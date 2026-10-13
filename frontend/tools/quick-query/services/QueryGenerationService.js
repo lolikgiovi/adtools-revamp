@@ -2,11 +2,30 @@ import { ValueProcessorService } from "./ValueProcessorService.js";
 import { oracleReservedWords } from "../constants.js";
 import { AttachmentValidationService } from "./AttachmentValidationService.js";
 
+const isImportedBlobValue = (value) => typeof value === "string" && /^data:application\/octet-stream;base64,/i.test(value);
+
+function getBlobColumns(schemaData, inputData) {
+  const blobFields = new Set(schemaData.filter((row) => String(row[1]).trim().toUpperCase() === "BLOB").map((row) => row[0]));
+  return (inputData?.[0] || [])
+    .map((name, index) => blobFields.has(String(name || "").trim()) ? index : -1)
+    .filter((index) => index >= 0);
+}
+
+export function findImportedBlobValues(schemaData, inputData) {
+  const columns = getBlobColumns(schemaData, inputData);
+  const values = new Set();
+  for (const row of inputData.slice(1)) {
+    for (const index of columns) {
+      if (isImportedBlobValue(row[index])) values.add(row[index]);
+    }
+  }
+  return [...values];
+}
+
 export function findReferencedBlobAttachments(schemaData, inputData, attachments) {
   if (!attachments?.length || !inputData?.length) return [];
 
-  const blobFields = new Set(schemaData.filter((row) => String(row[1]).trim().toUpperCase() === "BLOB").map((row) => row[0]));
-  const blobColumns = inputData[0].map((name, index) => blobFields.has(String(name || "").trim()) ? index : -1).filter((index) => index >= 0);
+  const blobColumns = getBlobColumns(schemaData, inputData);
   if (!blobColumns.length) return [];
 
   const referenced = new Set();
@@ -263,6 +282,7 @@ export class QueryGenerationService {
     const schemaMap = new Map(schemaData.map((row) => [row[0], row]));
     const blobAttachments = new Map();
     const importedBlobs = new Map();
+    const primaryKeys = this.ValueProcessorService.findPrimaryKeys(schemaData, tableName);
 
     // 4. Process each row of data
     const processedRows = dataRows.map((rowData, rowIndex) => {
@@ -303,8 +323,16 @@ export class QueryGenerationService {
 
             // Oracle row imports put their BLOB bytes in the grid as a Base64 data URI.
             // Decode those bytes in the same PL/SQL block used for attached files.
-            if (dataType.trim().toUpperCase() === "BLOB" &&
-              typeof value === "string" && /^data:application\/octet-stream;base64,/i.test(value)) {
+            if (dataType.trim().toUpperCase() === "BLOB" && isImportedBlobValue(value)) {
+              // Imported values have no filename; use the row key as a recognizable placeholder.
+              if (options.blobAttachmentMode === "filename") {
+                const keyValues = primaryKeys
+                  .map((key) => rowData[fieldNames.indexOf(key)])
+                  .filter((key) => key != null && String(key).trim() !== "" && !isImportedBlobValue(key));
+                const placeholder = keyValues.length ? keyValues.join("-") : fieldName;
+                const escapedPlaceholder = placeholder.replace(/'/g, "''");
+                return { fieldName, formattedValue: `utl_raw.cast_to_raw('${escapedPlaceholder}')` };
+              }
               let blob = importedBlobs.get(value);
               if (!blob) {
                 blob = { name: `imported ${fieldName} BLOB`, processedFormats: { base64: value } };
@@ -342,9 +370,6 @@ export class QueryGenerationService {
         throw error;
       }
     });
-
-    // 6. Find primary keys for MERGE statements
-    const primaryKeys = this.ValueProcessorService.findPrimaryKeys(schemaData, tableName);
 
     // 7. Generate SQL based on query type using Array.join() for O(n) performance
     const queryParts = [`SET DEFINE OFF;`];

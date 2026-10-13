@@ -16,12 +16,13 @@ function createChoiceUi() {
     <div id="backdrop" class="hidden" aria-hidden="true"></div>
     <div id="modal" class="hidden">
       <button id="close">Close</button>
-      <p id="description"></p>
-      <button id="content">Embed content</button>
-      <button id="filename">Keep filename</button>
+      <h3 id="blobAttachmentTitle"></h3><p id="description"></p>
+      <button id="content"><span class="qq-blob-attachment-option-title"></span><span class="qq-blob-attachment-option-detail"></span></button>
+      <button id="filename"><span class="qq-blob-attachment-option-title"></span><span class="qq-blob-attachment-option-detail"></span></button>
     </div>`;
   const ui = Object.create(QuickQueryUI.prototype);
   ui.elements = {
+    blobAttachmentTitle: document.getElementById("blobAttachmentTitle"),
     blobAttachmentOverlay: document.getElementById("backdrop"),
     blobAttachmentModal: document.getElementById("modal"),
     blobAttachmentDescription: document.getElementById("description"),
@@ -45,6 +46,22 @@ describe("Quick Query BLOB attachment choice", () => {
     await expect(choice).resolves.toBe("content");
     expect(document.activeElement.id).toBe("generate");
     expect(ui.elements.blobAttachmentModal.classList.contains("hidden")).toBe(true);
+  });
+
+  it("explains imported placeholders and resets labels for attachment-only generation", async () => {
+    const ui = createChoiceUi();
+    const choice = ui._showBlobAttachmentChoice(1, 2);
+    expect(ui.elements.blobAttachmentTitle.textContent).toBe("BLOB content detected");
+    expect(ui.elements.blobAttachmentDescription.textContent).toContain("2 imported BLOB values");
+    expect(ui.elements.blobAttachmentFilenameButton.textContent).toContain("row key");
+    expect(ui.elements.blobAttachmentFilenameButton.textContent).toContain("filenames");
+    ui.elements.blobAttachmentFilenameButton.click();
+    await expect(choice).resolves.toBe("filename");
+    const next = ui._showBlobAttachmentChoice(1);
+    expect(ui.elements.blobAttachmentFilenameButton.textContent).toContain("Keep filename for later");
+    expect(ui.elements.blobAttachmentFilenameButton.textContent).not.toContain("row key");
+    ui.elements.closeBlobAttachmentModalButton.click();
+    await expect(next).resolves.toBeNull();
   });
 
   it("supports filename selection and Escape cancellation", async () => {
@@ -75,7 +92,7 @@ describe("Quick Query BLOB attachment choice", () => {
     ui._generateQuery = vi.fn();
 
     await ui.handleGenerateQuery();
-    expect(ui._showBlobAttachmentChoice).toHaveBeenCalledWith(1);
+    expect(ui._showBlobAttachmentChoice).toHaveBeenCalledWith(1, 0);
     expect(ui._generateQuery).toHaveBeenCalledWith(
       "TEST.DOCUMENTS", "merge", expect.any(Array), expect.any(Array), "manual",
       { defaultSysdate: true, auditUserMode: "off", blobAttachmentMode: "filename" },
@@ -88,6 +105,20 @@ describe("Quick Query BLOB attachment choice", () => {
       "TEST.DOCUMENTS", "merge", expect.any(Array), expect.any(Array), "manual",
       { defaultSysdate: true, auditUserMode: "off" },
     );
+
+    ui.processedFiles = [];
+    ui.dataTable.getData = () => [["id", "document"], ["1", "data:application/octet-stream;base64,AA=="]];
+    await ui.handleGenerateQuery();
+    expect(ui._showBlobAttachmentChoice).toHaveBeenLastCalledWith(0, 1);
+    expect(ui._generateQuery).toHaveBeenLastCalledWith(
+      "TEST.DOCUMENTS", "merge", expect.any(Array), expect.any(Array), "manual",
+      { defaultSysdate: true, auditUserMode: "off", blobAttachmentMode: "filename" },
+    );
+    ui._showBlobAttachmentChoice.mockResolvedValueOnce(null);
+    const generations = ui._generateQuery.mock.calls.length;
+    await ui.handleGenerateQuery();
+    expect(ui._generateQuery).toHaveBeenCalledTimes(generations);
+    ui.dataTable.getData = () => [["id", "document"], ["1", "missing.pdf"]];
 
     ui.elements.auditUserMode = { value: "custom" };
     ui.elements.customAuditUser = { value: "R27_ANTARES" };

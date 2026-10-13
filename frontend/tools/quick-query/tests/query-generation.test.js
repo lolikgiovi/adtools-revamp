@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { QueryGenerationService, findReferencedBlobAttachments } from '../services/QueryGenerationService.js'
+import { QueryGenerationService, findReferencedBlobAttachments, findImportedBlobValues } from '../services/QueryGenerationService.js'
 import { AttachmentProcessorService } from '../services/AttachmentProcessorService.js'
 
 vi.mock('../../../core/UsageTracker.js', () => ({
@@ -94,6 +94,67 @@ describe('QueryGenerationService - BLOB attachments', () => {
 
     expect(findReferencedBlobAttachments(schema, input, attachments)).toEqual([attachments[0]])
     expect(findReferencedBlobAttachments([['id', 'NUMBER'], ['document', 'VARCHAR2(30)']], input, attachments)).toEqual([])
+  })
+
+  it('detects unique imported BLOB values without attachments, including empty BLOBs', () => {
+    const value = 'data:application/octet-stream;base64,AA=='
+    const empty = 'data:application/octet-stream;base64,'
+    const input = [['id', 'document'], ['1', value], ['2', value], ['3', empty], ['4', null]]
+    expect(findImportedBlobValues(schema, input)).toEqual([value, empty])
+    expect(findImportedBlobValues([['id', 'NUMBER'], ['document', 'CLOB']], input)).toEqual([])
+    expect(findImportedBlobValues(schema, [])).toEqual([])
+  })
+
+  it.each(['insert', 'update', 'merge'])('honors both output choices for imported BLOBs in %s', (queryType) => {
+    const input = [['id', 'document'], ['1', 'data:application/octet-stream;base64,AP8=']]
+    const svc = new QueryGenerationService()
+    const embedded = svc.generateQuery('documents', queryType, schema, input, [], { blobAttachmentMode: 'content' })
+    expect(embedded).toContain("UTL_ENCODE.BASE64_DECODE(UTL_RAW.CAST_TO_RAW('AP8='))")
+    const deferred = svc.generateQuery('documents', queryType, schema, input, [], { blobAttachmentMode: 'filename' })
+    expect(deferred).toContain("utl_raw.cast_to_raw('1')")
+    expect(deferred).not.toContain('EMPTY_BLOB()')
+    expect(deferred).not.toContain('DECLARE')
+    expect(deferred).not.toContain('AP8=')
+    expect(deferred).not.toContain('data:application')
+  })
+
+  it('uses filename bytes and row-key imported BLOB placeholders together in regular SQL', () => {
+    const sql = new QueryGenerationService().generateQuery('documents', 'insert', schema, [
+      ['id', 'document'], ['1', 'first.pdf'], ['2', 'data:application/octet-stream;base64,'],
+    ], [pdf('first.pdf', [1])], { blobAttachmentMode: 'filename' })
+    expect(sql).toContain("utl_raw.cast_to_raw('first.pdf')")
+    expect(sql).toContain("utl_raw.cast_to_raw('2')")
+    expect(sql).not.toContain('DECLARE')
+  })
+
+  it('uses tnc_code for both imported language fields and escapes quotes in the key', () => {
+    const tncSchema = [
+      ['tnc_code', 'VARCHAR2(100)', 'No', '', '', 'Yes'],
+      ['content_en', 'BLOB', 'Yes'], ['content_id', 'BLOB', 'Yes'],
+    ]
+    const sql = new QueryGenerationService().generateQuery('TERMS_AND_CONDITIONS.TERMS_AND_CONDITIONS', 'merge', tncSchema, [
+      ['tnc_code', 'content_en', 'content_id'],
+      ["gold-loan's-onboarding", 'data:application/octet-stream;base64,AA==', 'data:application/octet-stream;base64,AQ=='],
+    ], [], { blobAttachmentMode: 'filename' })
+    expect(sql).toContain("utl_raw.cast_to_raw('gold-loan''s-onboarding') AS content_en")
+    expect(sql).toContain("utl_raw.cast_to_raw('gold-loan''s-onboarding') AS content_id")
+    expect(sql).not.toContain('EMPTY_BLOB()')
+  })
+
+  it('joins composite key values in schema order even when input columns are reordered', () => {
+    const keys = [['code', 'VARCHAR2(50)', 'No', '', '', 'Yes'], ['version', 'NUMBER', 'No', '', '', 'Yes'],
+      ['document', 'BLOB', 'Yes']]
+    const sql = new QueryGenerationService().generateQuery('documents', 'insert', keys, [
+      ['document', 'version', 'code'], ['data:application/octet-stream;base64,AA==', 0, 'tnc'],
+    ], [], { blobAttachmentMode: 'filename' })
+    expect(sql).toContain("utl_raw.cast_to_raw('tnc-0')")
+  })
+
+  it('uses the existing first-column fallback without an explicit primary key', () => {
+    const sql = new QueryGenerationService().generateQuery('documents', 'insert', [
+      ['code', 'VARCHAR2(50)', 'No'], ['document', 'BLOB', 'Yes'],
+    ], [['code', 'document'], ['tnc', 'data:application/octet-stream;base64,AA==']], [], { blobAttachmentMode: 'filename' })
+    expect(sql).toContain("utl_raw.cast_to_raw('tnc')")
   })
 
   it('rejects an attached file whose binary content is unavailable', () => {

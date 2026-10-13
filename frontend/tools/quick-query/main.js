@@ -1,5 +1,5 @@
 import { IndexedDBStorageService } from "./services/IndexedDBStorageService.js";
-import { columnIndexToLetter, findReferencedBlobAttachments } from "./services/QueryGenerationService.js";
+import { columnIndexToLetter, findReferencedBlobAttachments, findImportedBlobValues } from "./services/QueryGenerationService.js";
 import { isDbeaverSchema } from "./services/SchemaValidationService.js";
 import { initialSchemaTableSpecification, initialDataTableSpecification } from "./constants.js";
 import { AttachmentProcessorService } from "./services/AttachmentProcessorService.js";
@@ -459,6 +459,7 @@ export class QuickQueryUI {
       closeHtmlMinifyOverlayButton: document.getElementById("closeHtmlMinifyOverlay"),
 
       // BLOB attachment choice
+      blobAttachmentTitle: document.getElementById("blobAttachmentTitle"),
       blobAttachmentOverlay: document.getElementById("blobAttachmentOverlay"),
       blobAttachmentModal: document.getElementById("blobAttachmentModal"),
       blobAttachmentDescription: document.getElementById("blobAttachmentDescription"),
@@ -2514,8 +2515,9 @@ export class QuickQueryUI {
       const options = { defaultSysdate: this.elements.defaultSysdateToggle.checked, auditUserMode };
       if (auditUserMode === "custom") options.customAuditUser = customAuditUser;
       const blobAttachments = findReferencedBlobAttachments(schemaData, inputData, this.processedFiles);
-      if (blobAttachments.length > 0) {
-        const choice = await this._showBlobAttachmentChoice(blobAttachments.length);
+      const importedBlobs = findImportedBlobValues(schemaData, inputData);
+      if (blobAttachments.length > 0 || importedBlobs.length > 0) {
+        const choice = await this._showBlobAttachmentChoice(blobAttachments.length, importedBlobs.length);
         if (!choice) return;
         options.blobAttachmentMode = choice;
       }
@@ -2527,7 +2529,7 @@ export class QuickQueryUI {
     }
   }
 
-  _showBlobAttachmentChoice(fileCount) {
+  _showBlobAttachmentChoice(fileCount, importedCount = 0) {
     return new Promise((resolve) => {
       const {
         blobAttachmentOverlay: overlay,
@@ -2539,7 +2541,25 @@ export class QuickQueryUI {
       } = this.elements;
       const previousFocus = document.activeElement;
       this._blobChoicePending = true;
-      description.textContent = `${fileCount} attached ${fileCount === 1 ? "file is" : "files are"} referenced by BLOB fields. How should Quick Query generate the script?`;
+      const hasImports = importedCount > 0;
+      this.elements.blobAttachmentTitle.textContent = hasImports ? "BLOB content detected" : "BLOB attachment detected";
+      const sources = [];
+      if (fileCount) sources.push(`${fileCount} attached ${fileCount === 1 ? "file" : "files"}`);
+      if (hasImports) sources.push(`${importedCount} imported BLOB ${importedCount === 1 ? "value" : "values"}`);
+      const verb = fileCount + importedCount === 1 ? "is" : "are";
+      description.textContent = `${sources.join(" and ")} ${verb} referenced by BLOB fields. How should Quick Query generate the script?`;
+      contentButton.querySelector(".qq-blob-attachment-option-title").textContent = hasImports
+        ? "Embed BLOB content" : "Embed file content";
+      contentButton.querySelector(".qq-blob-attachment-option-detail").textContent = hasImports
+        ? `Generate a PL/SQL script that loads the imported${fileCount ? " and attached" : ""} bytes into the BLOB fields.`
+        : "Generate a PL/SQL script that loads the attached bytes into the BLOB field.";
+      filenameButton.querySelector(".qq-blob-attachment-option-title").textContent = hasImports
+        ? "Keep placeholders for later" : "Keep filename for later";
+      const attachmentDetail = fileCount ? " and filenames stored as BLOB bytes for attachments" : "";
+      filenameButton.querySelector(".qq-blob-attachment-option-detail").textContent = hasImports
+        ? `Generate regular SQL with the row key stored as BLOB bytes for imported values${attachmentDetail}. ` +
+          "Replace placeholders with file content later."
+        : "Generate regular SQL with the filename stored as BLOB bytes. Replace it with file content later.";
       overlay.classList.remove("hidden");
       overlay.setAttribute("aria-hidden", "false");
       modal.classList.remove("hidden");
