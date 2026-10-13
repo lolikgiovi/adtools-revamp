@@ -38,3 +38,32 @@ PARAMETER_VALUE	VARCHAR2(50)	Yes		3
 - `./node_modules/.bin/vite build --outDir /tmp/ad-tools-config-id-build`: passed, with the existing large-chunk warning.
 - Targeted ESLint: no errors; existing warnings remain in the Quick Query files.
 - `git diff --check`: passed.
+
+## UPDATE extension (2026-10-13)
+
+Browser verified the same fixture with query type UPDATE, for both overlay choices.
+Keep existing IDs omits CONFIG_ID from SET and from the changed-fields SELECT.
+Update IDs includes it in both. WHERE still matches PARAMETER_KEY. The UPDATE
+overlay omits the INSERT note and has no automatic focus highlight or toolbar button.
+SQL was generated and copied, not executed against Oracle.
+
+Reproduce by following the schema/data steps above, selecting UPDATE, and generating
+once for each choice. The preserve-ID result is:
+
+```sql
+UPDATE VERIFY.CONFIG
+SET
+  parameter_value = 'new value'
+WHERE parameter_key = 'some.key';
+
+SELECT parameter_key, parameter_value FROM VERIFY.CONFIG
+WHERE parameter_key IN ('some.key');
+```
+
+Focused regression command:
+
+```sh
+./node_modules/.bin/vitest run frontend/tools/quick-query/tests/config-id-merge.test.js frontend/tools/quick-query/tests/query-generation.test.js
+```
+
+Result: 2 test files, 112 tests passed.

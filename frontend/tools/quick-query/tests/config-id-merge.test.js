@@ -48,16 +48,36 @@ describe("config MERGE ID policy", () => {
     expect(sql).toContain("WHEN NOT MATCHED");
   });
 
-  it("leaves non-config MERGE and UPDATE behavior unchanged", () => {
+  it("leaves non-config MERGE behavior unchanged", () => {
     const service = new QueryGenerationService();
     expect(service.generateQuery("APP.SETTINGS", "merge", schema, input)).toContain("tgt.parameter_key = src.parameter_key");
-    expect(service.generateQuery("APP.APP_CONFIG", "update", schema, input)).toContain(
-      "config_id = (SELECT NVL(MAX(CONFIG_ID)+1, 1) FROM APP.APP_CONFIG)",
-    );
   });
 });
 
-describe("config MERGE choice flow", () => {
+// UPDATE-specific failures: ignored ID still appearing in SET or the changed-field
+// SELECT, and generating an empty UPDATE when CONFIG_ID is the only editable field.
+describe("config UPDATE ID policy", () => {
+  it.each([undefined, false, true])("honors update choice %s in SQL and verification fields", (updateConfigIds) => {
+    const sql = new QueryGenerationService().generateQuery("APP.APP_CONFIG", "update", schema, input, [], { updateConfigIds });
+    expect(sql).toContain("WHERE parameter_key = 'some.key'");
+    expect(sql.includes("config_id = (SELECT NVL(MAX(CONFIG_ID)+1, 1) FROM APP.APP_CONFIG)")).toBe(updateConfigIds === true);
+    expect(sql).toContain("parameter_value = 'new value'");
+    const verification = sql.split("------ SELECT Statement --------")[1];
+    expect(verification.includes("SELECT parameter_key, config_id, parameter_value")).toBe(updateConfigIds === true);
+    if (updateConfigIds !== true) expect(verification).toContain("SELECT parameter_key, parameter_value FROM");
+  });
+
+  it("rejects UPDATE with no editable fields after preserving CONFIG_ID", () => {
+    expect(() =>
+      new QueryGenerationService().generateQuery("APP.APP_CONFIG", "update", schema.slice(0, 2), [
+        input[0].slice(0, 2),
+        input[1].slice(0, 2),
+      ]),
+    ).toThrow("No fields to update");
+  });
+});
+
+describe.each(["merge", "update"])("config %s choice flow", (queryType) => {
   let ui;
   beforeEach(() => {
     vi.clearAllMocks();
@@ -68,7 +88,7 @@ describe("config MERGE choice flow", () => {
     };
     ui.schemaTable = { getData: () => schema };
     ui.dataTable = { getData: () => input };
-    ui.getQueryTypeValue = () => "merge";
+    ui.getQueryTypeValue = () => queryType;
     ui.flushPendingDataAutosave = vi.fn();
     ui.storageService = { saveSchema: vi.fn() };
     ui.excelImportService = { hasData: () => false };
@@ -89,7 +109,7 @@ describe("config MERGE choice flow", () => {
     );
     expect(ui._generateQuery).toHaveBeenLastCalledWith(
       "APP.APP_CONFIG",
-      "merge",
+      queryType,
       schema,
       input,
       "manual",
@@ -107,7 +127,7 @@ describe("config MERGE choice flow", () => {
     await ui.handleGenerateQuery();
     expect(ui._generateQuery).toHaveBeenLastCalledWith(
       "APP.APP_CONFIG",
-      "merge",
+      queryType,
       schema,
       expect.any(Array),
       "excel",
@@ -132,7 +152,7 @@ describe("config MERGE choice flow", () => {
     expect(ui._generateQuery).toHaveBeenCalledTimes(1);
   });
 
-  it.each(["insert", "update"])("does not prompt for %s", async (type) => {
+  it.each(["insert"])("does not prompt for %s", async (type) => {
     ui.getQueryTypeValue = () => type;
     await ui.handleGenerateQuery();
     expect(confirmAction).not.toHaveBeenCalled();

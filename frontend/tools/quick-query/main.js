@@ -2446,11 +2446,11 @@ export class QuickQueryUI {
     document.addEventListener("click", this._queryTypeDocumentClick);
   }
 
-  isConfigIdMerge(tableName, queryType, schemaData, inputData = null) {
+  isConfigIdUpdate(tableName, queryType, schemaData, inputData = null) {
     const fields = schemaData.map((row) => String(row[0]).toLowerCase());
     const headers = inputData ? (inputData[0] || []).map((field) => String(field).toLowerCase()) : fields;
     return (
-      queryType === "merge" &&
+      ["merge", "update"].includes(queryType) &&
       tableName.toLowerCase().endsWith("config") &&
       ["parameter_key", "config_id"].every((field) => fields.includes(field) && headers.includes(field))
     );
@@ -2524,12 +2524,12 @@ export class QuickQueryUI {
       }
 
       const options = { defaultSysdate: this.elements.defaultSysdateToggle.checked, auditUserMode };
-      if (this.isConfigIdMerge(tableName, queryType, schemaData, inputData)) {
+      if (this.isConfigIdUpdate(tableName, queryType, schemaData, inputData)) {
         options.updateConfigIds = await confirmAction({
           title: "Update existing CONFIG_IDs?",
           description:
-            "Rows are matched using PARAMETER_KEY. Updating CONFIG_ID will replace the existing ID on matched rows. " +
-            "New rows still use the configured INSERT behavior.",
+            "Rows are matched using PARAMETER_KEY. Updating CONFIG_ID will replace the existing ID on matched rows." +
+            (queryType === "merge" ? " New rows still use the configured INSERT behavior." : ""),
           confirmLabel: "Update IDs",
           cancelLabel: "Keep existing IDs",
         });

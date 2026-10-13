@@ -373,13 +373,17 @@ export class QueryGenerationService {
 
     // 7. Generate SQL based on query type using Array.join() for O(n) performance
     const queryParts = [`SET DEFINE OFF;`];
+    const updateRows =
+      queryType === "update" && this.shouldPreserveConfigId(tableName, primaryKeys, options)
+        ? processedRows.map((row) => row.filter((field) => field.fieldName.toLowerCase() !== "config_id"))
+        : processedRows;
 
     if (queryType === "insert") {
       for (const processedFields of processedRows) {
         queryParts.push(this.generateInsertStatement(tableName, processedFields));
       }
     } else if (queryType === "update") {
-      queryParts.push(this.generateUpdateStatement(tableName, processedRows, primaryKeys, fieldNames));
+      queryParts.push(this.generateUpdateStatement(tableName, updateRows, primaryKeys, fieldNames));
     } else {
       for (const processedFields of processedRows) {
         queryParts.push(this.generateMergeStatement(tableName, processedFields, primaryKeys, options));
@@ -396,7 +400,7 @@ export class QueryGenerationService {
     if (selectQuery) {
       let selectStatements = selectQuery.trimStart();
       if (queryType === "update") {
-        const updatedFieldsSelect = this.generateUpdatedFieldsSelectStatement(tableName, processedRows, primaryKeys, schemaData);
+        const updatedFieldsSelect = this.generateUpdatedFieldsSelectStatement(tableName, updateRows, primaryKeys, schemaData);
         selectStatements = `${updatedFieldsSelect}\n${selectStatements}`;
       }
       queryParts.push(`\n------ SELECT Statement --------\n${selectStatements}`);
@@ -439,6 +443,14 @@ export class QueryGenerationService {
     return `INSERT INTO ${tableName} (${fields.join(", ")}) \nVALUES (${values.join(", ")});`;
   }
 
+  shouldPreserveConfigId(tableName, primaryKeys, options = {}) {
+    return (
+      tableName.toLowerCase().endsWith("config") &&
+      primaryKeys.some((field) => field.toLowerCase() === "parameter_key") &&
+      options.updateConfigIds !== true
+    );
+  }
+
   generateMergeStatement(tableName, processedFields, primaryKeys, options = {}) {
     // Format fields for SELECT part
     const selectFields = processedFields.map((f) => `\n  ${f.formattedValue} AS ${this.formatFieldName(f.fieldName)}`).join(",");
@@ -446,10 +458,7 @@ export class QueryGenerationService {
     // Format ON conditions for primary keys
     const pkConditions = primaryKeys.map((pk) => `tgt.${this.formatFieldName(pk)} = src.${this.formatFieldName(pk)}`).join(" AND ");
 
-    const preserveConfigId =
-      tableName.toLowerCase().endsWith("config") &&
-      primaryKeys.some((field) => field.toLowerCase() === "parameter_key") &&
-      options.updateConfigIds !== true;
+    const preserveConfigId = this.shouldPreserveConfigId(tableName, primaryKeys, options);
 
     // Preserve physical config IDs on matched rows unless explicitly opted in.
     const updateFieldsList = processedFields
