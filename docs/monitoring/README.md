@@ -116,7 +116,7 @@ The metadata query found no MONITORING triggers and no other objects after exclu
 Consequently, there is no observed trigger-based configuration audit, automatic UPDATED\_\* maintenance, or stored configuration API.
 The audit table's existence does not prove the monitoring application writes it. Application-side behavior is unverified.
 Database audit integration requires an agreed action vocabulary, actor and OLD_VALUE/NEW_VALUE serialization.
-The current PRD defers database audit writes; the audit table does not populate automatically.
+The current PRD includes application-written audit rows in the same transaction as configuration changes; the table does not populate automatically.
 If audit integration is added, commit configuration and audit records together. Audit history should not be an ordinary editable table.
 
 USERS accepts roles USER/ADMIN, activity Y/N and hashes starting `$2`; TOKEN requires a 64-character TOKEN_HASH.
@@ -152,23 +152,19 @@ A menu-oriented editor fits this schema better than eleven unrelated editable gr
 8. Offer audit/history inspection and deliberate menu activation/deactivation. If deletion is included, preview all affected records,
    explicitly include logical summary fields, and respect datasource restrictions.
 
-The current [PRD.md](PRD.md) defines a dedicated bound UPDATE endpoint for five managed tables, with full-row conflict checks,
-CLOB binding, one transaction, rollback and readback. It separates this from generated INSERT scripts and defers audit writes.
-Most configuration rows have no version/updated timestamp, so direct updates compare the complete original row under a lock.
-No edited dashboard query is automatically executed during save or validation.
-
-The user initially selected script generation, then confirmed direct UPDATE access. Existing-row updates now use
-fetch latest Oracle data → show conflicts → directly update if unchanged, with a transaction-time locked recheck.
-Creation/cloning retains generated INSERT scripts and optional Run Query handoff.
-See [PRD.md](PRD.md) for the authoritative V1 scope, guarded-script contract and integration requirements.
-The PRD supersedes the historical alternatives above and defines the selected direct UPDATE execution model.
+The current [PRD.md](PRD.md) defines a dedicated managed-apply endpoint for explicit INSERT/UPDATE across five configuration tables,
+with complete locked-row conflict checks, typed/CLOB binding, one transaction, readback and atomic DSH_CONFIG_AUDIT history writes.
+A mixed batch can create parents/children and edit existing rows together. Optional guarded script export uses the same rules.
+History groups affected-row entries using a shared change ID in versioned OLD_VALUE/NEW_VALUE JSON; the existing table has no transaction-ID column.
+This is the agreed AD Tools plan, not verified existing monitoring-application behavior. No edited dashboard query executes during save/validation.
+The PRD supersedes the historical alternatives above. Existing audit-consumer compatibility still needs verification before enabling writes.
 
 ## Remaining questions before implementation
 
 - Does the monitoring application cache configuration, and what refresh/reload is required after changes?
 - Which schema tables does it currently read, especially DSH_SUMMARY_QUERY versus DSH_SUMMARY_GROUP?
 - What are the exact runtime value-format, query-bind, pagination, alias-casing and chart fallback contracts?
-- What audit JSON/action format and actor identity does the application expect?
+- Do existing audit consumers accept the AD Tools versioned JSON envelope and INSERT/UPDATE action vocabulary defined in PRD MQ-17?
 - Should the first release include datasource administration, deletion and whole-menu cloning, or start with menu/query/field editing?
 - What AD Tools credential/profile should map to this UAT connection? DBeaver access does not establish an AD Tools profile or write pathway.
 

@@ -2,8 +2,8 @@
 
 **Status:** revised requirements, ready for review; implementation has not started.
 **Date:** 2026-10-13. **Product:** AD Tools. **Route:** `#monitoring-query`. **Category:** Config.
-**Decision accepted (revised):** use guarded MERGE for existing edits and new/cloned rows in one reviewed transaction.
-Fetch latest Oracle data → show conflicts → apply if unchanged. Disable editing while applying; standardize typed reads and comparisons.
+**Decision accepted (revised):** use guarded INSERT/UPDATE for existing edits and new/cloned rows in one reviewed transaction.
+Fetch latest Oracle data → show conflicts → apply if unchanged. Disable editing while applying; standardize typed reads and comparisons. Record grouped change history for every successful transaction.
 **Initial target:** MONITORING schema on UAT-MONITORING / EVTUAT4_COM. Other environments require explicit profiles and schema validation.
 
 This document owns the feature requirements. [Schema discovery](README.md) owns dated evidence and the complete table/column inventory.
@@ -17,7 +17,7 @@ Editing those tables individually makes it difficult to understand the complete 
 preserve long SQL, and review the exact effect of a change.
 
 Monitoring Query presents the configuration as one navigable hierarchy. Existing edits and new/cloned rows execute directly through AD Tools
-as guarded MERGE operations after latest-data conflict checks. Jenkins is optional; the same reviewed plan can produce a standalone MERGE package
+as guarded INSERT/UPDATE operations after latest-data conflict checks. Jenkins is optional; the same reviewed plan can produce a standalone INSERT/UPDATE package
 for the existing Run Query workflow. Saving a local draft never modifies Oracle; **Update Oracle** explicitly does.
 Distinguish draft saved, update committed, outcome unknown, database state verified, script generated and script handed off.
 
@@ -41,7 +41,7 @@ Distinguish draft saved, update committed, outcome unknown, database state verif
 | Enable or disable a dashboard              | Stage DSH_MENU.IS_ACTIVE, review and generate the change                               |
 | Find broken configuration                  | Inspect missing parents, duplicate ordering and incomplete chart/mapping configuration |
 | Apply a reviewed update                    | Fetch latest Oracle values, resolve any conflicts, then update directly in AD Tools    |
-| Apply new/cloned configuration             | Apply with existing edits through MERGE; optionally export a guarded MERGE package     |
+| Apply new/cloned configuration             | Apply with existing edits through explicit INSERT/UPDATE; optionally export a guarded INSERT/UPDATE package     |
 | Check the result                           | Reload affected rows and compare them with the generated expected state                |
 
 ## 3. Release scope
@@ -58,22 +58,23 @@ Distinguish draft saved, update committed, outcome unknown, database state verif
 | DSH_DATASOURCE       | Read a safe projection; select an existing datasource for queries                 |
 | DSH_SUMMARY_QUERY    | Read-only compatibility section when present; retain unchanged                    |
 | Configuration health | Read-only findings and links to affected entities                                 |
+| Change history       | Read-only successful transactions, actor/time, affected rows and complete before/after diffs       |
 | Local drafts         | Autosave, restore, discard, refresh/rebase and explicit conflict resolution       |
 | Change package       | Diff, guarded apply script, verification SQL, copy/download and Run Query handoff |
 
-Five configuration tables support guarded MERGE for existing edits and new rows. Datasources and the single-summary-query table are read-only in V1.
+Five configuration tables support guarded INSERT/UPDATE for existing edits and new rows. Datasources and the single-summary-query table are read-only in V1.
 One reviewed batch can mix existing edits and new parents/children. Apply new parents before their children in the same transaction; no intermediate reload is required.
-Review labels each row as Update existing or Create new. MERGE must never switch that reviewed intent because the database changed.
+Review labels each row as Update existing or Create new. Execution must never switch that reviewed intent because the database changed.
 Discarding a newly added unsaved block is supported. Removing an existing database row is outside V1.
 
 ### Excluded from V1
 
-- Standalone direct INSERT/DELETE endpoints, background/autosave DML, automatic Jenkins triggering or automatic dashboard query execution.
-  Creating reviewed rows through the guarded MERGE operation is included in V1.
+- Direct DELETE, unrestricted SQL execution, background/autosave DML, automatic Jenkins triggering or automatic dashboard query execution.
+  Reviewed INSERT and UPDATE operations through the managed-apply endpoint are included in V1.
 - Hard deletion, primary-key renaming, moving existing children to different parents, or automatic orphan cleanup.
 - Datasource creation/editing, JDBC URL/credential display, and credential migration from DBeaver.
 - USERS, TOKEN, Flyway history, or general-purpose table CRUD.
-- Writing DSH_CONFIG_AUDIT until its application contract is known; an audit-history browser is deferred too.
+- Editing/deleting audit history, approval/PR workflows and automatic revert. DSH_CONFIG_AUDIT writes and read-only history are included.
 - Editing DSH_SUMMARY_QUERY until its runtime role is confirmed.
 - Cross-environment deployment, merge/promotion, or automatic SQL schema/provider substitutions.
 - A monitoring dashboard renderer, chart renderer, or claim that database verification proves runtime dashboard behavior.
@@ -94,7 +95,7 @@ SQL uses the existing Oracle Monaco integration with wrap, copy, search and a re
 Health findings and change review are reachable without losing the selected item or unsaved work.
 
 Primary actions: **Load**, **Edit**, **Add**, **Clone**, **Review Changes**, **Update Oracle**, **Generate SQL**, **Copy SQL**,
-**Download Package**, **Open in Run Query**, **Verify Database**, and **Discard Draft**.
+**Download Package**, **Open in Run Query**, **Verify Database**, **History**, and **Discard Draft**.
 **Update Oracle** fetches latest values and proceeds automatically if no conflict exists; do not add a second confirmation when the
 reviewed revision is unchanged. If conflicts exist, stop and show baseline/latest/draft values. Resolution requires another Update Oracle action.
 Do not label local persistence as “Save to database” or handoff as “Applied.”
@@ -106,12 +107,13 @@ flowchart LR
   C --> D[Update Oracle]
   D --> E[Fetch latest and compare]
   E --> F[No conflict: lock and recheck in transaction]
-  F --> G[Execute bound MERGEs in dependency order and commit]
-  G --> H[Read back and verify]
+  F --> G[Execute bound INSERTs and UPDATEs, read back, then write audit records]
+  G --> H[Configuration and audit commit together]
+  H --> V[Refresh baseline and view History]
   E --> I[Conflict: baseline / latest / draft]
   F --> I
   I --> B
-  C --> J[Optional: generate guarded MERGE package]
+  C --> J[Optional: generate guarded INSERT/UPDATE package]
   J --> K[Copy / download / Run Query]
 ```
 
@@ -124,7 +126,7 @@ V1 does not add a separate browser Oracle proxy or offline package-import produc
 **MQ-02.** Select an existing AD Tools connection profile; DBeaver's connection is discovery evidence, not an imported credential profile.
 Capture actual service/database identity, current schema and connection profile ID. Require MONITORING and compatible table metadata.
 Do not identify an environment using a display name alone. Direct apply use the selected Oracle connection and reassert its identity inside the transaction.
-For MERGE-script handoff, allow explicitly mapped execution identities when the Jenkins user differs.
+For SQL-script handoff, allow explicitly mapped execution identities when the Jenkins user differs.
 
 **MQ-03.** Validate required tables, PKs, types, length semantics, nullability and relevant constraints against the discovery contract.
 Refuse direct apply and generation on incompatible drift and explain the specific mismatch. Fetch CHAR_USED/CHAR_LENGTH/DATA_LENGTH and database character set
@@ -199,7 +201,7 @@ No edited SQL is executed against its datasource during validation in V1.
 
 ## 8. Review and change-package model
 
-**MQ-11.** Review groups changes by menu and entity, showing operation, PK, modified scalar values, full SQL diff,
+**MQ-11.** Review groups changes by menu and entity, showing explicit INSERT or UPDATE operation, PK, modified scalar values, full SQL diff,
 parent references and warnings. Unchanged fields generate no UPDATE assignment. Explicit NULL is distinct from unchanged;
 empty VARCHAR2 is treated as NULL and rejected for required fields. Required SQL CLOBs cannot be empty.
 For optional CLOBs, provide explicit Clear → NULL; preserve a baseline zero-length non-null CLOB as a distinct state.
@@ -224,53 +226,53 @@ Script generation performs the same parent/ID preflight; guards are repeated whe
 
 - `manifest.json`: format version, package ID, source identity/schema, schema fingerprint, baseline/read times,
   draft revision, declared actor, operations, warnings, expected-state comparison rules and script SHA-256.
-- `apply.sql`: standalone guarded MERGE script for the reviewed existing/new rows, with embedded serialized values,
+- `apply.sql`: standalone guarded INSERT/UPDATE script for the reviewed existing/new rows, with embedded serialized values,
   target identity assertions, baseline/existence checks, rollback-on-error and one commit on success. No unresolved outer bind placeholders.
   Stored dashboard binds remain inside CLOB data. Parameterized backend templates are a separate read-only preview labelled
-  **MERGE template — requires backend bindings**; they are never the content of Copy SQL or Open in Run Query.
+  **SQL template — requires backend bindings**; they are never the content of Copy SQL or Open in Run Query.
 - `verify.sql`: explicit PK-scoped SELECTs with PK first, affected fields and full CLOB readback; no recent-time heuristics.
 - `changes.json`: original/desired typed values for changed rows, supporting inspection and verification; contains no credentials.
 
-Direct-apply review also exposes the generated MERGE templates, reviewed create/update intent, changed columns and typed bind values.
+Direct-apply review also exposes the generated INSERT/UPDATE templates, reviewed create/update intent, changed columns and typed bind values.
 The backend regenerates SQL from validated structured operations; it never trusts a client-provided SQL string.
-See [MERGE-EXAMPLES.md](MERGE-EXAMPLES.md) for representative SELECT/MERGE templates and bind contracts.
+See [UPDATE-EXAMPLES.md](UPDATE-EXAMPLES.md) for representative SELECT/INSERT/UPDATE templates and bind contracts.
 
 The package includes SQL/configuration and must be treated as internal development data.
 Do not send it to analytics or a Worker storage service. Copy SQL copies exactly apply.sql; download includes all four files.
 Any further edit or target change invalidates the active package and requires a new review/generation.
 Old packages remain identifiable by their revision and creation time; they cannot masquerade as the current draft.
 
-## 9. Guarded MERGE and Oracle script contracts
+## 9. Guarded INSERT/UPDATE and Oracle script contracts
 
 **MQ-14.** Use a feature-specific, metadata-checked allowlist of five managed tables and their exact PKs.
 Use explicit `MONITORING.<TABLE>` and explicit column lists. No DDL, GRANT, DELETE, unconstrained writes or unrestricted upsert.
-Generate MERGE matched on the physical PK only; never use SQL CLOBs or mutable fields in ON.
-For a reviewed existing row, emit WHEN MATCHED THEN UPDATE only; omit the INSERT branch.
-For a reviewed new row, emit WHEN NOT MATCHED THEN INSERT only; omit the UPDATE branch.
-Both are MERGE statements in one mixed transaction. A collision or missing original is a conflict, never permission to switch branches.
+Generate explicit UPDATE statements for reviewed existing rows and explicit INSERT statements for reviewed new rows.
+UPDATE uses the verified physical PK in WHERE. INSERT supplies the reviewed new PK and values.
+A collision or missing original is a conflict; never switch a reviewed INSERT into UPDATE or UPDATE into INSERT.
+Do not generate MERGE/upsert. Review, manifests and execution results identify INSERT versus UPDATE for each operation.
 Generate UPDATE assignments only for changed editable columns, plus DSH_MENU.UPDATED_BY/UPDATED_AT where applicable.
 Bind every supplied value, including the PK; identifiers come only from the backend allowlist.
 Existing PKs/parent IDs/CREATED_* cannot be changed; new rows supply reviewed PK/parent IDs and creation attributes.
-Oracle MERGE syntax and privileges: [Oracle SQL Reference](https://docs.oracle.com/en/database/oracle/oracle-database/19/sqlrf/MERGE.html).
-Validate required privileges for the generated statements; do not assume previously confirmed UPDATE access proves MERGE/creation access.
+Validate required privileges for the generated statements; do not assume previously confirmed UPDATE access proves INSERT access.
 
 **MQ-15.** Direct apply requires a dedicated Tauri → Rust → Oracle sidecar managed-apply operation, separate from read-query endpoints.
 One explicit Update Oracle action produces one transaction on one acquired connection with autocommit disabled:
 
-1. Assert target database/service/schema and permissions; revalidate the managed-table contract and operation intent.
+1. Assert target database/service/schema and permissions; revalidate the managed-table contract, audit-table contract, audit INSERT permission and operation intent.
    Reject duplicate table/PK operations, malformed typed values and references to parents absent from both Oracle and the new-row plan.
 2. Lock every reviewed existing row using explicit-column SELECT ... FOR UPDATE WAIT 5 in deterministic table/PK order.
    Validate and lock existing referenced parents, including the logical summary-group parent, in the same deterministic lock plan.
    Fetch complete original values while holding locks; never hold a transaction open while the user resolves a conflict.
 3. Recompare locked existing rows with the complete submitted baseline. Compare typed scalars, nulls and full CLOB content.
    Missing/changed originals conflict. Check every new PK is absent. Missing new keys cannot be row-locked;
-   concurrent creation is handled by the insert-only branch, PK constraint and exact row-count check.
+   concurrent creation is handled by the INSERT PK constraint and exact row-count check.
 4. On conflict, roll back without applying any row and return current values. Do not silently turn creation into update or update into creation.
-5. Execute parameterized intent-specific MERGEs in parent-before-child order, with deterministic PK ordering within each level.
+5. Execute parameterized INSERTs and UPDATEs according to reviewed intent in parent-before-child order, with deterministic PK ordering within each level.
    Bind SQL_TEXT/CHART_SQL as CLOBs. Require cursor.rowcount=1 for every operation. A concurrent new-ID collision,
-   zero-row MERGE or constraint failure rolls back the whole batch. A no-op draft executes no MERGE and changes no audit timestamp.
+   zero-row UPDATE or constraint failure rolls back the whole batch. A no-op draft executes no DML and changes no audit timestamp.
 6. Read back all expected affected values on the same transaction connection. Any readback failure/mismatch rolls back the entire batch.
-7. Commit once after all rows pass; return confirmed outcome and typed readback values. Close cursors/release connection in all cases.
+7. Insert and read back one audit record for each changed/new configuration row under MQ-17; any audit failure rolls back all configuration and audit writes.
+8. Commit once after configuration and audit rows pass; return confirmed outcome, change ID, audit IDs and typed readback values. Close cursors/release connection in all cases.
 
 The latest fetch provides the conflict experience; locked recheck protects existing rows until commit.
 Lock timeout returns a retryable busy state without automatically retrying a write. Permission failure never silently redirects to Jenkins.
@@ -285,7 +287,7 @@ The versioned request contains reviewed intent, never executable client SQL:
   operations: [
     { operationId, intent: "update", table, primaryKey,
       baseline: <complete typed original row>, changes: <changed editable columns> },
-    { operationId, intent: "create", table, primaryKey,
+    { operationId, intent: "insert", table, primaryKey,
       expectedAbsent: true, values: <reviewed typed new-row values> }
   ] }
 ```
@@ -313,28 +315,70 @@ Typed schema metadata determines conversion. The backend parses/validates wrappe
 Paged reads return an explicit completion marker/continuation token; callers cannot treat a row limit as a complete baseline.
 A truncated CLOB or incomplete page set blocks apply/generation. Prove precision, null/empty and completeness round trips before enabling writes.
 
-Generated MERGE packages implement the same reviewed intents and conflict rules inside one guarded PL/SQL transaction unit.
-Lock/recompare existing rows, check new IDs, apply parent-first, require one affected row per MERGE and verify before a single commit.
+Generated INSERT/UPDATE packages implement the same reviewed intents and conflict rules inside one guarded PL/SQL transaction unit.
+Lock/recompare existing rows, check new IDs, apply parent-first, require one affected row per INSERT or UPDATE, verify configuration and write/verify MQ-17 audit records before a single commit.
 Use type-explicit, NLS-independent values and full CLOB comparisons. Roll back/re-raise any error; never use error logging to skip failed rows.
 Applied operations invalidate their package for execution; further use requires fresh load/review/generation.
 Runner compatibility gates optional script handoff only. Rollback is transaction recovery, not postcommit undo.
 
 **MQ-16.** For direct apply, bind stored query text as CLOB data; inner :startDate/:endDate/:offset/:limit tokens stay
-inside that value and are not bound as part of the outer MERGE. Direct writes do not need SQL\*Plus substitution settings or literal chunking.
-The remaining serialization requirements apply to standalone generated MERGE scripts. Serialize stored SQL as data. Escape apostrophes correctly and preserve ampersands, semicolons, comments, Unicode,
+inside that value and are not bound as part of the outer INSERT or UPDATE. Direct writes do not need SQL\*Plus substitution settings or literal chunking.
+The remaining serialization requirements apply to standalone generated INSERT/UPDATE scripts. Serialize stored SQL as data. Escape apostrophes correctly and preserve ampersands, semicolons, comments, Unicode,
 CR/LF sequences and Oracle bind tokens inside that data. Disable SQL client substitution where the verified runner supports/requires it.
 Never interpolate stored SQL as executable statements in the apply script.
 Build CLOBs with temporary LOBs and escaped chunks safely below Oracle literal byte limits (target <= 2000 encoded bytes per chunk),
 without splitting Unicode characters; release temporary LOBs on success and failure. No entire-CLOB VARCHAR2 or single-literal assumption.
 If target encoding/runner transport cannot preserve the content, block generation/handoff with a specific error.
 
-**MQ-17.** Direct apply and generated MERGE scripts do not write DSH_CONFIG_AUDIT in V1. The app must disclose “Database audit entries are not written” in review.
-A local manifest is provenance for a proposed script, not a substitute for authenticated server audit history.
-Defining audit action vocabulary, JSON serialization and execution actor is a prerequisite for adding database audit writes later.
+**MQ-17. Change history for every successful transaction.** Both direct apply and exported scripts write DSH_CONFIG_AUDIT
+on the same connection and in the same transaction as configuration INSERTs/UPDATEs. Do not use an autonomous transaction.
+One audit row per affected configuration row; all rows in one apply share a change ID. No-op batches write no history.
+A validation failure, conflict or rollback produces no committed audit rows. Audit permission/serialization/readback failure rolls back the entire batch.
+History is a record of committed changes, not PR approvals or editable drafts.
 
-## 10. Optional MERGE handoff and verification
+Use the existing table without a schema migration:
 
-**MQ-18.** Direct apply have no Jenkins dependency. For optional execution of the reviewed mixed batch, reuse `run-query` navigation and SQL injection; Open in Run Query populates the editor and never triggers a job.
+- Omit AUDIT_ID (GENERATED ALWAYS AS IDENTITY). Return generated IDs using the Oracle driver/PLSQL output mechanism.
+- TABLE_NAME is the allowlisted configuration table; RECORD_ID is its physical PK. ACTION is exactly INSERT or UPDATE.
+- OLD_VALUE is SQL NULL for INSERT; for UPDATE it contains the complete locked original row in the JSON envelope below.
+- NEW_VALUE contains the complete actual post-DML row, including backend-generated audit attributes, in the same JSON envelope.
+  Serialize full typed rows with the MQ-15 contract, including complete SQL/CLOB content, null and empty LOB distinctions.
+- CHANGED_BY uses the MQ-09 actor policy. Store the actor source and connected Oracle username in the envelope;
+  a declared editor name remains declared attribution, not authenticated identity. Validate VARCHAR2 length before writing.
+- Resolve one database SYSTIMESTAMP value per transaction and use it as CHANGED_AT for all its audit rows.
+  Group by change ID, never timestamp proximity or consecutive AUDIT_ID values.
+
+Versioned JSON envelope inside OLD_VALUE/NEW_VALUE CLOBs:
+
+```text
+{ source: "ad-tools.monitoring-query", version: 1,
+  changeId: <UUID identifying this execution attempt>, requestId, operationId,
+  menuId: <owning menu ID>, operationCount: <number of changed/new rows>,
+  actorSource, databaseUsername, row: <complete typed configuration row> }
+```
+
+Allocate and persist the change ID before dispatch, alongside the immutable submitted request.
+A standalone script allocates a fresh change ID at execution and returns/displays it with its audit IDs; package ID is separate provenance.
+All audit entries share that execution's change ID. Validate existing application audit consumers before enabling this new envelope;
+this is the AD Tools writing contract, not evidence that other applications already use it. Avoid duplicate automatic auditing if triggers appear.
+Existing/foreign audit formats are preserved; never rewrite them or infer grouping they do not contain.
+
+**History UI.** Open History for the selected menu, newest transactions first, with database time, actor, change ID and INSERT/UPDATE counts.
+Expand a transaction to list affected tables/PKs and inspect complete before/after scalar and SQL diffs.
+Use the stored menu ID so child changes remain discoverable even if the current hierarchy later changes.
+Read only safe explicit audit projections in bounded pages; query/group the envelope by change ID and source/version.
+Load large OLD_VALUE/NEW_VALUE CLOBs when opening a diff. Legacy/unrecognized entries show as individual entries with format/grouping unverified.
+Missing history access, malformed JSON or incomplete reads show explicit states; do not silently claim no history or a complete transaction.
+History is read-only. No automatic undo; reapplying old values would require a new reviewed and conflict-checked transaction.
+
+After a confirmed commit, link to the new history entry. For Outcome Unknown, a complete matching audit group plus expected configuration
+provides additional committed-change evidence; verify target, request/change ID, operation count and contents before resolving state.
+Missing/incomplete audit readback does not prove rollback and never authorizes automatic retry. Keep the existing reconciliation rules.
+These audit rows are application change history, not tamper-proof security audit or exactly-once execution receipts.
+
+## 10. Optional SQL handoff and verification
+
+**MQ-18.** Direct apply has no Jenkins dependency. For optional execution of the reviewed mixed batch, reuse `run-query` navigation and SQL injection; Open in Run Query populates the editor and never triggers a job.
 Extend the route contract with versioned optional metadata:
 
 ```text
@@ -359,7 +403,7 @@ Compatibility work belongs to this feature's implementation scope. Do not silent
 **MQ-21.** Direct-apply states: **Draft**, **Checking Latest**, **Conflict**, **Updating**, **Committed**,
 **Outcome Unknown**, **Verified**, **Verification Mismatch** and **Failed**. Never show Committed without a confirmed commit response.
 Precommit readback failure rolls back; postcommit refresh failure retains Committed with verification pending.
-MERGE-package lifecycle states: **Draft**, **Needs Refresh**, **Conflict**, **Ready for Review**, **Generated**, **Handed Off**,
+SQL-package lifecycle states: **Draft**, **Needs Refresh**, **Conflict**, **Ready for Review**, **Generated**, **Handed Off**,
 **Verified**, **Verification Mismatch**. Run Query owns actual job status; no automatic completion callback is assumed.
 Handed Off records editor transfer only. Verify Database is an explicit read-only operation against the package's source target.
 Compare all intended changed/new rows with package expectations using typed values and complete CLOBs.
@@ -369,7 +413,7 @@ Verification of database values does not assert dashboard cache refresh, renderi
 ## 11. Technical composition
 
 Current checkout is a Vanilla JS SPA with class-based BaseTool, shared Oracle/Monaco services and Tauri Oracle connectivity.
-Extend the Oracle bridge with a dedicated managed-apply transaction command; Jenkins remains optional for MERGE scripts.
+Extend the Oracle bridge with a dedicated managed-apply transaction command; Jenkins remains optional for INSERT/UPDATE scripts.
 Implement in that active architecture; do not make this feature contingent on a React cutover or add a second shell.
 If the implementation checkout has since migrated, follow its active architecture contract and preserve the same service/data behavior.
 
@@ -377,10 +421,10 @@ If the implementation checkout has since migrated, follow its active architectur
 | ------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
 | Tool controller / template / scoped styles | Navigation, forms, review, state rendering and widget lifecycle                                          |
 | Oracle repository                          | Explicit metadata/configuration reads, complete fetches, identity, refresh and managed-apply invocation |
-| Managed-apply backend                     | Allowlist, typed binds, full-row locked conflict check, one transaction, rollback and committed readback |
+| Managed-apply backend                     | Allowlist, typed binds, full-row locked conflict check, one transaction, atomic audit writes, rollback and committed readback |
 | Domain graph                               | Typed values, original/draft separation, ID maps, dependency traversal and clone rules                   |
 | Validation / health service                | DDL-backed rules, advisory SQL analysis and scoped findings                                              |
-| Change planner                             | Baseline comparison, intent-specific MERGE plan and conflicts                                      |
+| Change planner                             | Baseline comparison, explicit INSERT/UPDATE plan and conflicts                                      |
 | Oracle serializer / package service        | Guarded script, CLOB encoding, verification SQL, manifest/hash and exports                               |
 | Draft store                                | Feature-owned IndexedDB persistence and revision management                                              |
 | Run Query adapter                          | Versioned handoff, target mapping, atomic-package policy and provenance                                  |
@@ -409,21 +453,25 @@ Do not install missing tooling automatically. No live UAT mutation is needed to 
 | AC-07 | Draft survives navigation/reload; two connections with identical menu IDs remain independent; persistence failure is visible               |
 | AC-08 | Remote edit before latest fetch shows a conflict; edit after latest fetch fails the locked recheck and rolls back all updates              |
 | AC-09 | Apostrophes, ampersands, Unicode, embedded binds, >4000-character SQL and optional empty/null CLOBs survive a full LOCAL Oracle round trip |
-| AC-10 | Forced failure midway through direct LOCAL MERGEs leaves all rows unchanged; AD Tools receives structured failure                         |
-| AC-11 | Stale update retry fails baseline checks; zero-row MERGE/lock timeout cannot succeed; new-ID collision fails direct/script guards                |
+| AC-10 | Forced failure midway through direct LOCAL INSERTs/UPDATEs leaves all rows unchanged; AD Tools receives structured failure                         |
+| AC-11 | Stale update retry fails baseline checks; zero-row UPDATE/lock timeout cannot succeed; new-ID collision fails direct/script guards                |
 | AC-12 | Run Query receives exact script/hash, requires a matching target, never auto-runs, and rejects managed-script edits/splitting              |
 | AC-13 | Package near/above actual runner size limit gets correct byte-based behavior; no partial/chunked execution occurs                          |
 | AC-14 | Confirmed commit, outcome unknown and verified state stay distinct; mismatches preserve recoverable draft/package                          |
 | AC-15 | Normal and half-width Desktop, light/dark, keyboard use, empty state, long names and large SQL lists keep controls reachable               |
 | AC-16 | Wrong schema, drift, missing credentials, interrupted/partial fetch and stale response produce explicit recoverable states                 |
-| AC-17 | One mixed MERGE batch edits an existing row and creates a parent/children; all commit together or all roll back                          |
+| AC-17 | One mixed INSERT/UPDATE batch edits an existing row and creates a parent/children; all commit together or all roll back                          |
 | AC-18 | Deleted existing row is not recreated; colliding new ID is not overwritten, including a collision after preflight                       |
 | AC-19 | Editing/target changes/duplicate submission are disabled in flight; reload restores unresolved requests for reconciliation              |
 | AC-20 | Exact NUMBER and TIMESTAMP(6) values, null/empty CLOB and paged completeness survive every read/draft/apply boundary                      |
-| AC-21 | Copy SQL and Run Query receive standalone guarded MERGE SQL with embedded values; backend templates are clearly labelled separately    |
+| AC-21 | Copy SQL and Run Query receive standalone guarded INSERT/UPDATE SQL with embedded values; backend templates are clearly labelled separately    |
+| AC-22 | A mixed successful batch produces one correctly grouped history entry with complete typed before/after values per affected row         |
+| AC-23 | Forced audit INSERT/readback failure rolls back all configuration/audit writes; conflict/no-op writes no audit history                  |
+| AC-24 | Direct apply and exported script both audit atomically; each script execution has its own change ID                                      |
+| AC-25 | History supports menu scope, paging, full SQL diffs and foreign/malformed formats; incomplete/denied reads are explicit                   |
 
 For each E2E run retain a dated artifact containing commit, commands, environment, fixture/setup, screenshots or trace,
-package hash, expected/actual database comparisons, result, cleanup and reproduction steps. Keep credentials out of artifacts. Add E2E cases for denied MERGE/creation permission, double submission, connection changes during preflight,
+package hash, expected/actual database comparisons, result, cleanup and reproduction steps. Keep credentials out of artifacts. Add E2E cases for denied INSERT/UPDATE permission, double submission, connection changes during preflight,
 commit acknowledgment loss, readback reconciliation and stored SQL containing nested bind tokens.
 Label source checks, fixtures, browser behavior, LOCAL Oracle execution, Jenkins execution and packaged Desktop evidence separately.
 Generated SQL success on LOCAL Oracle is not proof of Jenkins or UAT behavior.
@@ -432,13 +480,14 @@ Generated SQL success on LOCAL Oracle is not proof of Jenkins or UAT behavior.
 
 1. Validate schema/identity loading, standardized typed reads and the dedicated Oracle managed-apply API contract.
 2. Implement hierarchy, drafts, editing/cloning, health and review.
-3. Implement mixed-batch guarded MERGE and prove intent checks, dependency order, locked recheck, typed/CLOB binding, rollback and uncertain-commit recovery in LOCAL Oracle.
-4. Implement standalone MERGE generation and optional Run Query target mapping/atomic transport; verify the runner before enabling handoff.
-   Direct MERGE delivery does not depend on Jenkins availability or this integration gate.
-5. Complete Desktop acceptance, read-only UAT load/readback checks and reproducible evidence.
+3. Implement mixed-batch guarded INSERT/UPDATE and prove intent checks, dependency order, locked recheck, typed/CLOB binding, rollback and uncertain-commit recovery in LOCAL Oracle.
+4. Implement standalone INSERT/UPDATE generation and optional Run Query target mapping/atomic transport; verify the runner before enabling handoff.
+   Direct INSERT/UPDATE delivery does not depend on Jenkins availability or this integration gate.
+5. Prove atomic audit writes, transaction grouping, history diffs and legacy-format handling in LOCAL Oracle.
+6. Complete Desktop acceptance, read-only UAT load/readback checks and reproducible evidence.
 
 Monitoring application cache/refresh behavior, exact value-format vocabulary, alias casing, pagination contract,
 chart fallback and DSH_SUMMARY_QUERY usage remain unverified. V1 can inspect/edit confirmed configuration while preserving unknown values;
 it must not claim runtime preview or compatibility-table editing. These unknowns do not justify inventing defaults or automatic reload actions.
-Database audit writes/history and future DELETE require separately agreed contracts.
-MERGE-based creation and editing are in scope; validate actual runtime privileges rather than assuming UPDATE access includes creation.
+DELETE and future approval/revert workflows require separately agreed contracts. DSH_CONFIG_AUDIT history is included under MQ-17.
+INSERT-based creation and editing are in scope; validate actual runtime privileges rather than assuming UPDATE access includes creation.
