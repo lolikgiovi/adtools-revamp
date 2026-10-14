@@ -2,6 +2,7 @@
  * App - Main application class
  * Initializes and coordinates all components
  */
+import { manualApprovalMonitor } from "./core/ManualApprovalMonitor.js";
 import { EventBus } from "./core/EventBus.js";
 import { Router } from "./core/Router.js";
 import { Sidebar } from "./components/Sidebar.js";
@@ -150,6 +151,7 @@ class App {
     this.router.navigate("home");
 
     this.bindGlobalEvents();
+    manualApprovalMonitor.start({ eventBus: this.eventBus });
     this.setupDevReleaseTourPreview();
     this._releaseTips = new ReleaseTips({
       release: { ...releaseContent, surface: isTauri() ? "desktop" : "web" },
@@ -1498,6 +1500,7 @@ class App {
    * Destroy the application
    */
   destroy() {
+    manualApprovalMonitor.stop();
     // Cleanup event listeners
     this.eventBus.clear();
 

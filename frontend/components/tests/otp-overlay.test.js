@@ -7,6 +7,8 @@ import { openOtpOverlay } from "../OtpOverlay.js";
 
 const globalStyles = readFileSync(resolve(process.cwd(), "frontend/styles/components.css"), "utf8");
 
+import { manualApprovalMonitor } from "../../core/ManualApprovalMonitor.js";
+
 describe("OTP overlay", () => {
   beforeEach(() => {
     document.head.innerHTML = `<style>${globalStyles}</style>`;
@@ -15,6 +17,7 @@ describe("OTP overlay", () => {
   });
 
   afterEach(() => {
+    manualApprovalMonitor.stop();
     document.querySelector(".otp-modal")?.remove();
     vi.unstubAllGlobals();
   });
@@ -124,7 +127,7 @@ describe("OTP overlay", () => {
     await expect(pending).rejects.toThrow("Closed");
   });
 
-  it("requests and completes manual approval when manual mode is active", async () => {
+  it("automatically completes manual approval when manual mode is active", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, mode: "manual" }) })
@@ -146,7 +149,6 @@ describe("OTP overlay", () => {
     expect(overlay.querySelector(".otp-manual-check").hidden).toBe(false);
     expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toMatchObject({ department: "WHOLESALE", role: "ENGINEER" });
 
-    overlay.querySelector(".otp-manual-check").click();
     await expect(pending).resolves.toEqual({ token: "manual-token", kvValue: undefined });
   });
 });

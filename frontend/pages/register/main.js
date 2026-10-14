@@ -1,3 +1,4 @@
+import { manualApprovalMonitor } from "../../core/ManualApprovalMonitor.js";
 import { isRegistrationEmailAllowed } from "../../core/RegistrationEmail.js";
 import { RegisterTemplate } from "./template.js";
 import "./styles.css";
@@ -39,6 +40,13 @@ export class RegisterPage {
 
     manualBtn?.addEventListener("click", () => this.requestManualApproval());
     checkApprovalBtn?.addEventListener("click", () => this.checkManualApproval());
+    this.unsubscribeApproval = manualApprovalMonitor.subscribe(({ request, data, error }) => {
+      if (!this.root || request.requestId !== this.manualRequest?.requestId) return;
+      if (error) this.setMessage(error.message || "Could not check approval status.");
+      else if (data.status === "approved") this.manualRequest = null;
+      else this.setMessage("Still pending. Approval status is checked automatically every minute.", "info");
+    });
+    manualApprovalMonitor.start({ eventBus: this.eventBus });
     void this.loadAuthMode();
 
     form.addEventListener("submit", async (e) => {
@@ -331,6 +339,8 @@ export class RegisterPage {
       const data = await this.postRegistrationEndpoint("/register/request-manual-approval", identity);
       this.manualRequest = { ...identity, requestId: data.requestId };
       localStorage.setItem("manual.approval.request", JSON.stringify(this.manualRequest));
+      manualApprovalMonitor.start({ eventBus: this.eventBus });
+      if (!this.root) return;
       this.root.querySelector('[data-role="approval-status"]').hidden = false;
       this.setMessage(
         data.status === "approved" ? "This request is approved. Checking access..." : "Manual approval request submitted.",
@@ -352,19 +362,7 @@ export class RegisterPage {
     button.textContent = "Checking...";
     this.setMessage("");
     try {
-      const data = await this.postRegistrationEndpoint("/register/manual-approval-status", this.manualRequest);
-      if (data.status !== "approved") {
-        this.setMessage("Still pending. Contact Lolik to review the request.", "info");
-        return;
-      }
-      this.finishRegistration({
-        username: this.manualRequest.displayName,
-        email: this.manualRequest.email,
-        department: this.manualRequest.department,
-        role: this.manualRequest.role,
-        userId: data.userId,
-        sessionToken: data.token,
-      });
+      await manualApprovalMonitor.check();
     } catch (error) {
       this.setMessage(error.message || "Could not check approval status.");
     } finally {
@@ -373,19 +371,10 @@ export class RegisterPage {
     }
   }
 
-  finishRegistration({ username, email, userId, sessionToken, department, role }) {
-    try {
-      if (sessionToken) SessionTokenStore.saveToken(sessionToken);
-      localStorage.setItem("user.username", username);
-      localStorage.setItem("user.email", email);
-      localStorage.setItem("user.department", department || "");
-      localStorage.setItem("user.role", role || "");
-      if (userId) localStorage.setItem("user.id", userId);
-      localStorage.setItem("user.registered", "true");
-      localStorage.removeItem("manual.approval.request");
-    } catch (_) {}
-    this.eventBus?.emit?.("user:registered", { username, email, userId, department, role });
-    location.hash = "#home";
+  unmount() {
+    this.unsubscribeApproval?.();
+    this.unsubscribeApproval = null;
+    this.root = null;
   }
 
   _fallbackInstallId() {

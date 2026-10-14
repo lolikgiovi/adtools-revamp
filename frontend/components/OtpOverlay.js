@@ -12,6 +12,7 @@ function nowMs() {
   return Date.now();
 }
 
+import { manualApprovalMonitor } from "../core/ManualApprovalMonitor.js";
 import { isRegistrationEmailAllowed } from "../core/RegistrationEmail.js";
 import { SessionTokenStore } from "../core/SessionTokenStore.js";
 import { UsageTracker } from "../core/UsageTracker.js";
@@ -144,6 +145,10 @@ export async function openOtpOverlay({
       const manualKey = "manual.approval.request";
       const deviceId = UsageTracker.getDeviceId();
       let manualRequest = null;
+      let unsubscribeApproval = null;
+      let approvedToken = null;
+      let finishingApproval = false;
+      let closed = false;
       if (manual) {
         try {
           const saved = JSON.parse(localStorage.getItem(manualKey) || "null");
@@ -219,6 +224,7 @@ export async function openOtpOverlay({
           if (!response.ok || !data?.ok) throw new Error(data?.error || "KV access failure");
           kvValue = data.value;
         }
+        if (closed) return;
         SessionTokenStore.saveToken(token);
         localStorage.setItem("user.department", manualRequest?.department ?? departmentInput.value);
         localStorage.setItem("user.role", manualRequest?.role ?? roleInput.value);
@@ -231,21 +237,24 @@ export async function openOtpOverlay({
         btnCheck.disabled = true;
         err.textContent = "";
         try {
-          const data = await postApproval("/register/manual-approval-status", manualRequest);
-          if (data.status !== "approved") {
-            showManualStatus("Still pending. Contact Lolik to review the request.");
-            return;
-          }
-          await finishWithToken(data.token);
-          try {
-            localStorage.removeItem(manualKey);
-          } catch (_) {
-            // Approval succeeded even if local storage is unavailable.
-          }
+          if (approvedToken) await completeApproval(approvedToken);
+          else await manualApprovalMonitor.check();
         } catch (error) {
           err.textContent = error.message || "Could not check approval status.";
         } finally {
           btnCheck.disabled = false;
+        }
+      }
+
+      async function completeApproval(token) {
+        if (closed || finishingApproval) return;
+        finishingApproval = true;
+        try {
+          await finishWithToken(token);
+        } catch (error) {
+          if (!closed) err.textContent = error.message || "Could not complete access.";
+        } finally {
+          finishingApproval = false;
         }
       }
 
@@ -282,6 +291,7 @@ export async function openOtpOverlay({
           showManualStatus(
             data.status === "approved" ? "Approval granted. Checking access..." : "Approval requested. Contact Lolik to review it.",
           );
+          manualApprovalMonitor.start();
           if (data.status === "approved") await checkManualApproval();
         } catch (error) {
           err.textContent = error.message || "Could not submit the approval request.";
@@ -362,6 +372,8 @@ export async function openOtpOverlay({
       }
 
       function cleanup() {
+        closed = true;
+        unsubscribeApproval?.();
         clearInterval(countdownTimer);
         overlay.remove();
         if (onClose) {
@@ -381,6 +393,15 @@ export async function openOtpOverlay({
       });
 
       document.body.appendChild(overlay);
+      unsubscribeApproval = manualApprovalMonitor.subscribe(({ request, data, error }) => {
+        if (closed || request.requestId !== manualRequest?.requestId) return;
+        if (error) err.textContent = error.message || "Could not check approval status.";
+        else if (data.status === "approved") {
+          approvedToken = data.token;
+          void completeApproval(data.token);
+        } else showManualStatus("Still pending. Approval status is checked automatically every minute.");
+      });
+      if (manualRequest) manualApprovalMonitor.start();
     } catch (e) {
       reject(e);
     }

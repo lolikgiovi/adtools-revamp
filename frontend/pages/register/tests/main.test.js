@@ -3,6 +3,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RegisterPage } from "../main.js";
 
+import { manualApprovalMonitor } from "../../../core/ManualApprovalMonitor.js";
+
 describe("registration email verification", () => {
   beforeEach(() => {
     document.body.innerHTML = '<div id="register-root"></div>';
@@ -11,6 +13,7 @@ describe("registration email verification", () => {
   });
 
   afterEach(() => {
+    manualApprovalMonitor.stop();
     vi.unstubAllGlobals();
   });
 
@@ -97,11 +100,39 @@ describe("registration email verification", () => {
     expect(root.querySelector(".register-error").textContent).toContain("@bankmandiri.co.id");
   });
 
+  it("checks a restored request on mount and automatically completes registration", async () => {
+    localStorage.setItem(
+      "manual.approval.request",
+      JSON.stringify({
+        requestId: "saved-request",
+        email: "person@bankmandiri.co.id",
+        deviceId: "device-1",
+        displayName: "Person",
+        department: "RETAIL",
+        role: "ENGINEER",
+      }),
+    );
+    const fetchMock = vi.fn(async (url) => ({
+      ok: true,
+      json: async () =>
+        url.includes("auth-mode") ? { ok: true, mode: "manual" } : { ok: true, status: "approved", token: "auto-token", userId: "user-1" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const root = document.querySelector("#register-root");
+    new RegisterPage({ eventBus: { emit: vi.fn() } }).mount(root);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fetchMock.mock.calls.some(([url]) => url.includes("manual-approval-status"))).toBe(true);
+    expect(localStorage.getItem("user.registered")).toBe("true");
+    expect(localStorage.getItem("manual.approval.request")).toBeNull();
+    expect(location.hash).toBe("#home");
+  });
+
   it("offers manual approval when the runtime mode is manual", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, mode: "manual" }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, requestId: "request-1", status: "pending" }) });
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, requestId: "request-1", status: "pending" }) })
+      .mockResolvedValue({ ok: true, json: async () => ({ ok: true, status: "pending" }) });
     vi.stubGlobal("fetch", fetchMock);
     const root = document.querySelector("#register-root");
     new RegisterPage({ eventBus: { emit: vi.fn() } }).mount(root);
