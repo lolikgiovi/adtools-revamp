@@ -3,7 +3,7 @@ import { UsageTracker } from "../../../core/UsageTracker.js";
 import { KafkaTool } from "../main.js";
 import { KAFKA_ACTIVE_BROKER_KEY, KAFKA_BROKERS_KEY } from "../service.js";
 
-vi.mock("../../../core/UsageTracker.js", () => ({ UsageTracker: { trackToolUse: vi.fn() } }));
+vi.mock("../../../core/UsageTracker.js", () => ({ UsageTracker: { trackToolUse: vi.fn(), trackEvent: vi.fn() } }));
 
 function mountWithBroker(tool) {
   const profile = { id: "test-broker", name: "broker:9092", brokers: "broker:9092" };
@@ -13,10 +13,54 @@ function mountWithBroker(tool) {
 }
 
 describe("Kafka analytics", () => {
+  // Favorites can fail through empty input, failed persistence, or telemetry throwing.
+  // Both pickers must record the topic and add/remove state without counting a tool use.
   beforeEach(() => {
+    vi.restoreAllMocks();
     vi.clearAllMocks();
     document.body.innerHTML = '<div id="tool"></div>';
     localStorage.clear();
+  });
+
+  it("logs favorite additions and removals from both pickers", () => {
+    const tool = new KafkaTool(null, {});
+    mountWithBroker(tool);
+    document.querySelector("#kafkaTopic").value = "orders.test";
+    document.querySelector("#kafkaListenTopic").value = "orders.test";
+    tool.toggleTopicFavorite("publish");
+    tool.toggleTopicFavorite("listen");
+    expect(UsageTracker.trackEvent.mock.calls).toEqual([
+      ["kafka", "topic_favorite_changed", {
+        topic: "orders.test", broker_profile: "broker:9092", source: "publish", favorite: true,
+      }],
+      ["kafka", "topic_favorite_changed", {
+        topic: "orders.test", broker_profile: "broker:9092", source: "listen", favorite: false,
+      }],
+    ]);
+    expect(UsageTracker.trackToolUse).not.toHaveBeenCalled();
+    tool.unmount();
+  });
+
+  it("does not log empty topics or an unsaved favorite", () => {
+    const tool = new KafkaTool(null, {});
+    mountWithBroker(tool);
+    tool.toggleTopicFavorite();
+    document.querySelector("#kafkaTopic").value = "orders.test";
+    vi.spyOn(localStorage, "setItem").mockImplementation(() => { throw new Error("Quota exceeded"); });
+    tool.toggleTopicFavorite();
+    expect(UsageTracker.trackEvent).not.toHaveBeenCalled();
+    tool.unmount();
+  });
+
+  it("keeps favorites working when telemetry throws", () => {
+    const tool = new KafkaTool(null, {});
+    mountWithBroker(tool);
+    document.querySelector("#kafkaTopic").value = "orders.test";
+    UsageTracker.trackEvent.mockImplementationOnce(() => { throw new Error("Telemetry unavailable"); });
+    expect(() => tool.toggleTopicFavorite()).not.toThrow();
+    expect(tool.favoriteTopics).toContain("orders.test");
+    expect(document.querySelector("#kafkaTopicFavorite").getAttribute("aria-pressed")).toBe("true");
+    tool.unmount();
   });
 
   it("records confirmed deliveries even when the tool unmounts before the response", async () => {

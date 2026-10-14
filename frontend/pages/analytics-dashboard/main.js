@@ -8,18 +8,43 @@ import "./styles.css";
 
 const API_BASE = import.meta.env.DEV ? "http://localhost:8787" : String(import.meta.env.VITE_WORKER_BASE || "").replace(/\/$/, "");
 const TOKEN_KEY = "analytics.dashboard.token";
+const PRIMARY_VIEWS = [
+  { id: "overview", label: "Overview" },
+  { id: "opportunities", label: "Tools" },
+  { id: "who", label: "People" },
+  { id: "daily", label: "Activity" },
+];
+const REPORT_GROUPS = [
+  ["Usage & Adoption", ["overview", "opportunities", "who", "active-users", "tools", "tool-adoption", "daily"]],
+  ["Reliability & Diagnostics", ["friction", "improvement-notes", "errors", "error-summary", "versions", "devices", "events"]],
+  ["Quick Query", ["quick-query", "qq-table-usage", "quick-query-errors", "qq-insights", "qq-splits", "qq-outcomes"]],
+  ["Compare Config", ["compare-config", "cc-table-pairs"]],
+  ["Run Query", ["run-query", "run-query-summary"]],
+  ["Run Batch", ["run-batch", "run-batch-summary"]],
+  ["JSON Tools", ["json-tools", "json-tools-summary", "json-outcomes"]],
+  ["Base64 Tools", ["base64-tools", "base64-summary"]],
+  ["QR Tools", ["qr-tools", "qr-summary"]],
+  ["TLV Viewer", ["tlv-viewer", "tlv-summary"]],
+  ["Image Checker", ["image-checker", "image-checker-summary"]],
+  ["HTML & Splunk", ["html-splunk", "template-editors-summary", "html-outcomes"]],
+  ["UUID & SQL IN", ["uuid-sql", "uuid-sql-summary"]],
+  ["Merge SQL", ["merge-sql", "merge-sql-summary"]],
+  ["Master Lockey", ["master-lockey", "master-lockey-summary"]],
+];
 
 class AnalyticsDashboardPage {
   constructor({ eventBus } = {}) {
     this.eventBus = eventBus;
     this.container = null;
     this.token = null;
+    this.personDirectoryData = null;
     this.tabs = [];
     this.currentTab = null;
     this.cache = {};
     this.filterText = "";
     this.selectedRange = "30d";
     this.currentWhoSection = "users";
+    this.selectedPerson = null;
     this.lastRenderedData = [];
     this.dataRequestId = 0;
     this.dataAbortController = null;
@@ -63,6 +88,10 @@ class AnalyticsDashboardPage {
     // Refresh
     this.container.querySelector("#dashboard-refresh")?.addEventListener("click", () => {
       this.cache = {};
+      if (this.currentTab === "__reports") {
+        this.showReportLibrary();
+        return;
+      }
       if (this.isPaginatedTab(this.currentTab)) this.resetPagination(this.currentTab, this.filterText);
       this.invalidateDataRequests();
       this.loadCurrentTabData();
@@ -82,6 +111,7 @@ class AnalyticsDashboardPage {
 
     this.container.querySelector("#dashboard-range")?.addEventListener("change", (e) => {
       this.selectedRange = e.target.value || "30d";
+      this.updateNavigation();
       delete this.cache[this.getCacheKey(this.currentTab)];
       this.invalidateDataRequests();
       this.loadCurrentTabData();
@@ -103,6 +133,16 @@ class AnalyticsDashboardPage {
     if (this.documentKeydownListener) document.removeEventListener("keydown", this.documentKeydownListener);
     this.documentKeydownListener = (e) => {
       if (e.key === "Escape") this.closeRowDetail();
+      const overlay = this.container?.querySelector("#row-detail-overlay");
+      if (e.key === "Tab" && overlay && !overlay.hidden) {
+        const controls = [...overlay.querySelectorAll('button, a[href], input, select, [tabindex="0"]')];
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if ((e.shiftKey && document.activeElement === first) || (!e.shiftKey && document.activeElement === last)) {
+          e.preventDefault();
+          (e.shiftKey ? last : first)?.focus();
+        }
+      }
     };
     document.addEventListener("keydown", this.documentKeydownListener);
   }
@@ -158,12 +198,14 @@ class AnalyticsDashboardPage {
     this.tabsRequestId += 1;
     this.authRequestId += 1;
     this.token = null;
+    this.personDirectoryData = null;
     this.tabs = [];
     this.currentTab = null;
     this.cache = {};
     this.filterText = "";
     this.selectedRange = "30d";
     this.currentWhoSection = "users";
+    this.selectedPerson = null;
     this.lastRenderedData = [];
     try {
       localStorage.removeItem(TOKEN_KEY);
@@ -231,21 +273,122 @@ class AnalyticsDashboardPage {
     const tabsContainer = this.container.querySelector("#dynamic-tabs");
     if (!tabsContainer) return;
 
-    tabsContainer.innerHTML = this.tabs
-      .map(
-        (tab, idx) =>
-          `<button type="button" class="tab-button${idx === 0 ? " active" : ""}" data-tab="${tab.id}">${this.escapeHtml(tab.name)}</button>`,
-      )
-      .join("");
-
-    // Bind click events
-    tabsContainer.querySelectorAll(".tab-button").forEach((btn) => {
-      btn.addEventListener("click", () => this.switchTab(btn.dataset.tab));
+    tabsContainer.setAttribute("aria-label", "Analytics views");
+    tabsContainer.innerHTML =
+      PRIMARY_VIEWS.filter((view) => this.tabs.some((tab) => tab.id === view.id))
+        .map((view) => `<button type="button" class="tab-button" data-tab="${view.id}">${view.label}</button>`)
+        .join("") + '<button type="button" class="tab-button" data-library>Reports</button>';
+    tabsContainer.querySelectorAll("[data-tab]").forEach((button) => {
+      button.addEventListener("click", () => this.switchTab(button.dataset.tab));
     });
+    tabsContainer.querySelector("[data-library]").addEventListener("click", () => this.showReportLibrary());
+    this.updateNavigation();
+  }
+
+  getReportGroups() {
+    const known = new Set(REPORT_GROUPS.flatMap(([, ids]) => ids));
+    return [
+      ...REPORT_GROUPS.map(([name, ids]) => ({ name, tabs: this.tabs.filter((tab) => ids.includes(tab.id)) })),
+      { name: "Custom Reports", tabs: this.tabs.filter((tab) => !known.has(tab.id)) },
+    ].filter((group) => group.tabs.length);
+  }
+
+  updateNavigation() {
+    if (!this.container) return;
+    const library = this.currentTab === "__reports";
+    const primary = PRIMARY_VIEWS.find((view) => view.id === this.currentTab);
+    this.container.querySelectorAll("#dynamic-tabs button").forEach((button) => {
+      const selected = button.dataset.library !== undefined ? !primary : button.dataset.tab === this.currentTab;
+      button.classList.toggle("active", selected);
+      if (selected) button.setAttribute("aria-current", "page");
+      else button.removeAttribute("aria-current");
+    });
+    const title = this.container.querySelector("#dashboard-report-title");
+    if (title)
+      title.textContent = library
+        ? "Report Library"
+        : primary?.label || this.tabs.find((tab) => tab.id === this.currentTab)?.name || "Overview";
+    const ranged = ["overview", "opportunities", "who", "daily"].includes(this.currentTab);
+    const scope = this.container.querySelector("#dashboard-scope");
+    if (scope)
+      scope.textContent = library
+        ? "Browse by tool or search all reports."
+        : ranged
+          ? `Activity for ${this.getRangeLabel(this.selectedRange)}`
+          : "Report-defined period";
+    const heading = this.container.querySelector(".dashboard-report-heading");
+    if (heading) heading.hidden = library || Boolean(primary);
+    const actions = this.container.querySelector(".dashboard-actions");
+    if (actions) actions.hidden = library;
+    const search = this.container.querySelector(".dashboard-search");
+    if (search) search.hidden = this.currentTab === "overview" || Boolean(this.selectedPerson);
+    const input = this.container.querySelector("#dashboard-search");
+    const label =
+      this.currentTab === "who"
+        ? "Search people"
+        : this.currentTab === "opportunities"
+          ? "Search tools"
+          : this.currentTab === "daily"
+            ? "Search activity"
+            : "Search this report";
+    if (input) {
+      input.setAttribute("aria-label", label);
+      input.placeholder = `${label}…`;
+    }
+  }
+
+  showReportLibrary() {
+    this.invalidateDataRequests();
+    this.selectedPerson = null;
+    this.currentTab = "__reports";
+    this.updateNavigation();
+    const panel = this.container.querySelector("#dashboard-panel");
+    panel.querySelector(".panel-loading").style.display = "none";
+    const content = panel.querySelector(".panel-content");
+    content.innerHTML = `<div class="report-library">
+      <label class="report-library-search" for="report-library-search"><span class="dashboard-search-label">Find a Report</span>
+        <input id="report-library-search" type="search" name="report-search" autocomplete="off" placeholder="Search tools or reports…">
+      </label><div class="report-groups"></div><p class="report-search-status" role="status"></p></div>`;
+    const input = content.querySelector("#report-library-search");
+    const render = () => {
+      const term = input.value.trim().toLowerCase();
+      const groups = this.getReportGroups()
+        .map((group) => ({ ...group, tabs: group.tabs.filter((tab) => `${group.name} ${tab.name}`.toLowerCase().includes(term)) }))
+        .filter((group) => group.tabs.length);
+      content.querySelector(".report-groups").innerHTML = groups
+        .map(
+          (group) =>
+            `<section class="report-group"><h3>${this.escapeHtml(group.name)}</h3><div>${group.tabs
+              .map(
+                (tab) =>
+                  `<button type="button" class="report-link" data-report="${this.escapeHtml(tab.id)}">
+            <span>${this.escapeHtml(tab.name)}</span><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" stroke-width="1.5"><path d="m9 5 7 7-7 7"/></svg></button>`,
+              )
+              .join("")}</div></section>`,
+        )
+        .join("");
+      const count = groups.reduce((sum, group) => sum + group.tabs.length, 0);
+      content.querySelector(".report-search-status").textContent = count
+        ? `${count} reports`
+        : "No matching reports. Try a tool name or clear your search.";
+      content.querySelectorAll("[data-report]").forEach((button) =>
+        button.addEventListener("click", () => {
+          this.switchTab(button.dataset.report);
+          const primary = [...this.container.querySelectorAll("#dynamic-tabs [data-tab]")].find(
+            (tab) => tab.dataset.tab === button.dataset.report,
+          );
+          (primary || this.container.querySelector("#dashboard-report-title"))?.focus();
+        }),
+      );
+    };
+    input.addEventListener("input", render);
+    render();
   }
 
   switchTab(tabId) {
     if (!this.container) return;
+    this.selectedPerson = null;
     this.currentTab = tabId;
     this.filterText = "";
     const searchInput = this.container.querySelector("#dashboard-search");
@@ -259,6 +402,7 @@ class AnalyticsDashboardPage {
       tab.classList.toggle("active", tab.dataset.tab === tabId);
     });
 
+    this.updateNavigation();
     this.loadCurrentTabData();
   }
 
@@ -295,7 +439,8 @@ class AnalyticsDashboardPage {
   }
 
   async loadCurrentTabData({ append = false } = {}) {
-    if (!this.currentTab || !this.container) return;
+    if (!this.currentTab || this.currentTab === "__reports" || !this.container) return;
+    if (this.selectedPerson) return this.loadPersonData();
 
     const panel = this.container.querySelector("#dashboard-panel");
     const loading = panel?.querySelector(".panel-loading");
@@ -367,11 +512,11 @@ class AnalyticsDashboardPage {
           this.renderTable(content, data.data);
         }
       } else {
-        content.innerHTML = `<div class="panel-error">${data.error || "Failed to load data"}</div>`;
+        content.innerHTML = `<div class="panel-error">${this.escapeHtml(data.error || "Failed to load data")}</div>`;
       }
     } catch (err) {
       if (this.isDataRequestCurrent(requestId, tabId, content)) {
-        content.innerHTML = `<div class="panel-error">Connection error: ${err.message}</div>`;
+        content.innerHTML = `<div class="panel-error">Connection error: ${this.escapeHtml(err.message)}</div>`;
       }
     } finally {
       if (this.isDataRequestCurrent(requestId, tabId, content)) {
@@ -424,6 +569,11 @@ class AnalyticsDashboardPage {
       return;
     }
 
+    if (this.currentTab === "opportunities" && data.some((row) => "successful_uses" in row)) {
+      this.renderToolInsights(container, data);
+      return;
+    }
+
     // Infer columns from first row
     const columns = Object.keys(data[0] || {});
 
@@ -469,7 +619,39 @@ class AnalyticsDashboardPage {
     // Bind row click events
     container.querySelectorAll(".dashboard-table tbody tr").forEach((tr, idx) => {
       tr.style.cursor = "pointer";
+      tr.tabIndex = 0;
+      tr.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          tr.click();
+        }
+      });
       tr.addEventListener("click", () => this.showRowDetail(data[idx]));
+    });
+  }
+
+  renderToolInsights(container, data) {
+    const number = (value) => new Intl.NumberFormat().format(Number(value) || 0);
+    const total = this.lastRenderedData.reduce((sum, row) => sum + (Number(row.successful_uses) || 0), 0);
+    container.innerHTML = `<div class="tools-summary"><span>${number(data.length)} ${this.filterText ? "matching " : ""}tools</span>
+      <details class="counting-help"><summary>How counts work</summary><p>Successful uses are completed tool actions.
+      Repeat users have at least two successful uses in the selected period; this does not measure returning on another day.</p></details></div>
+      <div class="table-wrapper"><table class="dashboard-table tool-insights-table">
+      <thead><tr><th>Tool</th><th>Users</th><th>Successful Uses</th><th>Repeat Users</th><th>Most Used Action</th><th>Details</th></tr></thead>
+      <tbody>${data
+        .map((row, index) => {
+          const share = total ? Math.max(0, Math.min(100, (Number(row.successful_uses) / total) * 100)) : 0;
+          return `<tr><td>${this.escapeHtml(this.formatToolName(row.tool_id))}
+          <span class="tool-usage-bar" style="--usage-share:${share}%" aria-hidden="true"></span></td>
+          <td>${number(row.users)}</td><td>${number(row.successful_uses)}</td>
+          <td>${number(row.repeat_users)} of ${number(row.users)}</td>
+          <td>${this.escapeHtml(this.formatTitleValue(row.top_action))}</td>
+          <td><button type="button" class="btn btn-outline btn-sm" data-tool-detail="${index}"
+            aria-label="View ${this.escapeHtml(this.formatToolName(row.tool_id))} usage details">View</button></td></tr>`;
+        })
+        .join("")}</tbody></table></div>`;
+    container.querySelectorAll("[data-tool-detail]").forEach((button) => {
+      button.addEventListener("click", () => this.showRowDetail(data[Number(button.dataset.toolDetail)]));
     });
   }
 
@@ -479,7 +661,7 @@ class AnalyticsDashboardPage {
   }
 
   shouldRenderOverviewCards(columns) {
-    return this.currentTab === "overview" && ["metric", "value", "context"].every((col) => columns.includes(col));
+    return this.currentTab === "overview" && ["metric", "value"].every((col) => columns.includes(col));
   }
 
   shouldRenderWhoInsights(columns) {
@@ -492,7 +674,7 @@ class AnalyticsDashboardPage {
         id: "users",
         name: "Top users",
         tabLabel: "Users",
-        description: "People with the most activity in the selected time range.",
+        description: "Select a name to inspect behavior. Ranked by activity; up to 200 people.",
         columns: ["rank", "user", "main_activity", "events", "tools_used", "devices_seen", "errors", "last_activity"],
       },
       {
@@ -519,16 +701,10 @@ class AnalyticsDashboardPage {
     const activeUsers = Number(topUser?.active_users_total ?? topUsers.length);
     const totalActions = Number(topUser?.events_total ?? topUsers.reduce((sum, row) => sum + Number(row.events || 0), 0));
     const totalErrors = Number(topUser?.errors_total ?? topUsers.reduce((sum, row) => sum + Number(row.errors || 0), 0));
-    const rangeLabel = this.getRangeLabel(this.selectedRange);
     const clickableRows = [];
 
     const summary = [
-      {
-        label: "Most active",
-        value: topUser?.user || "-",
-        context: topUser ? `${topUser.events || 0} actions, mostly ${this.formatActionName(topUser.action)}` : rangeLabel,
-      },
-      { label: "People", value: activeUsers, context: `Active ${rangeLabel}` },
+      { label: "Active People", value: activeUsers, context: "" },
       { label: "Actions", value: totalActions, context: "Tool usage events counted" },
       { label: "Errors", value: totalErrors, context: "Uncaught errors reported" },
     ]
@@ -537,7 +713,7 @@ class AnalyticsDashboardPage {
           <div class="who-summary-card">
             <span>${this.escapeHtml(String(card.label))}</span>
             <strong>${this.escapeHtml(String(card.value))}</strong>
-            <small>${this.escapeHtml(String(card.context))}</small>
+            ${card.context ? `<small>${this.escapeHtml(String(card.context))}</small>` : ""}
           </div>
         `,
       )
@@ -563,6 +739,9 @@ class AnalyticsDashboardPage {
             const cells = activeSection.columns
               .map((col) => {
                 const value = this.formatWhoValue(row, col);
+                if (col === "user" && row.user_email)
+                  return `<td><button type="button" class="person-link"
+                  data-person="${this.escapeHtml(row.user_email)}">${this.escapeHtml(row.user)}<small>${this.escapeHtml(row.user_email)}</small></button></td>`;
                 return `<td title="${this.escapeHtml(String(value ?? ""))}">${this.escapeHtml(String(value ?? "-"))}</td>`;
               })
               .join("");
@@ -572,14 +751,13 @@ class AnalyticsDashboardPage {
       : `<tr><td colspan="${activeSection.columns.length}" class="who-empty-cell">No matching rows</td></tr>`;
 
     container.innerHTML = `
-      <div class="table-info">People activity across ${this.escapeHtml(rangeLabel)} - click a row for details</div>
       <div class="who-insights">
         <div class="who-summary-grid">${summary}</div>
         <div class="who-section-tabs">${sectionTabs}</div>
         <section class="who-insight-section">
           <div class="who-insight-heading">
             <div>
-              <h3>${this.escapeHtml(activeSection.name)}</h3>
+              <h3 class="dashboard-search-label">${this.escapeHtml(activeSection.name)}</h3>
               <p>${this.escapeHtml(activeSection.description)}</p>
             </div>
             <span>${this.formatSectionInfo(activeRows.length)}</span>
@@ -603,8 +781,160 @@ class AnalyticsDashboardPage {
 
     container.querySelectorAll(".dashboard-table tbody tr").forEach((tr) => {
       tr.style.cursor = "pointer";
-      tr.addEventListener("click", () => this.showRowDetail(clickableRows[Number(tr.dataset.rowIndex)]));
+      tr.tabIndex = 0;
+      tr.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          tr.click();
+        }
+      });
+      tr.addEventListener("click", () => {
+        const row = clickableRows[Number(tr.dataset.rowIndex)];
+        if (row?.user_email) this.openPerson(row.user_email);
+        else this.showRowDetail(row);
+      });
     });
+  }
+
+  async openPerson(identity) {
+    if (!this.container || !identity) return;
+    this.personDirectoryData = this.lastRenderedData;
+    this.personDirectoryRange = this.selectedRange;
+    this.currentTab = "who";
+    this.selectedPerson = identity;
+    this.focusPersonHeading = true;
+    this.invalidateDataRequests();
+    this.updateNavigation();
+    return this.loadPersonData();
+  }
+
+  async loadPersonData() {
+    if (!this.container || !this.selectedPerson) return;
+    this.invalidateDataRequests();
+    const requestId = ++this.dataRequestId;
+    const person = this.selectedPerson;
+    const container = this.container;
+    const content = container.querySelector("#dashboard-panel .panel-content");
+    container.querySelector(".panel-loading").style.display = "none";
+    content.innerHTML =
+      '<div class="person-profile"><button type="button" class="btn btn-secondary btn-sm" data-person-back>Back to People</button>' +
+      '<p role="status">Loading person activity…</p></div>';
+    this.bindPersonBack(content);
+    this.dataAbortController = new AbortController();
+    const current = () =>
+      this.container === container && this.currentTab === "who" && this.selectedPerson === person && this.dataRequestId === requestId;
+    try {
+      const response = await fetch(`${API_BASE}/dashboard/query`, {
+        method: "POST",
+        signal: this.dataAbortController.signal,
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.token}` },
+        body: JSON.stringify({ tabId: "who", person, range: this.selectedRange }),
+      });
+      if (!current()) return;
+      if (response.status === 401) {
+        this.logout();
+        return;
+      }
+      const result = await response.json();
+      if (!current()) return;
+      if (!result.ok || !result.data || Array.isArray(result.data)) throw new Error(result.error || "Person activity is unavailable");
+      this.renderPersonProfile(content, result.data, result.source || "recorded activity");
+    } catch (error) {
+      if (!current() || error.name === "AbortError") return;
+      content.innerHTML = `<div class="person-profile"><button type="button" class="btn btn-secondary btn-sm" data-person-back>Back to People</button>
+        <p role="alert">${this.escapeHtml(error.message)}. Use Refresh to try again.</p></div>`;
+      this.bindPersonBack(content);
+    } finally {
+      if (current()) this.dataAbortController = null;
+    }
+  }
+
+  bindPersonBack(content) {
+    content.querySelector("[data-person-back]")?.addEventListener("click", () => {
+      const identity = this.selectedPerson;
+      this.selectedPerson = null;
+      this.invalidateDataRequests();
+      this.updateNavigation();
+      if (this.personDirectoryRange === this.selectedRange && this.personDirectoryData?.length) {
+        this.renderTable(content, this.personDirectoryData);
+        [...content.querySelectorAll("[data-person]")].find((button) => button.dataset.person === identity)?.focus();
+      } else this.loadCurrentTabData();
+    });
+  }
+
+  renderPersonProfile(content, data, source) {
+    const summary = data.summary || {};
+    const number = (value) => new Intl.NumberFormat().format(Number(value) || 0);
+    const escape = (value) => this.escapeHtml(String(value ?? "—"));
+    const date = (value) => {
+      if (!value) return "—";
+      const raw = String(value).replace(" ", "T");
+      const timestamp = new Date(/(?:Z|[+-]\d{2}:\d{2})$/.test(raw) ? raw : raw + "+07:00");
+      return Number.isNaN(timestamp.getTime())
+        ? escape(value)
+        : escape(
+            new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(timestamp),
+          );
+    };
+    const tools = data.tools || [];
+    const actions = data.actions || [];
+    const recent = data.recent || [];
+    const errors = data.errors || [];
+    const table = (headers, rows) => `<div class="person-table-wrap"><table class="dashboard-table"><thead><tr>
+      ${headers.map((header) => `<th>${header}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
+    const toolRows = tools.map(
+      (row) => `<tr><td>${escape(this.formatToolName(row.tool_id))}</td><td>${number(row.events)}</td>
+      <td>${Number(summary.events) ? number((Number(row.events) / Number(summary.events)) * 100) : 0}%</td></tr>`,
+    );
+    const actionRows = actions.map(
+      (row) => `<tr><td>${escape(this.formatToolName(row.tool_id))}</td>
+      <td>${escape(this.formatTitleValue(row.action))}</td><td>${number(row.events)}</td><td>${date(row.last_activity)}</td></tr>`,
+    );
+    const recentRows = recent.map(
+      (row) => `<tr><td>${date(row.created_time)}</td><td>${escape(this.formatToolName(row.tool_id))}</td>
+      <td>${escape(this.formatTitleValue(row.action))}</td><td>${escape(row.device_id)}</td></tr>`,
+    );
+    const errorRows = errors.map(
+      (row) => `<tr><td>${date(row.created_time)}</td><td>${escape(this.formatToolName(row.tool_id))}</td>
+      <td>${escape(row.error_name)}</td><td class="person-error-message">${escape(row.message)}</td></tr>`,
+    );
+    content.innerHTML = `<article class="person-profile">
+      <button type="button" class="btn btn-secondary btn-sm" data-person-back>Back to People</button>
+      <header class="person-heading"><h3 tabindex="-1">${escape(summary.user_email || this.selectedPerson)}</h3>
+        <p>${escape(source)} · dates in Asia/Jakarta</p></header>
+      <dl class="person-stats">${[
+        ["Recorded Activity", summary.events],
+        ["Active Days", summary.active_days],
+        ["Tools Used", summary.tools_used],
+        ["Devices", summary.devices_seen],
+        ["Uncaught Errors", data.error_count],
+      ]
+        .map(([label, value]) => `<div><dt>${label}</dt><dd>${number(value)}</dd></div>`)
+        .join("")}</dl>
+      <p class="person-context">First activity in this period: ${date(summary.first_activity)}. Last activity: ${date(summary.last_activity)}.</p>
+      ${Number(summary.events) === 0 ? '<p class="panel-empty">No recorded activity for this person in this period. Try a wider time range.</p>' : ""}
+      <div class="person-breakdowns"><section><h4>Tool Mix</h4><p>Share of this person’s recorded activity.</p>
+        ${tools.length ? table(["Tool", "Activity", "Share"], toolRows) : "<p>No tool activity in this period.</p>"}</section>
+      <section><h4>Active Days</h4><p>Days with recorded activity; this does not measure sessions or time spent.</p>
+        ${
+          (data.days || []).length
+            ? table(
+                ["Day", "Activity"],
+                data.days.map((row) => `<tr><td>${escape(row.day)}</td><td>${number(row.events)}</td></tr>`),
+              )
+            : "<p>No active days recorded.</p>"
+        }</section></div>
+      <section><h4>Actions by Tool</h4><p>All recorded action totals for this person in the selected period.</p>
+        ${actions.length ? table(["Tool", "Action", "Activity", "Last Used"], actionRows) : "<p>No actions recorded.</p>"}</section>
+      <details><summary>Recent Activity · ${number(recent.length)} of ${number(summary.events)} records</summary>
+        <p>Latest 100 records. This is an activity sequence, not a session replay.</p>
+        ${recent.length ? table(["Time", "Tool", "Action", "Device"], recentRows) : "<p>No recent activity recorded.</p>"}</details>
+      <details><summary>Uncaught Errors · ${number(data.error_count)} reports</summary><p>Latest 50 error reports, counted separately from usage.</p>
+        ${errors.length ? table(["Time", "Tool", "Error", "Message"], errorRows) : "<p>No uncaught errors recorded in this period.</p>"}</details>
+    </article>`;
+    this.bindPersonBack(content);
+    if (this.focusPersonHeading) content.querySelector(".person-heading h3")?.focus();
+    this.focusPersonHeading = false;
   }
 
   formatWhoHeader(key, sectionName) {
@@ -632,6 +962,8 @@ class AnalyticsDashboardPage {
       "compare-config": "Compare Config",
       "html-template": "HTML Template",
       "image-checker": "Check Image",
+      "check-image": "Check Image",
+      "sql-in-clause": "Query IN",
       "json-tools": "JSON Tools",
       "master-lockey": "Master Lockey",
       "merge-sql": "Merge SQL",
@@ -669,26 +1001,55 @@ class AnalyticsDashboardPage {
   }
 
   renderOverviewCards(container, data) {
-    const cards = data
-      .map((row) => {
-        return `
-          <button type="button" class="overview-card" data-metric="${this.escapeHtml(String(row.metric ?? ""))}">
-            <span class="overview-card-label">${this.escapeHtml(String(row.metric ?? "-"))}</span>
-            <strong>${this.escapeHtml(String(row.value ?? "-"))}</strong>
-            <span class="overview-card-context">${this.escapeHtml(String(row.context ?? ""))}</span>
-          </button>
-        `;
-      })
-      .join("");
-
-    container.innerHTML = `
-      <div class="table-info">${this.formatTableInfo(data.length)} - click a card for details</div>
-      <div class="overview-grid">${cards}</div>
-    `;
-
-    container.querySelectorAll(".overview-card").forEach((card, idx) => {
-      card.addEventListener("click", () => this.showRowDetail(data[idx]));
-    });
+    const metrics = new Map(data.map((row) => [row.metric, row.value]));
+    const numeric = (key) => {
+      const raw = metrics.get(key);
+      if (raw === undefined || raw === null || raw === "") return null;
+      const value = Number(String(raw).replaceAll(",", ""));
+      return Number.isFinite(value) && value >= 0 ? value : null;
+    };
+    const count = (key) => (numeric(key) === null ? "—" : new Intl.NumberFormat().format(numeric(key)));
+    const top = String(metrics.get("Most used tool") || "").match(/^(.*?)\s*\(([\d,]+)\)$/);
+    const total = numeric("Successful tool uses");
+    const toolName = top ? this.formatToolName(top[1].trim()) : "No tool activity recorded";
+    const share = top && total > 0 ? (Number(top[2].replaceAll(",", "")) / total) * 100 : null;
+    const rawError = String(metrics.get("Noisiest error") || "—");
+    const errorParts = rawError.match(/^(.*?) \/ (.*?) \(([\d,]+)\)$/);
+    const topError = errorParts ? `${this.formatToolName(errorParts[1])} · ${errorParts[2]} · ${errorParts[3]} reports` : rawError;
+    const stats = [
+      ["Active People", count("Active users")],
+      ["Successful Uses", count("Successful tool uses")],
+      ["Tool Opens", count("Tool opens")],
+      ["People with Errors", count("Affected users")],
+    ];
+    container.innerHTML = `<div class="owner-overview"><dl class="overview-stats">${stats
+      .map(
+        ([label, value]) =>
+          `<div><dt>${label}</dt><dd>${value}</dd>${label === "People with Errors" ? `<small>${count("Uncaught errors")} uncaught reports</small>` : ""}</div>`,
+      )
+      .join("")}</dl>
+      <section class="overview-observation"><div><h2>Where Usage Concentrates</h2><p><strong>${this.escapeHtml(toolName)}</strong>
+        ${
+          share !== null
+            ? `accounts for ${new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(share)}% of successful uses.`
+            : top
+              ? `has ${new Intl.NumberFormat().format(Number(top[2].replaceAll(",", "")))} successful uses.`
+              : ""
+        }</p></div>
+        <button type="button" class="btn btn-secondary btn-sm" data-overview-view="opportunities">Explore Tools</button></section>
+      <section class="overview-observation"><div><h2>Most Reported Error</h2><p>${this.escapeHtml(topError)}</p>
+        <small>Error reports are counted separately from successful uses.</small></div>
+        <button type="button" class="btn btn-outline btn-sm" data-overview-view="errors"
+          title="Error Details uses its own report-defined time period">Inspect Errors</button></section>
+      <details class="counting-help"><summary>About these metrics</summary><p>Active people have recorded tool usage.
+        Successful uses count completed actions; tool opens count navigation. Multiple uses can follow one open.
+        People with errors are counted from uncaught reports and may differ from the active-people population.</p></details></div>`;
+    container.querySelectorAll("[data-overview-view]").forEach((button) =>
+      button.addEventListener("click", () => {
+        if (button.dataset.overviewView === "errors" && !this.tabs.some((tab) => tab.id === "errors")) this.showReportLibrary();
+        else this.switchTab(button.dataset.overviewView);
+      }),
+    );
   }
 
   renderGroupedToolUsageTable(container, data, columns) {
@@ -751,6 +1112,13 @@ class AnalyticsDashboardPage {
 
     container.querySelectorAll(".dashboard-table tbody tr").forEach((tr, idx) => {
       tr.style.cursor = "pointer";
+      tr.tabIndex = 0;
+      tr.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          tr.click();
+        }
+      });
       tr.addEventListener("click", () => this.showRowDetail(groupedRows[idx]));
     });
   }
@@ -789,12 +1157,18 @@ class AnalyticsDashboardPage {
       </table>
     `;
 
+    this.detailTrigger = document.activeElement;
+    overlay.hidden = false;
     overlay.classList.add("open");
+    this.container.querySelector("#row-detail-close").focus();
   }
 
   closeRowDetail() {
     const overlay = this.container?.querySelector("#row-detail-overlay");
     overlay?.classList.remove("open");
+    if (overlay) overlay.hidden = true;
+    this.detailTrigger?.focus?.();
+    this.detailTrigger = null;
   }
 
   formatHeader(key) {
@@ -886,6 +1260,8 @@ class AnalyticsDashboardPage {
   }
 
   unmount() {
+    this.personDirectoryData = null;
+    this.selectedPerson = null;
     this.invalidateDataRequests();
     this.tabsRequestId += 1;
     this.authRequestId += 1;

@@ -1,0 +1,178 @@
+{
+  "title": "Redesign the Analytics Dashboard",
+  "question": "Choose the starting view for understanding adoption and user behavior. All three retain the AD Tools theme and replace the 46-tab strip with grouped reports.",
+  "options": [
+    {
+      "id": "people",
+      "label": "People First",
+      "thesis": "Start with audience breadth, then inspect each person\u2019s tool and action mix.",
+      "palette": [
+        "#101010",
+        "#fafafa",
+        "#737373"
+      ],
+      "materials": [
+        "Existing AD Tools theme",
+        "Compact tables & proportional bars"
+      ],
+      "viewport": "Active people and activity distribution above a people table; selecting a person opens their usage beside it.",
+      "risk": "Can overemphasize power users unless the distribution stays visible.",
+      "comp": ".impeccable/mocks/decision/people.webp",
+      "wireframe": {
+        "cols": 12,
+        "rows": 10,
+        "regions": [
+          {
+            "label": "Scope & date",
+            "x": 0,
+            "y": 0,
+            "w": 12,
+            "h": 1,
+            "accent": false
+          },
+          {
+            "label": "Audience summary",
+            "x": 0,
+            "y": 1,
+            "w": 12,
+            "h": 2,
+            "accent": false
+          },
+          {
+            "label": "People & usage",
+            "x": 0,
+            "y": 3,
+            "w": 7,
+            "h": 7,
+            "accent": true
+          },
+          {
+            "label": "Selected person",
+            "x": 7,
+            "y": 3,
+            "w": 5,
+            "h": 7,
+            "accent": false
+          }
+        ]
+      },
+      "kicker": "THE ROLL"
+    },
+    {
+      "id": "adoption",
+      "label": "Adoption Overview",
+      "thesis": "See which tools reach people and which actions account for successful use.",
+      "palette": [
+        "#101010",
+        "#fafafa",
+        "#737373"
+      ],
+      "materials": [
+        "Existing AD Tools theme",
+        "Compact tables & proportional bars"
+      ],
+      "viewport": "A compact summary above ranked tool bars, with observations and drill-downs alongside.",
+      "risk": "Needs clear definitions so repeated use is not mistaken for returning users.",
+      "comp": ".impeccable/mocks/decision/adoption.webp",
+      "wireframe": {
+        "cols": 12,
+        "rows": 10,
+        "regions": [
+          {
+            "label": "Scope & date",
+            "x": 0,
+            "y": 0,
+            "w": 12,
+            "h": 1,
+            "accent": false
+          },
+          {
+            "label": "Activity summary",
+            "x": 0,
+            "y": 1,
+            "w": 12,
+            "h": 2,
+            "accent": false
+          },
+          {
+            "label": "Tool adoption & action mix",
+            "x": 0,
+            "y": 3,
+            "w": 8,
+            "h": 7,
+            "accent": true
+          },
+          {
+            "label": "Evidence & observations",
+            "x": 8,
+            "y": 3,
+            "w": 4,
+            "h": 7,
+            "accent": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "tools",
+      "label": "Tool Explorer",
+      "thesis": "Choose a tool and inspect its users, dominant actions, and recorded friction.",
+      "palette": [
+        "#101010",
+        "#fafafa",
+        "#737373"
+      ],
+      "materials": [
+        "Existing AD Tools theme",
+        "Compact tables & proportional bars"
+      ],
+      "viewport": "A ranked tool list at left and a detailed usage workspace at right.",
+      "risk": "Cross-product understanding takes more navigation.",
+      "comp": ".impeccable/mocks/decision/tools.webp",
+      "wireframe": {
+        "cols": 12,
+        "rows": 10,
+        "regions": [
+          {
+            "label": "Scope & date",
+            "x": 0,
+            "y": 0,
+            "w": 12,
+            "h": 1,
+            "accent": false
+          },
+          {
+            "label": "Ranked tools",
+            "x": 0,
+            "y": 1,
+            "w": 4,
+            "h": 9,
+            "accent": false
+          },
+          {
+            "label": "Tool summary",
+            "x": 4,
+            "y": 1,
+            "w": 8,
+            "h": 2,
+            "accent": true
+          },
+          {
+            "label": "Actions & users",
+            "x": 4,
+            "y": 3,
+            "w": 8,
+            "h": 7,
+            "accent": false
+          }
+        ]
+      }
+    }
+  ],
+  "reroll": true,
+  "steer": true,
+  "buildPath": {
+    "value": "code",
+    "toggle": true
+  }
+}

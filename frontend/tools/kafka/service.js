@@ -1,3 +1,5 @@
+import { UsageTracker } from "../../core/UsageTracker.js";
+
 export const KAFKA_CONFIG_KEY = "tool:kafka:connection";
 export const KAFKA_BROKERS_KEY = "tool:kafka:brokers";
 export const KAFKA_ACTIVE_BROKER_KEY = "tool:kafka:active-broker";
@@ -200,33 +202,92 @@ export function readKafkaTopicFavorites(storage = localStorage) {
   }
 }
 
+function kafkaErrorCategory(error) {
+  const text = String(error?.message || error || "");
+  if (/timed?\s*out|timeout/i.test(text)) return "timeout";
+  if (/authorization|access denied|authentication|sasl/i.test(text)) return "authorization";
+  if (/transport|connect|broker.*unavailable|resolve/i.test(text)) return "connection";
+  if (/already.*progress|already running|wait three seconds/i.test(text)) return "busy";
+  if (/valid|enter |only plaintext|exceed|too large/i.test(text)) return "validation";
+  return "unknown";
+}
+
 export class KafkaService {
   constructor({ invoke, listen } = {}) {
     this.invoke = invoke;
     this.listen = listen;
+    this.listenerContext = {};
+  }
+
+  log(event, metadata) {
+    // Diagnostics must never interrupt Kafka operations. Only explicit metadata is sent.
+    try { UsageTracker.trackEvent("kafka", event, metadata); } catch (_) { /* Telemetry is best effort. */ }
   }
 
   async call(command, args) {
-    if (!this.invoke) this.invoke = (await import("@tauri-apps/api/core")).invoke;
+    const started = performance.now();
+    const metadata = { outcome: "success" };
+    try {
+      const profile = readKafkaBrokerProfiles().find((item) => item.brokers === args?.config?.brokers);
+      if (profile) metadata.broker_profile = profile.name;
+    } catch (_) { /* Saved profile lookup is optional for diagnostics. */ }
+    if (args?.topic) metadata.topic = args.topic;
+    if (command === "kafka_publish") metadata.requested_count = args.records.length;
+    if (command === "kafka_start_listener") metadata.from_beginning = !!args.fromBeginning;
+    if (command === "kafka_stop_listener") Object.assign(metadata, this.listenerContext);
+    if (command === "kafka_search_history") {
+      metadata.range_hours = Math.max(0, Math.round((Date.now() - args.sinceMs) / 3600000));
+    }
     const detail = { service: "kafka", command, phase: "start", label: args?.config?.brokers || "" };
     globalThis.dispatchEvent?.(new CustomEvent("adtools:connection-activity", { detail }));
     try {
+      if (!this.invoke) this.invoke = (await import("@tauri-apps/api/core")).invoke;
       const result = await this.invoke(command, args);
+      if (command === "kafka_publish") {
+        metadata.delivered_count = result.delivered.length;
+        if (result.failedAt != null) {
+          metadata.outcome = result.delivered.length ? "partial" : "failure";
+          metadata.failed_message_index = result.failedAt;
+          metadata.error_category = kafkaErrorCategory(result.error);
+        }
+      }
+      if (command === "kafka_list_topics") metadata.topic_count = result.length;
+      if (command === "kafka_search_history") {
+        metadata.match_count = result.matches.length;
+        metadata.scanned_count = result.scanned;
+        metadata.limited = !!result.limited;
+      }
+      if (command === "kafka_start_listener") {
+        this.listenerContext = { broker_profile: metadata.broker_profile, topic: metadata.topic };
+      }
+      if (command === "kafka_stop_listener") this.listenerContext = {};
       globalThis.dispatchEvent?.(new CustomEvent("adtools:connection-activity", {
         detail: { ...detail, phase: "finish", success: true },
       }));
       return result;
     } catch (error) {
+      metadata.outcome = "failure";
+      metadata.error_category = kafkaErrorCategory(error);
       globalThis.dispatchEvent?.(new CustomEvent("adtools:connection-activity", {
         detail: { ...detail, phase: "finish", success: false },
       }));
       throw error;
+    } finally {
+      metadata.duration_ms = Math.max(0, Math.round(performance.now() - started));
+      this.log(`${command.replace(/^kafka_/, "")}_result`, metadata);
     }
   }
 
   async on(event, handler) {
     if (!this.listen) this.listen = (await import("@tauri-apps/api/event")).listen;
-    return this.listen(event, handler);
+    return this.listen(event, (payload) => {
+      if (event === "kafka-listener-error") {
+        this.log("listener_error", {
+          ...this.listenerContext, outcome: "failure", error_category: kafkaErrorCategory(payload.payload),
+        });
+      }
+      handler(payload);
+    });
   }
 
   test(config) { return this.call("kafka_test_connection", { config }); }

@@ -1357,9 +1357,7 @@ function mergeStoredTabsWithDefaults(storedTabs) {
     const storedTab = storedById.get(defaultTab.id);
     if (!storedTab) return defaultTab;
     // Keep endpoint-owned built-in SQL current when stored copies outlive code changes.
-    return ["daily", "events", "qq-table-usage"].includes(defaultTab.id)
-      ? { ...storedTab, query: defaultTab.query }
-      : storedTab;
+    return ["daily", "events", "qq-table-usage"].includes(defaultTab.id) ? { ...storedTab, query: defaultTab.query } : storedTab;
   });
   const defaultIds = new Set(DEFAULT_TABS.map((tab) => tab.id));
   const customTabs = storedTabs.filter((tab) => tab?.id && !defaultIds.has(tab.id));
@@ -1555,7 +1553,12 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
 
     if (tab.id === "who") {
       const rangeConfig = getDashboardRangeConfig(range);
-      return executeWhoQuery(env, `tab:who:${rangeConfig.id}:v1`, rangeConfig);
+      if (body.person !== undefined) {
+        const person = String(body.person).trim().toLowerCase();
+        if (!person || person.length > 320) return dashboardJson({ ok: false, error: "A valid user identity is required" }, 400);
+        return executePersonQuery(env, person, rangeConfig);
+      }
+      return executeWhoQuery(env, `tab:who:${rangeConfig.id}:v2`, rangeConfig);
     }
 
     if (tab.id === "daily" || tab.id === "events") {
@@ -1817,6 +1820,61 @@ async function executeOverviewQuery(env, cacheKey, rangeConfig) {
   }
 }
 
+async function executePersonQuery(env, person, rangeConfig) {
+  const tables = await getDashboardTables(env);
+  const branches = getWhoActivityBranches(tables, rangeConfig);
+  const empty = {
+    summary: { user_email: person, events: 0, active_days: 0, tools_used: 0, devices_seen: 0 },
+    tools: [],
+    actions: [],
+    days: [],
+    recent: [],
+    errors: [],
+    error_count: 0,
+  };
+  const source = tables.has("tool_usage") ? "successful uses" : tables.has("usage_log") ? "usage activity" : "tracked events";
+  const data = { ...empty };
+  if (branches.length) {
+    const cte = `WITH activity AS (${branches.join(" UNION ALL ")}), person_activity AS (
+      SELECT * FROM activity WHERE user_email = ?1
+    ) `;
+    const rows = async (query) =>
+      (
+        await env.DB.prepare(cte + query)
+          .bind(person)
+          .all()
+      ).results || [];
+    const [summary, tools, actions, days, recent] = await Promise.all([
+      rows(`SELECT ?1 AS user_email, COUNT(*) AS events, COUNT(DISTINCT DATE(datetime(created_time))) AS active_days,
+        COUNT(DISTINCT tool_id) AS tools_used, COUNT(DISTINCT device_id) AS devices_seen,
+        MIN(created_time) AS first_activity, MAX(created_time) AS last_activity FROM person_activity`),
+      rows(`SELECT tool_id, COUNT(*) AS events, MAX(created_time) AS last_activity FROM person_activity
+        GROUP BY tool_id ORDER BY events DESC, tool_id`),
+      rows(`SELECT tool_id, action, COUNT(*) AS events, MAX(created_time) AS last_activity FROM person_activity
+        GROUP BY tool_id, action ORDER BY events DESC, tool_id, action`),
+      rows(`SELECT DATE(datetime(created_time)) AS day, COUNT(*) AS events FROM person_activity GROUP BY day ORDER BY day DESC`),
+      rows(`SELECT user_email, tool_id, action, device_id, created_time FROM person_activity
+        ORDER BY datetime(created_time) DESC, tool_id, action, device_id LIMIT 100`),
+    ]);
+    Object.assign(data, { summary: summary[0] || empty.summary, tools, actions, days, recent });
+  }
+  if (tables.has("error_events")) {
+    const where = `WHERE LOWER(user_email) = ?1 AND ${includedAnalyticsEmailSql("user_email")} ${rangeConfig.where("created_time")}`;
+    const [errors, count] = await Promise.all([
+      env.DB.prepare(
+        `SELECT tool_id, error_name, message, created_time FROM error_events ${where}
+        ORDER BY datetime(created_time) DESC, id DESC LIMIT 50`,
+      )
+        .bind(person)
+        .all(),
+      env.DB.prepare(`SELECT COUNT(*) AS total FROM error_events ${where}`).bind(person).first(),
+    ]);
+    data.errors = errors.results || [];
+    data.error_count = Number(count?.total) || 0;
+  }
+  return dashboardJson({ ok: true, data, mode: "computed-person", source, range: rangeConfig.id, limits: { recent: 100, errors: 50 } });
+}
+
 async function executeWhoQuery(env, cacheKey, rangeConfig) {
   try {
     if (!env.DB) {
@@ -1970,6 +2028,7 @@ ranked_actions AS (
 SELECT 1 AS section_order,
   'Top users' AS section,
   rank,
+  user_email,
   user,
   tool_id,
   action,
@@ -1984,11 +2043,12 @@ SELECT 1 AS section_order,
   errors_total,
   details
 FROM ranked_users
-WHERE rank <= 25
+WHERE rank <= 200
 UNION ALL
 SELECT 2 AS section_order,
   'Top user tools' AS section,
   rank,
+  user_email,
   user,
   tool_id,
   action,
@@ -2008,6 +2068,7 @@ UNION ALL
 SELECT 3 AS section_order,
   'Top user actions' AS section,
   rank,
+  user_email,
   user,
   tool_id,
   action,

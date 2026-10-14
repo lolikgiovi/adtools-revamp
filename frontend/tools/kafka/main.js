@@ -1598,7 +1598,13 @@ export class KafkaTool extends BaseTool {
     }
     const favorite = this.favoriteTopics.includes(topic);
     this.favoriteTopics = favorite ? this.favoriteTopics.filter((item) => item !== topic) : [topic, ...this.favoriteTopics].slice(0, 100);
-    try { localStorage.setItem(KAFKA_TOPIC_FAVORITES_KEY, JSON.stringify(this.favoriteTopics)); } catch (_) {}
+    try {
+      localStorage.setItem(KAFKA_TOPIC_FAVORITES_KEY, JSON.stringify(this.favoriteTopics));
+      const profile = this.brokerProfiles.find((item) => item.id === readKafkaActiveBrokerId());
+      UsageTracker.trackEvent("kafka", "topic_favorite_changed", {
+        topic, source, favorite: !favorite, ...(profile ? { broker_profile: profile.name } : {}),
+      });
+    } catch (_) { /* Persistence and analytics remain best effort for the favorites UI. */ }
     this.updateTopicFavorite("publish");
     this.updateTopicFavorite("listen");
     this.renderTopicOptions(source);

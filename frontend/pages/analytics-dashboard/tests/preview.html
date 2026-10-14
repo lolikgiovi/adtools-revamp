@@ -1,0 +1,56 @@
+<!doctype html><html lang="en" class="dark"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Analytics Navigation Preview</title></head><body>
+<div class="preview-controls"><strong>UI preview · synthetic data</strong><button id="preview-theme">Switch Theme</button></div><main id="preview-root"></main>
+<script type="module">
+import '../../../styles.css';
+import { installSearchableDropdowns } from '../../../components/SearchableDropdown.js';
+import { AnalyticsDashboardPage } from '../main.js';
+const tabs = [{"id": "overview", "name": "Overview"}, {"id": "opportunities", "name": "Opportunities"}, {"id": "who", "name": "Who"}, {"id": "active-users", "name": "Active Users"}, {"id": "tools", "name": "Tool Usage"}, {"id": "tool-adoption", "name": "Tool Adoption"}, {"id": "daily", "name": "Recent Activity"}, {"id": "devices", "name": "Devices"}, {"id": "events", "name": "Events"}, {"id": "friction", "name": "Friction"}, {"id": "improvement-notes", "name": "Improvement Notes"}, {"id": "errors", "name": "Error Details"}, {"id": "error-summary", "name": "Error Summary"}, {"id": "versions", "name": "Runtime Versions"}, {"id": "quick-query", "name": "Quick Query"}, {"id": "qq-table-usage", "name": "QQ Table Usage"}, {"id": "quick-query-errors", "name": "QQ Errors"}, {"id": "qq-insights", "name": "QQ Workflow"}, {"id": "qq-splits", "name": "QQ Splits"}, {"id": "qq-outcomes", "name": "QQ Outcomes"}, {"id": "compare-config", "name": "Compare Config"}, {"id": "cc-table-pairs", "name": "CC Table Pairs"}, {"id": "run-query", "name": "Run Query"}, {"id": "run-query-summary", "name": "Run Query Summary"}, {"id": "run-batch", "name": "Run Batch"}, {"id": "run-batch-summary", "name": "Run Batch Summary"}, {"id": "json-tools", "name": "JSON Tools"}, {"id": "json-tools-summary", "name": "JSON Tool Summary"}, {"id": "json-outcomes", "name": "JSON Outcomes"}, {"id": "base64-tools", "name": "Base64 Tools"}, {"id": "base64-summary", "name": "Base64 Summary"}, {"id": "qr-tools", "name": "QR Tools"}, {"id": "qr-summary", "name": "QR Summary"}, {"id": "tlv-viewer", "name": "TLV Viewer"}, {"id": "tlv-summary", "name": "TLV Summary"}, {"id": "image-checker", "name": "Image Checker"}, {"id": "image-checker-summary", "name": "Image Check Summary"}, {"id": "html-splunk", "name": "HTML & Splunk"}, {"id": "template-editors-summary", "name": "Template Editors"}, {"id": "html-outcomes", "name": "HTML Outcomes"}, {"id": "uuid-sql", "name": "UUID & SQL IN"}, {"id": "uuid-sql-summary", "name": "UUID & SQL Summary"}, {"id": "merge-sql", "name": "Merge SQL"}, {"id": "merge-sql-summary", "name": "Merge SQL Summary"}, {"id": "master-lockey", "name": "Master Lockey"}, {"id": "master-lockey-summary", "name": "Lockey Summary"}];
+const page = new AnalyticsDashboardPage();
+page.mount(document.querySelector('#preview-root'));
+page.tabs = tabs;
+page.showDashboard();
+page.loadCurrentTabData = async function () {
+ if (this.selectedPerson) return this.loadPersonData();
+ const content = this.container.querySelector('.panel-content');
+ this.container.querySelector('.panel-loading').style.display = 'none';
+ const data = this.currentTab === 'overview' ? [
+ {metric:'Active users',value:'24'},
+ {metric:'Successful tool uses',value:'1240'},
+ {metric:'Tool opens',value:'500'},
+ {metric:'Uncaught errors',value:'10'},
+ {metric:'Affected users',value:'4'},
+ {metric:'Most used tool',value:'quick-query (620)'},
+ {metric:'Noisiest error',value:'run-query / Error (7)'}
+ ] : this.currentTab === 'opportunities' ? [
+ {tool_id:'quick-query',users:22,successful_uses:620,repeat_users:18,top_action:'merge',friction_events:12},
+ {tool_id:'run-query',users:14,successful_uses:310,repeat_users:10,top_action:'run',friction_events:3},
+ {tool_id:'json-tools',users:8,successful_uses:190,repeat_users:6,top_action:'prettify',friction_events:0}
+  ] : this.currentTab === 'who' ? [
+ {section:'Top users',rank:1,user:'Alex',user_email:'alex@example.test',tool_id:'quick-query',action:'merge',events:24,tools_used:2,devices_seen:1,errors:1,last_activity:'2026-10-14 10:30:00',active_users_total:1,events_total:24,errors_total:1},
+ {section:'Top user tools',rank:1,user:'Alex',user_email:'alex@example.test',tool_id:'quick-query',action:'merge',events:18,last_activity:'2026-10-14 10:30:00'},
+ {section:'Top user actions',rank:1,user:'Alex',user_email:'alex@example.test',tool_id:'quick-query',action:'merge',events:18,last_activity:'2026-10-14 10:30:00'}
+ ] : [{tool:'Quick Query',action:'merge',uses:32,user:'Preview User'}];
+ this.renderTable(content,data);
+};
+page.loadPersonData = async function () {
+ this.renderPersonProfile(this.container.querySelector('.panel-content'), {
+  summary:{user_email:this.selectedPerson,events:24,active_days:3,tools_used:2,devices_seen:1,first_activity:'2026-10-12 09:00:00',last_activity:'2026-10-14 10:30:00'},
+  tools:[{tool_id:'quick-query',events:18},{tool_id:'json-tools',events:6}],
+  actions:[{tool_id:'quick-query',action:'merge',events:18,last_activity:'2026-10-14 10:30:00'},{tool_id:'json-tools',action:'prettify',events:6,last_activity:'2026-10-13 09:00:00'}],
+  days:[{day:'2026-10-14',events:12},{day:'2026-10-13',events:8},{day:'2026-10-12',events:4}],
+  recent:[{tool_id:'quick-query',action:'merge',device_id:'preview-device',created_time:'2026-10-14 10:30:00'}],
+  errors:[{tool_id:'json-tools',error_name:'SyntaxError',message:'Example parse error',created_time:'2026-10-13 09:00:00'}],error_count:1
+ },'successful uses');
+};
+page.renderTabs();
+page.showReportLibrary();
+installSearchableDropdowns(document);
+document.querySelector('#preview-theme').onclick = () => {
+ document.documentElement.classList.toggle('dark');
+};
+</script><style>
+body{height:100vh;display:flex;flex-direction:column;background:hsl(var(--background));color:hsl(var(--foreground));padding:0 24px}
+.preview-controls{padding:12px 0;display:flex;justify-content:space-between;gap:12px;font-size:12px;border-bottom:1px solid hsl(var(--border))}
+.preview-controls button{background:hsl(var(--card));color:hsl(var(--foreground));border:1px solid hsl(var(--border));padding:4px 10px;border-radius:4px}
+#preview-root{flex:1;min-height:0;padding-bottom:16px}
+</style></body></html>
