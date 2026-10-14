@@ -153,7 +153,7 @@ export class ApprovalPage {
     const filtered = this.requests.filter((item) => {
       if (item.status !== this.status) return false;
       if (!this.query) return true;
-      return [item.email, item.display_name, item.device_id, item.platform, item.user_agent].some((value) =>
+      return [item.email, item.display_name, item.device_id, item.platform, item.user_agent, item.department, item.role].some((value) =>
         String(value || "")
           .toLowerCase()
           .includes(this.query),
@@ -179,6 +179,8 @@ export class ApprovalPage {
           </div>
         </div>
         <div class="approval-request-identity">
+          ${this.detail("Department", item.department)}
+          ${this.detail("Role", item.role)}
           ${this.detail("Device", item.device_id)}
           ${this.detail("Platform", item.platform)}
           ${this.detail("Location", [item.country, item.timezone].filter(Boolean).join(" · "))}

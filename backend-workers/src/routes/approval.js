@@ -4,6 +4,11 @@ import { completeRegistration, detectRegistrationPlatform } from "./auth.js";
 import { validateDashboardToken } from "./dashboard.js";
 import { getRegistrationAuthMode } from "../utils/registrationAuthMode.js";
 
+import { isRegistrationEmailAllowed } from "../utils/email.js";
+import { registrationRole } from "../utils/registrationRole.js";
+import { sendRegistrationNotification } from "../utils/registrationNotification.js";
+import { registrationDepartment } from "../utils/registrationDepartment.js";
+
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -32,6 +37,8 @@ export async function handleManualApprovalRequest(request, env) {
     }
     if (!env.DB) return json({ ok: false, error: "Database not available" }, 500);
     const data = await request.json();
+    const department = registrationDepartment(data.department, true);
+    const role = registrationRole(data.role, true);
     const email = String(data.email || "")
       .trim()
       .toLowerCase();
@@ -43,6 +50,8 @@ export async function handleManualApprovalRequest(request, env) {
       return json({ ok: false, error: "Display name, valid email, and device identity are required" }, 400);
     }
 
+    if (!isRegistrationEmailAllowed(email)) return json({ ok: false, error: "Use your @bankmandiri.co.id email." }, 403);
+
     const existing = await env.DB.prepare(
       "SELECT id, status FROM manual_approval_requests WHERE email = ? AND device_id = ? ORDER BY requested_at DESC LIMIT 1",
     )
@@ -53,8 +62,8 @@ export async function handleManualApprovalRequest(request, env) {
     const id = crypto.randomUUID();
     await env.DB.prepare(
       `INSERT INTO manual_approval_requests (
-        id, email, display_name, device_id, platform, user_agent, ip_address, country, locale, timezone, screen_size, status, requested_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+        id, email, display_name, device_id, platform, user_agent, ip_address, country, locale, timezone, screen_size, department, role, status, requested_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
     )
       .bind(
         id,
@@ -68,9 +77,21 @@ export async function handleManualApprovalRequest(request, env) {
         String(data.locale || "").slice(0, 64),
         String(data.timezone || "").slice(0, 100),
         String(data.screenSize || "").slice(0, 32),
+        department,
+        role,
         tsGmt7Plain(),
       )
       .run();
+    await sendRegistrationNotification(env, {
+      email,
+      displayName,
+      department,
+      role,
+      platform: detectRegistrationPlatform(data, request),
+      requestId: id,
+      mode: "manual",
+      approvalUrl: `${new URL(request.url).origin}/#approval`,
+    });
     return json({ ok: true, requestId: id, status: "pending" }, 201);
   } catch (err) {
     return json({ ok: false, error: String(err) }, 400);
@@ -89,7 +110,7 @@ export async function handleManualApprovalStatus(request, env) {
     if (!requestId || !email || !deviceId) return json({ ok: false, error: "Request identity is required" }, 400);
 
     const row = await env.DB.prepare(
-      "SELECT id, email, display_name, device_id, platform, status, completed_at, session_token FROM manual_approval_requests WHERE id = ? AND email = ? AND device_id = ?",
+      "SELECT id, email, display_name, device_id, platform, department, role, status, completed_at, session_token FROM manual_approval_requests WHERE id = ? AND email = ? AND device_id = ?",
     )
       .bind(requestId, email, deviceId)
       .first();
@@ -111,7 +132,14 @@ export async function handleManualApprovalStatus(request, env) {
 
     try {
       const registration = await completeRegistration(
-        { email: row.email, displayName: row.display_name, deviceId: row.device_id, platform: row.platform },
+        {
+          email: row.email,
+          displayName: row.display_name,
+          deviceId: row.device_id,
+          platform: row.platform,
+          department: row.department,
+          role: row.role,
+        },
         request,
         env,
       );
@@ -138,7 +166,7 @@ export async function handleApprovalList(request, env) {
   try {
     if (!env.DB) return json({ ok: false, error: "Database not available" }, 500);
     const result = await env.DB.prepare(
-      `SELECT id, email, display_name, device_id, platform, user_agent, ip_address, country, locale, timezone, screen_size,
+      `SELECT id, email, display_name, device_id, platform, user_agent, ip_address, country, locale, timezone, screen_size, department, role,
         status, requested_at, approved_at, completed_at
       FROM manual_approval_requests
       WHERE status IN ('pending', 'approved')

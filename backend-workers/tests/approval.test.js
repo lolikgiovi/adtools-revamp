@@ -46,7 +46,13 @@ describe("manual approval", () => {
       new Request("https://example.test/register/request-manual-approval", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: "person@example.com", displayName: "Person", deviceId: "device-1" }),
+        body: JSON.stringify({
+          email: "person@bankmandiri.co.id",
+          displayName: "Person",
+          department: "RETAIL",
+          role: "ENGINEER",
+          deviceId: "device-1",
+        }),
       }),
       env,
     );
@@ -71,8 +77,10 @@ describe("manual approval", () => {
           "CF-IPCountry": "ID",
         },
         body: JSON.stringify({
-          email: "Person@Example.com",
+          email: "Person@BankMandiri.co.id",
           displayName: "Person",
+          department: "RETAIL",
+          role: "ENGINEER",
           deviceId: "device-1",
           platform: "Browser",
           locale: "en-ID",
@@ -88,7 +96,16 @@ describe("manual approval", () => {
     expect(body).toMatchObject({ ok: true, status: "pending" });
     expect(body.requestId).toBeTruthy();
     expect(inserted[0]).toEqual(
-      expect.arrayContaining(["person@example.com", "Person", "device-1", "Test Browser", "203.0.113.7", "ID", "Asia/Jakarta"]),
+      expect.arrayContaining([
+        "person@bankmandiri.co.id",
+        "Person",
+        "RETAIL",
+        "device-1",
+        "Test Browser",
+        "203.0.113.7",
+        "ID",
+        "Asia/Jakarta",
+      ]),
     );
   });
 
@@ -98,7 +115,7 @@ describe("manual approval", () => {
       new Request("https://example.test/register/manual-approval-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId: "request-1", email: "person@example.com", deviceId: "wrong-device" }),
+        body: JSON.stringify({ requestId: "request-1", email: "person@bankmandiri.co.id", deviceId: "wrong-device" }),
       }),
       env,
     );
@@ -112,7 +129,7 @@ describe("manual approval", () => {
           statement({
             first: {
               id: "request-1",
-              email: "person@example.com",
+              email: "person@bankmandiri.co.id",
               device_id: "device-1",
               status: "approved",
               completed_at: "2026-01-01 10:00:00",
@@ -121,13 +138,13 @@ describe("manual approval", () => {
           }),
         ),
       },
-      adtools: { get: vi.fn(async (key) => (key === "session:session-1" ? JSON.stringify({ email: "person@example.com" }) : null)) },
+      adtools: { get: vi.fn(async (key) => (key === "session:session-1" ? JSON.stringify({ email: "person@bankmandiri.co.id" }) : null)) },
     };
     const response = await handleManualApprovalStatus(
       new Request("https://example.test/register/manual-approval-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId: "request-1", email: "person@example.com", deviceId: "device-1" }),
+        body: JSON.stringify({ requestId: "request-1", email: "person@bankmandiri.co.id", deviceId: "device-1" }),
       }),
       env,
     );
@@ -141,7 +158,7 @@ describe("manual approval", () => {
     const sessions = new Map();
     const row = {
       id: "request-1",
-      email: "person@example.com",
+      email: "person@bankmandiri.co.id",
       display_name: "Person",
       device_id: "device-1",
       platform: "Browser",
@@ -160,7 +177,7 @@ describe("manual approval", () => {
       new Request("https://example.test/register/manual-approval-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId: "request-1", email: "person@example.com", deviceId: "device-1" }),
+        body: JSON.stringify({ requestId: "request-1", email: "person@bankmandiri.co.id", deviceId: "device-1" }),
       }),
       env,
     );

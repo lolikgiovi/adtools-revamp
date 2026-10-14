@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Registration profile preview</title>
+    <link rel="stylesheet" href="/styles/reset.css" />
+    <link rel="stylesheet" href="/styles/buttons.css" />
+    <link rel="stylesheet" href="/styles/components.css" />
+    <link rel="stylesheet" href="/styles/themes.css" />
+  </head>
+  <body>
+    <main id="registration-preview"></main>
+    <script type="module">
+      import { RegisterPage } from "/pages/register/main.js";
+      new RegisterPage().mount(document.querySelector("#registration-preview"));
+    </script>
+  </body>
+</html>

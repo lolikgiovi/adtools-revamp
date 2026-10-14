@@ -1,3 +1,4 @@
+import { isRegistrationEmailAllowed } from "../../core/RegistrationEmail.js";
 import { RegisterTemplate } from "./template.js";
 import "./styles.css";
 import { UsageTracker } from "../../core/UsageTracker.js";
@@ -31,6 +32,8 @@ export class RegisterPage {
         this.manualRequest = saved;
         container.querySelector("#reg-username").value = saved.displayName || "";
         container.querySelector("#reg-email").value = saved.email;
+        container.querySelector("#reg-department").value = saved.department || "";
+        container.querySelector("#reg-role").value = saved.role || "";
       }
     } catch (_) {}
 
@@ -53,14 +56,21 @@ export class RegisterPage {
       const otpInput = container.querySelector("#reg-otp");
       const username = (usernameInput.value || "").trim().slice(0, 15);
       const email = (emailInput.value || "").trim();
+      const department = container.querySelector("#reg-department").value;
+      const role = container.querySelector("#reg-role").value;
 
-      const emailOk = /.+@.+\..+/.test(email);
+      const emailOk = isRegistrationEmailAllowed(email);
       if (username.length < 2) {
         errorEl.textContent = "Please enter a valid Display Name.";
         return;
       }
       if (!emailOk) {
-        errorEl.textContent = "Please enter a valid email.";
+        errorEl.textContent = "Use your @bankmandiri.co.id email.";
+        return;
+      }
+
+      if (!department || !role) {
+        errorEl.textContent = !department ? "Please select a department." : "Please select a role.";
         return;
       }
 
@@ -81,7 +91,7 @@ export class RegisterPage {
               const res = await fetch(endpoint, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email }),
+                body: JSON.stringify({ email, department, role }),
                 credentials: "omit",
               });
               if (res.ok) {
@@ -142,6 +152,8 @@ export class RegisterPage {
           const payload = {
             deviceId,
             displayName: username,
+            department,
+            role,
             email,
             code,
             platform,
@@ -201,12 +213,14 @@ export class RegisterPage {
           try {
             localStorage.setItem("user.username", username);
             localStorage.setItem("user.email", email);
+            localStorage.setItem("user.department", department || "");
+            localStorage.setItem("user.role", role || "");
             if (userId) localStorage.setItem("user.id", userId);
             localStorage.setItem("user.registered", "true");
           } catch (_) {}
 
           // Notify app and move to home
-          this.eventBus?.emit?.("user:registered", { username, email, userId });
+          this.eventBus?.emit?.("user:registered", { username, email, userId, department, role });
           location.hash = "#home";
           return;
         }
@@ -252,6 +266,8 @@ export class RegisterPage {
     return {
       displayName,
       email,
+      department: this.root.querySelector("#reg-department").value,
+      role: this.root.querySelector("#reg-role").value,
       deviceId,
       platform: isTauri() ? "Desktop (Tauri)" : "Browser",
       locale: navigator.language || "",
@@ -273,8 +289,12 @@ export class RegisterPage {
       this.setMessage("Please enter a valid Display Name.");
       return false;
     }
-    if (!/.+@.+\..+/.test(identity.email)) {
-      this.setMessage("Please enter a valid email.");
+    if (!isRegistrationEmailAllowed(identity.email)) {
+      this.setMessage("Use your @bankmandiri.co.id email.");
+      return false;
+    }
+    if (!identity.department || !identity.role) {
+      this.setMessage(!identity.department ? "Please select a department." : "Please select a role.");
       return false;
     }
     return true;
@@ -340,6 +360,8 @@ export class RegisterPage {
       this.finishRegistration({
         username: this.manualRequest.displayName,
         email: this.manualRequest.email,
+        department: this.manualRequest.department,
+        role: this.manualRequest.role,
         userId: data.userId,
         sessionToken: data.token,
       });
@@ -351,16 +373,18 @@ export class RegisterPage {
     }
   }
 
-  finishRegistration({ username, email, userId, sessionToken }) {
+  finishRegistration({ username, email, userId, sessionToken, department, role }) {
     try {
       if (sessionToken) SessionTokenStore.saveToken(sessionToken);
       localStorage.setItem("user.username", username);
       localStorage.setItem("user.email", email);
+      localStorage.setItem("user.department", department || "");
+      localStorage.setItem("user.role", role || "");
       if (userId) localStorage.setItem("user.id", userId);
       localStorage.setItem("user.registered", "true");
       localStorage.removeItem("manual.approval.request");
     } catch (_) {}
-    this.eventBus?.emit?.("user:registered", { username, email, userId });
+    this.eventBus?.emit?.("user:registered", { username, email, userId, department, role });
     location.hash = "#home";
   }
 

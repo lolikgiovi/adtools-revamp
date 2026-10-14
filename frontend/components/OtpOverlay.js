@@ -12,6 +12,7 @@ function nowMs() {
   return Date.now();
 }
 
+import { isRegistrationEmailAllowed } from "../core/RegistrationEmail.js";
 import { SessionTokenStore } from "../core/SessionTokenStore.js";
 import { UsageTracker } from "../core/UsageTracker.js";
 import { isTauri } from "../core/Runtime.js";
@@ -89,6 +90,24 @@ export async function openOtpOverlay({
           <div class="otp-dialog app-overlay-surface">
             <h3>Verify access</h3>
             <p class="otp-email-status"></p>
+            <label class="otp-department-field">Department
+              <select class="otp-department" required>
+                <option value="">Select department</option>
+                <option value="RETAIL">RETAIL</option>
+                <option value="SME">SME</option>
+                <option value="NBDS">NBDS</option>
+                <option value="ENTERPRISE">ENTERPRISE</option>
+                <option value="PARTNERSHIP">PARTNERSHIP</option>
+                <option value="WHOLESALE">WHOLESALE</option>
+              </select>
+            </label>
+            <label class="otp-department-field">Role
+              <select class="otp-role otp-department" required>
+                <option value="">Select role</option>
+                <option value="ANALYST">ANALYST</option>
+                <option value="ENGINEER">ENGINEER</option>
+              </select>
+            </label>
             <div class="otp-actions">
               ${
                 manual
@@ -109,6 +128,10 @@ export async function openOtpOverlay({
         </div>
       `);
 
+      const departmentInput = overlay.querySelector(".otp-department");
+      const roleInput = overlay.querySelector(".otp-role");
+      roleInput.value = localStorage.getItem("user.role") || "";
+      departmentInput.value = localStorage.getItem("user.department") || "";
       const status = overlay.querySelector(".otp-email-status");
       const err = overlay.querySelector(".otp-error");
       const input = overlay.querySelector(".otp-code-input");
@@ -126,6 +149,8 @@ export async function openOtpOverlay({
           const saved = JSON.parse(localStorage.getItem(manualKey) || "null");
           if (saved?.requestId && saved.email === email?.trim().toLowerCase() && saved.deviceId === deviceId) {
             manualRequest = saved;
+            departmentInput.value = saved.department || "";
+            roleInput.value = saved.role || "";
           }
         } catch (_) {
           manualRequest = null;
@@ -195,6 +220,8 @@ export async function openOtpOverlay({
           kvValue = data.value;
         }
         SessionTokenStore.saveToken(token);
+        localStorage.setItem("user.department", manualRequest?.department ?? departmentInput.value);
+        localStorage.setItem("user.role", manualRequest?.role ?? roleInput.value);
         cleanup();
         resolve({ token, kvValue });
       }
@@ -222,13 +249,25 @@ export async function openOtpOverlay({
         }
       }
 
+      function validateProfile() {
+        if (!isRegistrationEmailAllowed(email)) {
+          err.textContent = "Use your @bankmandiri.co.id email.";
+          return false;
+        }
+        if (departmentInput.value && roleInput.value) return true;
+        err.textContent = !departmentInput.value ? "Please select a department." : "Please select a role.";
+        return false;
+      }
+
       async function requestManualApproval() {
-        if (!email) return;
+        if (!email || !validateProfile()) return;
         btnManual.disabled = true;
         err.textContent = "";
         try {
           const displayName = (localStorage.getItem("user.username") || email.split("@")[0]).trim().slice(0, 15);
           const identity = {
+            role: roleInput.value,
+            department: departmentInput.value,
             displayName: displayName.length >= 2 ? displayName : "AD Tools User",
             email: email.trim().toLowerCase(),
             deviceId,
@@ -270,7 +309,7 @@ export async function openOtpOverlay({
       }
 
       async function requestOtp() {
-        if (!email) return;
+        if (!email || !validateProfile()) return;
         // Rate-limit immediately upon click
         try {
           localStorage.setItem(lastKey, String(nowMs()));
@@ -283,7 +322,7 @@ export async function openOtpOverlay({
           const res = await fetch(reqUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email }),
+            body: JSON.stringify({ email, role: roleInput.value, department: departmentInput.value }),
           });
           const j = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(j?.error || `Network error (${res.status})`);
@@ -300,6 +339,7 @@ export async function openOtpOverlay({
 
       async function verifyOtp() {
         err.textContent = "";
+        if (!validateProfile()) return;
         const code = (input.value || "").trim();
         if (!/^[0-9]{6}$/.test(code)) {
           err.textContent = "Please enter a 6-digit OTP code.";
@@ -311,7 +351,7 @@ export async function openOtpOverlay({
           const res = await fetch(verUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, code }),
+            body: JSON.stringify({ email, code, deviceId, role: roleInput.value, department: departmentInput.value }),
           });
           const j = await res.json().catch(() => ({}));
           if (!res.ok || !j?.ok) throw new Error(j?.error || "Invalid OTP");

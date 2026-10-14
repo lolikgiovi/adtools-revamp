@@ -35,6 +35,8 @@ describe("registration email verification", () => {
 
     root.querySelector("#reg-username").value = "Test User";
     root.querySelector("#reg-email").value = "person@bankmandiri.co.id";
+    root.querySelector("#reg-department").value = "WHOLESALE";
+    root.querySelector("#reg-role").value = "ENGINEER";
     root.querySelector(".register-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -48,10 +50,51 @@ describe("registration email verification", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(fetchMock.mock.calls[2][0]).toBe("/register/verify");
-    expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toMatchObject({ email: "person@bankmandiri.co.id", code: "123456" });
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toMatchObject({
+      email: "person@bankmandiri.co.id",
+      code: "123456",
+      department: "WHOLESALE",
+      role: "ENGINEER",
+    });
     expect(localStorage.getItem("user.registered")).toBe("true");
+    expect(localStorage.getItem("user.department")).toBe("WHOLESALE");
+    expect(localStorage.getItem("user.role")).toBe("ENGINEER");
     expect(eventBus.emit).toHaveBeenCalledWith("user:registered", expect.objectContaining({ email: "person@bankmandiri.co.id" }));
     expect(location.hash).toBe("#home");
+  });
+
+  it("requires both department and role before submitting a manual request", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true, mode: "manual" }) }));
+    vi.stubGlobal("fetch", fetchMock);
+    const root = document.querySelector("#register-root");
+    new RegisterPage().mount(root);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    root.querySelector("#reg-username").value = "Person";
+    root.querySelector("#reg-email").value = "person@bankmandiri.co.id";
+    root.querySelector('[data-role="manual-approval-btn"]').click();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(root.querySelector(".register-error").textContent).toContain("department");
+    root.querySelector("#reg-department").value = "SME";
+    root.querySelector('[data-role="manual-approval-btn"]').click();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(root.querySelector(".register-error").textContent).toContain("role");
+    expect(root.querySelector("#reg-department").required).toBe(true);
+    expect(root.querySelector("#reg-role").required).toBe(true);
+  });
+
+  it("rejects an email outside Bank Mandiri before making a request", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true, mode: "manual" }) }));
+    vi.stubGlobal("fetch", fetchMock);
+    const root = document.querySelector("#register-root");
+    new RegisterPage().mount(root);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    root.querySelector("#reg-username").value = "Person";
+    root.querySelector("#reg-email").value = "person@gmail.com";
+    root.querySelector("#reg-department").value = "SME";
+    root.querySelector("#reg-role").value = "ANALYST";
+    root.querySelector('[data-role="manual-approval-btn"]').click();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(root.querySelector(".register-error").textContent).toContain("@bankmandiri.co.id");
   });
 
   it("offers manual approval when the runtime mode is manual", async () => {
@@ -71,10 +114,13 @@ describe("registration email verification", () => {
 
     root.querySelector("#reg-username").value = "Test User";
     root.querySelector("#reg-email").value = "person@bankmandiri.co.id";
+    root.querySelector("#reg-department").value = "WHOLESALE";
+    root.querySelector("#reg-role").value = "ENGINEER";
     root.querySelector('[data-role="manual-approval-btn"]').click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(fetchMock.mock.calls[1][0]).toBe("/register/request-manual-approval");
     expect(root.querySelector('[data-role="approval-status"]').hidden).toBe(false);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toMatchObject({ department: "WHOLESALE", role: "ENGINEER" });
   });
 });

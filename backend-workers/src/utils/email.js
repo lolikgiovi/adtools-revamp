@@ -38,6 +38,11 @@ export function isEmailDomainAllowed(email, env) {
   return allowed.includes(domain);
 }
 
+// Registration is restricted to this exact domain, independently of config access settings.
+export function isRegistrationEmailAllowed(email) {
+  return typeof email === "string" && /^[^@\s]+@bankmandiri\.co\.id$/i.test(email.trim());
+}
+
 /**
  * Sends OTP verification email via Resend
  * @param {object} env - Environment bindings

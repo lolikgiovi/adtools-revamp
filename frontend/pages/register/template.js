@@ -10,7 +10,27 @@ export const RegisterTemplate = /* html */ `
         </div>
         <div class="register-field">
           <label for="reg-email">Email</label>
-          <input type="email" id="reg-email" class="register-input" placeholder="name@example.com" aria-label="Email" required />
+          <input type="email" id="reg-email" class="register-input" placeholder="name@bankmandiri.co.id" aria-label="Email" required />
+        </div>
+        <div class="register-field">
+          <label for="reg-department">Department</label>
+          <select id="reg-department" class="register-input" required>
+            <option value="">Select department</option>
+            <option value="RETAIL">RETAIL</option>
+            <option value="SME">SME</option>
+            <option value="NBDS">NBDS</option>
+            <option value="ENTERPRISE">ENTERPRISE</option>
+            <option value="PARTNERSHIP">PARTNERSHIP</option>
+            <option value="WHOLESALE">WHOLESALE</option>
+          </select>
+        </div>
+        <div class="register-field">
+          <label for="reg-role">Role</label>
+          <select id="reg-role" class="register-input" required>
+            <option value="">Select role</option>
+            <option value="ANALYST">ANALYST</option>
+            <option value="ENGINEER">ENGINEER</option>
+          </select>
         </div>
         <div class="register-field otp-field" style="display:none">
           <label for="reg-otp">Verification Code</label>
@@ -35,7 +55,7 @@ export const RegisterTemplate = /* html */ `
         </div>
         <button type="button" class="btn btn-secondary" data-role="check-approval-btn">Check Status</button>
       </div>
-      <p class="register-note">Bank Mandiri email is required for managed config access.</p>
+      <p class="register-note">Use your @bankmandiri.co.id email to register.</p>
     </div>
   </div>
 `;

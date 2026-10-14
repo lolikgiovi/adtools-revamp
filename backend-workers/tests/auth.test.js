@@ -1,7 +1,13 @@
 // @vitest-environment node
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { handleKvGet, handleRegisterRequestOtp, handleRegisterVerify, handleRegistrationAuthMode } from "../src/routes/auth.js";
+import {
+  handleKvGet,
+  handleRegisterRequestOtp,
+  handleRegisterVerify,
+  handleRegistrationAuthMode,
+  completeRegistration,
+} from "../src/routes/auth.js";
 
 function createKvMock(values = {}) {
   return {
@@ -47,7 +53,7 @@ describe("registration and config access", () => {
     vi.unstubAllGlobals();
   });
 
-  it("allows non-Bank Mandiri email to request registration OTP", async () => {
+  it("allows Bank Mandiri email to request registration OTP", async () => {
     const fetchMock = vi.fn(
       async () =>
         new Response(JSON.stringify({ id: "message-1" }), {
@@ -74,7 +80,7 @@ describe("registration and config access", () => {
       new Request("http://localhost/register/request-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: "person@example.com" }),
+        body: JSON.stringify({ email: "person@bankmandiri.co.id", department: "RETAIL", role: "ANALYST" }),
       }),
       env,
     );
@@ -93,7 +99,7 @@ describe("registration and config access", () => {
     const emailPayload = JSON.parse(requestOptions.body);
     expect(emailPayload).toMatchObject({
       from: "AD Tools <otp-adtools@example.com>",
-      to: ["person@example.com"],
+      to: ["person@bankmandiri.co.id"],
       subject: "[AD Tools] OTP for AD Tools",
       tags: [{ name: "category", value: "otp" }],
     });
@@ -120,7 +126,7 @@ describe("registration and config access", () => {
       new Request("http://localhost/register/request-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: "person@example.com" }),
+        body: JSON.stringify({ email: "person@bankmandiri.co.id", department: "RETAIL", role: "ANALYST" }),
       }),
       env,
     );
@@ -128,7 +134,7 @@ describe("registration and config access", () => {
     await expect(requestResponse.json()).resolves.toMatchObject({ ok: false, mode: "manual" });
   });
 
-  it("allows non-Bank Mandiri email to verify registration OTP", async () => {
+  it("allows Bank Mandiri email to verify registration OTP", async () => {
     const env = {
       ALLOWED_EMAIL_DOMAINS: "bankmandiri.co.id",
       DB: createVerifyDbMock(),
@@ -139,7 +145,13 @@ describe("registration and config access", () => {
       new Request("http://localhost/register/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: "person@example.com", code: "123456", deviceId: "device-1" }),
+        body: JSON.stringify({
+          email: "person@bankmandiri.co.id",
+          department: "RETAIL",
+          role: "ANALYST",
+          code: "123456",
+          deviceId: "device-1",
+        }),
       }),
       env,
     );
@@ -148,6 +160,84 @@ describe("registration and config access", () => {
     expect(response.status).toBe(200);
     expect(body.ok).toBe(true);
     expect(body.token).toBeTruthy();
+  });
+
+  it.each(["person@gmail.com", "person@sub.bankmandiri.co.id", "person@bankmandiri.co.id.evil.test", "person@@bankmandiri.co.id"])(
+    "rejects OTP registration from %s before storing or consuming a code",
+    async (email) => {
+      const env = { REGISTRATION_AUTH_MODE: "otp", ALLOWED_EMAIL_DOMAINS: "gmail.com", DB: createVerifyDbMock(), adtools: createKvMock() };
+      const payload = { email, department: "RETAIL", role: "ANALYST", code: "123456" };
+      for (const handler of [handleRegisterRequestOtp, handleRegisterVerify]) {
+        const response = await handler(
+          new Request("https://example.test/register/verify", { method: "POST", body: JSON.stringify(payload) }),
+          env,
+        );
+        expect(response.status).toBe(403);
+      }
+      expect(env.DB.executed).toHaveLength(0);
+    },
+  );
+
+  it("persists department and preserves it when an older client omits it", async () => {
+    const env = { DB: createVerifyDbMock(), adtools: createKvMock() };
+    const request = new Request("http://localhost/register/verify");
+    await completeRegistration({ email: "person@bankmandiri.co.id", department: "WHOLESALE", role: "ANALYST" }, request, env);
+    const insert = env.DB.executed.find(({ sql }) => sql.startsWith("INSERT INTO users"));
+    expect(insert.sql).toContain("department");
+    expect(insert.sql).toContain("COALESCE");
+    expect(insert.args).toContain("WHOLESALE");
+    expect(insert.args).toContain("ANALYST");
+    expect(insert.sql).toContain("role = COALESCE");
+    await completeRegistration({ email: "person@bankmandiri.co.id" }, request, env);
+    const inserts = env.DB.executed.filter(({ sql }) => sql.startsWith("INSERT INTO users"));
+    expect(inserts[1].args).toContain(null);
+  });
+
+  it.each([{ department: "UNKNOWN" }, { role: "ADMIN" }, { role: 5 }, { department: "" }, { role: "" }])(
+    "rejects invalid metadata %j before consuming the OTP",
+    async (metadata) => {
+      const env = { DB: createVerifyDbMock(), adtools: createKvMock() };
+      const response = await handleRegisterVerify(
+        new Request("http://localhost/register/verify", {
+          method: "POST",
+          body: JSON.stringify({ email: "person@bankmandiri.co.id", department: "RETAIL", role: "ANALYST", code: "123456", ...metadata }),
+        }),
+        env,
+      );
+      expect(response.status).toBe(400);
+      expect(env.DB.executed).toHaveLength(0);
+    },
+  );
+
+  it("alerts the admin after a new user verifies OTP, without leaking the code", async () => {
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const env = {
+      DB: createVerifyDbMock(),
+      adtools: createKvMock(),
+      REGISTRATION_ADMIN_EMAIL: "admin@example.com",
+      RESEND_API_KEY: "test-key",
+    };
+    const response = await handleRegisterVerify(
+      new Request("https://example.test/register/verify", {
+        method: "POST",
+        body: JSON.stringify({ email: "person@bankmandiri.co.id", department: "RETAIL", role: "ANALYST", code: "123456" }),
+      }),
+      env,
+    );
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.text).toContain("ANALYST");
+    expect(body.text).not.toContain("123456");
+    await handleRegisterVerify(
+      new Request("https://example.test/register/verify", {
+        method: "POST",
+        body: JSON.stringify({ email: "person@bankmandiri.co.id", department: "RETAIL", role: "ANALYST", code: "123456" }),
+      }),
+      env,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("allows Bank Mandiri session token to read protected config content", async () => {

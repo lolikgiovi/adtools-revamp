@@ -5,9 +5,13 @@
 
 import { corsHeaders, isOriginAllowed } from "../utils/cors.js";
 import { tsGmt7, tsGmt7Plain, parseTsFlexible } from "../utils/timestamps.js";
-import { allowedEmailDomains, OTP_EXPIRY_MINUTES, sendOtpEmail } from "../utils/email.js";
+import { allowedEmailDomains, OTP_EXPIRY_MINUTES, sendOtpEmail, isRegistrationEmailAllowed } from "../utils/email.js";
 import { clearRateLimit, consumeRateLimit } from "../utils/rateLimit.js";
 import { getRegistrationAuthMode } from "../utils/registrationAuthMode.js";
+
+import { registrationRole } from "../utils/registrationRole.js";
+import { sendRegistrationNotification } from "../utils/registrationNotification.js";
+import { registrationDepartment } from "../utils/registrationDepartment.js";
 
 const OTP_EXPIRY_MS = OTP_EXPIRY_MINUTES * 60 * 1000;
 
@@ -37,9 +41,12 @@ export function detectRegistrationPlatform(data, request) {
 }
 
 export async function completeRegistration(data, request, env) {
+  const department = registrationDepartment(data.department);
+  const role = registrationRole(data.role);
   const email = String(data.email || "")
     .trim()
     .toLowerCase();
+  if (!isRegistrationEmailAllowed(email)) throw new Error("Use your @bankmandiri.co.id email.");
   const deviceIdRaw = String(data.deviceId || data.device_id || data.installId || "").trim();
   const deviceId = deviceIdRaw || (data.displayName ? `${String(data.displayName).trim()}-${crypto.randomUUID()}` : crypto.randomUUID());
   const platform = detectRegistrationPlatform(data, request);
@@ -47,9 +54,9 @@ export async function completeRegistration(data, request, env) {
   const existingUser = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(email).first();
   const newUserId = existingUser?.id || crypto.randomUUID();
   await env.DB.prepare(
-    "INSERT INTO users (id, email, created_time, last_seen) VALUES (?, ?, ?, ?) ON CONFLICT(email) DO UPDATE SET last_seen = excluded.last_seen",
+    "INSERT INTO users (id, email, created_time, last_seen, department, role) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(email) DO UPDATE SET last_seen = excluded.last_seen, department = COALESCE(excluded.department, users.department), role = COALESCE(excluded.role, users.role)",
   )
-    .bind(newUserId, email, tsGmt7Plain(), tsGmt7Plain())
+    .bind(newUserId, email, tsGmt7Plain(), tsGmt7Plain(), department, role)
     .run();
   const userRow = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(email).first();
   const userId = userRow?.id || newUserId;
@@ -66,7 +73,7 @@ export async function completeRegistration(data, request, env) {
     expirationTtl: 6 * 60 * 60,
   });
 
-  return { userId, token, deviceId, platform };
+  return { userId, token, deviceId, platform, isNewUser: !existingUser };
 }
 
 function isConfigEmailAllowed(email, env) {
@@ -112,13 +119,16 @@ export async function handleRegisterRequestOtp(request, env) {
         headers: { "Content-Type": "application/json", ...corsHeaders(), "Cache-Control": "no-store" },
       });
     }
-    const { email } = await request.json();
+    const data = await request.json();
+    registrationDepartment(data.department, true);
+    registrationRole(data.role, true);
+    const { email } = data;
     const normalized = String(email || "")
       .trim()
       .toLowerCase();
-    if (!/.+@.+\..+/.test(normalized))
-      return new Response(JSON.stringify({ ok: false, error: "Invalid email" }), {
-        status: 400,
+    if (!isRegistrationEmailAllowed(normalized))
+      return new Response(JSON.stringify({ ok: false, error: "Use your @bankmandiri.co.id email." }), {
+        status: 403,
         headers: { "Content-Type": "application/json", ...corsHeaders() },
       });
 
@@ -169,6 +179,8 @@ export async function handleRegisterRequestOtp(request, env) {
 export async function handleRegisterVerify(request, env) {
   try {
     const data = await request.json();
+    registrationDepartment(data.department, true);
+    registrationRole(data.role, true);
     const email = String(data.email || "")
       .trim()
       .toLowerCase();
@@ -179,6 +191,13 @@ export async function handleRegisterVerify(request, env) {
     if (!email || !code) {
       return new Response(JSON.stringify({ ok: false, error: "Missing email or code" }), {
         status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
+
+    if (!isRegistrationEmailAllowed(email)) {
+      return new Response(JSON.stringify({ ok: false, error: "Use your @bankmandiri.co.id email." }), {
+        status: 403,
         headers: { "Content-Type": "application/json", ...corsHeaders() },
       });
     }
@@ -242,6 +261,18 @@ export async function handleRegisterVerify(request, env) {
     }
     const { userId, token } = registration;
     await clearRateLimit(env.adtools, verifyLimitKey);
+    if (registration.isNewUser) {
+      await sendRegistrationNotification(env, {
+        email,
+        displayName: data.displayName,
+        department: data.department,
+        role: data.role,
+        platform: registration.platform,
+        requestId: userId,
+        mode: "otp",
+        approvalUrl: `${new URL(request.url).origin}/#approval`,
+      });
+    }
 
     return new Response(JSON.stringify({ ok: true, userId, token }), {
       headers: { "Content-Type": "application/json", ...corsHeaders() },

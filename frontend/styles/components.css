@@ -2573,3 +2573,26 @@ body.global-search-open {
     font-size: 0.875rem;
   }
 }
+
+.otp-department-field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+  font-size: 13px;
+}
+
+.otp-department {
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+  font: inherit;
+}
+
+.otp-department:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
