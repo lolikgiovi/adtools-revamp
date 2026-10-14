@@ -79,8 +79,9 @@ async function readOverview(env) {
   return response.json();
 }
 
-function currentGmt7Timestamp() {
-  return new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().replace("T", " ").slice(0, 19);
+function currentGmt7Timestamp(timestamp = Date.now()) {
+  // Match stored GMT+7 timestamps without relying on the test runner's timezone.
+  return `${new Date(timestamp + 7 * 60 * 60 * 1000).toISOString().replace("T", " ").slice(0, 19)}+07:00`;
 }
 
 describe("analytics overview count integrity", () => {
@@ -88,56 +89,60 @@ describe("analytics overview count integrity", () => {
 
   afterEach(() => env?.DB.close());
 
-  it("uses the idempotent success ledger instead of absolute snapshots for overview totals", async () => {
-    env = createEnvironment();
-    const createdTime = currentGmt7Timestamp();
-    const payload = {
-      device_id: "device-1",
-      user_email: "user@example.com",
-      events: [],
-      error_events: [],
-      usage_log: [
-        {
-          tool_id: "json-tools",
-          action: "prettify",
-          created_time: createdTime,
-        },
-      ],
-      tool_usage: [{ event_id: "use-1", tool_id: "json-tools", action: "prettify", created_time: createdTime }],
-      device_usage: [
-        {
-          tool_id: "json-tools",
-          action: "prettify",
-          count: 2,
-          updated_time: createdTime,
-        },
-      ],
-    };
+  it.each(["00:30:00", "18:22:00", "23:59:00"])(
+    "uses the idempotent success ledger instead of absolute snapshots for overview totals at %s GMT+7",
+    async (time) => {
+      env = createEnvironment();
+      const today = currentGmt7Timestamp().slice(0, 10);
+      const createdTime = currentGmt7Timestamp(Date.parse(`${today}T${time}+07:00`));
+      const payload = {
+        device_id: "device-1",
+        user_email: "user@example.com",
+        events: [],
+        error_events: [],
+        usage_log: [
+          {
+            tool_id: "json-tools",
+            action: "prettify",
+            created_time: createdTime,
+          },
+        ],
+        tool_usage: [{ event_id: "use-1", tool_id: "json-tools", action: "prettify", created_time: createdTime }],
+        device_usage: [
+          {
+            tool_id: "json-tools",
+            action: "prettify",
+            count: 2,
+            updated_time: createdTime,
+          },
+        ],
+      };
 
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const response = await handleAnalyticsBatchPost(
-        new Request("http://localhost/analytics/batch", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }),
-        env,
-        { email: "user@example.com", deviceId: "device-1" },
-      );
-      expect(response.status).toBe(200);
-    }
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const response = await handleAnalyticsBatchPost(
+          new Request("http://localhost/analytics/batch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          }),
+          env,
+          { email: "user@example.com", deviceId: "device-1" },
+        );
+        expect(response.status).toBe(200);
+      }
 
-    const data = await readOverview(env);
-    expect(data.user).toMatchObject({ totalActivities: 1, toolsUsed: 1 });
-    expect(data.user.tools).toEqual([{ toolId: "json-tools", count: 1 }]);
-    expect(data.global).toMatchObject({ totalActivities: 1, toolsUsed: 1, activeUsers: 1 });
-    expect(data.user.daily).toEqual([{ day: createdTime.slice(0, 10), count: 1 }]);
-    expect(data.global.daily).toEqual([{ day: createdTime.slice(0, 10), count: 1 }]);
-    const storedLogs = await env.DB.prepare("SELECT COUNT(*) AS count FROM usage_log").first();
-    expect(storedLogs.count).toBe(1);
-    const storedUses = await env.DB.prepare("SELECT COUNT(*) AS count FROM tool_usage").first();
-    expect(storedUses.count).toBe(1);
-  });
+      const data = await readOverview(env);
+      expect(data.user).toMatchObject({ totalActivities: 1, toolsUsed: 1 });
+      expect(data.user.tools).toEqual([{ toolId: "json-tools", count: 1 }]);
+      expect(data.global).toMatchObject({ totalActivities: 1, toolsUsed: 1, activeUsers: 1 });
+      expect(data.user.daily).toEqual([{ day: createdTime.slice(0, 10), count: 1 }]);
+      expect(data.global.daily).toEqual([{ day: createdTime.slice(0, 10), count: 1 }]);
+      const storedLogs = await env.DB.prepare("SELECT COUNT(*) AS count FROM usage_log").first();
+      expect(storedLogs.count).toBe(1);
+      const storedUses = await env.DB.prepare("SELECT COUNT(*) AS count FROM tool_usage").first();
+      expect(storedUses.count).toBe(1);
+    },
+  );
 
   it("deduplicates retries by stable tool-use event id in the daily pulse", async () => {
     env = createEnvironment();
