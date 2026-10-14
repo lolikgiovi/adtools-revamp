@@ -148,8 +148,9 @@ export class JenkinsRunner extends BaseTool {
     try {
       const sql = (data && (data.sql || data.query)) || "";
       if (!sql) return;
-      // Mark source as quick-query when receiving SQL via route
-      this._querySource = "quick-query";
+      // Managed packages retain provenance and cannot enter the generic splitter.
+      this._monitoringPackage = data.monitoringPackage || null;
+      this._querySource = this._monitoringPackage ? "monitoring-query" : "quick-query";
       // If editor is ready, set immediately; otherwise stash for onMount
       if (this.editor && typeof this.editor.setValue === "function") {
         this.editor.setValue(sql);
@@ -2389,6 +2390,11 @@ export class JenkinsRunner extends BaseTool {
       const job = jobInput.value.trim();
       const env = envSelect.value;
       const sql = this.editor ? this.editor.getValue().trim() : "";
+      if (this._monitoringPackage || sql.startsWith("-- AD Tools Monitoring Query guarded package")) {
+        statusEl.textContent = "Monitoring packages require verified runner compatibility and an explicit target mapping. Execute through Monitoring Config or a verified Oracle client.";
+        this.showError("Managed Monitoring execution is unavailable for this Jenkins runner. SQL splitting is disabled.");
+        return;
+      }
       const totalBytes = calcUtf8Bytes(sql);
       // Determine query source: quick-query, template, or manual
       const source = this._querySource || "manual";

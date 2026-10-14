@@ -1,0 +1,961 @@
+{
+  "ok": true,
+  "action": "load",
+  "state": "Loaded",
+  "identity": {
+    "database": "FREEPDB1",
+    "service": "freepdb1",
+    "schema": "MONITORING",
+    "username": "MONITORING",
+    "characterSet": "AL32UTF8"
+  },
+  "fingerprint": "74f6cd83d195fcf86867a574e8eab14e3a7ac32731d608ef6cdd55d9f75f899b",
+  "schemaFingerprint": "74f6cd83d195fcf86867a574e8eab14e3a7ac32731d608ef6cdd55d9f75f899b",
+  "metadata": {
+    "schema": "MONITORING",
+    "tables": [
+      {
+        "name": "DSH_MENU",
+        "primaryKey": "MENU_ID",
+        "columns": [
+          {
+            "name": "MENU_ID",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 50,
+            "charUsed": "B",
+            "dataLength": 50,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "CHANNEL_NAME",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 100,
+            "charUsed": "B",
+            "dataLength": 100,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "MENU_LABEL",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 100,
+            "charUsed": "B",
+            "dataLength": 100,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "DISPLAY_ORDER",
+            "type": "NUMBER",
+            "nullable": false,
+            "length": null,
+            "charUsed": null,
+            "dataLength": 22,
+            "precision": 3,
+            "scale": 0,
+            "default": "1"
+          },
+          {
+            "name": "IS_ACTIVE",
+            "type": "CHAR",
+            "nullable": false,
+            "length": 1,
+            "charUsed": "B",
+            "dataLength": 1,
+            "precision": null,
+            "scale": null,
+            "default": "'Y'"
+          },
+          {
+            "name": "CREATED_BY",
+            "type": "VARCHAR2",
+            "nullable": true,
+            "length": 50,
+            "charUsed": "B",
+            "dataLength": 50,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "CREATED_AT",
+            "type": "TIMESTAMP(6)",
+            "nullable": false,
+            "length": null,
+            "charUsed": null,
+            "dataLength": 11,
+            "precision": null,
+            "scale": 6,
+            "default": "SYSTIMESTAMP"
+          },
+          {
+            "name": "UPDATED_BY",
+            "type": "VARCHAR2",
+            "nullable": true,
+            "length": 50,
+            "charUsed": "B",
+            "dataLength": 50,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "UPDATED_AT",
+            "type": "TIMESTAMP(6)",
+            "nullable": true,
+            "length": null,
+            "charUsed": null,
+            "dataLength": 11,
+            "precision": null,
+            "scale": 6,
+            "default": null
+          }
+        ]
+      },
+      {
+        "name": "DSH_SUMMARY_GROUP",
+        "primaryKey": "GROUP_ID",
+        "columns": [
+          {
+            "name": "GROUP_ID",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 50,
+            "charUsed": "B",
+            "dataLength": 50,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "MENU_ID",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 50,
+            "charUsed": "B",
+            "dataLength": 50,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "DATASOURCE_ID",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 30,
+            "charUsed": "B",
+            "dataLength": 30,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "GROUP_TITLE",
+            "type": "VARCHAR2",
+            "nullable": true,
+            "length": 100,
+            "charUsed": "B",
+            "dataLength": 100,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "SQL_TEXT",
+            "type": "CLOB",
+            "nullable": false,
+            "length": null,
+            "charUsed": null,
+            "dataLength": 4000,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "TIMEOUT_MS",
+            "type": "NUMBER",
+            "nullable": false,
+            "length": null,
+            "charUsed": null,
+            "dataLength": 22,
+            "precision": 6,
+            "scale": 0,
+            "default": "5000"
+          },
+          {
+            "name": "DISPLAY_ORDER",
+            "type": "NUMBER",
+            "nullable": false,
+            "length": null,
+            "charUsed": null,
+            "dataLength": 22,
+            "precision": 3,
+            "scale": 0,
+            "default": "1"
+          }
+        ]
+      },
+      {
+        "name": "DSH_SUMMARY_FIELD",
+        "primaryKey": "FIELD_ID",
+        "columns": [
+          {
+            "name": "FIELD_ID",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 50,
+            "charUsed": "B",
+            "dataLength": 50,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "GROUP_ID",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 50,
+            "charUsed": "B",
+            "dataLength": 50,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "FIELD_TITLE",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 100,
+            "charUsed": "B",
+            "dataLength": 100,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "SOURCE_FIELD",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 50,
+            "charUsed": "B",
+            "dataLength": 50,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "VALUE_FORMAT",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 20,
+            "charUsed": "B",
+            "dataLength": 20,
+            "precision": null,
+            "scale": null,
+            "default": "'text'"
+          },
+          {
+            "name": "TONE",
+            "type": "VARCHAR2",
+            "nullable": true,
+            "length": 10,
+            "charUsed": "B",
+            "dataLength": 10,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "DISPLAY_ORDER",
+            "type": "NUMBER",
+            "nullable": false,
+            "length": null,
+            "charUsed": null,
+            "dataLength": 22,
+            "precision": 3,
+            "scale": 0,
+            "default": "1"
+          }
+        ]
+      },
+      {
+        "name": "DSH_DETAIL_TABLE",
+        "primaryKey": "TABLE_ID",
+        "columns": [
+          {
+            "name": "TABLE_ID",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 50,
+            "charUsed": "B",
+            "dataLength": 50,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "MENU_ID",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 50,
+            "charUsed": "B",
+            "dataLength": 50,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "DATASOURCE_ID",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 30,
+            "charUsed": "B",
+            "dataLength": 30,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "TABLE_TITLE",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 150,
+            "charUsed": "B",
+            "dataLength": 150,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "TONE",
+            "type": "VARCHAR2",
+            "nullable": true,
+            "length": 10,
+            "charUsed": "B",
+            "dataLength": 10,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "PAGE_SIZE",
+            "type": "NUMBER",
+            "nullable": false,
+            "length": null,
+            "charUsed": null,
+            "dataLength": 22,
+            "precision": 3,
+            "scale": 0,
+            "default": "10"
+          },
+          {
+            "name": "SQL_TEXT",
+            "type": "CLOB",
+            "nullable": false,
+            "length": null,
+            "charUsed": null,
+            "dataLength": 4000,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "TIMEOUT_MS",
+            "type": "NUMBER",
+            "nullable": false,
+            "length": null,
+            "charUsed": null,
+            "dataLength": 22,
+            "precision": 6,
+            "scale": 0,
+            "default": "5000"
+          },
+          {
+            "name": "DISPLAY_ORDER",
+            "type": "NUMBER",
+            "nullable": false,
+            "length": null,
+            "charUsed": null,
+            "dataLength": 22,
+            "precision": 3,
+            "scale": 0,
+            "default": "1"
+          },
+          {
+            "name": "SHOW_CHART",
+            "type": "CHAR",
+            "nullable": false,
+            "length": 1,
+            "charUsed": "B",
+            "dataLength": 1,
+            "precision": null,
+            "scale": null,
+            "default": "'Y'"
+          },
+          {
+            "name": "CHART_TYPE",
+            "type": "VARCHAR2",
+            "nullable": true,
+            "length": 10,
+            "charUsed": "B",
+            "dataLength": 10,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "CHART_TITLE",
+            "type": "VARCHAR2",
+            "nullable": true,
+            "length": 150,
+            "charUsed": "B",
+            "dataLength": 150,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "CHART_SQL",
+            "type": "CLOB",
+            "nullable": true,
+            "length": null,
+            "charUsed": null,
+            "dataLength": 4000,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "CHART_LABEL_FIELD",
+            "type": "VARCHAR2",
+            "nullable": true,
+            "length": 50,
+            "charUsed": "B",
+            "dataLength": 50,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "CHART_VALUE_FIELD",
+            "type": "VARCHAR2",
+            "nullable": true,
+            "length": 50,
+            "charUsed": "B",
+            "dataLength": 50,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "CHART_VALUE_FORMAT",
+            "type": "VARCHAR2",
+            "nullable": true,
+            "length": 20,
+            "charUsed": "B",
+            "dataLength": 20,
+            "precision": null,
+            "scale": null,
+            "default": "'number'"
+          }
+        ]
+      },
+      {
+        "name": "DSH_DETAIL_COLUMN",
+        "primaryKey": "COLUMN_ID",
+        "columns": [
+          {
+            "name": "COLUMN_ID",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 50,
+            "charUsed": "B",
+            "dataLength": 50,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "TABLE_ID",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 50,
+            "charUsed": "B",
+            "dataLength": 50,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "COLUMN_TITLE",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 100,
+            "charUsed": "B",
+            "dataLength": 100,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "SOURCE_FIELD",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 50,
+            "charUsed": "B",
+            "dataLength": 50,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "VALUE_FORMAT",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 20,
+            "charUsed": "B",
+            "dataLength": 20,
+            "precision": null,
+            "scale": null,
+            "default": "'text'"
+          },
+          {
+            "name": "ALIGN",
+            "type": "VARCHAR2",
+            "nullable": true,
+            "length": 6,
+            "charUsed": "B",
+            "dataLength": 6,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "DISPLAY_ORDER",
+            "type": "NUMBER",
+            "nullable": false,
+            "length": null,
+            "charUsed": null,
+            "dataLength": 22,
+            "precision": 3,
+            "scale": 0,
+            "default": "1"
+          }
+        ]
+      },
+      {
+        "name": "DSH_DATASOURCE",
+        "primaryKey": "DATASOURCE_ID",
+        "columns": [
+          {
+            "name": "DATASOURCE_ID",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 30,
+            "charUsed": "B",
+            "dataLength": 30,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "DISPLAY_NAME",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 100,
+            "charUsed": "B",
+            "dataLength": 100,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "JDBC_URL",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 500,
+            "charUsed": "B",
+            "dataLength": 500,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "CREDENTIAL_REF",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 50,
+            "charUsed": "B",
+            "dataLength": 50,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "POOL_MAX",
+            "type": "NUMBER",
+            "nullable": false,
+            "length": null,
+            "charUsed": null,
+            "dataLength": 22,
+            "precision": 3,
+            "scale": 0,
+            "default": "5"
+          },
+          {
+            "name": "CONNECT_TIMEOUT_MS",
+            "type": "NUMBER",
+            "nullable": false,
+            "length": null,
+            "charUsed": null,
+            "dataLength": 22,
+            "precision": 6,
+            "scale": 0,
+            "default": "5000"
+          },
+          {
+            "name": "DESCRIPTION",
+            "type": "VARCHAR2",
+            "nullable": true,
+            "length": 300,
+            "charUsed": "B",
+            "dataLength": 300,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "IS_ACTIVE",
+            "type": "CHAR",
+            "nullable": false,
+            "length": 1,
+            "charUsed": "B",
+            "dataLength": 1,
+            "precision": null,
+            "scale": null,
+            "default": "'Y'"
+          },
+          {
+            "name": "CREATED_BY",
+            "type": "VARCHAR2",
+            "nullable": true,
+            "length": 50,
+            "charUsed": "B",
+            "dataLength": 50,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "CREATED_AT",
+            "type": "TIMESTAMP(6)",
+            "nullable": false,
+            "length": null,
+            "charUsed": null,
+            "dataLength": 11,
+            "precision": null,
+            "scale": 6,
+            "default": "SYSTIMESTAMP"
+          }
+        ]
+      },
+      {
+        "name": "DSH_CONFIG_AUDIT",
+        "primaryKey": "AUDIT_ID",
+        "columns": [
+          {
+            "name": "AUDIT_ID",
+            "type": "NUMBER",
+            "nullable": false,
+            "length": null,
+            "charUsed": null,
+            "dataLength": 22,
+            "precision": null,
+            "scale": null,
+            "default": "GENERATED ALWAYS AS IDENTITY"
+          },
+          {
+            "name": "TABLE_NAME",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 30,
+            "charUsed": "B",
+            "dataLength": 30,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "RECORD_ID",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 50,
+            "charUsed": "B",
+            "dataLength": 50,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "ACTION",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 10,
+            "charUsed": "B",
+            "dataLength": 10,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "OLD_VALUE",
+            "type": "CLOB",
+            "nullable": true,
+            "length": null,
+            "charUsed": null,
+            "dataLength": 4000,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "NEW_VALUE",
+            "type": "CLOB",
+            "nullable": true,
+            "length": null,
+            "charUsed": null,
+            "dataLength": 4000,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "CHANGED_BY",
+            "type": "VARCHAR2",
+            "nullable": true,
+            "length": 50,
+            "charUsed": "B",
+            "dataLength": 50,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "CHANGED_AT",
+            "type": "TIMESTAMP(6)",
+            "nullable": false,
+            "length": null,
+            "charUsed": null,
+            "dataLength": 11,
+            "precision": null,
+            "scale": 6,
+            "default": "SYSTIMESTAMP"
+          }
+        ]
+      },
+      {
+        "name": "DSH_SUMMARY_QUERY",
+        "primaryKey": "MENU_ID",
+        "columns": [
+          {
+            "name": "MENU_ID",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 50,
+            "charUsed": "B",
+            "dataLength": 50,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "DATASOURCE_ID",
+            "type": "VARCHAR2",
+            "nullable": false,
+            "length": 30,
+            "charUsed": "B",
+            "dataLength": 30,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "SQL_TEXT",
+            "type": "CLOB",
+            "nullable": false,
+            "length": null,
+            "charUsed": null,
+            "dataLength": 4000,
+            "precision": null,
+            "scale": null,
+            "default": null
+          },
+          {
+            "name": "TIMEOUT_MS",
+            "type": "NUMBER",
+            "nullable": false,
+            "length": null,
+            "charUsed": null,
+            "dataLength": 22,
+            "precision": 6,
+            "scale": 0,
+            "default": "5000"
+          }
+        ]
+      }
+    ],
+    "characterSet": "AL32UTF8",
+    "summaryQueryAvailable": true
+  },
+  "menuId": "E2E_MENU_96584307D9F34FAD",
+  "tables": {
+    "DSH_MENU": [
+      {
+        "MENU_ID": "E2E_MENU_96584307D9F34FAD",
+        "CHANNEL_NAME": "AD_TOOLS_LOCAL_E2E",
+        "MENU_LABEL": "Synthetic menu before update",
+        "DISPLAY_ORDER": {
+          "type": "number",
+          "value": "1"
+        },
+        "IS_ACTIVE": "Y",
+        "CREATED_BY": "LOCAL_E2E",
+        "CREATED_AT": {
+          "type": "timestamp",
+          "precision": 6,
+          "value": "2026-10-14T00:10:55.493271"
+        },
+        "UPDATED_BY": null,
+        "UPDATED_AT": null
+      }
+    ],
+    "DSH_SUMMARY_GROUP": [
+      {
+        "GROUP_ID": "E2E_GROUP_96584307D9F34FAD",
+        "MENU_ID": "E2E_MENU_96584307D9F34FAD",
+        "DATASOURCE_ID": "E2EDS_96584307D9F34FAD",
+        "GROUP_TITLE": "Synthetic long CLOB group",
+        "SQL_TEXT": {
+          "type": "clob",
+          "value": "SELECT :startDate AS START_DATE, :endDate AS END_DATE, :offset AS ROW_OFFSET, :limit AS ROW_LIMIT FROM DUAL\r\n/* E2E literal/comment bind: ':nestedBind'; unicode: 東京, café, 😀, 🌴 */\r\n/* lossless CLOB payload begins\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\n雪🌴CLOB-E2E-東京\r\nlossless CLOB payload ends */"
+        },
+        "TIMEOUT_MS": {
+          "type": "number",
+          "value": "60000"
+        },
+        "DISPLAY_ORDER": {
+          "type": "number",
+          "value": "1"
+        }
+      }
+    ],
+    "DSH_SUMMARY_FIELD": [
+      {
+        "FIELD_ID": "E2E_FIELD_96584307D9F34FAD",
+        "GROUP_ID": "E2E_GROUP_96584307D9F34FAD",
+        "FIELD_TITLE": "Synthetic count",
+        "SOURCE_FIELD": "E2E_COUNT",
+        "VALUE_FORMAT": "number",
+        "TONE": null,
+        "DISPLAY_ORDER": {
+          "type": "number",
+          "value": "1"
+        }
+      }
+    ],
+    "DSH_DETAIL_TABLE": [
+      {
+        "TABLE_ID": "E2E_TABLE_96584307D9F34FAD",
+        "MENU_ID": "E2E_MENU_96584307D9F34FAD",
+        "DATASOURCE_ID": "E2EDS_96584307D9F34FAD",
+        "TABLE_TITLE": "Synthetic detail",
+        "TONE": null,
+        "PAGE_SIZE": {
+          "type": "number",
+          "value": "10"
+        },
+        "SQL_TEXT": {
+          "type": "clob",
+          "value": "SELECT :startDate AS START_DATE, :endDate AS END_DATE, :offset AS OFFSET_VALUE, :limit AS LIMIT_VALUE FROM DUAL"
+        },
+        "TIMEOUT_MS": {
+          "type": "number",
+          "value": "5000"
+        },
+        "DISPLAY_ORDER": {
+          "type": "number",
+          "value": "1"
+        },
+        "SHOW_CHART": "N",
+        "CHART_TYPE": null,
+        "CHART_TITLE": null,
+        "CHART_SQL": null,
+        "CHART_LABEL_FIELD": null,
+        "CHART_VALUE_FIELD": null,
+        "CHART_VALUE_FORMAT": "number"
+      }
+    ],
+    "DSH_DETAIL_COLUMN": [
+      {
+        "COLUMN_ID": "E2E_COLUMN_96584307D9F34FAD",
+        "TABLE_ID": "E2E_TABLE_96584307D9F34FAD",
+        "COLUMN_TITLE": "Synthetic value",
+        "SOURCE_FIELD": "E2E_VALUE",
+        "VALUE_FORMAT": "text",
+        "ALIGN": "left",
+        "DISPLAY_ORDER": {
+          "type": "number",
+          "value": "1"
+        }
+      }
+    ],
+    "DSH_DATASOURCE": [
+      {
+        "DATASOURCE_ID": "E2EDS_96584307D9F34FAD",
+        "DISPLAY_NAME": "Synthetic Local E2E datasource",
+        "IS_ACTIVE": "Y",
+        "POOL_MAX": {
+          "type": "number",
+          "value": "1"
+        },
+        "CONNECT_TIMEOUT_MS": {
+          "type": "number",
+          "value": "5000"
+        }
+      }
+    ],
+    "DSH_SUMMARY_QUERY": []
+  },
+  "health": {
+    "orphanSummaryFields": []
+  },
+  "issues": [],
+  "idInventory": {
+    "DSH_MENU": [
+      "E2E_MENU_96584307D9F34FAD"
+    ],
+    "DSH_SUMMARY_GROUP": [
+      "E2E_GROUP_96584307D9F34FAD"
+    ],
+    "DSH_SUMMARY_FIELD": [
+      "E2E_FIELD_96584307D9F34FAD"
+    ],
+    "DSH_DETAIL_TABLE": [
+      "E2E_TABLE_96584307D9F34FAD"
+    ],
+    "DSH_DETAIL_COLUMN": [
+      "E2E_COLUMN_96584307D9F34FAD"
+    ]
+  },
+  "complete": true,
+  "writable": true,
+  "readScope": "single synthetic LOCAL E2E menu hierarchy",
+  "readAt": "2026-10-13T17:10:55.976Z"
+}

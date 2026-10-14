@@ -160,6 +160,14 @@
       "icon": "language",
       "requiresTauri": true,
       "order": 100
+    },
+    {
+      "id": "monitoring-query",
+      "name": "Monitoring Config",
+      "category": "config",
+      "icon": "database",
+      "order": 52,
+      "requiresTauri": true
     }
   ]
 }

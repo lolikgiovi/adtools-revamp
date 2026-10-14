@@ -142,6 +142,16 @@ export class OracleConnectionService {
     return this.invokeTauri("oracle_sidecar_query_batch", { queries });
   }
 
+  static async monitoring(connection, request) {
+    const started = await this.ensureSidecarStarted();
+    if (!started) throw new OracleSidecarError("Oracle bridge did not start");
+    return this.invokeTauri("oracle_sidecar_monitoring", {
+      connectionName: connection.name,
+      config: { name: connection.name, connect_string: connection.connect_string },
+      request,
+    });
+  }
+
   static updateHeaderStatus(status = this.getSidecarStatus()) {
     const statusIndicator = document.getElementById("sidecar-status-indicator");
     if (!statusIndicator) return;

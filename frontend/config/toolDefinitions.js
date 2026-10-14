@@ -1,4 +1,8 @@
 const TOOL_MODULES = {
+  "monitoring-query": {
+    description: "Inspect, edit and safely apply Oracle monitoring configuration",
+    load: () => import("../tools/monitoring-query/main.js").then((module) => ({ ToolClass: module.MonitoringQuery })),
+  },
   "uuid-generator": {
     description: "Generate UUID v4 strings for unique identifiers",
     load: () => import("../tools/uuid-generator/main.js").then((module) => ({ ToolClass: module.UUIDGenerator })),

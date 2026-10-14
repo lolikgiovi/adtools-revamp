@@ -17,5 +17,6 @@
   "sql-in-clause": { "actions": ["copy"], "boundary": "generated output is copied successfully" },
   "merge-sql": { "actions": ["merge", "report_from_sql"], "boundary": "SQL result is generated and saved" },
   "check-image": { "actions": ["check"], "boundary": "the requested image-check batch completes" },
+  "monitoring-query": { "actions": ["load"], "boundary": "complete schema-checked Oracle configuration loads successfully" },
   "master-lockey": { "actions": ["bulk_search", "bulk_search_copy", "bulk_search_copy_lockey", "bulk_confluence_search", "bulk_confluence_copy_lockey", "bulk_confluence_copy_table", "confluence_copy_lockey", "confluence_copy_table"], "boundary": "search returns results or clipboard write succeeds" }
 }

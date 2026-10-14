@@ -1,6 +1,6 @@
 # Monitoring Query — Product requirements
 
-**Status:** revised requirements, ready for review; implementation has not started.
+**Status:** implemented in the active Vanilla JS/Tauri checkout; LOCAL verification is recorded in [verification.md](verification.md). UAT and Jenkins runner gates remain unverified.
 **Date:** 2026-10-13. **Product:** AD Tools. **Route:** `#monitoring-query`. **Category:** Config.
 **Decision accepted (revised):** use guarded INSERT/UPDATE for existing edits and new/cloned rows in one reviewed transaction.
 Fetch latest Oracle data → show conflicts → apply if unchanged. Disable editing while applying; standardize typed reads and comparisons. Record grouped change history for every successful transaction.

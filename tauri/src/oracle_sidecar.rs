@@ -5,6 +5,8 @@
 //! Oracle Instant Client to be bundled with the app.
 
 use std::process::Command;
+#[cfg(unix)]
+use std::io::Read;
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use serde::Deserialize;
@@ -17,6 +19,27 @@ const SIDECAR_PORT: u16 = 21522;
 const SIDECAR_NAME: &str = "oracle-sidecar";
 const STARTUP_TIMEOUT_MS: u64 = 30000;
 const HEALTH_CHECK_INTERVAL_MS: u64 = 100;
+static MONITORING_BRIDGE_TOKEN: OnceLock<String> = OnceLock::new();
+
+fn monitoring_bridge_token() -> &'static str {
+    MONITORING_BRIDGE_TOKEN.get_or_init(|| {
+        let mut bytes = [0u8; 32];
+        #[cfg(unix)]
+        std::fs::File::open("/dev/urandom").and_then(|mut f| f.read_exact(&mut bytes))
+            .expect("secure random source unavailable");
+        #[cfg(windows)]
+        {
+            #[link(name = "bcrypt")]
+            extern "system" {
+                fn BCryptGenRandom(algorithm: *mut std::ffi::c_void, buffer: *mut u8, length: u32, flags: u32) -> i32;
+            }
+            let status = unsafe { BCryptGenRandom(std::ptr::null_mut(), bytes.as_mut_ptr(), bytes.len() as u32, 2) };
+            assert_eq!(status, 0, "secure random source unavailable");
+        }
+        bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    })
+}
+
 static SIDECAR_HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
 /// Kill any process occupying the sidecar port.
@@ -82,6 +105,7 @@ pub async fn start_oracle_sidecar(app: tauri::AppHandle) -> Result<String, Strin
     let sidecar_command = app
         .shell()
         .sidecar(SIDECAR_NAME)
+        .map(|command| command.env("ADTOOLS_MONITORING_TOKEN", monitoring_bridge_token()))
         .map_err(|e| format!("Failed to create sidecar command: {}", e))?;
 
     let (mut rx, child) = sidecar_command
@@ -184,6 +208,7 @@ fn connection_payload(connection_name: &str, config: &crate::oracle::ConnectionC
 async fn post_sidecar(path: &str, payload: Value) -> Result<Value, String> {
     let response = sidecar_http_client()
         .post(format!("http://127.0.0.1:{}{}", SIDECAR_PORT, path))
+        .header("X-ADTools-Monitoring-Token", monitoring_bridge_token())
         .timeout(Duration::from_secs(300))
         .json(&payload)
         .send()
@@ -327,4 +352,15 @@ mod tests {
         let child = state.child.lock().unwrap();
         assert!(child.is_none());
     }
+}
+
+/// Structured monitoring requests; credentials remain in the native keychain boundary.
+#[tauri::command]
+pub async fn oracle_sidecar_monitoring(
+    connection_name: String,
+    config: crate::oracle::ConnectionConfig,
+    request: Value,
+) -> Result<Value, String> {
+    let connection = connection_payload(&connection_name, &config)?;
+    post_sidecar("/monitoring", json!({ "connection": connection, "request": request })).await
 }

@@ -9,6 +9,9 @@ Uses oracledb in THIN mode - no native Oracle client libraries required!
 """
 
 import asyncio
+import os
+import secrets
+import monitoring
 import atexit
 import base64
 import logging
@@ -22,7 +25,7 @@ from threading import Lock
 from typing import Any, Optional
 
 import oracledb
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
@@ -518,6 +521,33 @@ async def list_pools():
                 "last_used": pool_manager._last_used[key].isoformat()
             })
         return {"pools": pools}
+
+
+
+
+class MonitoringRequest(BaseModel):
+    connection: ConnectionConfig
+    request: dict[str, Any]
+
+
+def _monitoring_sync(request: MonitoringRequest):
+    pool = pool_manager.get_pool(request.connection)
+    with pool.acquire() as conn:
+        try:
+            return monitoring.handle(conn, request.request)
+        finally:
+            conn.rollback()
+
+
+@app.post("/monitoring")
+async def monitoring_request(
+    request: MonitoringRequest,
+    x_adtools_monitoring_token: Optional[str] = Header(default=None),
+):
+    token = os.environ.get("ADTOOLS_MONITORING_TOKEN", "")
+    if not token or not secrets.compare_digest(token, x_adtools_monitoring_token or ""):
+        raise HTTPException(status_code=403, detail="Monitoring requires the authenticated Desktop bridge")
+    return await asyncio.get_running_loop().run_in_executor(_db_executor, _monitoring_sync, request)
 
 
 # =============================================================================
