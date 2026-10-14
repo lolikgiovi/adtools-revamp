@@ -39,7 +39,6 @@ const ASSET_LOAD_RELOAD_KEY_PREFIX = "adtools.assetLoadReloads";
 const WARM_TOOL_IDLE_DISPOSE_MS = 90 * 1000;
 const WARM_TOOL_MAX_HEAVY_TOOLS = 2;
 const PRIVILEGED_ADMIN_EMAIL = "fashalli.bilhaq@bankmandiri.co.id";
-const ADMINISTRATOR_STORAGE_KEY = "administrator";
 const RELEASE_TOUR_PREVIEW_QUERY = "release-tour";
 const IS_DEV = import.meta.env.DEV;
 
@@ -1604,7 +1603,7 @@ class App {
       const email = String(localStorage.getItem("user.email") || "")
         .trim()
         .toLowerCase();
-      return email === PRIVILEGED_ADMIN_EMAIL && localStorage.getItem(ADMINISTRATOR_STORAGE_KEY) === "true";
+      return email === PRIVILEGED_ADMIN_EMAIL;
     } catch (_) {
       return false;
     }

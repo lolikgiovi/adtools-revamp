@@ -11,31 +11,25 @@ afterEach(() => {
 });
 
 describe("privileged sidebar pages", () => {
-  it("does not show the privileged pages for the configured email without the flag", () => {
-    localStorage.setItem("user.email", "FASHALLI.BILHAQ@BANKMANDIRI.CO.ID");
-    const app = Object.create(App.prototype);
-
-    expect(app.buildMenuConfig().footer.map((item) => item.id)).toEqual(["about", "settings"]);
-  });
-
-  it("does not show the privileged pages for the flag without the configured email", () => {
-    localStorage.setItem("administrator", "true");
-    const app = Object.create(App.prototype);
-
-    expect(app.buildMenuConfig().footer.map((item) => item.id)).toEqual(["about", "settings"]);
-  });
-
-  it("shows the privileged pages only when both conditions match", () => {
-    localStorage.setItem("user.email", "FASHALLI.BILHAQ@BANKMANDIRI.CO.ID");
-    localStorage.setItem("administrator", "true");
+  // Failure cases: matching email blocked by a missing/false flag; absent or other email granted access by the flag.
+  it.each([null, "false", "true"])("shows the privileged pages for the configured email with flag %s", (flag) => {
+    localStorage.setItem("user.email", " FASHALLI.BILHAQ@BANKMANDIRI.CO.ID ");
+    if (flag !== null) localStorage.setItem("administrator", flag);
     const app = Object.create(App.prototype);
 
     expect(app.buildMenuConfig().footer.map((item) => item.id)).toEqual(["about", "settings", "analytics-dashboard", "approval"]);
   });
 
+  it.each(["", "another@bankmandiri.co.id"])("does not show the privileged pages for other email %s with the flag", (email) => {
+    if (email) localStorage.setItem("user.email", email);
+    localStorage.setItem("administrator", "true");
+    const app = Object.create(App.prototype);
+
+    expect(app.buildMenuConfig().footer.map((item) => item.id)).toEqual(["about", "settings"]);
+  });
+
   it("renders the privileged entries in the web runtime", async () => {
     localStorage.setItem("user.email", "fashalli.bilhaq@bankmandiri.co.id");
-    localStorage.setItem("administrator", "true");
     const app = Object.create(App.prototype);
     const sidebar = Object.assign(Object.create(Sidebar.prototype), {
       menuConfig: app.buildMenuConfig(),
