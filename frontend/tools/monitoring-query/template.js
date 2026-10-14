@@ -16,7 +16,7 @@ export function shell(connections, desktop) {
     <div class="mq-status" role="status" aria-live="polite">${desktop ? "Select an Oracle connection to inspect monitoring configuration." : "Oracle loading requires AD Tools Desktop. Open this tool in the desktop app."}</div>
     <div class="mq-workspace">
       <aside class="mq-nav" aria-label="Monitoring menus">
-        <div class="mq-nav-heading"><strong>Menus</strong>${button("add-menu", "Add", true)}</div>
+        <div class="mq-nav-heading"><strong>Menus</strong>${button("add-menu", "Add Menu", true)}</div>
         <label class="mq-search"><span class="mq-sr-only">Search menus</span><input id="mq-search" name="menu-search" type="search" placeholder="Search menus or channels…" autocomplete="off"></label>
         <div class="mq-menu-list"></div>
         <div class="mq-nav-footer">${button("health", "Configuration Health", true)}</div>

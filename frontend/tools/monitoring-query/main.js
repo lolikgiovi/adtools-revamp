@@ -418,14 +418,14 @@ export class MonitoringQuery extends BaseTool {
       [...groups]
         .map(
           ([channel, rows]) =>
-            `<div class="mq-channel">${esc(channel)}</div>${rows
+            `<section class="mq-channel-group" aria-label="${esc(channel || "Unassigned channel")}"><div class="mq-channel"><span>Channel</span><strong>${esc(channel || "Unassigned")}</strong></div><div class="mq-channel-menus">${rows
               .sort((a, b) => Number(valueText(a.DISPLAY_ORDER)) - Number(valueText(b.DISPLAY_ORDER)) || a.MENU_ID.localeCompare(b.MENU_ID))
               .map((row) => {
                 const pending = this.operations.filter((op) => menuFor(this.tables, op.table, op.desired) === row.MENU_ID).length;
                 return `<button class="mq-menu" type="button" data-action="select" data-table="DSH_MENU" data-id="${esc(row.MENU_ID)}" aria-current="${this.menuId === row.MENU_ID}" ${this.frozen || this.targetChanged ? "disabled" : ""}>
-        ${row.IS_ACTIVE !== "Y" ? '<span class="mq-inactive" title="Inactive"></span>' : ""}<span class="mq-menu-label">${esc(row.MENU_LABEL)}</span>${pending ? `<span class="mq-badge">${pending}</span>` : ""}</button>`;
+        ${row.IS_ACTIVE !== "Y" ? '<span class="mq-inactive" title="Inactive"></span>' : ""}<span class="mq-menu-label"><span>${esc(row.MENU_LABEL)}</span>${menus.some((other) => other !== row && other.CHANNEL_NAME === row.CHANNEL_NAME && other.MENU_LABEL === row.MENU_LABEL) ? `<small translate="no">${esc(row.MENU_ID)}</small>` : ""}</span>${pending ? `<span class="mq-badge">${pending}</span>` : ""}</button>`;
               })
-              .join("")}`,
+              .join("")}</div></section>`,
         )
         .join("") || '<p class="mq-hint" style="padding:12px">No menus found.</p>';
   }
@@ -456,12 +456,38 @@ export class MonitoringQuery extends BaseTool {
       content.innerHTML = this.historyHtml();
     } else {
       const row = this.selectedRow;
-      content.innerHTML = `<nav class="mq-breadcrumb" aria-label="Configuration breadcrumb"><span>${esc(menu?.CHANNEL_NAME || "Monitoring")}</span><span aria-hidden="true">/</span>
-        <button data-action="select" data-table="DSH_MENU" data-id="${esc(this.menuId)}">${esc(menu?.MENU_LABEL || "Menus")}</button>${this.selected?.table !== "DSH_MENU" ? `<span aria-hidden="true">/</span><span>${esc(title(this.selected.table, row))}</span>` : ""}</nav>
+      content.innerHTML = `${this.breadcrumbHtml(menu, row)}
         ${row ? this.entityHtml(row) : `<div class="mq-empty"><h2>No Menu Selected</h2><p>Add a menu to begin a local draft.</p>${button("add-menu", "Add Menu", this.frozen)}</div>`}`;
       this.mountEditors();
     }
     this.updateControls();
+  }
+  breadcrumbHtml(menu, row) {
+    const table = this.selected?.table;
+    const parts = [`<span>Channel: ${esc(menu?.CHANNEL_NAME || "Monitoring")}</span>`];
+    if (row && table !== "DSH_MENU") {
+      parts.push(
+        `<button data-action="select" data-table="DSH_MENU" data-id="${esc(this.menuId)}">${esc(menu?.MENU_LABEL || "Menu")}</button>`,
+      );
+      const section = ["DSH_SUMMARY_GROUP", "DSH_SUMMARY_FIELD"].includes(table)
+        ? "summary"
+        : ["DSH_DETAIL_TABLE", "DSH_DETAIL_COLUMN"].includes(table)
+          ? "details"
+          : "compatibility";
+      parts.push(
+        `<button data-action="tab" data-section="${section}">${section === "summary" ? "Summary queries" : section === "details" ? "Detail queries" : "Compatibility"}</button>`,
+      );
+      if (["DSH_SUMMARY_FIELD", "DSH_DETAIL_COLUMN"].includes(table)) {
+        const [parentTable, foreignKey] = PARENTS[table];
+        const parent = this.tables[parentTable].find((item) => item[KEYS[parentTable]] === row[foreignKey]);
+        if (parent)
+          parts.push(
+            `<button data-action="select" data-table="${parentTable}" data-id="${esc(parent[KEYS[parentTable]])}">${esc(title(parentTable, parent))}</button>`,
+          );
+      }
+      parts.push(`<span aria-current="page">${esc(title(table, row))}</span>`);
+    }
+    return `<nav class="mq-breadcrumb" aria-label="Configuration breadcrumb">${parts.join('<span aria-hidden="true">/</span>')}</nav>`;
   }
   entityHtml(row) {
     const table = this.selected.table;
@@ -471,16 +497,24 @@ export class MonitoringQuery extends BaseTool {
     let html = `<div class="mq-section-heading"><h2>${esc(title(table, row))} ${count ? '<span class="mq-badge">Draft</span>' : ""}</h2><div class="mq-actions">${writable ? (this.editing ? button("done", "Done Editing") : button("edit", "Edit")) : '<span class="mq-badge">Read-only</span>'}${writable ? button("clone", "Clone") : ""}${!existing && writable ? button("remove-new", "Remove New Block") : ""}</div></div>`;
     if (table === "DSH_MENU" && !this.editing) {
       html += `<p class="mq-hint" translate="no">${esc(row.MENU_ID)} · ${row.IS_ACTIVE === "Y" ? "Active" : "Inactive"} · Display order ${esc(valueText(row.DISPLAY_ORDER))}</p>
-        <div class="mq-tabs" aria-label="Menu sections">${["summary", "details", "compatibility"].map((section) => `<button class="mq-tab" data-action="tab" data-section="${section}" aria-current="${this.section === section ? "page" : "false"}">${friendly(section)}</button>`).join("")}</div>`;
+        <nav class="mq-tabs" aria-label="Menu sections">${[
+          ["summary", "Summary queries", "DSH_SUMMARY_GROUP"],
+          ["details", "Detail queries", "DSH_DETAIL_TABLE"],
+          ["compatibility", "Compatibility", "DSH_SUMMARY_QUERY"],
+        ]
+          .map(
+            ([section, label, child]) =>
+              `<button class="mq-tab" data-action="tab" data-section="${section}" aria-current="${this.section === section ? "page" : "false"}">${label} <span class="mq-section-count">${(this.tables[child] || []).filter((item) => item.MENU_ID === this.menuId).length}</span></button>`,
+          )
+          .join("")}</nav>`;
       const child =
         this.section === "summary" ? "DSH_SUMMARY_GROUP" : this.section === "details" ? "DSH_DETAIL_TABLE" : "DSH_SUMMARY_QUERY";
-      html += this.listHtml(
-        child,
-        (this.tables[child] || []).filter((item) => item.MENU_ID === this.menuId),
-      );
-      if (child !== "DSH_SUMMARY_QUERY")
-        html += `<div class="mq-actions" style="margin-top:14px"><button class="mq-button" data-action="add" data-table="${child}">Add ${LABELS[child]}</button></div>`;
-      else html += '<p class="mq-hint">Compatibility configuration is read-only until its runtime role is confirmed.</p>';
+      const rows = (this.tables[child] || []).filter((item) => item.MENU_ID === this.menuId);
+      const label = this.section === "summary" ? "Summary queries" : this.section === "details" ? "Detail queries" : "Compatibility";
+      html += `<div class="mq-section-heading mq-query-heading"><h3>${label}</h3>${child !== "DSH_SUMMARY_QUERY" ? `<button class="mq-button" data-action="add" data-table="${child}">Add ${LABELS[child]}</button>` : '<span class="mq-badge">Read-only</span>'}</div>`;
+      html += this.listHtml(child, rows);
+      if (child === "DSH_SUMMARY_QUERY")
+        html += '<p class="mq-hint">Compatibility configuration is read-only until its runtime role is confirmed.</p>';
       return html;
     }
     html += `<div class="mq-form">${columnsFor(this.metadata, table)
@@ -509,7 +543,8 @@ export class MonitoringQuery extends BaseTool {
   listHtml(table, rows) {
     if (!rows.length) return '<p class="mq-hint">No configuration in this section yet.</p>';
     const mapping = ["DSH_SUMMARY_FIELD", "DSH_DETAIL_COLUMN"].includes(table);
-    return `<div class="mq-table-wrap"><table class="mq-rows"><thead><tr><th>${mapping ? "Label" : "Query"}</th><th>${mapping ? "Mapping" : "Datasource"}</th><th>${mapping ? "Format" : "Timeout"}</th><th>Order</th></tr></thead><tbody>${rows
+    const child = table === "DSH_SUMMARY_GROUP" ? "DSH_SUMMARY_FIELD" : table === "DSH_DETAIL_TABLE" ? "DSH_DETAIL_COLUMN" : null;
+    return `<div class="mq-table-wrap"><table class="mq-rows"><thead><tr><th>${mapping ? "Label" : "Query"}</th><th>${mapping ? "Mapping" : "Datasource"}</th><th>${mapping ? "Format" : "Timeout (ms)"}</th>${child ? `<th>${child === "DSH_SUMMARY_FIELD" ? "Fields" : "Columns"}</th>` : ""}<th>Order</th>${child ? '<th><span class="mq-sr-only">Open query</span></th>' : ""}</tr></thead><tbody>${rows
       .sort(
         (a, b) =>
           Number(valueText(a.DISPLAY_ORDER)) - Number(valueText(b.DISPLAY_ORDER)) ||
@@ -517,7 +552,7 @@ export class MonitoringQuery extends BaseTool {
       )
       .map(
         (row) =>
-          `<tr><td><button class="mq-row-link" data-action="select" data-table="${table}" data-id="${esc(row[KEYS[table]])}">${esc(title(table, row))}</button><div class="mq-hint" translate="no">${esc(row[KEYS[table]])}</div></td><td>${esc(mapping ? row.SOURCE_FIELD : this.tables.DSH_DATASOURCE.find((ds) => ds.DATASOURCE_ID === row.DATASOURCE_ID)?.DISPLAY_NAME || row.DATASOURCE_ID)}</td><td>${esc(mapping ? row.VALUE_FORMAT : valueText(row.TIMEOUT_MS))}</td><td>${esc(valueText(row.DISPLAY_ORDER))}</td></tr>`,
+          `<tr><td><button class="mq-row-link" data-action="select" data-table="${table}" data-id="${esc(row[KEYS[table]])}">${esc(title(table, row))}</button><details class="mq-identity"><summary>ID</summary><span translate="no">${esc(row[KEYS[table]])}</span></details></td><td>${esc(mapping ? row.SOURCE_FIELD : this.tables.DSH_DATASOURCE.find((ds) => ds.DATASOURCE_ID === row.DATASOURCE_ID)?.DISPLAY_NAME || row.DATASOURCE_ID)}</td><td>${esc(mapping ? row.VALUE_FORMAT : valueText(row.TIMEOUT_MS))}</td>${child ? `<td>${(this.tables[child] || []).filter((item) => item[PARENTS[child][1]] === row[KEYS[table]]).length}</td>` : ""}<td>${esc(valueText(row.DISPLAY_ORDER))}</td>${child ? `<td><button class="mq-button" data-action="select" data-table="${table}" data-id="${esc(row[KEYS[table]])}" aria-label="Open ${esc(title(table, row))}">Open</button></td>` : ""}</tr>`,
       )
       .join("")}</tbody></table></div>`;
   }

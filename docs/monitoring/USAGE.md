@@ -7,7 +7,7 @@ For the local test database, use the saved **MONITORING** profile connected to `
 ## Edit an existing configuration
 
 1. Select the Oracle connection and click **Load**. This reads configuration; it does not write Oracle.
-2. Pick a menu from the left. **Summary** contains summary queries and their fields; **Details** contains detail queries, columns and chart settings. **Compatibility** is read-only.
+2. Pick a menu from the left. **Summary queries** contains summary queries and their fields; **Detail queries** contains detail queries, columns and chart settings. Both sections show query counts; each query row shows its field or column count. **Compatibility** is read-only.
 3. Click a query or field label to inspect it. Click **Edit**, change the values, then **Done Editing**. Existing IDs and parent references are read-only. Query text is stored as data and is never executed for validation.
 4. Click **Review Changes**. Expand each changed row to inspect the complete Before/After values. Resolve any validation errors.
 5. Click **Update Oracle** to write the reviewed batch. The tool fetches latest rows, checks for conflicts, applies the batch and its history in one transaction, then refreshes the configuration.
@@ -17,7 +17,7 @@ Edits autosave locally in IndexedDB. **Done Editing** does not write Oracle. **D
 
 ## Add or clone
 
-- **Add** beside Menus creates a draft menu.
+- **Add Menu** beside Menus creates a draft menu.
 - **Add Summary Query** or **Add Detail Query** adds a child to the selected menu. Open a query to add its fields or columns.
 - **Clone** copies the selected menu/query/field with fresh IDs and remapped child references. SQL is copied unchanged. A menu with compatibility-query configuration cannot be cloned in V1.
 - Fill required fields and review the new IDs, datasource and parent references before applying. New rows and existing edits can be reviewed together.
