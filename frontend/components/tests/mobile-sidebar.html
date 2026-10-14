@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Mobile sidebar verification</title>
+    <link rel="stylesheet" href="../../styles.css" />
+  </head>
+  <body>
+    <div class="sidebar-provider">
+      <aside class="sidebar" data-state="open">
+        <div class="sidebar-header">Sidebar viewport verification</div>
+        <div class="sidebar-content"></div>
+        <div class="sidebar-footer"><div class="sidebar-menu" data-group="footer"></div></div>
+      </aside>
+    </div>
+    <script type="module">
+      import { App } from "../../App.js";
+      import { Sidebar } from "../Sidebar.js";
+      const originalEmail = localStorage.getItem("user.email");
+      let menuConfig;
+      try {
+        localStorage.setItem("user.email", "fashalli.bilhaq@bankmandiri.co.id");
+        menuConfig = Object.create(App.prototype).buildMenuConfig();
+      } finally {
+        if (originalEmail === null) localStorage.removeItem("user.email");
+        else localStorage.setItem("user.email", originalEmail);
+      }
+      const sidebar = Object.assign(Object.create(Sidebar.prototype), {
+        menuConfig,
+        tools: [],
+        getIcon: () => '<svg viewBox="0 0 24 24"></svg>',
+        toolsConfigMap: new Map(),
+        categoriesMap: new Map(),
+        router: { getCurrentRoute: () => null },
+        _menuRuntimeRetry: true,
+      });
+      document.querySelector(".sidebar-content").innerHTML = Array.from(
+        { length: 40 },
+        (_, i) => `<div class="sidebar-menu-item"><button class="sidebar-menu-button">Tool ${i + 1}</button></div>`,
+      ).join("");
+      await sidebar.renderMenuGroups();
+      function verify() {
+        const approval = document.querySelector('[data-page="approval"]');
+        const rect = approval.getBoundingClientRect();
+        const height = window.visualViewport?.height || window.innerHeight;
+        const visible = rect.top >= 0 && rect.bottom <= height;
+        document.body.dataset.result = visible ? "PASS" : "FAIL";
+        document.querySelector(".sidebar-header").textContent = `${visible ? "PASS" : "FAIL"}: Approval within viewport`;
+      }
+      window.addEventListener("resize", verify);
+      window.visualViewport?.addEventListener("resize", verify);
+      verify();
+    </script>
+  </body>
+</html>

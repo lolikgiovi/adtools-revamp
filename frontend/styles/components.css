@@ -401,6 +401,7 @@ body.global-search-open {
     top: 0;
     left: 0;
     height: 100vh;
+    height: 100dvh;
     z-index: 200;
     /* keep above in mobile too */
     transition: transform 0.2s ease;
