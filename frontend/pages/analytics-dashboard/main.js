@@ -39,11 +39,13 @@ class AnalyticsDashboardPage {
 
     // Check for existing token
     try {
-      const stored = sessionStorage.getItem(TOKEN_KEY);
+      const stored = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
       if (stored) {
         const payload = JSON.parse(atob(stored));
         if (payload.exp && payload.exp > Date.now()) {
           this.token = stored;
+          localStorage.setItem(TOKEN_KEY, stored);
+          sessionStorage.removeItem(TOKEN_KEY);
           this.showDashboard();
           this.loadTabs();
         }
@@ -129,7 +131,8 @@ class AnalyticsDashboardPage {
       if (data.ok && data.token) {
         this.token = data.token;
         try {
-          sessionStorage.setItem(TOKEN_KEY, data.token);
+          localStorage.setItem(TOKEN_KEY, data.token);
+          sessionStorage.removeItem(TOKEN_KEY);
         } catch (_) {}
         this.showDashboard();
         this.loadTabs();
@@ -163,6 +166,7 @@ class AnalyticsDashboardPage {
     this.currentWhoSection = "users";
     this.lastRenderedData = [];
     try {
+      localStorage.removeItem(TOKEN_KEY);
       sessionStorage.removeItem(TOKEN_KEY);
     } catch (_) {}
     Object.keys(this.pagination).forEach((tabId) => this.resetPagination(tabId));

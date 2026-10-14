@@ -22,10 +22,12 @@ export class ApprovalPage {
 
   restoreSession() {
     try {
-      const token = sessionStorage.getItem(TOKEN_KEY);
+      const token = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
       const payload = token ? JSON.parse(atob(token)) : null;
       if (payload?.exp > Date.now()) {
         this.token = token;
+        localStorage.setItem(TOKEN_KEY, token);
+        sessionStorage.removeItem(TOKEN_KEY);
         this.showContent();
         this.loadRequests();
       }
@@ -73,7 +75,8 @@ export class ApprovalPage {
       const data = await response.json();
       if (!response.ok || !data.token) throw new Error(data.error || "Invalid password");
       this.token = data.token;
-      sessionStorage.setItem(TOKEN_KEY, data.token);
+      localStorage.setItem(TOKEN_KEY, data.token);
+      sessionStorage.removeItem(TOKEN_KEY);
       this.showContent();
       await this.loadRequests();
     } catch (err) {
@@ -90,6 +93,7 @@ export class ApprovalPage {
   logout() {
     this.token = null;
     this.requests = [];
+    localStorage.removeItem(TOKEN_KEY);
     sessionStorage.removeItem(TOKEN_KEY);
     this.root.querySelector("#approval-auth").hidden = false;
     this.root.querySelector("#approval-content").hidden = true;
