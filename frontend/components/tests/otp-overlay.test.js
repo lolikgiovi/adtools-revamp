@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { UsageTracker } from "../../core/UsageTracker.js";
 import { openOtpOverlay } from "../OtpOverlay.js";
 
 const globalStyles = readFileSync(resolve(process.cwd(), "frontend/styles/components.css"), "utf8");
@@ -25,7 +26,7 @@ describe("OTP overlay", () => {
   it("renders as a visible fixed modal when opened outside Settings", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({ ok: true, json: async () => ({ ok: true, mode: "manual" }) })),
+      vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ ok: true, mode: "manual" }) })),
     );
     const pending = openOtpOverlay({ email: "person@bankmandiri.co.id", preferCachedToken: false });
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -42,9 +43,17 @@ describe("OTP overlay", () => {
   it("still opens while the request button is rate-limited", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({ ok: true, json: async () => ({ ok: true, mode: "otp" }) })),
+      vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ ok: true, mode: "otp" }) })),
     );
-    localStorage.setItem("otp.lastRequest.usage-overview", String(Date.now()));
+    localStorage.setItem(
+      `otp.flow:person@bankmandiri.co.id:${UsageTracker.getDeviceId()}`,
+      JSON.stringify({
+        savedAt: Date.now(),
+        retryAt: Date.now() + 60_000,
+        manualAvailableAt: Date.now() + 180_000,
+        sent: true,
+      }),
+    );
     const pending = openOtpOverlay({ email: "person@bankmandiri.co.id", storageScope: "usage-overview", preferCachedToken: false });
     pending.catch(() => {});
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -60,18 +69,18 @@ describe("OTP overlay", () => {
   it("requests an email OTP and completes the protected action after verification", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, mode: "otp" }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, token: "otp-token" }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, value: { schema: "ready" } }) });
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ok: true, mode: "otp" }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ok: true }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ok: true, token: "otp-token" }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ok: true, value: { schema: "ready" } }) });
     vi.stubGlobal("fetch", fetchMock);
 
     const pending = openOtpOverlay({ email: "person@bankmandiri.co.id", kvKey: "default-config", preferCachedToken: false });
     await new Promise((resolve) => setTimeout(resolve, 0));
     const overlay = document.querySelector(".otp-modal");
-    expect(overlay.querySelector(".otp-email-status").textContent).toContain("around 1 minute");
-    expect(overlay.querySelector(".otp-email-status").textContent).toContain("Contact Lolik directly");
-    expect(overlay.querySelector(".otp-manual-request")).toBeNull();
+    expect(overlay.querySelector(".otp-email-status").textContent).toContain("1–3 minutes");
+    expect(overlay.querySelector(".otp-email-status").textContent).toContain("check your spam folder");
+    expect(overlay.querySelector(".otp-manual-request").hidden).toBe(true);
 
     overlay.querySelector(".otp-department").value = "WHOLESALE";
     overlay.querySelector(".otp-role").value = "ENGINEER";
@@ -94,7 +103,7 @@ describe("OTP overlay", () => {
   });
 
   it("blocks non-Bank Mandiri email before requesting access", async () => {
-    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true, mode: "manual" }) }));
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ ok: true, mode: "manual" }) }));
     vi.stubGlobal("fetch", fetchMock);
     const pending = openOtpOverlay({ email: "person@gmail.com", preferCachedToken: false });
     pending.catch(() => {});
@@ -110,7 +119,7 @@ describe("OTP overlay", () => {
   });
 
   it("requires both profile fields before requesting access", async () => {
-    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true, mode: "manual" }) }));
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ ok: true, mode: "manual" }) }));
     vi.stubGlobal("fetch", fetchMock);
     const pending = openOtpOverlay({ email: "person@bankmandiri.co.id", preferCachedToken: false });
     pending.catch(() => {});
@@ -130,15 +139,15 @@ describe("OTP overlay", () => {
   it("automatically completes manual approval when manual mode is active", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, mode: "manual" }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, requestId: "request-1", status: "pending" }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, status: "approved", token: "manual-token" }) });
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ok: true, mode: "manual" }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ok: true, requestId: "request-1", status: "pending" }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ok: true, status: "approved", token: "manual-token" }) });
     vi.stubGlobal("fetch", fetchMock);
 
     const pending = openOtpOverlay({ email: "person@bankmandiri.co.id", preferCachedToken: false });
     await new Promise((resolve) => setTimeout(resolve, 0));
     const overlay = document.querySelector(".otp-modal");
-    expect(overlay.querySelector(".otp-request")).toBeNull();
+    expect(overlay.querySelector(".otp-request").hidden).toBe(true);
     expect(overlay.textContent).toContain("contact Lolik");
 
     overlay.querySelector(".otp-department").value = "WHOLESALE";

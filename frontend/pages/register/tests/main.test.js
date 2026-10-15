@@ -20,9 +20,9 @@ describe("registration email verification", () => {
   it("requests an OTP, explains delivery time, and verifies the code", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, mode: "otp" }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, userId: "user-1", token: "otp-token" }) });
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ok: true, mode: "otp" }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ok: true }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ok: true, userId: "user-1", token: "otp-token" }) });
     vi.stubGlobal("fetch", fetchMock);
     const eventBus = { emit: vi.fn() };
     const root = document.querySelector("#register-root");
@@ -32,8 +32,8 @@ describe("registration email verification", () => {
     const submitButton = root.querySelector('[data-role="submit-btn"]');
     expect(submitButton.disabled).toBe(false);
     expect(submitButton.textContent).toBe("Request OTP");
-    expect(root.textContent).toContain("Delivery takes around 1 minute");
-    expect(root.textContent).toContain("Contact Lolik directly for faster access");
+    expect(root.textContent).toContain("allow 1–3 minutes");
+    expect(root.textContent).toContain("check your spam folder");
     expect(root.querySelector('[data-role="manual-approval-btn"]').hidden).toBe(true);
 
     root.querySelector("#reg-username").value = "Test User";
@@ -67,7 +67,7 @@ describe("registration email verification", () => {
   });
 
   it("requires both department and role before submitting a manual request", async () => {
-    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true, mode: "manual" }) }));
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ ok: true, mode: "manual" }) }));
     vi.stubGlobal("fetch", fetchMock);
     const root = document.querySelector("#register-root");
     new RegisterPage().mount(root);
@@ -86,7 +86,7 @@ describe("registration email verification", () => {
   });
 
   it("rejects an email outside Bank Mandiri before making a request", async () => {
-    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true, mode: "manual" }) }));
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ ok: true, mode: "manual" }) }));
     vi.stubGlobal("fetch", fetchMock);
     const root = document.querySelector("#register-root");
     new RegisterPage().mount(root);
@@ -130,9 +130,9 @@ describe("registration email verification", () => {
   it("offers manual approval when the runtime mode is manual", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, mode: "manual" }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, requestId: "request-1", status: "pending" }) })
-      .mockResolvedValue({ ok: true, json: async () => ({ ok: true, status: "pending" }) });
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ok: true, mode: "manual" }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ok: true, requestId: "request-1", status: "pending" }) })
+      .mockResolvedValue({ ok: true, status: 200, json: async () => ({ ok: true, status: "pending" }) });
     vi.stubGlobal("fetch", fetchMock);
     const root = document.querySelector("#register-root");
     new RegisterPage({ eventBus: { emit: vi.fn() } }).mount(root);

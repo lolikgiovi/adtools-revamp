@@ -13,6 +13,8 @@ import { registrationRole } from "../utils/registrationRole.js";
 import { sendRegistrationNotification } from "../utils/registrationNotification.js";
 import { registrationDepartment } from "../utils/registrationDepartment.js";
 
+import { readOtpFlow, saveOtpFlow, OTP_RETRY_MS, OTP_MANUAL_WAIT_MS } from "../utils/otpRequestFlow.js";
+
 const OTP_EXPIRY_MS = OTP_EXPIRY_MINUTES * 60 * 1000;
 
 export async function handleRegistrationAuthMode(env) {
@@ -132,6 +134,15 @@ export async function handleRegisterRequestOtp(request, env) {
         headers: { "Content-Type": "application/json", ...corsHeaders() },
       });
 
+    const previous = await readOtpFlow(env, normalized, data.deviceId);
+    const now = Date.now();
+    if (previous?.retryAt > now) {
+      return new Response(JSON.stringify({ ok: false, error: "Please wait one minute before retrying email.", ...previous }), {
+        status: 429,
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
+
     if (await consumeRateLimit(env.adtools, `otp:request:${normalized}`, 3, 10 * 60)) {
       return new Response(JSON.stringify({ ok: false, error: "Too many OTP requests. Try later." }), {
         status: 429,
@@ -147,22 +158,38 @@ export async function handleRegisterRequestOtp(request, env) {
       .bind(normalized, code, tsGmt7Plain(OTP_EXPIRY_MS))
       .run();
 
-    // Try to send via Postmark; capture the result for dev
+    const state = {
+      retryAt: now + OTP_RETRY_MS,
+      manualAvailableAt: previous?.manualAvailableAt ?? now + OTP_MANUAL_WAIT_MS,
+      manualApprovalAvailable: previous?.manualApprovalAvailable === true,
+    };
+    await saveOtpFlow(env, normalized, data.deviceId, state);
+
+    // Resend must return exactly 200 before we report delivery acceptance.
     let sendResult = null;
     try {
       sendResult = await sendOtpEmail(env, normalized, code);
     } catch (e) {
       sendResult = { ok: false, error: String(e) };
     }
-    const sent = !!(sendResult && sendResult.ok);
-    if (!sent && String(env.DEV_MODE || "") !== "true") throw new Error("OTP delivery unavailable");
+    const sent = sendResult?.status === 200 && sendResult?.ok === true;
+    if (!sent) {
+      state.manualApprovalAvailable = true;
+      state.manualAvailableAt = Date.now();
+      await saveOtpFlow(env, normalized, data.deviceId, state);
+      return new Response(JSON.stringify({ ok: false, error: "Email could not be sent. Request manual approval instead.", ...state }), {
+        status: 502,
+        headers: { "Content-Type": "application/json", ...corsHeaders(), "Cache-Control": "no-store" },
+      });
+    }
+    await saveOtpFlow(env, normalized, data.deviceId, state);
 
     const payload =
       String(env.DEV_MODE || "") === "true"
         ? { ok: true, devCode: code, mailSent: sent, mailStatus: sendResult, expiresAt: expiresTs }
         : { ok: true, expiresAt: expiresTs };
 
-    return new Response(JSON.stringify(payload), {
+    return new Response(JSON.stringify({ ...payload, ...state }), {
       headers: { "Content-Type": "application/json", ...corsHeaders() },
     });
   } catch (err) {

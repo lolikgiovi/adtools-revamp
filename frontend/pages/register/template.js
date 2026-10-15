@@ -44,7 +44,9 @@ export const RegisterTemplate = /* html */ `
         <div class="register-actions">
           <button type="button" class="btn btn-primary" data-role="manual-approval-btn" hidden>Request Manual Approval</button>
           <button type="submit" class="btn btn-primary" data-role="submit-btn" hidden>Request OTP</button>
+          <button type="button" class="btn btn-secondary" data-role="retry-email-btn" hidden>Retry Email</button>
         </div>
+        <p class="register-hint" data-role="fallback-countdown"></p>
         <div class="register-error" aria-live="polite"></div>
       </form>
       <div class="approval-status" data-role="approval-status" hidden>

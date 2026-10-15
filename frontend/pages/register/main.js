@@ -1,3 +1,4 @@
+import { OtpRequestFlow } from "../../core/OtpRequestFlow.js";
 import { manualApprovalMonitor } from "../../core/ManualApprovalMonitor.js";
 import { isRegistrationEmailAllowed } from "../../core/RegistrationEmail.js";
 import { RegisterTemplate } from "./template.js";
@@ -47,6 +48,26 @@ export class RegisterPage {
       else this.setMessage("Still pending. Approval status is checked automatically every minute.", "info");
     });
     manualApprovalMonitor.start({ eventBus: this.eventBus });
+    this.otpFlow = new OtpRequestFlow({
+      identity: () => this.getRegistrationIdentity(),
+      retry: container.querySelector('[data-role="retry-email-btn"]'),
+      manual: manualBtn,
+      hint: container.querySelector('[data-role="fallback-countdown"]'),
+    });
+    container.querySelector('[data-role="retry-email-btn"]').addEventListener("click", () => this.requestOtp());
+    container.querySelector("#reg-email").addEventListener("input", () => {
+      this.step = "email";
+      otpField.style.display = "none";
+      submitBtn.textContent = "Request OTP";
+      submitBtn.hidden = false;
+      container.querySelector("#reg-otp").value = "";
+      if (this.otpFlow.state()?.sent) {
+        this.step = "otp";
+        otpField.style.display = "block";
+        submitBtn.textContent = "Verify & Continue";
+      }
+      this.otpFlow.render();
+    });
     void this.loadAuthMode();
 
     form.addEventListener("submit", async (e) => {
@@ -87,58 +108,7 @@ export class RegisterPage {
 
         // Step 1: request OTP
         if (this.step === "email") {
-          // Request OTP
-          submitBtn.disabled = true;
-          submitBtn.textContent = "Sending code...";
-          const endpointCandidates = ["/register/request-otp", baseEnv ? `${baseEnv}/register/request-otp` : ""];
-          let devCode = null;
-          let requested = false;
-          let blocked = false;
-          for (const endpoint of endpointCandidates.filter(Boolean)) {
-            try {
-              const res = await fetch(endpoint, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, department, role }),
-                credentials: "omit",
-              });
-              if (res.ok) {
-                const resp = await res.json();
-                devCode = resp?.devCode || null;
-                requested = true;
-                break;
-              } else if (res.status === 403) {
-                blocked = true;
-                let msg = "Email domain not allowed";
-                try {
-                  const resp = await res.json();
-                  if (resp && typeof resp.error === "string" && resp.error) msg = resp.error;
-                } catch (_) {}
-                errorEl.textContent = msg || "Email domain not allowed. Use your @bankmandiri.co.id email.";
-                break;
-              }
-            } catch (_) {}
-          }
-          submitBtn.disabled = false;
-          if (blocked) {
-            submitBtn.textContent = "Request OTP";
-            return;
-          }
-          if (!requested) {
-            submitBtn.textContent = "Request OTP";
-            errorEl.textContent = "Failed to send code. Please try again.";
-            return;
-          }
-
-          // Progress UI to OTP step
-          otpField.style.display = "block";
-          this.step = "otp";
-          submitBtn.textContent = "Verify & Continue";
-          if (devCode) {
-            otpInput.value = devCode;
-          }
-          errorEl.textContent = "Code requested. Delivery takes around 1 minute. Contact Lolik directly for faster access.";
-          errorEl.classList.add("is-info");
+          await this.requestOtp();
           return; // stop here; verification will happen on next submit
         }
 
@@ -247,7 +217,6 @@ export class RegisterPage {
     const manual = mode === REGISTRATION_AUTH_MODE.MANUAL;
     const title = this.root.querySelector('[data-role="method-title"]');
     const copy = this.root.querySelector('[data-role="method-copy"]');
-    const manualButton = this.root.querySelector('[data-role="manual-approval-btn"]');
     const otpButton = this.root.querySelector('[data-role="submit-btn"]');
     const approvalStatus = this.root.querySelector('[data-role="approval-status"]');
     const otpField = this.root.querySelector(".otp-field");
@@ -255,13 +224,44 @@ export class RegisterPage {
     title.textContent = manual ? "Manual approval is enabled." : "Verify your email with an OTP.";
     copy.textContent = manual
       ? "Request approval, then contact Lolik directly for faster access."
-      : "Delivery takes around 1 minute. Contact Lolik directly for faster access.";
-    manualButton.hidden = !manual;
-    otpButton.hidden = manual;
-    approvalStatus.hidden = !manual || !this.manualRequest;
+      : "Please allow 1–3 minutes for delivery and check your spam folder.";
+    this.otpFlow.manualMode = manual;
+    this.otpFlow.render();
+    if (!manual && this.otpFlow.state()?.sent) {
+      this.step = "otp";
+      otpField.style.display = "block";
+      otpButton.textContent = "Verify & Continue";
+    }
+    otpButton.hidden = manual || (this.otpFlow.state() !== null && !this.otpFlow.state()?.sent);
+    approvalStatus.hidden = !this.manualRequest;
     if (manual) {
       this.step = "email";
       otpField.style.display = "none";
+    }
+  }
+
+  async requestOtp() {
+    if (!this.root || this.authMode !== REGISTRATION_AUTH_MODE.OTP) return;
+    const identity = this.getRegistrationIdentity();
+    if (!this.validateIdentity(identity)) return;
+    const button = this.root.querySelector('[data-role="submit-btn"]');
+    button.disabled = true;
+    try {
+      const data = await this.otpFlow.request();
+      if (!data || !this.root) return;
+      this.step = "otp";
+      button.hidden = false;
+      this.root.querySelector(".otp-field").style.display = "block";
+      button.textContent = "Verify & Continue";
+      if (data.devCode) this.root.querySelector("#reg-otp").value = data.devCode;
+      this.setMessage("Code requested. Please allow 1–3 minutes for delivery and check your spam folder.", "info");
+    } catch (error) {
+      if (this.root) {
+        button.hidden = !this.otpFlow.state()?.sent;
+        this.setMessage(error.message);
+      }
+    } finally {
+      button.disabled = false;
     }
   }
 
@@ -334,6 +334,7 @@ export class RegisterPage {
     const button = this.root.querySelector('[data-role="manual-approval-btn"]');
     button.disabled = true;
     button.textContent = "Requesting...";
+    this.otpFlow.manualPending = true;
     this.setMessage("");
     try {
       const data = await this.postRegistrationEndpoint("/register/request-manual-approval", identity);
@@ -352,6 +353,7 @@ export class RegisterPage {
     } finally {
       button.disabled = false;
       button.textContent = "Request Manual Approval";
+      this.otpFlow.manualPending = false;
     }
   }
 
@@ -372,6 +374,7 @@ export class RegisterPage {
   }
 
   unmount() {
+    this.otpFlow?.destroy();
     this.unsubscribeApproval?.();
     this.unsubscribeApproval = null;
     this.root = null;

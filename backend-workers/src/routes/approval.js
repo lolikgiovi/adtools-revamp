@@ -1,3 +1,4 @@
+import { readOtpFlow } from "../utils/otpRequestFlow.js";
 import { corsHeaders } from "../utils/cors.js";
 import { tsGmt7Plain } from "../utils/timestamps.js";
 import { completeRegistration, detectRegistrationPlatform } from "./auth.js";
@@ -32,11 +33,18 @@ async function hasLiveSession(env, token) {
 
 export async function handleManualApprovalRequest(request, env) {
   try {
-    if ((await getRegistrationAuthMode(env)) !== "manual") {
-      return json({ ok: false, mode: "otp", error: "Manual approval is disabled. Request an email OTP." }, 409);
+    const mode = await getRegistrationAuthMode(env);
+    const data = await request.json();
+    if (mode !== "manual") {
+      const email = String(data.email || "")
+        .trim()
+        .toLowerCase();
+      const state = await readOtpFlow(env, email, data.deviceId);
+      if (!state || (!state.manualApprovalAvailable && Date.now() < state.manualAvailableAt)) {
+        return json({ ok: false, mode: "otp", error: "Request an OTP first, then wait three minutes for manual approval." }, 409);
+      }
     }
     if (!env.DB) return json({ ok: false, error: "Database not available" }, 500);
-    const data = await request.json();
     const department = registrationDepartment(data.department, true);
     const role = registrationRole(data.role, true);
     const email = String(data.email || "")
