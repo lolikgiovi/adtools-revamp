@@ -1,0 +1,102 @@
+[
+  {
+    "slug": "charcoal",
+    "mode": "light",
+    "width": 480,
+    "overflow": false,
+    "code": "123456",
+    "scriptCount": 0
+  },
+  {
+    "slug": "charcoal",
+    "mode": "dark",
+    "width": 480,
+    "overflow": false,
+    "code": "123456",
+    "scriptCount": 0
+  },
+  {
+    "slug": "charcoal",
+    "mode": "light",
+    "width": 320,
+    "overflow": false,
+    "code": "123456",
+    "scriptCount": 0
+  },
+  {
+    "slug": "charcoal",
+    "mode": "dark",
+    "width": 320,
+    "overflow": false,
+    "code": "123456",
+    "scriptCount": 0
+  },
+  {
+    "slug": "paper",
+    "mode": "light",
+    "width": 480,
+    "overflow": false,
+    "code": "123456",
+    "scriptCount": 0
+  },
+  {
+    "slug": "paper",
+    "mode": "dark",
+    "width": 480,
+    "overflow": false,
+    "code": "123456",
+    "scriptCount": 0
+  },
+  {
+    "slug": "paper",
+    "mode": "light",
+    "width": 320,
+    "overflow": false,
+    "code": "123456",
+    "scriptCount": 0
+  },
+  {
+    "slug": "paper",
+    "mode": "dark",
+    "width": 320,
+    "overflow": false,
+    "code": "123456",
+    "scriptCount": 0
+  },
+  {
+    "slug": "midnight",
+    "mode": "light",
+    "width": 480,
+    "overflow": false,
+    "code": "123456",
+    "scriptCount": 0
+  },
+  {
+    "slug": "midnight",
+    "mode": "dark",
+    "width": 480,
+    "overflow": false,
+    "code": "123456",
+    "scriptCount": 0
+  },
+  {
+    "slug": "midnight",
+    "mode": "light",
+    "width": 320,
+    "overflow": false,
+    "code": "123456",
+    "scriptCount": 0
+  },
+  {
+    "slug": "midnight",
+    "mode": "dark",
+    "width": 320,
+    "overflow": false,
+    "code": "123456",
+    "scriptCount": 0
+  },
+  {
+    "phoneToggle": "true",
+    "pageOverflow": false
+  }
+]

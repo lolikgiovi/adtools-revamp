@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>AD Tools · Email options</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f5f6f7;
+        --ink: #172535;
+        --muted: #465563;
+        --blue: #194d72;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          16px/1.5 Arial,
+          Helvetica,
+          sans-serif;
+      }
+      main {
+        max-width: 1300px;
+        margin: auto;
+        padding: 40px 32px;
+      }
+      h1 {
+        font-size: 36px;
+        letter-spacing: -1px;
+        line-height: 1.15;
+        margin: 0 0 12px;
+      }
+      p {
+        margin: 0;
+        color: var(--muted);
+      }
+      .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: end;
+        gap: 24px;
+      }
+      .note {
+        max-width: 670px;
+      }
+      nav {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin: 28px 0 20px;
+      }
+      button,
+      a {
+        font: inherit;
+      }
+      button {
+        cursor: pointer;
+        border: 0;
+        background: #e3e8ec;
+        color: var(--ink);
+        padding: 12px 18px;
+        border-radius: 6px;
+        min-height: 44px;
+      }
+      button[aria-pressed="true"] {
+        background: var(--blue);
+        color: white;
+      }
+      button:hover {
+        background: #cfdae3;
+      }
+      button[aria-pressed="true"]:hover {
+        background: #123b59;
+      }
+      button:focus-visible,
+      a:focus-visible {
+        outline: 3px solid #b46b13;
+        outline-offset: 3px;
+      }
+      .description {
+        margin-bottom: 24px;
+        min-height: 24px;
+      }
+      .pair {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+      }
+      .pane {
+        min-width: 0;
+      }
+      .pane h2 {
+        font-size: 16px;
+        margin: 0 0 10px;
+      }
+      .host {
+        padding: 20px;
+        background: white;
+        border-radius: 12px;
+      }
+      .host.dark {
+        background: #242729;
+      }
+      .mailhead {
+        font-size: 13px;
+        color: #475560;
+        margin-bottom: 16px;
+      }
+      .dark .mailhead {
+        color: #d6dde1;
+      }
+      .mailhead strong {
+        color: inherit;
+      }
+      .mailhead span {
+        display: block;
+        margin-top: 3px;
+      }
+      iframe {
+        display: block;
+        width: 100%;
+        height: 640px;
+        border: 0;
+        background: transparent;
+        margin: auto;
+      }
+      .phone iframe {
+        max-width: 375px;
+      }
+      .phone .host {
+        padding: 16px 8px;
+      }
+      footer {
+        max-width: 70ch;
+        margin-top: 24px;
+        font-size: 16px;
+        color: var(--muted);
+      }
+      a {
+        color: var(--blue);
+        text-underline-offset: 3px;
+      }
+      ::selection {
+        background: #ccdeea;
+        color: #112d40;
+      }
+      @media (max-width: 850px) {
+        .pair {
+          grid-template-columns: 1fr;
+        }
+        .top {
+          align-items: start;
+          flex-direction: column;
+        }
+        main {
+          padding: 28px 16px;
+        }
+        h1 {
+          font-size: 30px;
+        }
+        .host {
+          padding: 12px 8px;
+        }
+        iframe {
+          height: 630px;
+        }
+        nav {
+          gap: 6px;
+        }
+        button {
+          padding: 12px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="top">
+        <div>
+          <h1>A better email in both modes.</h1>
+          <p class="note">
+            Three directions for the AD Tools verification email. Compare the intended light and dark palettes side by side.
+          </p>
+        </div>
+        <button id="size" aria-pressed="false">Phone width</button>
+      </div>
+      <nav aria-label="Email design options"></nav>
+      <p class="description" id="description"></p>
+      <div class="pair">
+        <section class="pane">
+          <h2>Light mode</h2>
+          <div class="host">
+            <div class="mailhead"><strong>AD Tools</strong> &lt;no-reply@lolik.cloud&gt;<span>[AD Tools] OTP for AD Tools</span></div>
+            <iframe title="Light mode email preview" id="light"></iframe>
+          </div>
+        </section>
+        <section class="pane">
+          <h2>Dark mode</h2>
+          <div class="host dark">
+            <div class="mailhead"><strong>AD Tools</strong> &lt;no-reply@lolik.cloud&gt;<span>[AD Tools] OTP for AD Tools</span></div>
+            <iframe title="Dark mode email preview" id="dark"></iframe>
+          </div>
+        </section>
+      </div>
+      <footer>
+        Browser previews of authored palettes; Outlook may apply additional color transformations. Test code 123456 does not
+        authenticate.<br /><a id="download" href="charcoal.html" download>Download email HTML</a> · Email content uses tables, inline
+        styles, system fonts, and selectable text. No images or scripts.
+      </footer>
+    </main>
+    <script>
+      const options = [
+        ["charcoal", "Charcoal & gold", "Closest to the original. Warm gold, restrained framing, a prominent code."],
+        ["paper", "Paper & ink", "A compact letter. Clear hierarchy and minimal decoration."],
+        ["midnight", "Midnight blue", "A generous blue code panel with a quiet, editorial layout."],
+      ];
+      const nav = document.querySelector("nav");
+      function select(slug) {
+        const option = options.find((o) => o[0] === slug) || options[0];
+        document.querySelector("#description").textContent = option[2];
+        for (const mode of ["light", "dark"]) document.querySelector("#" + mode).src = option[0] + "-" + mode + ".html";
+        document.querySelector("#download").href = option[0] + ".html";
+        for (const button of nav.children) button.setAttribute("aria-pressed", String(button.dataset.slug === option[0]));
+        history.replaceState(null, "", "#" + option[0]);
+      }
+      for (const option of options) {
+        const button = document.createElement("button");
+        button.textContent = option[1];
+        button.dataset.slug = option[0];
+        button.onclick = () => select(option[0]);
+        nav.append(button);
+      }
+      document.querySelector("#size").onclick = function () {
+        const phone = document.querySelector(".pair").classList.toggle("phone");
+        this.setAttribute("aria-pressed", String(phone));
+        this.textContent = phone ? "Desktop width" : "Phone width";
+      };
+      select(location.hash.slice(1) || options[0][0]);
+    </script>
+  </body>
+</html>
