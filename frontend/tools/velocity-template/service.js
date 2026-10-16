@@ -1,8 +1,83 @@
 import { Compile, parse } from "velocityjs";
 
+export class VelocityTemplateError extends Error {
+  constructor(message, { kind = "runtime", line = 1, column = 1, cause } = {}) {
+    super(message, { cause });
+    this.name = "VelocityTemplateError";
+    this.kind = kind;
+    this.line = line;
+    this.column = column;
+  }
+}
+
+function validateDirectiveStructure(template) {
+  const stack = [];
+  const blockDirectives = new Set(["if", "foreach", "macro", "define"]);
+  const withoutBlockComments = template.replace(/#\*[\s\S]*?\*#/g, (comment) => comment.replace(/[^\n]/g, " "));
+  const lines = withoutBlockComments.split("\n");
+
+  lines.forEach((line, lineIndex) => {
+    const content = line.replace(/##.*$/, "").replace(/(["'])(?:\\.|(?!\1).)*\1/g, (quoted) => " ".repeat(quoted.length));
+    for (const match of content.matchAll(/(?<!\\)#(if|foreach|macro|define|elseif|else|end)\b/g)) {
+      const directive = match[1];
+      const location = { line: lineIndex + 1, column: match.index + 1 };
+      if (blockDirectives.has(directive)) {
+        stack.push({ directive, ...location });
+        continue;
+      }
+      if (directive === "else" || directive === "elseif") {
+        if (stack.at(-1)?.directive !== "if") {
+          const hint = directive === "else" ? "Move #else before the matching #end." : "Use #elseif inside an open #if block.";
+          throw new VelocityTemplateError(`Unexpected #${directive}: there is no open #if block. ${hint}`, {
+            kind: "syntax",
+            ...location,
+          });
+        }
+        continue;
+      }
+      if (!stack.length) {
+        throw new VelocityTemplateError("Unexpected #end: there is no open block to close.", { kind: "syntax", ...location });
+      }
+      stack.pop();
+    }
+  });
+
+  const unclosed = stack.at(-1);
+  if (unclosed) {
+    throw new VelocityTemplateError(`Unclosed #${unclosed.directive} block: add a matching #end.`, {
+      kind: "syntax",
+      line: unclosed.line,
+      column: unclosed.column,
+    });
+  }
+}
+
+function normalizeVelocityError(error) {
+  if (error instanceof VelocityTemplateError) return error;
+  const location = error?.hash?.loc;
+  if (location) {
+    const expectation = String(error.message || "")
+      .split("\n")
+      .find((line) => line.startsWith("Expecting "));
+    return new VelocityTemplateError(expectation ? `Invalid Velocity syntax. ${expectation}` : "Invalid Velocity syntax.", {
+      kind: "syntax",
+      line: location.first_line || 1,
+      column: (location.first_column ?? 0) + 1,
+      cause: error,
+    });
+  }
+  return new VelocityTemplateError(`Velocity rendering failed: ${error?.message || "Unknown error."}`, { cause: error });
+}
+
 export function renderVelocityTemplate(template = "", context = {}) {
   const values = context && typeof context === "object" && !Array.isArray(context) ? context : {};
-  return new Compile(parse(String(template))).render(values);
+  const source = String(template);
+  try {
+    validateDirectiveStructure(source);
+    return new Compile(parse(source)).render(values);
+  } catch (error) {
+    throw normalizeVelocityError(error);
+  }
 }
 
 function referencePath(node) {

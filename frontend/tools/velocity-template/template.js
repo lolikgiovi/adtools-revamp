@@ -38,13 +38,13 @@ export const VelocityTemplate = /* html */ `
         <div class="pane-header vtl-compact-header">
           <div class="vtl-title-group">
             <h3 id="velocityResultTitle">Rendered Result</h3>
-            <span id="velocityPreviewStatus" class="vtl-pane-caption" role="status" hidden></span>
           </div>
           <div class="vtl-panel-actions">
             <button id="btnToggleVelocityWrap" class="btn btn-secondary btn-sm" type="button" aria-pressed="true">Wrap</button>
             <button id="btnCopyVelocityPreview" class="btn btn-secondary btn-sm" type="button">Copy</button>
           </div>
         </div>
+        <div id="velocityPreviewStatus" class="vtl-inline-error velocity-preview-error" role="alert" hidden></div>
         <pre id="velocityPreview" class="vtl-preview-output" aria-label="Rendered Velocity template"></pre>
       </section>
     </div>

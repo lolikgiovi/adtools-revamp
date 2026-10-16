@@ -37,4 +37,34 @@ describe("Velocity template service", () => {
       customer: { profile: { name: "sample" } },
     });
   });
+
+  it("reports unmatched branch directives with a useful source location", () => {
+    const template = "#if($customer.active)\n#end\n#else\n#end";
+
+    expect(() => renderVelocityTemplate(template, {})).toThrow(
+      expect.objectContaining({
+        name: "VelocityTemplateError",
+        kind: "syntax",
+        line: 3,
+        column: 1,
+        message: "Unexpected #else: there is no open #if block. Move #else before the matching #end.",
+      }),
+    );
+  });
+
+  it("normalizes Velocity parser errors with their source location", () => {
+    expect(() => renderVelocityTemplate("#set($value = )", {})).toThrow(
+      expect.objectContaining({
+        name: "VelocityTemplateError",
+        kind: "syntax",
+        line: 1,
+        column: 13,
+      }),
+    );
+  });
+
+  it("does not treat directives in comments or quoted strings as template structure", () => {
+    expect(renderVelocityTemplate("## #else\n#set($label = '#end')\n$label", {})).toContain("#end");
+    expect(renderVelocityTemplate("#* #if($value) *#\nDone", {})).toContain("Done");
+  });
 });

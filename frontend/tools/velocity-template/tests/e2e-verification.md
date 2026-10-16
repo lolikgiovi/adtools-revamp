@@ -24,6 +24,8 @@
 9. **Sync fields** added missing external references while preserving the supplied customer and item values.
 10. Leaving and reopening Velocity Template restored the saved template and context with the same rendered result.
 11. No application errors were recorded in the browser console during the successful journey.
+12. An unmatched `#else` displayed a wrapping `Velocity syntax error` alert with its line and column, and Monaco marked the offending directive.
+13. Correcting the directive structure cleared both the alert and Monaco marker and resumed the live preview.
 
 ## Focused verification
 
@@ -37,4 +39,4 @@ Run the focused service verification as well:
 ./node_modules/.bin/vitest run frontend/tools/velocity-template/tests/service.test.js
 ```
 
-Expected result: `1 passed`, `4 passed`.
+Expected result: `1 passed`, `7 passed`.

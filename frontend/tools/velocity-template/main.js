@@ -248,6 +248,8 @@ class VelocityTemplateTool extends BaseTool {
     if (!output || !status || !contextError || !this.editor) return;
     try {
       const rendered = renderVelocityTemplate(this.editor.getValue(), this.readContext());
+      monaco.editor.setModelMarkers(this.editor.getModel(), "velocity-template", []);
+      monaco.editor.setModelMarkers(this.contextEditor.getModel(), "velocity-context", []);
       output.textContent = rendered;
       output.classList.remove("is-stale");
       status.hidden = true;
@@ -258,8 +260,30 @@ class VelocityTemplateTool extends BaseTool {
     } catch (error) {
       const message = error?.message || "Unable to render template.";
       const isJsonError = error instanceof SyntaxError;
+      const line = Math.max(1, Number(error?.line) || 1);
+      const column = Math.max(1, Number(error?.column) || 1);
+      const model = this.editor.getModel();
+      const endColumn = model ? model.getLineMaxColumn(Math.min(line, model.getLineCount())) : column + 1;
+      monaco.editor.setModelMarkers(
+        this.editor.getModel(),
+        "velocity-template",
+        isJsonError
+          ? []
+          : [
+              {
+                severity: monaco.MarkerSeverity.Error,
+                message,
+                startLineNumber: line,
+                startColumn: column,
+                endLineNumber: line,
+                endColumn: Math.max(column + 1, endColumn),
+              },
+            ],
+      );
       output.classList.add("is-stale");
-      status.textContent = `${isJsonError ? "Preview paused" : "Template error"}: ${message}`;
+      status.textContent = isJsonError
+        ? `Context JSON error — ${message}`
+        : `${error?.kind === "syntax" ? "Velocity syntax error" : "Velocity rendering error"} · Line ${line}, column ${column} — ${message}`;
       status.hidden = false;
       status.classList.add("is-error");
       contextError.textContent = isJsonError ? `Invalid JSON: ${message}` : "";

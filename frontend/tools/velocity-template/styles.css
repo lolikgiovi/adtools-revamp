@@ -8,3 +8,8 @@
 .velocity-template-tool .vtl-inline-error {
   flex: 0 0 auto;
 }
+
+.velocity-template-tool .velocity-preview-error {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
