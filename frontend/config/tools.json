@@ -133,6 +133,13 @@
       "order": 70
     },
     {
+      "id": "velocity-template",
+      "name": "Velocity Template",
+      "category": "template",
+      "icon": "velocity-template",
+      "order": 71
+    },
+    {
       "id": "sql-in-clause",
       "name": "Query IN",
       "category": "config",

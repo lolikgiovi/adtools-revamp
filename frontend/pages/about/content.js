@@ -101,6 +101,16 @@ export const toolGuides = {
     ],
     notes: "Keep the field review open when checking a template before handoff.",
   },
+  "velocity-template": {
+    summary: "Write and render common Velocity-compatible VTL against local JSON context data.",
+    howToUse: [
+      "Write or paste a Velocity template in the editor.",
+      "Provide the variables used by the template as a JSON object in Context Data.",
+      "Review the live rendered result, then copy the template or rendered output.",
+    ],
+    notes:
+      "Rendering uses VelocityJS locally for common VTL. It is not the Java Apache Velocity runtime and does not include Splunk-specific helpers.",
+  },
   "sql-in-clause": {
     summary: "Convert newline-separated values into SQL IN clauses and ready-to-run SELECT statements.",
     howToUse: [

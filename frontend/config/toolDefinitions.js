@@ -59,6 +59,10 @@ const TOOL_MODULES = {
     description: "Edit Splunk templates with formatting, minify, syntax highlighting, and field review",
     load: () => import("../tools/splunk-template/main.js").then((module) => ({ ToolClass: module.SplunkVTLEditor })),
   },
+  "velocity-template": {
+    description: "Write and render common Velocity-compatible VTL with JSON context data",
+    load: () => import("../tools/velocity-template/main.js").then((module) => ({ ToolClass: module.VelocityTemplateTool })),
+  },
   "sql-in-clause": {
     description: "Convert newline lists into SQL IN clause formats",
     load: () => import("../tools/sql-in-clause/main.js").then((module) => ({ ToolClass: module.SQLInClauseTool })),

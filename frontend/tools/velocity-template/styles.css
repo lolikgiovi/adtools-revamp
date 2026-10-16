@@ -1,0 +1,10 @@
+@import "../splunk-template/styles.css";
+
+.velocity-template-tool .vtl-editor-pane > .monaco-editor-container {
+  flex: 1;
+  min-height: 0;
+}
+
+.velocity-template-tool .vtl-inline-error {
+  flex: 0 0 auto;
+}
