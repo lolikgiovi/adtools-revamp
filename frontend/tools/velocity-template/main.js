@@ -7,7 +7,7 @@ import "monaco-editor/esm/vs/language/json/monaco.contribution.js";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
 import { getIconSvg } from "./icon.js";
-import { extractContextPaths, renderVelocityTemplate, setNestedValue } from "./service.js";
+import { extractContextPaths, formatRenderedResult, renderVelocityTemplate, setNestedValue } from "./service.js";
 import { VelocityTemplate } from "./template.js";
 import "./styles.css";
 
@@ -38,6 +38,7 @@ class VelocityTemplateTool extends BaseTool {
     this._languageDisposables = [];
     this._templateStorageKey = "tool:velocity-template:editor";
     this._contextStorageKey = "tool:velocity-template:context";
+    this._resultTypeStorageKey = "tool:velocity-template:result-type";
   }
 
   getIconSvg() {
@@ -192,6 +193,8 @@ class VelocityTemplateTool extends BaseTool {
       document.getElementById("velocityContext"),
       this.editorOptions(context, "json", "Velocity context JSON"),
     );
+    const resultType = this.readStored(this._resultTypeStorageKey, "text");
+    document.getElementById("velocityResultType").value = resultType === "json" ? "json" : "text";
   }
 
   editorOptions(value, language, ariaLabel) {
@@ -246,11 +249,14 @@ class VelocityTemplateTool extends BaseTool {
     const status = document.getElementById("velocityPreviewStatus");
     const contextError = document.getElementById("velocityContextError");
     if (!output || !status || !contextError || !this.editor) return;
+    let rendered = "";
     try {
-      const rendered = renderVelocityTemplate(this.editor.getValue(), this.readContext());
+      rendered = renderVelocityTemplate(this.editor.getValue(), this.readContext());
+      const resultType = document.getElementById("velocityResultType")?.value || "text";
+      const displayValue = formatRenderedResult(rendered, resultType);
       monaco.editor.setModelMarkers(this.editor.getModel(), "velocity-template", []);
       monaco.editor.setModelMarkers(this.contextEditor.getModel(), "velocity-context", []);
-      output.textContent = rendered;
+      output.textContent = displayValue;
       output.classList.remove("is-stale");
       status.hidden = true;
       status.textContent = "";
@@ -260,6 +266,7 @@ class VelocityTemplateTool extends BaseTool {
     } catch (error) {
       const message = error?.message || "Unable to render template.";
       const isJsonError = error instanceof SyntaxError;
+      const isOutputError = error?.kind === "output";
       const line = Math.max(1, Number(error?.line) || 1);
       const column = Math.max(1, Number(error?.column) || 1);
       const model = this.editor.getModel();
@@ -267,7 +274,7 @@ class VelocityTemplateTool extends BaseTool {
       monaco.editor.setModelMarkers(
         this.editor.getModel(),
         "velocity-template",
-        isJsonError
+        isJsonError || isOutputError
           ? []
           : [
               {
@@ -280,10 +287,15 @@ class VelocityTemplateTool extends BaseTool {
               },
             ],
       );
-      output.classList.add("is-stale");
+      if (isOutputError) {
+        output.textContent = rendered;
+        output.classList.remove("is-stale");
+      } else output.classList.add("is-stale");
       status.textContent = isJsonError
         ? `Context JSON error — ${message}`
-        : `${error?.kind === "syntax" ? "Velocity syntax error" : "Velocity rendering error"} · Line ${line}, column ${column} — ${message}`;
+        : isOutputError
+          ? `Rendered JSON error · Output line ${line}, column ${column} — ${message}`
+          : `${error?.kind === "syntax" ? "Velocity syntax error" : "Velocity rendering error"} · Line ${line}, column ${column} — ${message}`;
       status.hidden = false;
       status.classList.add("is-error");
       contextError.textContent = isJsonError ? `Invalid JSON: ${message}` : "";
@@ -368,6 +380,10 @@ class VelocityTemplateTool extends BaseTool {
       } catch (_) {
         this.showError("Fix the Context Data JSON, then try Sync fields again.");
       }
+    });
+    document.getElementById("velocityResultType")?.addEventListener("change", (event) => {
+      this.persist(this._resultTypeStorageKey, event.currentTarget.value);
+      this.updatePreview();
     });
     document.getElementById("btnToggleVelocityWrap")?.addEventListener("click", (event) => {
       const nowrap = document.getElementById("velocityPreview")?.classList.toggle("is-nowrap") || false;

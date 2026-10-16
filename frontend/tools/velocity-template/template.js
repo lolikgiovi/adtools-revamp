@@ -40,6 +40,13 @@ export const VelocityTemplate = /* html */ `
             <h3 id="velocityResultTitle">Rendered Result</h3>
           </div>
           <div class="vtl-panel-actions">
+            <label class="vtl-result-type">
+              <span>Result type</span>
+              <select id="velocityResultType" aria-label="Result type">
+                <option value="text">Text</option>
+                <option value="json">JSON</option>
+              </select>
+            </label>
             <button id="btnToggleVelocityWrap" class="btn btn-secondary btn-sm" type="button" aria-pressed="true">Wrap</button>
             <button id="btnCopyVelocityPreview" class="btn btn-secondary btn-sm" type="button">Copy</button>
           </div>

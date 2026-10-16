@@ -10,6 +10,38 @@ export class VelocityTemplateError extends Error {
   }
 }
 
+export class VelocityResultError extends Error {
+  constructor(message, { line = 1, column = 1, cause } = {}) {
+    super(message, { cause });
+    this.name = "VelocityResultError";
+    this.kind = "output";
+    this.line = line;
+    this.column = column;
+  }
+}
+
+function jsonErrorLocation(source, error) {
+  const position = Number(String(error?.message || "").match(/position\s+(\d+)/i)?.[1]);
+  if (!Number.isFinite(position)) return { line: 1, column: 1 };
+  const before = source.slice(0, position);
+  const lines = before.split("\n");
+  return { line: lines.length, column: lines.at(-1).length + 1 };
+}
+
+export function formatRenderedResult(rendered = "", mode = "text") {
+  const source = String(rendered);
+  if (mode !== "json") return source;
+  try {
+    return JSON.stringify(JSON.parse(source), null, 2);
+  } catch (error) {
+    const location = jsonErrorLocation(source, error);
+    throw new VelocityResultError(`Rendered output is not valid JSON. ${error?.message || "Check the generated JSON syntax."}`, {
+      ...location,
+      cause: error,
+    });
+  }
+}
+
 function validateDirectiveStructure(template) {
   const stack = [];
   const blockDirectives = new Set(["if", "foreach", "macro", "define"]);

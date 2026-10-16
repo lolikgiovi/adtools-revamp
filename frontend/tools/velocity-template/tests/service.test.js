@@ -1,4 +1,4 @@
-import { extractContextPaths, renderVelocityTemplate, setNestedValue } from "../service.js";
+import { extractContextPaths, formatRenderedResult, renderVelocityTemplate, setNestedValue } from "../service.js";
 
 describe("Velocity template service", () => {
   it("renders standard Velocity variables, directives, collections, and methods", () => {
@@ -66,5 +66,22 @@ describe("Velocity template service", () => {
   it("does not treat directives in comments or quoted strings as template structure", () => {
     expect(renderVelocityTemplate("## #else\n#set($label = '#end')\n$label", {})).toContain("#end");
     expect(renderVelocityTemplate("#* #if($value) *#\nDone", {})).toContain("Done");
+  });
+
+  it("keeps text output unchanged and pretty-prints JSON output", () => {
+    const rendered = '{"name":"Maya","active":true}';
+
+    expect(formatRenderedResult(rendered, "text")).toBe(rendered);
+    expect(formatRenderedResult(rendered, "json")).toBe('{\n  "name": "Maya",\n  "active": true\n}');
+  });
+
+  it("reports invalid rendered JSON as an output error", () => {
+    expect(() => formatRenderedResult("Hello, Maya!", "json")).toThrow(
+      expect.objectContaining({
+        name: "VelocityResultError",
+        kind: "output",
+        message: expect.stringContaining("Rendered output is not valid JSON"),
+      }),
+    );
   });
 });

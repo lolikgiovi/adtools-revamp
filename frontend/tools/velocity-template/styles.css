@@ -13,3 +13,21 @@
   white-space: normal;
   overflow-wrap: anywhere;
 }
+
+.velocity-template-tool .vtl-result-type {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.76rem;
+}
+
+.velocity-template-tool .vtl-result-type select {
+  min-height: 2rem;
+  padding: 0.25rem 1.6rem 0.25rem 0.55rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 7px;
+  background: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
+  font: inherit;
+}

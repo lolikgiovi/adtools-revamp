@@ -26,6 +26,9 @@
 11. No application errors were recorded in the browser console during the successful journey.
 12. An unmatched `#else` displayed a wrapping `Velocity syntax error` alert with its line and column, and Monaco marked the offending directive.
 13. Correcting the directive structure cleared both the alert and Monaco marker and resumed the live preview.
+14. Selecting **JSON** pretty-printed valid rendered JSON.
+15. Invalid rendered JSON displayed a `Rendered JSON error` while keeping the raw rendered output visible for diagnosis.
+16. Switching back to **Text** preserved the rendered output exactly and cleared the JSON error.
 
 ## Focused verification
 
@@ -39,4 +42,4 @@ Run the focused service verification as well:
 ./node_modules/.bin/vitest run frontend/tools/velocity-template/tests/service.test.js
 ```
 
-Expected result: `1 passed`, `7 passed`.
+Expected result: `1 passed`, `9 passed`.
