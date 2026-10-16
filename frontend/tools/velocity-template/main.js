@@ -256,6 +256,19 @@ class VelocityTemplateTool extends BaseTool {
     return parsed;
   }
 
+  configurePreviewMode(mode) {
+    const isJson = mode === "json";
+    const model = this.previewEditor?.getModel();
+    if (model) monaco.editor.setModelLanguage(model, isJson ? "json" : "plaintext");
+    this.previewEditor?.updateOptions({
+      lineNumbers: isJson ? "on" : "off",
+      lineNumbersMinChars: isJson ? 3 : 0,
+      lineDecorationsWidth: isJson ? 8 : 0,
+      folding: isJson,
+      showFoldingControls: isJson ? "mouseover" : "never",
+    });
+  }
+
   schedulePreview() {
     clearTimeout(this._previewTimer);
     this._previewTimer = setTimeout(() => this.updatePreview(), 200);
@@ -271,7 +284,7 @@ class VelocityTemplateTool extends BaseTool {
       rendered = renderVelocityTemplate(this.editor.getValue(), this.readContext());
       const resultType = document.getElementById("velocityResultType")?.value || "text";
       const displayValue = formatRenderedResult(rendered, resultType);
-      monaco.editor.setModelLanguage(this.previewEditor.getModel(), resultType === "json" ? "json" : "plaintext");
+      this.configurePreviewMode(resultType);
       monaco.editor.setModelMarkers(this.editor.getModel(), "velocity-template", []);
       monaco.editor.setModelMarkers(this.contextEditor.getModel(), "velocity-context", []);
       this.previewEditor.setValue(displayValue);
@@ -306,7 +319,7 @@ class VelocityTemplateTool extends BaseTool {
             ],
       );
       if (isOutputError) {
-        monaco.editor.setModelLanguage(this.previewEditor.getModel(), "json");
+        this.configurePreviewMode("json");
         this.previewEditor.setValue(rendered);
         output.classList.remove("is-stale");
       } else output.classList.add("is-stale");
