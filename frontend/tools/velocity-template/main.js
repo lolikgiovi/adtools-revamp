@@ -261,9 +261,9 @@ class VelocityTemplateTool extends BaseTool {
     const model = this.previewEditor?.getModel();
     if (model) monaco.editor.setModelLanguage(model, isJson ? "json" : "plaintext");
     this.previewEditor?.updateOptions({
-      lineNumbers: isJson ? "on" : "off",
-      lineNumbersMinChars: isJson ? 3 : 0,
-      lineDecorationsWidth: isJson ? 8 : 0,
+      lineNumbers: "on",
+      lineNumbersMinChars: 3,
+      lineDecorationsWidth: 8,
       folding: isJson,
       showFoldingControls: isJson ? "mouseover" : "never",
     });
