@@ -52,7 +52,7 @@ export const VelocityTemplate = /* html */ `
           </div>
         </div>
         <div id="velocityPreviewStatus" class="vtl-inline-error velocity-preview-error" role="alert" hidden></div>
-        <pre id="velocityPreview" class="vtl-preview-output" aria-label="Rendered Velocity template"></pre>
+        <div id="velocityPreview" class="vtl-preview-output" aria-label="Rendered Velocity template"></div>
       </section>
     </div>
   </div>

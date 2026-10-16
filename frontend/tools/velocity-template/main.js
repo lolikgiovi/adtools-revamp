@@ -35,6 +35,7 @@ class VelocityTemplateTool extends BaseTool {
     super({ id: "velocity-template", eventBus, isHeavyTool: true });
     this.editor = null;
     this.contextEditor = null;
+    this.previewEditor = null;
     this._languageDisposables = [];
     this._templateStorageKey = "tool:velocity-template:editor";
     this._contextStorageKey = "tool:velocity-template:context";
@@ -66,14 +67,17 @@ class VelocityTemplateTool extends BaseTool {
     this._languageDisposables = [];
     this.editor?.dispose();
     this.contextEditor?.dispose();
+    this.previewEditor?.dispose();
     this.editor = null;
     this.contextEditor = null;
+    this.previewEditor = null;
     this.cleanupResizer();
   }
 
   onWarmResume() {
     this.editor?.layout?.();
     this.contextEditor?.layout?.();
+    this.previewEditor?.layout?.();
   }
 
   registerLanguage() {
@@ -193,6 +197,19 @@ class VelocityTemplateTool extends BaseTool {
       document.getElementById("velocityContext"),
       this.editorOptions(context, "json", "Velocity context JSON"),
     );
+    this.previewEditor = monaco.editor.create(document.getElementById("velocityPreview"), {
+      ...this.editorOptions("", "plaintext", "Rendered Velocity template"),
+      readOnly: true,
+      domReadOnly: true,
+      lineNumbers: "off",
+      folding: false,
+      glyphMargin: false,
+      lineDecorationsWidth: 0,
+      lineNumbersMinChars: 0,
+      renderLineHighlight: "none",
+      overviewRulerLanes: 0,
+      wordWrap: "on",
+    });
     const resultType = this.readStored(this._resultTypeStorageKey, "text");
     document.getElementById("velocityResultType").value = resultType === "json" ? "json" : "text";
   }
@@ -248,15 +265,16 @@ class VelocityTemplateTool extends BaseTool {
     const output = document.getElementById("velocityPreview");
     const status = document.getElementById("velocityPreviewStatus");
     const contextError = document.getElementById("velocityContextError");
-    if (!output || !status || !contextError || !this.editor) return;
+    if (!output || !status || !contextError || !this.editor || !this.previewEditor) return;
     let rendered = "";
     try {
       rendered = renderVelocityTemplate(this.editor.getValue(), this.readContext());
       const resultType = document.getElementById("velocityResultType")?.value || "text";
       const displayValue = formatRenderedResult(rendered, resultType);
+      monaco.editor.setModelLanguage(this.previewEditor.getModel(), resultType === "json" ? "json" : "plaintext");
       monaco.editor.setModelMarkers(this.editor.getModel(), "velocity-template", []);
       monaco.editor.setModelMarkers(this.contextEditor.getModel(), "velocity-context", []);
-      output.textContent = displayValue;
+      this.previewEditor.setValue(displayValue);
       output.classList.remove("is-stale");
       status.hidden = true;
       status.textContent = "";
@@ -288,7 +306,8 @@ class VelocityTemplateTool extends BaseTool {
             ],
       );
       if (isOutputError) {
-        output.textContent = rendered;
+        monaco.editor.setModelLanguage(this.previewEditor.getModel(), "json");
+        this.previewEditor.setValue(rendered);
         output.classList.remove("is-stale");
       } else output.classList.add("is-stale");
       status.textContent = isJsonError
@@ -349,7 +368,7 @@ class VelocityTemplateTool extends BaseTool {
     });
     document
       .getElementById("btnCopyVelocityPreview")
-      ?.addEventListener("click", () => this.copyToClipboard(document.getElementById("velocityPreview")?.textContent || ""));
+      ?.addEventListener("click", () => this.copyToClipboard(this.previewEditor?.getValue() || ""));
     document.getElementById("btnPasteVelocity")?.addEventListener("click", async () => {
       try {
         const value = await navigator.clipboard.readText();
@@ -386,7 +405,9 @@ class VelocityTemplateTool extends BaseTool {
       this.updatePreview();
     });
     document.getElementById("btnToggleVelocityWrap")?.addEventListener("click", (event) => {
-      const nowrap = document.getElementById("velocityPreview")?.classList.toggle("is-nowrap") || false;
+      const output = document.getElementById("velocityPreview");
+      const nowrap = output?.classList.toggle("is-nowrap") || false;
+      this.previewEditor?.updateOptions({ wordWrap: nowrap ? "off" : "on" });
       event.currentTarget.setAttribute("aria-pressed", String(!nowrap));
       event.currentTarget.textContent = nowrap ? "No wrap" : "Wrap";
     });

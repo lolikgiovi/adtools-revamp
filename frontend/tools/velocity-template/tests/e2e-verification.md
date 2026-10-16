@@ -29,6 +29,7 @@
 14. Selecting **JSON** pretty-printed valid rendered JSON.
 15. Invalid rendered JSON displayed a `Rendered JSON error` while keeping the raw rendered output visible for diagnosis.
 16. Switching back to **Text** preserved the rendered output exactly and cleared the JSON error.
+17. JSON results used distinct Monaco token colors for keys, strings, booleans, numbers, and brackets; **Copy** returned clean JSON and **Wrap** still toggled correctly.
 
 ## Focused verification
 
