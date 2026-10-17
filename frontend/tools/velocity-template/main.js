@@ -2,12 +2,21 @@ import { BaseTool } from "../../core/BaseTool.js";
 import { cleanAnalyticsMeta, summarizeText } from "../../core/AnalyticsMeta.js";
 import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import { OracleConnectionService } from "../../core/OracleConnectionService.js";
+import { isTauri } from "../../core/Runtime.js";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.main.js";
 import "monaco-editor/esm/vs/language/json/monaco.contribution.js";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
 import { getIconSvg } from "./icon.js";
-import { extractContextPaths, formatRenderedResult, renderVelocityTemplate, setNestedValue } from "./service.js";
+import {
+  extractContextPaths,
+  formatRenderedResult,
+  normalizeImportedTemplateValue,
+  parseTemplateImportQuery,
+  renderVelocityTemplate,
+  setNestedValue,
+} from "./service.js";
 import { VelocityTemplate } from "./template.js";
 import "./styles.css";
 
@@ -40,6 +49,9 @@ class VelocityTemplateTool extends BaseTool {
     this._templateStorageKey = "tool:velocity-template:editor";
     this._contextStorageKey = "tool:velocity-template:context";
     this._resultTypeStorageKey = "tool:velocity-template:result-type";
+    this._paneStateStorageKey = "tool:velocity-template:pane-state";
+    this._sqlImportRows = [];
+    this._sqlImportColumns = [];
   }
 
   getIconSvg() {
@@ -55,6 +67,8 @@ class VelocityTemplateTool extends BaseTool {
     this.initializeEditors();
     this.initializeResizer();
     this.bindEvents();
+    this.initializePaneState();
+    this.initializeSqlImport();
     this.updatePreview();
     UsageTracker.trackFeature("velocity-template", "mount", "", 5000);
   }
@@ -71,6 +85,7 @@ class VelocityTemplateTool extends BaseTool {
     this.editor = null;
     this.contextEditor = null;
     this.previewEditor = null;
+    document.getElementById("velocitySqlImportDialog")?.close?.();
     this.cleanupResizer();
   }
 
@@ -211,7 +226,7 @@ class VelocityTemplateTool extends BaseTool {
       wordWrap: "on",
     });
     const resultType = this.readStored(this._resultTypeStorageKey, "text");
-    document.getElementById("velocityResultType").value = resultType === "json" ? "json" : "text";
+    this.setResultType(resultType === "json" ? "json" : "text", { updatePreview: false });
   }
 
   editorOptions(value, language, ariaLabel) {
@@ -282,7 +297,7 @@ class VelocityTemplateTool extends BaseTool {
     let rendered = "";
     try {
       rendered = renderVelocityTemplate(this.editor.getValue(), this.readContext());
-      const resultType = document.getElementById("velocityResultType")?.value || "text";
+      const resultType = this._resultType || "text";
       const displayValue = formatRenderedResult(rendered, resultType);
       this.configurePreviewMode(resultType);
       monaco.editor.setModelMarkers(this.editor.getModel(), "velocity-template", []);
@@ -355,6 +370,166 @@ class VelocityTemplateTool extends BaseTool {
     this.contextEditor?.setValue(JSON.stringify(value, null, 2));
   }
 
+  setResultType(mode, { updatePreview = true } = {}) {
+    this._resultType = mode === "json" ? "json" : "text";
+    const trigger = document.getElementById("velocityResultType");
+    if (trigger) trigger.textContent = this._resultType === "json" ? "JSON" : "Text";
+    this.container?.querySelectorAll("[data-result-type]").forEach((button) => {
+      button.setAttribute("aria-checked", String(button.dataset.resultType === this._resultType));
+    });
+    this.persist(this._resultTypeStorageKey, this._resultType);
+    document.getElementById("velocityResultTypeMenu")?.removeAttribute("open");
+    if (updatePreview) this.updatePreview();
+  }
+
+  initializePaneState() {
+    let state = "expanded";
+    try {
+      state = JSON.parse(this.readStored(this._paneStateStorageKey, '"expanded"'));
+    } catch (_) {
+      // Ignore malformed persisted UI state and use the expanded layout.
+    }
+    this.setPaneState(["template", "context"].includes(state) ? state : "expanded", { persist: false });
+  }
+
+  setPaneState(collapsedPane, { persist = true } = {}) {
+    const layout = this.container?.querySelector(".vtl-layout");
+    if (!layout) return;
+    const state = ["template", "context"].includes(collapsedPane) ? collapsedPane : "expanded";
+    layout.classList.toggle("is-template-collapsed", state === "template");
+    layout.classList.toggle("is-context-collapsed", state === "context");
+    const templateButton = document.getElementById("btnCollapseVelocityTemplate");
+    const contextButton = document.getElementById("btnCollapseVelocityContext");
+    templateButton?.setAttribute("aria-expanded", String(state !== "template"));
+    contextButton?.setAttribute("aria-expanded", String(state !== "context"));
+    templateButton?.setAttribute("aria-label", state === "template" ? "Expand Velocity Template" : "Collapse Velocity Template");
+    contextButton?.setAttribute("aria-label", state === "context" ? "Expand Context Data" : "Collapse Context Data");
+    if (persist) this.persist(this._paneStateStorageKey, JSON.stringify(state));
+    requestAnimationFrame(() => {
+      this.editor?.layout?.();
+      this.contextEditor?.layout?.();
+    });
+  }
+
+  initializeSqlImport() {
+    const button = document.getElementById("btnImportVelocitySql");
+    if (button) button.hidden = !isTauri();
+  }
+
+  loadOracleConnections() {
+    try {
+      const connections = JSON.parse(localStorage.getItem("config.oracle.connections") || "[]");
+      return Array.isArray(connections) ? connections.filter((item) => item?.name && item?.connect_string) : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  openSqlImport() {
+    const connections = this.loadOracleConnections();
+    if (!connections.length) {
+      this.showError("No Oracle connections configured. Add one in Settings first.");
+      return;
+    }
+    this._sqlImportConnections = connections;
+    const select = document.getElementById("velocitySqlConnection");
+    select.replaceChildren(
+      ...connections.map((connection) => {
+        const option = document.createElement("option");
+        option.value = connection.name;
+        option.textContent = `${connection.name} (${connection.connect_string})`;
+        return option;
+      }),
+    );
+    const dialog = document.getElementById("velocitySqlImportDialog");
+    document.getElementById("velocitySqlImportError").hidden = true;
+    document.getElementById("velocitySqlSelection").hidden = true;
+    document.getElementById("btnApplyVelocitySqlImport").disabled = true;
+    document.getElementById("velocitySqlImportOverlay").hidden = false;
+    dialog.showModal();
+    document.getElementById("velocitySqlQuery")?.focus();
+  }
+
+  closeSqlImport() {
+    document.getElementById("velocitySqlImportDialog")?.close();
+    document.getElementById("velocitySqlImportOverlay").hidden = true;
+    document.getElementById("btnImportVelocitySql")?.focus();
+  }
+
+  showSqlImportError(error) {
+    const output = document.getElementById("velocitySqlImportError");
+    output.textContent = error?.message || String(error);
+    output.hidden = false;
+  }
+
+  updateSqlImportPreview() {
+    const rowIndex = Number(document.getElementById("velocitySqlRow")?.value || 0);
+    const columnIndex = Number(document.getElementById("velocitySqlField")?.value || 0);
+    const preview = document.getElementById("velocitySqlPreview");
+    const apply = document.getElementById("btnApplyVelocitySqlImport");
+    try {
+      const value = normalizeImportedTemplateValue(this._sqlImportRows[rowIndex]?.[columnIndex]);
+      preview.value = value;
+      apply.disabled = false;
+    } catch (error) {
+      preview.value = "";
+      apply.disabled = true;
+      this.showSqlImportError(error);
+    }
+  }
+
+  async fetchSqlImportFields() {
+    const fetchButton = document.getElementById("btnFetchVelocitySql");
+    const error = document.getElementById("velocitySqlImportError");
+    error.hidden = true;
+    const connection = this._sqlImportConnections?.find((item) => item.name === document.getElementById("velocitySqlConnection")?.value);
+    if (!connection) return this.showSqlImportError("Select an Oracle connection.");
+    try {
+      const sql = parseTemplateImportQuery(document.getElementById("velocitySqlQuery")?.value);
+      fetchButton.disabled = true;
+      fetchButton.textContent = "Fetching…";
+      const result = await OracleConnectionService.queryViaSidecar(connection.name, connection, sql, 100);
+      if (!Array.isArray(result?.columns) || !Array.isArray(result?.rows)) throw new Error("Oracle returned an unexpected result.");
+      if (!result.rows.length) throw new Error("The query returned no rows.");
+      if (!result.columns.length) throw new Error("The query returned no fields.");
+      this._sqlImportColumns = result.columns.map(String);
+      this._sqlImportRows = result.rows;
+      const rowSelect = document.getElementById("velocitySqlRow");
+      const fieldSelect = document.getElementById("velocitySqlField");
+      rowSelect.replaceChildren(
+        ...result.rows.map((_, index) => {
+          const option = document.createElement("option");
+          option.value = String(index);
+          option.textContent = `Row ${index + 1}`;
+          return option;
+        }),
+      );
+      fieldSelect.replaceChildren(
+        ...this._sqlImportColumns.map((column, index) => {
+          const option = document.createElement("option");
+          option.value = String(index);
+          option.textContent = column;
+          return option;
+        }),
+      );
+      document.getElementById("velocitySqlSelection").hidden = false;
+      this.updateSqlImportPreview();
+    } catch (fetchError) {
+      document.getElementById("velocitySqlSelection").hidden = true;
+      document.getElementById("btnApplyVelocitySqlImport").disabled = true;
+      this.showSqlImportError(fetchError);
+    } finally {
+      fetchButton.disabled = false;
+      fetchButton.textContent = "Fetch fields";
+    }
+  }
+
+  applySqlImport() {
+    this.editor?.setValue(document.getElementById("velocitySqlPreview")?.value || "");
+    this.closeSqlImport();
+    this.showSuccess("Velocity template imported from SQL");
+  }
+
   track(action, input, output = input) {
     try {
       const meta = cleanAnalyticsMeta({ ...summarizeText(input, "input"), ...summarizeText(output, "output") });
@@ -413,9 +588,27 @@ class VelocityTemplateTool extends BaseTool {
         this.showError("Fix the Context Data JSON, then try Sync fields again.");
       }
     });
-    document.getElementById("velocityResultType")?.addEventListener("change", (event) => {
-      this.persist(this._resultTypeStorageKey, event.currentTarget.value);
-      this.updatePreview();
+    this.container?.querySelectorAll("[data-result-type]").forEach((button) => {
+      button.addEventListener("click", () => this.setResultType(button.dataset.resultType));
+    });
+    document.getElementById("btnCollapseVelocityTemplate")?.addEventListener("click", () => {
+      const collapsed = this.container?.querySelector(".vtl-layout")?.classList.contains("is-template-collapsed");
+      this.setPaneState(collapsed ? "expanded" : "template");
+    });
+    document.getElementById("btnCollapseVelocityContext")?.addEventListener("click", () => {
+      const collapsed = this.container?.querySelector(".vtl-layout")?.classList.contains("is-context-collapsed");
+      this.setPaneState(collapsed ? "expanded" : "context");
+    });
+    document.getElementById("btnImportVelocitySql")?.addEventListener("click", () => this.openSqlImport());
+    document.getElementById("btnFetchVelocitySql")?.addEventListener("click", () => this.fetchSqlImportFields());
+    document.getElementById("velocitySqlRow")?.addEventListener("change", () => this.updateSqlImportPreview());
+    document.getElementById("velocitySqlField")?.addEventListener("change", () => this.updateSqlImportPreview());
+    document.getElementById("btnApplyVelocitySqlImport")?.addEventListener("click", () => this.applySqlImport());
+    document.getElementById("btnCloseVelocitySqlImport")?.addEventListener("click", () => this.closeSqlImport());
+    document.getElementById("btnCancelVelocitySqlImport")?.addEventListener("click", () => this.closeSqlImport());
+    document.getElementById("velocitySqlImportOverlay")?.addEventListener("click", () => this.closeSqlImport());
+    document.getElementById("velocitySqlImportDialog")?.addEventListener("close", () => {
+      document.getElementById("velocitySqlImportOverlay").hidden = true;
     });
     document.getElementById("btnToggleVelocityWrap")?.addEventListener("click", (event) => {
       const output = document.getElementById("velocityPreview");
@@ -425,8 +618,9 @@ class VelocityTemplateTool extends BaseTool {
       event.currentTarget.textContent = nowrap ? "No wrap" : "Wrap";
     });
     this.container?.querySelector(".velocity-template-tool")?.addEventListener("click", (event) => {
-      const menu = document.getElementById("velocityMoreActions");
-      if (menu && !menu.contains(event.target)) menu.removeAttribute("open");
+      [document.getElementById("velocityMoreActions"), document.getElementById("velocityResultTypeMenu")].forEach((menu) => {
+        if (menu && !menu.contains(event.target)) menu.removeAttribute("open");
+      });
     });
   }
 

@@ -23,20 +23,200 @@
   overflow-wrap: anywhere;
 }
 
-.velocity-template-tool .vtl-result-type {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
+.velocity-template-tool .vtl-result-type-label {
   color: hsl(var(--muted-foreground));
   font-size: 0.76rem;
 }
 
-.velocity-template-tool .vtl-result-type select {
-  min-height: 2rem;
-  padding: 0.25rem 1.6rem 0.25rem 0.55rem;
+.velocity-template-tool .vtl-result-type-menu .vtl-actions-menu-popover {
+  width: 120px;
+}
+
+.velocity-template-tool .vtl-result-type-menu [aria-checked="true"]::after {
+  float: right;
+  content: "✓";
+}
+
+.velocity-template-tool .vtl-collapse-button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+}
+
+.velocity-template-tool .vtl-collapse-button:hover {
+  background: hsl(var(--muted) / 0.55);
+  color: hsl(var(--foreground));
+}
+
+.velocity-template-tool .vtl-collapse-button:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+.velocity-template-tool .vtl-collapse-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.75;
+  transition: transform 160ms ease-out;
+}
+
+.velocity-template-tool .vtl-collapse-button[aria-expanded="false"] svg {
+  transform: rotate(180deg);
+}
+
+.velocity-template-tool .vtl-layout.is-template-collapsed {
+  grid-template-rows: 38px minmax(220px, 1fr);
+}
+
+.velocity-template-tool .vtl-layout.is-context-collapsed {
+  grid-template-rows: minmax(360px, 1fr) 38px;
+}
+
+.velocity-template-tool .vtl-layout.is-template-collapsed .vtl-editor-pane > .monaco-editor-container,
+.velocity-template-tool .vtl-layout.is-context-collapsed .vtl-parameters-pane > :not(.pane-header) {
+  visibility: hidden;
+}
+
+.velocity-template-tool .vtl-import-overlay {
+  position: fixed;
+  inset: 0;
+}
+
+.velocity-template-tool .vtl-import-dialog {
+  width: min(680px, calc(100vw - 32px));
+  max-width: none;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  box-shadow: 0 24px 70px hsl(var(--foreground) / 0.28);
+}
+
+.velocity-template-tool .vtl-import-dialog::backdrop {
+  background: hsl(var(--background) / 0.72);
+}
+
+.velocity-template-tool .vtl-import-header,
+.velocity-template-tool .vtl-import-footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+}
+
+.velocity-template-tool .vtl-import-header {
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.velocity-template-tool .vtl-import-header h3,
+.velocity-template-tool .vtl-import-header p {
+  margin: 0;
+}
+
+.velocity-template-tool .vtl-import-header p {
+  margin-top: 0.25rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.82rem;
+}
+
+.velocity-template-tool .vtl-import-body {
+  display: grid;
+  gap: 0.85rem;
+  max-height: min(620px, calc(100dvh - 190px));
+  overflow: auto;
+  padding: 1rem 1.1rem;
+}
+
+.velocity-template-tool .vtl-import-field {
+  display: grid;
+  gap: 0.4rem;
+  color: hsl(var(--foreground));
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.velocity-template-tool .vtl-import-field select,
+.velocity-template-tool .vtl-import-field textarea {
+  width: 100%;
+  padding: 0.55rem 0.65rem;
   border: 1px solid hsl(var(--border));
   border-radius: 7px;
-  background: hsl(var(--secondary));
-  color: hsl(var(--secondary-foreground));
+  outline: 0;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
   font: inherit;
+  font-weight: 400;
+}
+
+.velocity-template-tool .vtl-import-field textarea {
+  resize: vertical;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  line-height: 1.45;
+}
+
+.velocity-template-tool .vtl-import-field select:focus,
+.velocity-template-tool .vtl-import-field textarea:focus {
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
+}
+
+.velocity-template-tool .vtl-import-field small {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.velocity-template-tool .vtl-import-selection {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.85rem;
+  padding-top: 0.15rem;
+}
+
+.velocity-template-tool .vtl-import-selection[hidden] {
+  display: none;
+}
+
+.velocity-template-tool .vtl-import-preview-field {
+  grid-column: 1 / -1;
+}
+
+.velocity-template-tool .vtl-import-footer {
+  align-items: center;
+  justify-content: flex-end;
+  border-top: 1px solid hsl(var(--border));
+}
+
+@media (max-width: 940px) {
+  .velocity-template-tool .vtl-layout.is-template-collapsed {
+    grid-template-rows: 38px minmax(240px, 1fr) minmax(280px, 1fr);
+  }
+
+  .velocity-template-tool .vtl-layout.is-context-collapsed {
+    grid-template-rows: minmax(300px, 1fr) 38px minmax(280px, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .velocity-template-tool .vtl-import-selection {
+    grid-template-columns: 1fr;
+  }
+
+  .velocity-template-tool .vtl-import-preview-field {
+    grid-column: auto;
+  }
 }

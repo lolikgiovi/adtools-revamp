@@ -182,3 +182,28 @@ export function setNestedValue(target, path, value) {
   });
   return target;
 }
+
+export function parseTemplateImportQuery(sql = "") {
+  const statement = String(sql).trim().replace(/;\s*$/, "").trim();
+  const masked = statement
+    .replace(/--[^\n]*/g, (comment) => " ".repeat(comment.length))
+    .replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, " "))
+    .replace(/'(?:''|[^'])*'/g, (quoted) => " ".repeat(quoted.length))
+    .replace(/"(?:""|[^"])*"/g, (quoted) => " ".repeat(quoted.length));
+  if (!statement || !/^SELECT\b/i.test(masked) || /;/.test(masked)) {
+    throw new Error("Enter one read-only SELECT statement.");
+  }
+  if (/\b(?:INSERT|UPDATE|DELETE|MERGE|ALTER|DROP|CREATE|TRUNCATE|GRANT|REVOKE|EXECUTE|CALL|FOR\s+UPDATE)\b/i.test(masked)) {
+    throw new Error("The import query must be read-only.");
+  }
+  return statement;
+}
+
+export function normalizeImportedTemplateValue(value) {
+  if (value == null) return "";
+  if (["string", "number", "boolean", "bigint"].includes(typeof value)) return String(value);
+  if (typeof value === "object" && typeof value.data === "string" && /^oracle_(?:clob|nclob)$/i.test(value.__adtools_type || "")) {
+    return value.data;
+  }
+  throw new Error("The selected field cannot be imported as template text.");
+}

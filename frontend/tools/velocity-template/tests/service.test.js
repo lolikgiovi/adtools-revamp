@@ -1,4 +1,11 @@
-import { extractContextPaths, formatRenderedResult, renderVelocityTemplate, setNestedValue } from "../service.js";
+import {
+  extractContextPaths,
+  formatRenderedResult,
+  normalizeImportedTemplateValue,
+  parseTemplateImportQuery,
+  renderVelocityTemplate,
+  setNestedValue,
+} from "../service.js";
 
 describe("Velocity template service", () => {
   it("renders standard Velocity variables, directives, collections, and methods", () => {
@@ -83,5 +90,22 @@ describe("Velocity template service", () => {
         message: expect.stringContaining("Rendered output is not valid JSON"),
       }),
     );
+  });
+
+  it("accepts one read-only SELECT for template import", () => {
+    expect(parseTemplateImportQuery("  SELECT * FROM APP.MESSAGE_TEMPLATE WHERE ID = 7;  ")).toBe(
+      "SELECT * FROM APP.MESSAGE_TEMPLATE WHERE ID = 7",
+    );
+    expect(() => parseTemplateImportQuery("DELETE FROM APP.MESSAGE_TEMPLATE")).toThrow("one read-only SELECT");
+    expect(() => parseTemplateImportQuery("SELECT * FROM APP.ONE; SELECT * FROM APP.TWO")).toThrow("one read-only SELECT");
+    expect(() => parseTemplateImportQuery("SELECT * FROM APP.MESSAGE_TEMPLATE FOR UPDATE")).toThrow("read-only");
+  });
+
+  it("normalizes text and byte-backed Oracle template values", () => {
+    expect(normalizeImportedTemplateValue("Hello $customer.name")).toBe("Hello $customer.name");
+    expect(normalizeImportedTemplateValue(17)).toBe("17");
+    expect(normalizeImportedTemplateValue(null)).toBe("");
+    expect(normalizeImportedTemplateValue({ __adtools_type: "oracle_clob", data: "#if($active)Yes#end" })).toBe("#if($active)Yes#end");
+    expect(() => normalizeImportedTemplateValue({ unsupported: true })).toThrow("cannot be imported as template text");
   });
 });
