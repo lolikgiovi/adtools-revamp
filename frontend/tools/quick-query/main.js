@@ -111,8 +111,9 @@ export class QuickQuery extends BaseTool {
     this.ui?.refreshLayouts?.();
   }
 
-  onRouteData({ tableName } = {}) {
-    if (tableName) void this.ui?.openTableTab(tableName);
+  onRouteData({ tableName, createQuery } = {}) {
+    if (createQuery?.sql) void this.ui?.openCreatedQuery(createQuery);
+    else if (tableName) void this.ui?.openTableTab(tableName);
   }
 }
 
@@ -671,7 +672,9 @@ export class QuickQueryUI {
         click: () => this.closeOracleDataImport(),
       },
       oracleDataOverlay: {
-        click: (e) => { if (e.target === this.elements.oracleDataOverlay) this.closeOracleDataImport(); },
+        click: (e) => {
+          if (e.target === this.elements.oracleDataOverlay) this.closeOracleDataImport();
+        },
       },
       oracleDataModal: {
         click: (event) => {
@@ -1296,9 +1299,11 @@ export class QuickQueryUI {
   updatePrimaryKeyHighlight(schemaData = this.schemaTable?.getData?.().filter((row) => row[0]) || []) {
     const tableName = this.elements.tableNameInput?.value?.trim() || "";
     const findPrimaryKeys = this.queryExecutionService?.queryService?.ValueProcessorService?.findPrimaryKeys;
-    this.primaryKeyFieldNames = new Set(schemaData.length && findPrimaryKeys
-      ? findPrimaryKeys.call(this.queryExecutionService.queryService.ValueProcessorService, schemaData, tableName)
-      : []);
+    this.primaryKeyFieldNames = new Set(
+      schemaData.length && findPrimaryKeys
+        ? findPrimaryKeys.call(this.queryExecutionService.queryService.ValueProcessorService, schemaData, tableName)
+        : [],
+    );
     this.dataTable?.render?.();
   }
 
@@ -1844,6 +1849,25 @@ export class QuickQueryUI {
       this.elements.tableNameInput.value = tableName;
       await this.saveActiveTabDraft();
     }
+    return tab;
+  }
+
+  async openCreatedQuery({ sql, title = "Untitled", tableName = "" } = {}) {
+    await this.ready;
+    if (!String(sql || "").trim()) return null;
+    const tab = await this.createNewTab();
+    if (!tab) {
+      this.eventBus?.emit("notification:error", { message: "Quick Query already has 15 tabs." });
+      return null;
+    }
+    tab.title = String(title || "Untitled").trim() || "Untitled";
+    tab.tableName = this.sanitizeTableInputValue(tableName);
+    tab.generatedSql = String(sql);
+    tab.source = "velocity-template";
+    tab.dirty = true;
+    await this.applyTabDraft(tab);
+    await this.storageService.saveQueryTab(tab);
+    await this.saveTabSession();
     return tab;
   }
 
@@ -2572,12 +2596,14 @@ export class QuickQueryUI {
       const verb = fileCount + importedCount === 1 ? "is" : "are";
       description.textContent = `${sources.join(" and ")} ${verb} referenced by BLOB fields. How should Quick Query generate the script?`;
       contentButton.querySelector(".qq-blob-attachment-option-title").textContent = hasImports
-        ? "Embed BLOB content" : "Embed file content";
+        ? "Embed BLOB content"
+        : "Embed file content";
       contentButton.querySelector(".qq-blob-attachment-option-detail").textContent = hasImports
         ? `Generate a PL/SQL script that loads the imported${fileCount ? " and attached" : ""} bytes into the BLOB fields.`
         : "Generate a PL/SQL script that loads the attached bytes into the BLOB field.";
       filenameButton.querySelector(".qq-blob-attachment-option-title").textContent = hasImports
-        ? "Keep placeholders for later" : "Keep filename for later";
+        ? "Keep placeholders for later"
+        : "Keep filename for later";
       const attachmentDetail = fileCount ? " and filenames stored as BLOB bytes for attachments" : "";
       filenameButton.querySelector(".qq-blob-attachment-option-detail").textContent = hasImports
         ? `Generate regular SQL with the row key stored as BLOB bytes for imported values${attachmentDetail}. ` +
@@ -3072,7 +3098,11 @@ export class QuickQueryUI {
     const onConfirm = () => {
       const squadName = this.elements.downloadAsSquadName.value.trim();
       const featureName = this.elements.downloadAsFeatureName.value.trim();
-      const name = this.elements.downloadAsFilename.value.trim().replace(/\.sql$/i, "").trim() || this._getDownloadAsDefaultName();
+      const name =
+        this.elements.downloadAsFilename.value
+          .trim()
+          .replace(/\.sql$/i, "")
+          .trim() || this._getDownloadAsDefaultName();
       const filename = `${name}.sql`;
 
       // Persist squad/feature to localStorage
@@ -3970,9 +4000,12 @@ export class QuickQueryUI {
     this.elements.oracleDataError.classList.add("hidden");
     this.elements.oracleDataSwitchTable.classList.add("hidden");
     try {
-      const blobFields = new Set(this.schemaTable.getData()
-        .filter((row) => String(row[1]).trim().toUpperCase() === "BLOB")
-        .map((row) => row[0]));
+      const blobFields = new Set(
+        this.schemaTable
+          .getData()
+          .filter((row) => String(row[1]).trim().toUpperCase() === "BLOB")
+          .map((row) => row[0]),
+      );
       const rows = await OracleDataImportService.fetch(connection, query, blobFields);
       if (this.elements.tableNameInput.value.trim().toUpperCase() !== selectedTable) {
         throw new Error("The selected table changed during the fetch. Run the query again.");

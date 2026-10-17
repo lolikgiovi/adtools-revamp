@@ -10,6 +10,7 @@ import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
 import { getIconSvg } from "./icon.js";
 import {
+  buildVelocityUpdateQuery,
   extractContextPaths,
   extractVelocityVariables,
   formatRenderedResult,
@@ -384,6 +385,7 @@ class VelocityTemplateTool extends BaseTool {
       tab.append(select, close);
       strip.appendChild(tab);
     });
+    this.updateCreateQueryButton();
   }
 
   async switchDocument(id, focusTab = false) {
@@ -811,6 +813,8 @@ class VelocityTemplateTool extends BaseTool {
     const identity = getTemplateImportIdentity(query, this._sqlImportColumns, this._sqlImportRows[rowIndex] || []);
     this.editor?.setValue(document.getElementById("velocitySqlPreview")?.value || "");
     if (identity && this.activeDocument) {
+      const columnIndex = Number(document.getElementById("velocitySqlField")?.value || 0);
+      identity.templateColumn = this._sqlImportColumns[columnIndex] || "";
       this.activeDocument.name = identity.label;
       this.activeDocument.sourceIdentity = identity;
       this.renderDocumentTabs();
@@ -818,6 +822,29 @@ class VelocityTemplateTool extends BaseTool {
     }
     this.closeSqlImport();
     this.showSuccess("Velocity template imported from SQL");
+  }
+
+  updateCreateQueryButton() {
+    const button = this.container?.querySelector("#btnCreateVelocityQuery");
+    if (!button) return;
+    const source = this.activeDocument?.sourceIdentity;
+    button.disabled = !source?.table || !source?.templateColumn || !Object.keys(source?.identifiers || {}).length;
+    button.title = button.disabled
+      ? "Import this template from SQL before creating an update query"
+      : "Open an update draft in Quick Query";
+  }
+
+  createUpdateQuery() {
+    try {
+      const source = this.activeDocument?.sourceIdentity;
+      const sql = buildVelocityUpdateQuery(source, this.editor?.getValue() || "");
+      const tableName = source.schema ? `${source.schema}.${source.table}` : source.table;
+      window.app?.router?.navigate("quick-query", {
+        createQuery: { sql, title: this.activeDocument.name, tableName },
+      });
+    } catch (error) {
+      this.showError(error?.message || "Could not create the update query.");
+    }
   }
 
   track(action, input, output = input) {
@@ -863,6 +890,7 @@ class VelocityTemplateTool extends BaseTool {
       void this.switchDocument(this.documents[next].id, true);
     });
     this.container?.querySelector("#btnNewVelocityDocument")?.addEventListener("click", () => void this.newDocument());
+    this.container?.querySelector("#btnCreateVelocityQuery")?.addEventListener("click", () => this.createUpdateQuery());
     document.getElementById("btnCopyVelocity")?.addEventListener("click", async () => {
       if (await this.copyToClipboard(this.editor.getValue())) this.track("copy", this.editor.getValue());
     });

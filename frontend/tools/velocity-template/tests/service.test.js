@@ -1,5 +1,6 @@
 import {
   extractContextPaths,
+  buildVelocityUpdateQuery,
   getTemplateImportIdentity,
   extractVelocityVariables,
   formatRenderedResult,
@@ -136,6 +137,38 @@ describe("Velocity template service", () => {
       identifiers: { TEMPLATE_ID: "42" },
       label: "VELOCITY_TEMPLATE - 42",
     });
+  });
+
+  it("builds an update query from imported source identity without executing it", () => {
+    expect(
+      buildVelocityUpdateQuery(
+        {
+          schema: "APP",
+          table: "MESSAGE_TEMPLATE",
+          templateColumn: "TEMPLATE_BODY",
+          identifiers: { SERVICE_CODE: "PAYMENT", ENVIRONMENT: "DEV" },
+        },
+        "Hello $customer.name\nIt's ready",
+      ),
+    ).toBe(
+      "UPDATE APP.MESSAGE_TEMPLATE\nSET TEMPLATE_BODY = to_clob('Hello $customer.name\nIt''s ready')\nWHERE SERVICE_CODE = 'PAYMENT'\n  AND ENVIRONMENT = 'DEV';",
+    );
+  });
+
+  it("chunks long templates into Oracle CLOB expressions", () => {
+    const sql = buildVelocityUpdateQuery({ table: "MESSAGE_TEMPLATE", templateColumn: "BODY", identifiers: { ID: "7" } }, "x".repeat(2200));
+
+    expect(sql.match(/to_clob\('/g)).toHaveLength(3);
+    expect(sql).toContain("') ||\n  to_clob('");
+  });
+
+  it("rejects update generation without a table, template field, or row identifier", () => {
+    expect(() => buildVelocityUpdateQuery({ schema: "APP", table: "MESSAGE_TEMPLATE", identifiers: {} }, "content")).toThrow(
+      "template column",
+    );
+    expect(() =>
+      buildVelocityUpdateQuery({ schema: "APP", table: "MESSAGE_TEMPLATE", templateColumn: "BODY", identifiers: {} }, "content"),
+    ).toThrow("row identifier");
   });
 
   it("normalizes text and byte-backed Oracle template values", () => {

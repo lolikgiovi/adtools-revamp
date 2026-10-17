@@ -264,6 +264,48 @@ export function getTemplateImportIdentity(sql = "", columns = [], row = []) {
   return { schema, table, identifiers, label: tabIdentifier ? `${tabNamespace} - ${tabIdentifier}` : qualifiedTable };
 }
 
+function sqlIdentifier(value, label) {
+  const identifier = String(value || "").trim();
+  if (!/^[A-Za-z_$#][\w$#]*$/.test(identifier)) throw new Error(`The imported ${label} is not a safe SQL identifier.`);
+  return identifier;
+}
+
+function sqlString(value) {
+  return `'${String(value).replaceAll("'", "''")}'`;
+}
+
+function sqlClob(value) {
+  const chunks = [];
+  let chunk = "";
+  for (const character of String(value)) {
+    const escaped =
+      character === "'" || character === "‘" || character === "’" ? "''" : character === "“" || character === "”" ? '"' : character;
+    if (chunk.length + escaped.length > 1000) {
+      chunks.push(chunk);
+      chunk = "";
+    }
+    chunk += escaped;
+  }
+  chunks.push(chunk);
+  return chunks.map((part) => `to_clob('${part}')`).join(" ||\n  ");
+}
+
+export function buildVelocityUpdateQuery(sourceIdentity, template) {
+  const schema = sourceIdentity?.schema ? sqlIdentifier(sourceIdentity.schema, "schema") : "";
+  const table = sqlIdentifier(sourceIdentity?.table, "table");
+  const templateColumn = sourceIdentity?.templateColumn;
+  if (!templateColumn) throw new Error("The imported template column is unavailable.");
+  const column = sqlIdentifier(templateColumn, "template column");
+  const identifiers = Object.entries(sourceIdentity?.identifiers || {});
+  if (!identifiers.length) throw new Error("At least one imported row identifier is required.");
+  const target = schema ? `${schema}.${table}` : table;
+  const predicates = identifiers.map(([name, value], index) => {
+    const prefix = index === 0 ? "WHERE" : "  AND";
+    return `${prefix} ${sqlIdentifier(name, "identifier column")} = ${sqlString(value)}`;
+  });
+  return [`UPDATE ${target}`, `SET ${column} = ${sqlClob(template)}`, ...predicates].join("\n") + ";";
+}
+
 export function normalizeImportedTemplateValue(value) {
   if (value == null) return "";
   if (["string", "number", "boolean", "bigint"].includes(typeof value)) return String(value);
