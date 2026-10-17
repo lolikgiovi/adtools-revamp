@@ -1,5 +1,123 @@
 @import "../splunk-template/styles.css";
 
+.velocity-template-tool {
+  display: flex;
+  flex-direction: column;
+}
+
+.velocity-template-tool .velocity-document-bar {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  min-height: 38px;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.velocity-template-tool .velocity-document-tabs {
+  display: flex;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.velocity-template-tool .velocity-document-tab {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  min-width: 86px;
+  max-width: 500px;
+  height: 38px;
+  border-right: 1px solid hsl(var(--border));
+  border-bottom: 2px solid transparent;
+  color: hsl(var(--muted-foreground));
+}
+
+.velocity-template-tool .velocity-document-tab:hover {
+  background: hsl(var(--muted) / 0.35);
+  color: hsl(var(--foreground));
+}
+
+.velocity-template-tool .velocity-document-tab.active {
+  border-bottom-color: hsl(var(--primary));
+  color: hsl(var(--foreground));
+}
+
+.velocity-template-tool .velocity-document-tab-select {
+  min-width: 0;
+  height: 100%;
+  padding: 0 0.55rem 0 0.75rem;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.8rem;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.velocity-template-tool .velocity-document-tab-close,
+.velocity-template-tool .velocity-document-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+}
+
+.velocity-template-tool .velocity-document-tab-close {
+  margin-right: 0.25rem;
+}
+
+.velocity-template-tool .velocity-document-tab-close svg,
+.velocity-template-tool .velocity-document-add svg {
+  width: 15px;
+  height: 15px;
+}
+
+.velocity-template-tool .velocity-document-tab-close:hover,
+.velocity-template-tool .velocity-document-add:hover {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+
+.velocity-template-tool .velocity-document-name {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  margin-left: 0.4rem;
+  padding: 0 0.35rem;
+  border: 1px solid hsl(var(--ring));
+  border-radius: 4px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.velocity-template-tool .velocity-document-tab-select:focus-visible,
+.velocity-template-tool .velocity-document-tab-close:focus-visible,
+.velocity-template-tool .velocity-document-add:focus-visible,
+.velocity-template-tool .velocity-document-name:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: -2px;
+}
+
+.velocity-template-tool .vtl-layout {
+  flex: 1 1 auto;
+  height: auto;
+}
+
 .velocity-template-tool .vtl-editor-pane > .monaco-editor-container {
   flex: 1;
   min-height: 0;

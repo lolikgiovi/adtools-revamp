@@ -1,5 +1,13 @@
 export const VelocityTemplate = /* html */ `
   <div class="tool-container splunk-vtl-editor velocity-template-tool">
+    <div class="velocity-document-bar" aria-label="Velocity documents">
+      <div id="velocityDocumentTabs" class="velocity-document-tabs" role="tablist" aria-label="Velocity documents"></div>
+      <button id="btnNewVelocityDocument" class="velocity-document-add" type="button" title="New Velocity document" aria-label="New Velocity document">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M12 5v14M5 12h14"></path>
+        </svg>
+      </button>
+    </div>
     <div class="vtl-layout">
       <section class="pane vtl-editor-pane" aria-labelledby="velocityEditorTitle">
         <div class="pane-header vtl-compact-header">

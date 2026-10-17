@@ -19,6 +19,7 @@ import {
   setNestedValue,
 } from "./service.js";
 import { VelocityTemplate } from "./template.js";
+import { VelocityDocumentStore } from "./documentStore.js";
 import "./styles.css";
 
 const DIRECTIVES = [
@@ -48,6 +49,20 @@ const VELOCITY_FUNCTIONS = [
   ["replace", "Replace text occurrences", "replace(${1:search}, ${2:replacement})"],
 ];
 
+const DEFAULT_TEMPLATE = [
+  "Hello, $customer.name!",
+  "",
+  "#if($customer.active)",
+  "Your items:",
+  "#foreach($item in $items)",
+  "- $item",
+  "#end",
+  "#else",
+  "Your account is inactive.",
+  "#end",
+].join("\n");
+const DEFAULT_CONTEXT = JSON.stringify({ customer: { name: "Maya", active: true }, items: ["One", "Two"] }, null, 2);
+
 function contextPaths(value, prefix = "", depth = 0) {
   if (!value || typeof value !== "object" || Array.isArray(value) || depth > 5) return [];
   return Object.entries(value).flatMap(([key, nested]) => {
@@ -64,12 +79,16 @@ class VelocityTemplateTool extends BaseTool {
     this.contextEditor = null;
     this.previewEditor = null;
     this._languageDisposables = [];
-    this._templateStorageKey = "tool:velocity-template:editor";
-    this._contextStorageKey = "tool:velocity-template:context";
     this._resultTypeStorageKey = "tool:velocity-template:result-type";
     this._paneStateStorageKey = "tool:velocity-template:pane-state";
     this._sqlImportRows = [];
     this._sqlImportColumns = [];
+    this.documentStore = null;
+    this.documents = [];
+    this.activeDocumentId = null;
+    this._documentWriteQueue = Promise.resolve();
+    this._tabTransition = false;
+    this._mountSequence = 0;
   }
 
   getIconSvg() {
@@ -81,7 +100,10 @@ class VelocityTemplateTool extends BaseTool {
   }
 
   async onMount() {
+    const sequence = ++this._mountSequence;
     this.registerLanguage();
+    await this.initializeDocuments();
+    if (sequence !== this._mountSequence || !this.container) return;
     this.initializeEditors();
     this.initializeResizer();
     this.bindEvents();
@@ -92,6 +114,7 @@ class VelocityTemplateTool extends BaseTool {
   }
 
   onUnmount() {
+    this._mountSequence += 1;
     clearTimeout(this._templateTimer);
     clearTimeout(this._contextTimer);
     clearTimeout(this._previewTimer);
@@ -103,6 +126,14 @@ class VelocityTemplateTool extends BaseTool {
     this.editor = null;
     this.contextEditor = null;
     this.previewEditor = null;
+    const store = this.documentStore;
+    const finalSave = this.flushActiveDocument().catch(() => {});
+    this.documents.forEach((document) => {
+      document.templateModel?.dispose();
+      document.contextModel?.dispose();
+    });
+    this.documents = [];
+    void Promise.allSettled([finalSave, this._documentWriteQueue]).then(() => store?.close());
     document.getElementById("velocitySqlImportDialog")?.close?.();
     this.cleanupResizer();
   }
@@ -221,33 +252,18 @@ class VelocityTemplateTool extends BaseTool {
   }
 
   initializeEditors() {
-    const template = this.readStored(
-      this._templateStorageKey,
-      [
-        "Hello, $customer.name!",
-        "",
-        "#if($customer.active)",
-        "Your items:",
-        "#foreach($item in $items)",
-        "- $item",
-        "#end",
-        "#else",
-        "Your account is inactive.",
-        "#end",
-      ].join("\n"),
-    );
-    const context = this.readStored(
-      this._contextStorageKey,
-      JSON.stringify({ customer: { name: "Maya", active: true }, items: ["One", "Two"] }, null, 2),
-    );
-    this.editor = monaco.editor.create(
-      document.getElementById("velocityEditor"),
-      this.editorOptions(template, "velocity", "Velocity template editor"),
-    );
-    this.contextEditor = monaco.editor.create(
-      document.getElementById("velocityContext"),
-      this.editorOptions(context, "json", "Velocity context JSON"),
-    );
+    const active = this.activeDocument;
+    const templateOptions = this.editorOptions("", "velocity", "Velocity template editor");
+    const contextOptions = this.editorOptions("", "json", "Velocity context JSON");
+    delete templateOptions.value;
+    delete templateOptions.language;
+    delete contextOptions.value;
+    delete contextOptions.language;
+    this.editor = monaco.editor.create(document.getElementById("velocityEditor"), { ...templateOptions, model: active.templateModel });
+    this.contextEditor = monaco.editor.create(document.getElementById("velocityContext"), {
+      ...contextOptions,
+      model: active.contextModel,
+    });
     this.previewEditor = monaco.editor.create(document.getElementById("velocityPreview"), {
       ...this.editorOptions("", "plaintext", "Rendered Velocity template"),
       readOnly: true,
@@ -263,6 +279,233 @@ class VelocityTemplateTool extends BaseTool {
     });
     const resultType = this.readStored(this._resultTypeStorageKey, "text");
     this.setResultType(resultType === "json" ? "json" : "text", { updatePreview: false });
+    this.renderDocumentTabs();
+  }
+
+  get activeDocument() {
+    return this.documents.find((document) => document.id === this.activeDocumentId);
+  }
+
+  createId() {
+    return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+
+  createDocumentModels(document) {
+    document.templateModel = monaco.editor.createModel(document.template || "", "velocity");
+    document.contextModel = monaco.editor.createModel(document.context || "{}", "json");
+    return document;
+  }
+
+  documentRecord(document) {
+    return {
+      id: document.id,
+      name: document.name,
+      template: document.templateModel?.getValue() ?? document.template ?? "",
+      context: document.contextModel?.getValue() ?? document.context ?? "{}",
+      createdAt: document.createdAt,
+      updatedAt: Date.now(),
+    };
+  }
+
+  async initializeDocuments() {
+    const store = new VelocityDocumentStore();
+    this.documentStore = store;
+    try {
+      await store.open();
+      const saved = await store.load(DEFAULT_TEMPLATE, DEFAULT_CONTEXT, () => this.createId());
+      this.documents = saved.documents.map((document) => this.createDocumentModels(document));
+      this.activeDocumentId = saved.activeId;
+    } catch (error) {
+      console.error("Could not open Velocity document storage:", error);
+      const now = Date.now();
+      const document = this.createDocumentModels({
+        id: this.createId(),
+        name: "Untitled 1",
+        template: this.readStored("tool:velocity-template:editor", DEFAULT_TEMPLATE),
+        context: this.readStored("tool:velocity-template:context", DEFAULT_CONTEXT),
+        createdAt: now,
+        updatedAt: now,
+      });
+      this.documents = [document];
+      this.activeDocumentId = document.id;
+      this.documentStore = null;
+      store.close();
+    }
+  }
+
+  writeDocumentStore(operation) {
+    if (!this.documentStore) return Promise.resolve();
+    const task = this._documentWriteQueue.then(operation);
+    this._documentWriteQueue = task.catch((error) => {
+      console.error("Could not save Velocity document:", error);
+      this.showError("Velocity draft was not saved. Check available storage before closing this page.");
+    });
+    return task;
+  }
+
+  scheduleDocumentSave() {
+    clearTimeout(this._documentTimer);
+    this._documentTimer = setTimeout(() => void this.flushActiveDocument(), 300);
+  }
+
+  async flushActiveDocument() {
+    clearTimeout(this._documentTimer);
+    const document = this.activeDocument;
+    if (!document) return;
+    const record = this.documentRecord(document);
+    await this.writeDocumentStore(() => this.documentStore.saveDocument(record));
+  }
+
+  renderDocumentTabs() {
+    const strip = this.container?.querySelector("#velocityDocumentTabs");
+    if (!strip) return;
+    strip.replaceChildren();
+    this.documents.forEach((document) => {
+      const tab = globalThis.document.createElement("div");
+      tab.className = `velocity-document-tab${document.id === this.activeDocumentId ? " active" : ""}`;
+      tab.dataset.documentId = document.id;
+      const select = globalThis.document.createElement("button");
+      select.type = "button";
+      select.className = "velocity-document-tab-select";
+      select.role = "tab";
+      select.setAttribute("aria-selected", String(document.id === this.activeDocumentId));
+      select.tabIndex = document.id === this.activeDocumentId ? 0 : -1;
+      select.title = `${document.name} · Double-click to rename`;
+      select.textContent = document.name;
+      const close = globalThis.document.createElement("button");
+      close.type = "button";
+      close.className = "velocity-document-tab-close";
+      close.setAttribute("aria-label", `Close ${document.name}`);
+      close.disabled = this.documents.length === 1;
+      close.innerHTML =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>';
+      tab.append(select, close);
+      strip.appendChild(tab);
+    });
+  }
+
+  async switchDocument(id, focusTab = false) {
+    if (this._tabTransition || id === this.activeDocumentId) return;
+    const next = this.documents.find((document) => document.id === id);
+    if (!next) return;
+    this._tabTransition = true;
+    try {
+      await this.flushActiveDocument();
+      this.activeDocument.templateViewState = this.editor.saveViewState();
+      this.activeDocument.contextViewState = this.contextEditor.saveViewState();
+      this.activeDocumentId = id;
+      this.editor.setModel(next.templateModel);
+      this.contextEditor.setModel(next.contextModel);
+      if (next.templateViewState) this.editor.restoreViewState(next.templateViewState);
+      if (next.contextViewState) this.contextEditor.restoreViewState(next.contextViewState);
+      this.renderDocumentTabs();
+      this.updatePreview();
+      await this.writeDocumentStore(() =>
+        this.documentStore.saveWorkspace(
+          this.documents.map((item) => item.id),
+          id,
+        ),
+      );
+      if (focusTab)
+        [...this.container.querySelectorAll(".velocity-document-tab")]
+          .find((tab) => tab.dataset.documentId === id)
+          ?.querySelector("button")
+          ?.focus();
+    } finally {
+      this._tabTransition = false;
+    }
+  }
+
+  async newDocument() {
+    if (this._tabTransition) return;
+    this._tabTransition = true;
+    try {
+      await this.flushActiveDocument();
+      const numbers = this.documents
+        .map((item) => /^Untitled (\d+)$/.exec(item.name)?.[1])
+        .filter(Boolean)
+        .map(Number);
+      const now = Date.now();
+      const document = this.createDocumentModels({
+        id: this.createId(),
+        name: `Untitled ${Math.max(0, ...numbers) + 1}`,
+        template: "",
+        context: "{}",
+        createdAt: now,
+        updatedAt: now,
+      });
+      const order = [...this.documents.map((item) => item.id), document.id];
+      await this.writeDocumentStore(() =>
+        this.documentStore.saveWorkspaceAndDocument(this.documentRecord(document), { order, activeId: document.id }),
+      );
+      this.activeDocument.templateViewState = this.editor.saveViewState();
+      this.activeDocument.contextViewState = this.contextEditor.saveViewState();
+      this.documents.push(document);
+      this.activeDocumentId = document.id;
+      this.editor.setModel(document.templateModel);
+      this.contextEditor.setModel(document.contextModel);
+      this.renderDocumentTabs();
+      this.updatePreview();
+      this.editor.focus();
+    } finally {
+      this._tabTransition = false;
+    }
+  }
+
+  async closeDocument(id) {
+    if (this._tabTransition || this.documents.length <= 1) return;
+    this._tabTransition = true;
+    try {
+      await this.flushActiveDocument();
+      const index = this.documents.findIndex((item) => item.id === id);
+      const closing = this.documents[index];
+      const remaining = this.documents.filter((item) => item.id !== id);
+      const next = id === this.activeDocumentId ? remaining[Math.min(index, remaining.length - 1)] : this.activeDocument;
+      await this.writeDocumentStore(() =>
+        this.documentStore.updateDocuments({ deleteIds: [id], order: remaining.map((item) => item.id), activeId: next.id }),
+      );
+      this.documents = remaining;
+      if (id === this.activeDocumentId) {
+        this.activeDocumentId = next.id;
+        this.editor.setModel(next.templateModel);
+        this.contextEditor.setModel(next.contextModel);
+        this.updatePreview();
+      }
+      closing.templateModel.dispose();
+      closing.contextModel.dispose();
+      this.renderDocumentTabs();
+    } finally {
+      this._tabTransition = false;
+    }
+  }
+
+  renameDocument(id) {
+    const document = this.documents.find((item) => item.id === id);
+    const tab = [...this.container.querySelectorAll(".velocity-document-tab")].find((item) => item.dataset.documentId === id);
+    const select = tab?.querySelector(".velocity-document-tab-select");
+    if (!document || !select) return;
+    const input = globalThis.document.createElement("input");
+    input.className = "velocity-document-name";
+    input.value = document.name;
+    select.replaceWith(input);
+    input.focus();
+    input.select();
+    let finished = false;
+    const finish = (save) => {
+      if (finished) return;
+      finished = true;
+      const name = input.value.trim().slice(0, 120);
+      if (save && name) {
+        document.name = name;
+        void this.writeDocumentStore(() => this.documentStore.saveDocument(this.documentRecord(document)));
+      }
+      this.renderDocumentTabs();
+    };
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") finish(true);
+      if (event.key === "Escape") finish(false);
+    });
+    input.addEventListener("blur", () => finish(true));
   }
 
   editorOptions(value, language, ariaLabel) {
@@ -578,15 +821,37 @@ class VelocityTemplateTool extends BaseTool {
 
   bindEvents() {
     this.editor?.onDidChangeModelContent(() => {
-      clearTimeout(this._templateTimer);
-      this._templateTimer = setTimeout(() => this.persist(this._templateStorageKey, this.editor?.getValue() || ""), 250);
+      this.scheduleDocumentSave();
       this.schedulePreview();
     });
     this.contextEditor?.onDidChangeModelContent(() => {
-      clearTimeout(this._contextTimer);
-      this._contextTimer = setTimeout(() => this.persist(this._contextStorageKey, this.contextEditor?.getValue() || ""), 250);
+      this.scheduleDocumentSave();
       this.schedulePreview();
     });
+    const tabs = this.container?.querySelector("#velocityDocumentTabs");
+    tabs?.addEventListener("click", (event) => {
+      const tab = event.target.closest(".velocity-document-tab");
+      if (!tab) return;
+      if (event.target.closest(".velocity-document-tab-close")) void this.closeDocument(tab.dataset.documentId);
+      else if (event.target.closest(".velocity-document-tab-select")) void this.switchDocument(tab.dataset.documentId, true);
+    });
+    tabs?.addEventListener("dblclick", (event) => {
+      const select = event.target.closest(".velocity-document-tab-select");
+      if (select) this.renameDocument(select.closest(".velocity-document-tab").dataset.documentId);
+    });
+    tabs?.addEventListener("keydown", (event) => {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      const current = this.documents.findIndex((document) => document.id === this.activeDocumentId);
+      const next =
+        event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? this.documents.length - 1
+            : (current + (event.key === "ArrowRight" ? 1 : -1) + this.documents.length) % this.documents.length;
+      event.preventDefault();
+      void this.switchDocument(this.documents[next].id, true);
+    });
+    this.container?.querySelector("#btnNewVelocityDocument")?.addEventListener("click", () => void this.newDocument());
     document.getElementById("btnCopyVelocity")?.addEventListener("click", async () => {
       if (await this.copyToClipboard(this.editor.getValue())) this.track("copy", this.editor.getValue());
     });
