@@ -13,6 +13,7 @@ import {
   extractContextPaths,
   extractVelocityVariables,
   formatRenderedResult,
+  getTemplateImportIdentity,
   normalizeImportedTemplateValue,
   parseTemplateImportQuery,
   renderVelocityTemplate,
@@ -302,6 +303,7 @@ class VelocityTemplateTool extends BaseTool {
       name: document.name,
       template: document.templateModel?.getValue() ?? document.template ?? "",
       context: document.contextModel?.getValue() ?? document.context ?? "{}",
+      sourceIdentity: document.sourceIdentity || null,
       createdAt: document.createdAt,
       updatedAt: Date.now(),
     };
@@ -804,7 +806,16 @@ class VelocityTemplateTool extends BaseTool {
   }
 
   applySqlImport() {
+    const rowIndex = Number(document.getElementById("velocitySqlRow")?.value || 0);
+    const query = document.getElementById("velocitySqlQuery")?.value || "";
+    const identity = getTemplateImportIdentity(query, this._sqlImportColumns, this._sqlImportRows[rowIndex] || []);
     this.editor?.setValue(document.getElementById("velocitySqlPreview")?.value || "");
+    if (identity && this.activeDocument) {
+      this.activeDocument.name = identity.label;
+      this.activeDocument.sourceIdentity = identity;
+      this.renderDocumentTabs();
+      this.scheduleDocumentSave();
+    }
     this.closeSqlImport();
     this.showSuccess("Velocity template imported from SQL");
   }

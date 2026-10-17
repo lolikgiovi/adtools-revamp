@@ -240,6 +240,31 @@ export function parseTemplateImportQuery(sql = "") {
   return statement;
 }
 
+export function getTemplateImportIdentity(sql = "", columns = [], row = []) {
+  const source = String(sql)
+    .replace(/--[^\n]*/g, " ")
+    .replace(/\/\*[\s\S]*?\*\//g, " ");
+  const from = source.match(/\bFROM\s+((?:"(?:[^"]|"")+"|[A-Za-z_$#][\w$#]*)(?:\s*\.\s*(?:"(?:[^"]|"")+"|[A-Za-z_$#][\w$#]*))?)/i)?.[1];
+  if (!from) return null;
+  const names = from.split(".").map((part) => part.trim().replace(/^"|"$/g, "").replace(/""/g, '"'));
+  const table = names.at(-1) || "";
+  const schema = names.length > 1 ? names.at(-2) : "";
+  if (!table) return null;
+
+  const columnMap = new Map(columns.map((column, index) => [String(column).toUpperCase(), index]));
+  const identifierNames = ["SERVICE_CODE", "ENVIRONMENT", "TEMPLATE_ID", "ID"];
+  const preferred = identifierNames.filter((name) => columnMap.has(name) && row[columnMap.get(name)] != null);
+  const selected = preferred.some((name) => name === "SERVICE_CODE" || name === "ENVIRONMENT")
+    ? preferred.filter((name) => name === "SERVICE_CODE" || name === "ENVIRONMENT")
+    : preferred.slice(0, 1);
+  const identifiers = Object.fromEntries(selected.map((name) => [name, String(row[columnMap.get(name)])]));
+  const qualifiedTable = schema ? `${schema}.${table}` : table;
+  const suffix = Object.entries(identifiers)
+    .map(([name, value]) => `${name}=${value}`)
+    .join(" · ");
+  return { schema, table, identifiers, label: suffix ? `${qualifiedTable} · ${suffix}` : qualifiedTable };
+}
+
 export function normalizeImportedTemplateValue(value) {
   if (value == null) return "";
   if (["string", "number", "boolean", "bigint"].includes(typeof value)) return String(value);

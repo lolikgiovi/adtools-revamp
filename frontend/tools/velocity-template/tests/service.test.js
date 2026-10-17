@@ -1,5 +1,6 @@
 import {
   extractContextPaths,
+  getTemplateImportIdentity,
   extractVelocityVariables,
   formatRenderedResult,
   normalizeImportedTemplateValue,
@@ -111,6 +112,30 @@ describe("Velocity template service", () => {
     expect(() => parseTemplateImportQuery("DELETE FROM APP.MESSAGE_TEMPLATE")).toThrow("one read-only SELECT");
     expect(() => parseTemplateImportQuery("SELECT * FROM APP.ONE; SELECT * FROM APP.TWO")).toThrow("one read-only SELECT");
     expect(() => parseTemplateImportQuery("SELECT * FROM APP.MESSAGE_TEMPLATE FOR UPDATE")).toThrow("read-only");
+  });
+
+  it("builds a database identity from the source table and row identifiers", () => {
+    expect(
+      getTemplateImportIdentity(
+        'SELECT * FROM "APP"."MESSAGE_TEMPLATE" WHERE SERVICE_CODE = :service',
+        ["ID", "SERVICE_CODE", "ENVIRONMENT", "TEMPLATE_BODY"],
+        [17, "PAYMENT", "DEV", "Hello $name"],
+      ),
+    ).toEqual({
+      schema: "APP",
+      table: "MESSAGE_TEMPLATE",
+      identifiers: { SERVICE_CODE: "PAYMENT", ENVIRONMENT: "DEV" },
+      label: "APP.MESSAGE_TEMPLATE · SERVICE_CODE=PAYMENT · ENVIRONMENT=DEV",
+    });
+  });
+
+  it("falls back to a primary identifier and handles an unqualified table", () => {
+    expect(getTemplateImportIdentity("SELECT BODY FROM VELOCITY_TEMPLATE", ["TEMPLATE_ID", "BODY"], [42, "content"])).toEqual({
+      schema: "",
+      table: "VELOCITY_TEMPLATE",
+      identifiers: { TEMPLATE_ID: "42" },
+      label: "VELOCITY_TEMPLATE · TEMPLATE_ID=42",
+    });
   });
 
   it("normalizes text and byte-backed Oracle template values", () => {
