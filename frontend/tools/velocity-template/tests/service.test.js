@@ -1,5 +1,6 @@
 import {
   extractContextPaths,
+  extractVelocityVariables,
   formatRenderedResult,
   normalizeImportedTemplateValue,
   parseTemplateImportQuery,
@@ -35,6 +36,17 @@ describe("Velocity template service", () => {
     const template = "#set($label = $customer.name)#foreach($item in $items)$item.title $label#end $account.id";
 
     expect(extractContextPaths(template)).toEqual(["account.id", "customer.name", "items"]);
+  });
+
+  it("extracts variables declared by set, foreach, and macro directives", () => {
+    const template = [
+      "#set($label = $customer.name)",
+      "#set($summary.title = 'Hello')",
+      "#foreach($item in $items)$item.name#end",
+      "#macro(renderCard $card $position)$card.title#end",
+    ].join("\n");
+
+    expect(extractVelocityVariables(template)).toEqual(["card", "item", "label", "position", "summary", "summary.title"]);
   });
 
   it("creates nested context values", () => {

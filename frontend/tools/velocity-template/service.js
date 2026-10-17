@@ -170,6 +170,47 @@ export function extractContextPaths(template = "") {
   return Array.from(paths).sort();
 }
 
+function collectVelocityVariables(node, variables) {
+  if (!node || typeof node !== "object") return;
+  if (Array.isArray(node)) {
+    node.forEach((child) => collectVelocityVariables(child, variables));
+    return;
+  }
+  if (node.type === "set") {
+    const path = referencePath(node.equal?.[0]);
+    if (path) {
+      variables.add(path.split(".")[0]);
+      variables.add(path);
+    }
+  } else if (node.type === "foreach" && node.to) {
+    variables.add(String(node.to).replace(/^\$/, ""));
+  } else if (node.type === "macro") {
+    (node.args || []).forEach((argument) => {
+      const name = String(argument?.id || argument || "").replace(/^\$/, "");
+      if (name) variables.add(name);
+    });
+  }
+  Object.values(node).forEach((child) => collectVelocityVariables(child, variables));
+}
+
+export function extractVelocityVariables(template = "") {
+  const variables = new Set();
+  const source = String(template);
+  try {
+    collectVelocityVariables(parse(source), variables);
+  } catch (_) {
+    for (const match of source.matchAll(/#set\s*\(\s*\$([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*=/g)) {
+      variables.add(match[1].split(".")[0]);
+      variables.add(match[1]);
+    }
+    for (const match of source.matchAll(/#foreach\s*\(\s*\$([A-Za-z_]\w*)\s+in\b/g)) variables.add(match[1]);
+    for (const match of source.matchAll(/#macro\s*\([^\r\n)]*/g)) {
+      for (const argument of match[0].matchAll(/\$([A-Za-z_]\w*)/g)) variables.add(argument[1]);
+    }
+  }
+  return Array.from(variables).sort();
+}
+
 export function setNestedValue(target, path, value) {
   const parts = String(path).split(".");
   let cursor = target;

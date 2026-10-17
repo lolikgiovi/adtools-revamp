@@ -11,6 +11,7 @@ import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
 import { getIconSvg } from "./icon.js";
 import {
   extractContextPaths,
+  extractVelocityVariables,
   formatRenderedResult,
   normalizeImportedTemplateValue,
   parseTemplateImportQuery,
@@ -28,6 +29,23 @@ const DIRECTIVES = [
   ["#set", "#set($${1:name} = ${2:value})"],
   ["#foreach", "#foreach($${1:item} in $${2:items})\n$0\n#end"],
   ["#macro", "#macro(${1:name} $${2:argument})\n$0\n#end"],
+];
+
+const VELOCITY_FUNCTIONS = [
+  ["toString", "Convert the value to text", "toString()"],
+  ["size", "Return the collection, map, or text size", "size()"],
+  ["isEmpty", "Check whether the value is empty", "isEmpty()"],
+  ["contains", "Check whether the value contains an item", "contains(${1:value})"],
+  ["get", "Get an item by key or index", "get(${1:key})"],
+  ["keySet", "Return the keys in a map", "keySet()"],
+  ["values", "Return the values in a map", "values()"],
+  ["toUpperCase", "Convert text to uppercase", "toUpperCase()"],
+  ["toLowerCase", "Convert text to lowercase", "toLowerCase()"],
+  ["trim", "Remove leading and trailing whitespace", "trim()"],
+  ["substring", "Return part of a text value", "substring(${1:start}${2:, end})"],
+  ["startsWith", "Check whether text starts with a value", "startsWith(${1:value})"],
+  ["endsWith", "Check whether text ends with a value", "endsWith(${1:value})"],
+  ["replace", "Replace text occurrences", "replace(${1:search}, ${2:replacement})"],
 ];
 
 function contextPaths(value, prefix = "", depth = 0) {
@@ -174,14 +192,32 @@ class VelocityTemplateTool extends BaseTool {
     }
     const quiet = reference[0].startsWith("$!");
     const wrapped = reference[0].includes("{");
-    return {
-      suggestions: contextPaths(context).map((path) => ({
-        label: `$${path}`,
-        kind: monaco.languages.CompletionItemKind.Variable,
-        insertText: `$${quiet ? "!" : ""}${wrapped ? "{" : ""}${path}${wrapped ? "}" : ""}`,
-        range: rangeFrom(reference[0].length),
-      })),
-    };
+    const contextVariables = contextPaths(context);
+    const paths = new Set([...contextVariables, ...extractVelocityVariables(model.getValue())]);
+    const suggestions = [...paths].map((path) => ({
+      label: `$${path}`,
+      kind: monaco.languages.CompletionItemKind.Variable,
+      insertText: `$${quiet ? "!" : ""}${wrapped ? "{" : ""}${path}${wrapped ? "}" : ""}`,
+      range: rangeFrom(reference[0].length),
+      detail: contextVariables.includes(path) ? "Context variable" : "Template variable",
+    }));
+    const functionCall = prefix.match(/\$!?\{?[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\.([A-Za-z_]\w*)?$/);
+    if (functionCall) {
+      const typedName = functionCall[1] || "";
+      suggestions.push(
+        ...VELOCITY_FUNCTIONS.filter(([name]) => name.toLowerCase().startsWith(typedName.toLowerCase())).map(
+          ([name, detail, insertText]) => ({
+            label: name,
+            kind: monaco.languages.CompletionItemKind.Function,
+            detail,
+            insertText,
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            range: rangeFrom(typedName.length),
+          }),
+        ),
+      );
+    }
+    return { suggestions };
   }
 
   initializeEditors() {
