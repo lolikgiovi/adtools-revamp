@@ -259,10 +259,9 @@ export function getTemplateImportIdentity(sql = "", columns = [], row = []) {
     : preferred.slice(0, 1);
   const identifiers = Object.fromEntries(selected.map((name) => [name, String(row[columnMap.get(name)])]));
   const qualifiedTable = schema ? `${schema}.${table}` : table;
-  const suffix = Object.entries(identifiers)
-    .map(([name, value]) => `${name}=${value}`)
-    .join(" · ");
-  return { schema, table, identifiers, label: suffix ? `${qualifiedTable} · ${suffix}` : qualifiedTable };
+  const tabNamespace = schema || table;
+  const tabIdentifier = identifiers.SERVICE_CODE || identifiers.ENVIRONMENT || Object.values(identifiers)[0];
+  return { schema, table, identifiers, label: tabIdentifier ? `${tabNamespace} - ${tabIdentifier}` : qualifiedTable };
 }
 
 export function normalizeImportedTemplateValue(value) {

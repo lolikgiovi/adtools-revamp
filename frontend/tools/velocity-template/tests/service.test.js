@@ -125,7 +125,7 @@ describe("Velocity template service", () => {
       schema: "APP",
       table: "MESSAGE_TEMPLATE",
       identifiers: { SERVICE_CODE: "PAYMENT", ENVIRONMENT: "DEV" },
-      label: "APP.MESSAGE_TEMPLATE · SERVICE_CODE=PAYMENT · ENVIRONMENT=DEV",
+      label: "APP - PAYMENT",
     });
   });
 
@@ -134,7 +134,7 @@ describe("Velocity template service", () => {
       schema: "",
       table: "VELOCITY_TEMPLATE",
       identifiers: { TEMPLATE_ID: "42" },
-      label: "VELOCITY_TEMPLATE · TEMPLATE_ID=42",
+      label: "VELOCITY_TEMPLATE - 42",
     });
   });
 
