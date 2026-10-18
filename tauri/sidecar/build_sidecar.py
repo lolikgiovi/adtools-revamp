@@ -103,7 +103,14 @@ def main():
         # The framework remains signed inside the app's bundled sidecar
         # resources, which the PyInstaller bootloader reaches via Frameworks.
         if platform.system() == "Darwin":
-            framework = output_path.parent / "_internal" / "Python3.framework"
+            internal_dir = output_path.parent / "_internal"
+            frameworks = sorted(internal_dir.glob("Python*.framework"))
+            if len(frameworks) != 1:
+                found = ", ".join(path.name for path in frameworks) or "none"
+                print(f"❌ Expected exactly one bundled Python framework in {internal_dir}; found: {found}")
+                sys.exit(1)
+
+            framework = frameworks[0]
             framework_sign = subprocess.run(
                 ["codesign", "--force", "--deep", "--sign", "-", str(framework)],
                 capture_output=True,

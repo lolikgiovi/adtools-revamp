@@ -16,8 +16,7 @@ export const VelocityTemplate = /* html */ `
           </div>
           <div class="vtl-panel-actions">
             <button id="btnImportVelocitySql" class="btn btn-secondary btn-sm" type="button" hidden>Import SQL</button>
-            <button id="btnCreateVelocityQuery" class="btn btn-secondary btn-sm" type="button" disabled>Create query</button>
-            <button id="btnCopyVelocity" class="btn btn-primary btn-sm" type="button">Copy</button>
+            <button id="btnCopyVelocity" class="btn btn-secondary btn-sm" type="button">Copy</button>
             <details id="velocityMoreActions" class="vtl-actions-menu">
               <summary class="btn btn-secondary btn-sm">More</summary>
               <div class="vtl-actions-menu-popover app-popover-surface">
@@ -28,6 +27,7 @@ export const VelocityTemplate = /* html */ `
             <button id="btnCollapseVelocityTemplate" class="vtl-collapse-button" type="button" aria-label="Collapse Velocity Template" aria-expanded="true">
               <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 10 4-4 4 4" /></svg>
             </button>
+            <button id="btnCreateVelocityQuery" class="btn btn-primary btn-sm" type="button" disabled>Create query</button>
           </div>
         </div>
         <div id="velocityEditor" class="monaco-editor-container"></div>
