@@ -76,45 +76,40 @@ export const VelocityTemplate = /* html */ `
     </div>
 
     <div id="velocitySqlImportOverlay" class="vtl-import-overlay app-overlay-backdrop" hidden></div>
-    <dialog id="velocitySqlImportDialog" class="vtl-import-dialog app-overlay-surface" aria-labelledby="velocitySqlImportTitle">
-      <div class="vtl-import-header">
-        <div>
+    <div id="velocitySqlImportDialog" class="vtl-import-modal" role="dialog" aria-modal="true" aria-labelledby="velocitySqlImportTitle" hidden>
+      <div class="vtl-import-dialog app-overlay-surface">
+        <div class="vtl-import-header">
           <h3 id="velocitySqlImportTitle">Import template from SQL</h3>
-          <p>Run a read-only query, then choose the row and field containing the Velocity template.</p>
+          <button id="btnCloseVelocitySqlImport" class="overlay-close-button app-overlay-close" type="button" aria-label="Close">×</button>
         </div>
-        <button id="btnCloseVelocitySqlImport" class="vtl-icon-button" type="button" aria-label="Close import dialog">×</button>
-      </div>
-      <div class="vtl-import-body">
-        <label class="vtl-import-field">
-          <span>Oracle connection</span>
-          <select id="velocitySqlConnection"></select>
-        </label>
-        <div class="vtl-import-field">
-          <span>SELECT query</span>
+        <div class="vtl-import-body">
+          <label class="vtl-import-field">
+            <span>Oracle connection</span>
+            <select id="velocitySqlConnection"></select>
+          </label>
           <div id="velocitySqlQuery" class="vtl-sql-editor" aria-label="Oracle SELECT query"></div>
-          <small>Up to 100 rows are fetched. Only SELECT statements are allowed.</small>
+          <div id="velocitySqlImportError" class="vtl-inline-error" role="alert" hidden></div>
+          <div id="velocitySqlSelection" class="vtl-import-selection" hidden>
+            <label class="vtl-import-field">
+              <span>Row</span>
+              <select id="velocitySqlRow"></select>
+            </label>
+            <label class="vtl-import-field">
+              <span>Template field</span>
+              <select id="velocitySqlField"></select>
+            </label>
+            <label class="vtl-import-field vtl-import-preview-field">
+              <span>Value preview</span>
+              <textarea id="velocitySqlPreview" rows="7" readonly></textarea>
+            </label>
+          </div>
         </div>
-        <div id="velocitySqlImportError" class="vtl-inline-error" role="alert" hidden></div>
-        <button id="btnFetchVelocitySql" class="btn btn-primary" type="button">Fetch fields</button>
-        <div id="velocitySqlSelection" class="vtl-import-selection" hidden>
-          <label class="vtl-import-field">
-            <span>Row</span>
-            <select id="velocitySqlRow"></select>
-          </label>
-          <label class="vtl-import-field">
-            <span>Template field</span>
-            <select id="velocitySqlField"></select>
-          </label>
-          <label class="vtl-import-field vtl-import-preview-field">
-            <span>Value preview</span>
-            <textarea id="velocitySqlPreview" rows="7" readonly></textarea>
-          </label>
+        <div class="vtl-import-footer app-modal-actions">
+          <button id="btnFetchVelocitySql" class="btn btn-primary" type="button">Fetch fields</button>
+          <button id="btnApplyVelocitySqlImport" class="btn btn-primary" type="button" disabled>Import template</button>
+          <button id="btnCancelVelocitySqlImport" class="btn" type="button">Cancel</button>
         </div>
       </div>
-      <div class="vtl-import-footer">
-        <button id="btnCancelVelocitySqlImport" class="btn btn-secondary" type="button">Cancel</button>
-        <button id="btnApplyVelocitySqlImport" class="btn btn-primary" type="button" disabled>Import template</button>
-      </div>
-    </dialog>
+    </div>
   </div>
 `;

@@ -127,7 +127,8 @@ class VelocityTemplateTool extends BaseTool {
     });
     this.documents = [];
     void Promise.allSettled([finalSave, this._documentWriteQueue]).then(() => store?.close());
-    document.getElementById("velocitySqlImportDialog")?.close?.();
+    const importDialog = document.getElementById("velocitySqlImportDialog");
+    if (importDialog) importDialog.hidden = true;
     this.cleanupResizer();
   }
 
@@ -720,7 +721,7 @@ class VelocityTemplateTool extends BaseTool {
     document.getElementById("velocitySqlSelection").hidden = true;
     document.getElementById("btnApplyVelocitySqlImport").disabled = true;
     document.getElementById("velocitySqlImportOverlay").hidden = false;
-    dialog.showModal();
+    dialog.hidden = false;
     if (!this._sqlImportEditor) {
       this._sqlImportEditor = createOracleEditor(document.getElementById("velocitySqlQuery"), {
         value: "SELECT * FROM SCHEMA.TEMPLATE_TABLE WHERE TEMPLATE_ID = 1",
@@ -738,7 +739,8 @@ class VelocityTemplateTool extends BaseTool {
   }
 
   closeSqlImport() {
-    document.getElementById("velocitySqlImportDialog")?.close();
+    const dialog = document.getElementById("velocitySqlImportDialog");
+    if (dialog) dialog.hidden = true;
     document.getElementById("velocitySqlImportOverlay").hidden = true;
     document.getElementById("btnImportVelocitySql")?.focus();
   }
@@ -951,8 +953,11 @@ class VelocityTemplateTool extends BaseTool {
     document.getElementById("btnCloseVelocitySqlImport")?.addEventListener("click", () => this.closeSqlImport());
     document.getElementById("btnCancelVelocitySqlImport")?.addEventListener("click", () => this.closeSqlImport());
     document.getElementById("velocitySqlImportOverlay")?.addEventListener("click", () => this.closeSqlImport());
-    document.getElementById("velocitySqlImportDialog")?.addEventListener("close", () => {
-      document.getElementById("velocitySqlImportOverlay").hidden = true;
+    document.getElementById("velocitySqlImportDialog")?.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.closeSqlImport();
+      }
     });
     document.getElementById("btnToggleVelocityWrap")?.addEventListener("click", (event) => {
       const output = document.getElementById("velocityPreview");
