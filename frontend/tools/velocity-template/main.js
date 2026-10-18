@@ -141,6 +141,16 @@ class VelocityTemplateTool extends BaseTool {
 
   registerLanguage() {
     configureMonacoWorkers(self, { editor: editorWorker, json: jsonWorker });
+    monaco.editor.defineTheme("velocity-template-dark", {
+      base: "vs-dark",
+      inherit: true,
+      rules: [
+        { token: "velocity.directive", foreground: "C586C0", fontStyle: "bold" },
+        { token: "velocity.variable", foreground: "DCDCAA" },
+        { token: "velocity.function", foreground: "4EC9B0", fontStyle: "bold" },
+      ],
+      colors: {},
+    });
     if (!monaco.languages.getLanguages().some((language) => language.id === "jsonc")) {
       monaco.languages.register({ id: "jsonc" });
       monaco.languages.setLanguageConfiguration("jsonc", {
@@ -198,14 +208,26 @@ class VelocityTemplateTool extends BaseTool {
         root: [
           [/##.*$/, "comment"],
           [/#\*/, "comment", "@blockComment"],
-          [/"([^"\\]|\\.)*"/, "string"],
-          [/'([^'\\]|\\.)*'/, "string"],
-          [/#(if|elseif|else|end|set|foreach|macro|parse|include|define|evaluate|stop|break)\b/, "keyword"],
-          [/\$!?\{[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)*\}/, "variable"],
-          [/\$!?[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)*/, "variable"],
+          [/#(if|elseif|else|end|set|foreach|macro|parse|include|define|evaluate|stop|break)\b/, "velocity.directive"],
+          [/(\$!?[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*?)(\.)([A-Za-z_]\w*)(?=\s*\()/, ["velocity.variable", "delimiter", "velocity.function"]],
+          [/\$!?\{[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)*\}/, "velocity.variable"],
+          [/\$!?[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)*/, "velocity.variable"],
+          [/"(?:[^"\\]|\\.)*"\s*(?=:)/, "key"],
+          [/"/, "string.quote", "@doubleQuotedString"],
+          [/'(?:[^'\\]|\\.)*'/, "string"],
           [/\b(?:true|false|null)\b/, "constant"],
-          [/\b\d+(?:\.\d+)?\b/, "number"],
+          [/-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/, "number"],
+          [/[{}[\],:]/, "delimiter"],
           [/[=!<>+*/%-]+/, "operator"],
+        ],
+        doubleQuotedString: [
+          [/(\$!?[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*?)(\.)([A-Za-z_]\w*)(?=\s*\()/, ["velocity.variable", "delimiter", "velocity.function"]],
+          [/\$!?\{[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)*\}/, "velocity.variable"],
+          [/\$!?[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)*/, "velocity.variable"],
+          [/\\(?:["\\/bfnrt]|u[0-9A-Fa-f]{4})/, "string.escape"],
+          [/[^\\$"]+/, "string"],
+          [/"/, "string.quote", "@pop"],
+          [/./, "string"],
         ],
         blockComment: [
           [/[^*]+/, "comment"],
@@ -544,7 +566,7 @@ class VelocityTemplateTool extends BaseTool {
     return {
       value,
       language,
-      theme: "vs-dark",
+      theme: "velocity-template-dark",
       automaticLayout: true,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
