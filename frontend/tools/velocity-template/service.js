@@ -110,19 +110,44 @@ function jsonErrorLocation(source, error) {
   return { line: 1, column: 1 };
 }
 
+function emptyRenderedJsonField(source, template) {
+  for (const match of source.matchAll(/"((?:[^"\\]|\\.)*)"\s*:\s*(?=[,}\]])/g)) {
+    const field = match[1];
+    const escapedField = field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const templateMatch = String(template).match(new RegExp(`"${escapedField}"\\s*:\\s*(\\$!\\{?[A-Za-z_]\\w*(?:\\.[A-Za-z_]\\w*)*\\}?)`));
+    if (!templateMatch) continue;
+    const reference = templateMatch[1];
+    const outputIndex = match.index + match[0].length;
+    const templateIndex = templateMatch.index + templateMatch[0].indexOf(reference);
+    const templateLocation = sourceLocation(String(template), templateIndex);
+    return {
+      ...sourceLocation(source, outputIndex),
+      templateLine: templateLocation.line,
+      templateColumn: templateLocation.column,
+      field,
+      reference,
+    };
+  }
+  return null;
+}
+
 export function formatRenderedResult(rendered = "", mode = "text", template = "") {
   const source = String(rendered);
   if (mode !== "json") return source;
   try {
     return JSON.stringify(JSON.parse(source), null, 2);
   } catch (error) {
-    const location = jsonErrorLocation(source, error);
+    const emptyField = emptyRenderedJsonField(source, template);
+    const location = emptyField || jsonErrorLocation(source, error);
     const templateIndex = location.reference ? String(template).indexOf(location.reference) : -1;
-    const templateLocation = templateIndex >= 0 ? sourceLocation(String(template), templateIndex) : {};
-    throw new VelocityResultError(`Rendered output is not valid JSON. ${error?.message || "Check the generated JSON syntax."}`, {
+    const templateLocation = location.templateLine || templateIndex < 0 ? {} : sourceLocation(String(template), templateIndex);
+    const detail = emptyField
+      ? `Quiet reference ${emptyField.reference} rendered an empty value for "${emptyField.field}". Add the value to Context Data or provide a JSON-safe default.`
+      : error?.message || "Check the generated JSON syntax.";
+    throw new VelocityResultError(`Rendered output is not valid JSON. ${detail}`, {
       ...location,
-      templateLine: templateLocation.line,
-      templateColumn: templateLocation.column,
+      templateLine: location.templateLine || templateLocation.line,
+      templateColumn: location.templateColumn || templateLocation.column,
       cause: error,
     });
   }

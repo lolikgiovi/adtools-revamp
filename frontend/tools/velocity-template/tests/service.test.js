@@ -139,6 +139,24 @@ describe("Velocity template service", () => {
     );
   });
 
+  it("maps an empty rendered JSON field back to its quiet Velocity reference", () => {
+    const template = ["{", '  "amount": $!transaction.amount,', '  "success": $transaction.success', "}"].join("\n");
+    const rendered = ["{", '  "amount": ,', '  "success": false', "}"].join("\n");
+
+    expect(() => formatRenderedResult(rendered, "json", template)).toThrow(
+      expect.objectContaining({
+        name: "VelocityResultError",
+        kind: "output",
+        line: 2,
+        column: 13,
+        templateLine: 2,
+        templateColumn: 13,
+        reference: "$!transaction.amount",
+        message: expect.stringContaining('Quiet reference $!transaction.amount rendered an empty value for "amount"'),
+      }),
+    );
+  });
+
   it("accepts one read-only SELECT for template import", () => {
     expect(parseTemplateImportQuery("  SELECT * FROM APP.MESSAGE_TEMPLATE WHERE ID = 7;  ")).toBe(
       "SELECT * FROM APP.MESSAGE_TEMPLATE WHERE ID = 7",
