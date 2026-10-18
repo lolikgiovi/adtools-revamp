@@ -303,7 +303,8 @@ class VelocityTemplateTool extends BaseTool {
       lineDecorationsWidth: 0,
       lineNumbersMinChars: 0,
       renderLineHighlight: "none",
-      overviewRulerLanes: 0,
+      renderValidationDecorations: "on",
+      overviewRulerLanes: 3,
       wordWrap: "on",
     });
     const resultType = this.readStored(this._resultTypeStorageKey, "text");
@@ -921,8 +922,20 @@ class VelocityTemplateTool extends BaseTool {
     });
     this.contextEditor?.onDidChangeModelContent(() => {
       this.scheduleDocumentSave();
-      this.schedulePreview();
+      document.getElementById("velocityPreview")?.classList.add("is-stale");
+      const contextError = document.getElementById("velocityContextError");
+      if (contextError) {
+        contextError.hidden = true;
+        contextError.textContent = "";
+      }
+      const previewStatus = document.getElementById("velocityPreviewStatus");
+      if (previewStatus?.textContent.startsWith("Context JSON error")) {
+        previewStatus.hidden = true;
+        previewStatus.textContent = "";
+        previewStatus.classList.remove("is-error");
+      }
     });
+    this.contextEditor?.onDidBlurEditorWidget(() => this.schedulePreview());
     const tabs = this.container?.querySelector("#velocityDocumentTabs");
     tabs?.addEventListener("click", (event) => {
       const tab = event.target.closest(".velocity-document-tab");
