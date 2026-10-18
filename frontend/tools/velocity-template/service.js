@@ -11,32 +11,118 @@ export class VelocityTemplateError extends Error {
 }
 
 export class VelocityResultError extends Error {
-  constructor(message, { line = 1, column = 1, cause } = {}) {
+  constructor(message, { line = 1, column = 1, cause, templateLine, templateColumn, reference } = {}) {
     super(message, { cause });
     this.name = "VelocityResultError";
     this.kind = "output";
     this.line = line;
     this.column = column;
+    this.templateLine = templateLine;
+    this.templateColumn = templateColumn;
+    this.reference = reference;
   }
 }
 
-function jsonErrorLocation(source, error) {
-  const position = Number(String(error?.message || "").match(/position\s+(\d+)/i)?.[1]);
-  if (!Number.isFinite(position)) return { line: 1, column: 1 };
+export function parseVelocityContext(context = "{}") {
+  const source = String(context).trim() || "{}";
+  let result = "";
+  let inString = false;
+  let escaped = false;
+  let comment = null;
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    const next = source[index + 1];
+    if (comment === "line") {
+      if (character === "\n" || character === "\r") {
+        comment = null;
+        result += character;
+      } else result += " ";
+      continue;
+    }
+    if (comment === "block") {
+      if (character === "*" && next === "/") {
+        result += "  ";
+        index += 1;
+        comment = null;
+      } else result += character === "\n" || character === "\r" ? character : " ";
+      continue;
+    }
+    if (inString) {
+      result += character;
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') inString = false;
+      continue;
+    }
+    if (character === '"') {
+      inString = true;
+      result += character;
+    } else if (character === "/" && next === "/") {
+      comment = "line";
+      result += "  ";
+      index += 1;
+    } else if (character === "/" && next === "*") {
+      comment = "block";
+      result += "  ";
+      index += 1;
+    } else result += character;
+  }
+  if (comment === "block") throw new SyntaxError("Unterminated block comment in context data.");
+  return JSON.parse(result);
+}
+
+function sourceLocation(source, position) {
   const before = source.slice(0, position);
   const lines = before.split("\n");
   return { line: lines.length, column: lines.at(-1).length + 1 };
 }
 
-export function formatRenderedResult(rendered = "", mode = "text") {
+function bareVelocityReference(source) {
+  let inString = false;
+  let escaped = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') inString = false;
+      continue;
+    }
+    if (character === '"') {
+      inString = true;
+      continue;
+    }
+    if (character !== "$") continue;
+    const reference = source.slice(index).match(/^\$!?\{?[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\}?/)?.[0];
+    if (reference) return { index, reference };
+  }
+  return null;
+}
+
+function jsonErrorLocation(source, error) {
+  const message = String(error?.message || "");
+  const explicitLine = message.match(/line\s+(\d+)\s+column\s+(\d+)/i);
+  if (explicitLine) return { line: Number(explicitLine[1]), column: Number(explicitLine[2]) };
+  const position = Number(message.match(/position\s+(\d+)/i)?.[1]);
+  if (Number.isFinite(position)) return sourceLocation(source, position);
+  const unresolved = bareVelocityReference(source);
+  if (unresolved) return { ...sourceLocation(source, unresolved.index), reference: unresolved.reference };
+  return { line: 1, column: 1 };
+}
+
+export function formatRenderedResult(rendered = "", mode = "text", template = "") {
   const source = String(rendered);
   if (mode !== "json") return source;
   try {
     return JSON.stringify(JSON.parse(source), null, 2);
   } catch (error) {
     const location = jsonErrorLocation(source, error);
+    const templateIndex = location.reference ? String(template).indexOf(location.reference) : -1;
+    const templateLocation = templateIndex >= 0 ? sourceLocation(String(template), templateIndex) : {};
     throw new VelocityResultError(`Rendered output is not valid JSON. ${error?.message || "Check the generated JSON syntax."}`, {
       ...location,
+      templateLine: templateLocation.line,
+      templateColumn: templateLocation.column,
       cause: error,
     });
   }

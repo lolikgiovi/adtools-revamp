@@ -17,6 +17,7 @@ import {
   formatRenderedResult,
   getTemplateImportIdentity,
   normalizeImportedTemplateValue,
+  parseVelocityContext,
   parseTemplateImportQuery,
   renderVelocityTemplate,
   setNestedValue,
@@ -140,6 +141,40 @@ class VelocityTemplateTool extends BaseTool {
 
   registerLanguage() {
     configureMonacoWorkers(self, { editor: editorWorker, json: jsonWorker });
+    if (!monaco.languages.getLanguages().some((language) => language.id === "jsonc")) {
+      monaco.languages.register({ id: "jsonc" });
+      monaco.languages.setLanguageConfiguration("jsonc", {
+        comments: { lineComment: "//", blockComment: ["/*", "*/"] },
+        brackets: [
+          ["{", "}"],
+          ["[", "]"],
+        ],
+        autoClosingPairs: [
+          { open: "{", close: "}" },
+          { open: "[", close: "]" },
+          { open: '"', close: '"', notIn: ["string", "comment"] },
+        ],
+      });
+      monaco.languages.setMonarchTokensProvider("jsonc", {
+        tokenizer: {
+          root: [
+            [/\s+/, "white"],
+            [/\/\/.*$/, "comment"],
+            [/\/\*/, "comment", "@blockComment"],
+            [/"(?:[^"\\]|\\.)*"\s*(?=:)/, "key"],
+            [/"(?:[^"\\]|\\.)*"/, "string"],
+            [/-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/, "number"],
+            [/\b(?:true|false|null)\b/, "keyword"],
+            [/[{}[\],:]/, "delimiter"],
+          ],
+          blockComment: [
+            [/[^*]+/, "comment"],
+            [/\*\//, "comment", "@pop"],
+            [/./, "comment"],
+          ],
+        },
+      });
+    }
     if (!monaco.languages.getLanguages().some((language) => language.id === "velocity")) {
       monaco.languages.register({ id: "velocity" });
     }
@@ -286,7 +321,7 @@ class VelocityTemplateTool extends BaseTool {
 
   createDocumentModels(document) {
     document.templateModel = monaco.editor.createModel(document.template || "", "velocity");
-    document.contextModel = monaco.editor.createModel(document.context || "{}", "json");
+    document.contextModel = monaco.editor.createModel(document.context || "{}", "jsonc");
     return document;
   }
 
@@ -541,7 +576,7 @@ class VelocityTemplateTool extends BaseTool {
   }
 
   readContext() {
-    const parsed = JSON.parse(this.contextEditor?.getValue().trim() || "{}");
+    const parsed = parseVelocityContext(this.contextEditor?.getValue());
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Context must be a JSON object.");
     return parsed;
   }
@@ -573,10 +608,11 @@ class VelocityTemplateTool extends BaseTool {
     try {
       rendered = renderVelocityTemplate(this.editor.getValue(), this.readContext());
       const resultType = this._resultType || "text";
-      const displayValue = formatRenderedResult(rendered, resultType);
+      const displayValue = formatRenderedResult(rendered, resultType, this.editor.getValue());
       this.configurePreviewMode(resultType);
       monaco.editor.setModelMarkers(this.editor.getModel(), "velocity-template", []);
       monaco.editor.setModelMarkers(this.contextEditor.getModel(), "velocity-context", []);
+      monaco.editor.setModelMarkers(this.previewEditor.getModel(), "velocity-output", []);
       this.previewEditor.setValue(displayValue);
       output.classList.remove("is-stale");
       status.hidden = true;
@@ -592,31 +628,46 @@ class VelocityTemplateTool extends BaseTool {
       const column = Math.max(1, Number(error?.column) || 1);
       const model = this.editor.getModel();
       const endColumn = model ? model.getLineMaxColumn(Math.min(line, model.getLineCount())) : column + 1;
+      const templateLine = Math.max(1, Number(error?.templateLine) || line);
+      const templateColumn = Math.max(1, Number(error?.templateColumn) || column);
       monaco.editor.setModelMarkers(
         this.editor.getModel(),
         "velocity-template",
-        isJsonError || isOutputError
+        isJsonError || (isOutputError && !error?.templateLine)
           ? []
           : [
               {
                 severity: monaco.MarkerSeverity.Error,
                 message,
-                startLineNumber: line,
-                startColumn: column,
-                endLineNumber: line,
-                endColumn: Math.max(column + 1, endColumn),
+                startLineNumber: isOutputError ? templateLine : line,
+                startColumn: isOutputError ? templateColumn : column,
+                endLineNumber: isOutputError ? templateLine : line,
+                endColumn: isOutputError ? templateColumn + (error.reference?.length || 1) : Math.max(column + 1, endColumn),
               },
             ],
       );
       if (isOutputError) {
         this.configurePreviewMode("json");
         this.previewEditor.setValue(rendered);
+        monaco.editor.setModelMarkers(this.previewEditor.getModel(), "velocity-output", [
+          {
+            severity: monaco.MarkerSeverity.Error,
+            message,
+            startLineNumber: line,
+            startColumn: column,
+            endLineNumber: line,
+            endColumn: column + (error.reference?.length || 1),
+          },
+        ]);
         output.classList.remove("is-stale");
-      } else output.classList.add("is-stale");
+      } else {
+        monaco.editor.setModelMarkers(this.previewEditor.getModel(), "velocity-output", []);
+        output.classList.add("is-stale");
+      }
       status.textContent = isJsonError
         ? `Context JSON error — ${message}`
         : isOutputError
-          ? `Rendered JSON error · Output line ${line}, column ${column} — ${message}`
+          ? `Rendered JSON error · Output line ${line}, column ${column}${error?.templateLine ? ` · Template line ${templateLine}, column ${templateColumn}` : ""} — ${message}`
           : `${error?.kind === "syntax" ? "Velocity syntax error" : "Velocity rendering error"} · Line ${line}, column ${column} — ${message}`;
       status.hidden = false;
       status.classList.add("is-error");

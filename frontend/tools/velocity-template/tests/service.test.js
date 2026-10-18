@@ -5,6 +5,7 @@ import {
   extractVelocityVariables,
   formatRenderedResult,
   normalizeImportedTemplateValue,
+  parseVelocityContext,
   parseTemplateImportQuery,
   renderVelocityTemplate,
   setNestedValue,
@@ -59,6 +60,22 @@ describe("Velocity template service", () => {
     });
   });
 
+  it("parses commented context JSON without altering comment-like text in strings", () => {
+    const context = `{
+      // Toggle the rendered branch
+      "success": false,
+      "url": "https://example.com/a/*literal*/",
+      /* Keep this value available for the template. */
+      "amount": 10
+    }`;
+
+    expect(parseVelocityContext(context)).toEqual({
+      success: false,
+      url: "https://example.com/a/*literal*/",
+      amount: 10,
+    });
+  });
+
   it("reports unmatched branch directives with a useful source location", () => {
     const template = "#if($customer.active)\n#end\n#else\n#end";
 
@@ -102,6 +119,22 @@ describe("Velocity template service", () => {
         name: "VelocityResultError",
         kind: "output",
         message: expect.stringContaining("Rendered output is not valid JSON"),
+      }),
+    );
+  });
+
+  it("locates an unresolved Velocity reference in rendered JSON and its template source", () => {
+    const template = ["{", '  "amount": $transaction.amount,', '  "success": $transaction.success', "}"].join("\n");
+
+    expect(() => formatRenderedResult(template, "json", template)).toThrow(
+      expect.objectContaining({
+        name: "VelocityResultError",
+        kind: "output",
+        line: 2,
+        column: 13,
+        templateLine: 2,
+        templateColumn: 13,
+        reference: "$transaction.amount",
       }),
     );
   });
