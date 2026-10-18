@@ -280,6 +280,21 @@
   font-weight: 400;
 }
 
+.velocity-template-tool .vtl-sql-editor {
+  width: 100%;
+  height: min(32vh, 250px);
+  min-height: 180px;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  border-radius: 7px;
+  background: #1e1e1e;
+}
+
+.velocity-template-tool .vtl-sql-editor:focus-within {
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
+}
+
 .velocity-template-tool .vtl-import-field textarea {
   resize: vertical;
   font-family: var(--font-mono, ui-monospace, monospace);

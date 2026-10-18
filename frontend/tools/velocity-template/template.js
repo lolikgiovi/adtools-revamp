@@ -12,6 +12,9 @@ export const VelocityTemplate = /* html */ `
       <section class="pane vtl-editor-pane" aria-labelledby="velocityEditorTitle">
         <div class="pane-header vtl-compact-header">
           <div class="vtl-title-group">
+            <button id="btnCollapseVelocityTemplate" class="vtl-collapse-button" type="button" aria-label="Collapse Velocity Template" aria-expanded="true">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 10 4-4 4 4" /></svg>
+            </button>
             <h3 id="velocityEditorTitle">Velocity Template</h3>
           </div>
           <div class="vtl-panel-actions">
@@ -24,9 +27,6 @@ export const VelocityTemplate = /* html */ `
                 <button id="btnClearVelocity" class="is-destructive" type="button">Clear template</button>
               </div>
             </details>
-            <button id="btnCollapseVelocityTemplate" class="vtl-collapse-button" type="button" aria-label="Collapse Velocity Template" aria-expanded="true">
-              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 10 4-4 4 4" /></svg>
-            </button>
             <button id="btnCreateVelocityQuery" class="btn btn-primary btn-sm" type="button" disabled>Create query</button>
           </div>
         </div>
@@ -37,13 +37,15 @@ export const VelocityTemplate = /* html */ `
 
       <section class="pane vtl-parameters-pane" aria-labelledby="velocityContextTitle">
         <div class="pane-header vtl-compact-header">
-          <div class="vtl-title-group"><h3 id="velocityContextTitle">Context Data</h3></div>
-          <div class="vtl-panel-actions">
-            <button id="btnSyncVelocityContext" class="btn btn-secondary btn-sm" type="button">Sync fields</button>
-            <button id="btnFormatVelocityContext" class="btn btn-secondary btn-sm" type="button">Format JSON</button>
+          <div class="vtl-title-group">
             <button id="btnCollapseVelocityContext" class="vtl-collapse-button" type="button" aria-label="Collapse Context Data" aria-expanded="true">
               <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 10 4-4 4 4" /></svg>
             </button>
+            <h3 id="velocityContextTitle">Context Data</h3>
+          </div>
+          <div class="vtl-panel-actions">
+            <button id="btnSyncVelocityContext" class="btn btn-secondary btn-sm" type="button">Sync fields</button>
+            <button id="btnFormatVelocityContext" class="btn btn-secondary btn-sm" type="button">Format JSON</button>
           </div>
         </div>
         <div id="velocityContextError" class="vtl-inline-error" role="alert" hidden></div>
@@ -87,11 +89,11 @@ export const VelocityTemplate = /* html */ `
           <span>Oracle connection</span>
           <select id="velocitySqlConnection"></select>
         </label>
-        <label class="vtl-import-field">
+        <div class="vtl-import-field">
           <span>SELECT query</span>
-          <textarea id="velocitySqlQuery" rows="5" spellcheck="false" placeholder="SELECT * FROM SCHEMA.TEMPLATE_TABLE WHERE TEMPLATE_ID = 1"></textarea>
+          <div id="velocitySqlQuery" class="vtl-sql-editor" aria-label="Oracle SELECT query"></div>
           <small>Up to 100 rows are fetched. Only SELECT statements are allowed.</small>
-        </label>
+        </div>
         <div id="velocitySqlImportError" class="vtl-inline-error" role="alert" hidden></div>
         <button id="btnFetchVelocitySql" class="btn btn-primary" type="button">Fetch fields</button>
         <div id="velocitySqlSelection" class="vtl-import-selection" hidden>

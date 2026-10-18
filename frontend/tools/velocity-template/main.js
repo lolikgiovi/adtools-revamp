@@ -1,6 +1,7 @@
 import { BaseTool } from "../../core/BaseTool.js";
 import { cleanAnalyticsMeta, summarizeText } from "../../core/AnalyticsMeta.js";
 import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
+import { createOracleEditor } from "../../core/MonacoOracle.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { OracleConnectionService } from "../../core/OracleConnectionService.js";
 import { isTauri } from "../../core/Runtime.js";
@@ -22,6 +23,7 @@ import {
 } from "./service.js";
 import { VelocityTemplate } from "./template.js";
 import { VelocityDocumentStore } from "./documentStore.js";
+import { DEFAULT_VELOCITY_CONTEXT, DEFAULT_VELOCITY_TEMPLATE } from "./starter.js";
 import "./styles.css";
 
 const DIRECTIVES = [
@@ -51,20 +53,6 @@ const VELOCITY_FUNCTIONS = [
   ["replace", "Replace text occurrences", "replace(${1:search}, ${2:replacement})"],
 ];
 
-const DEFAULT_TEMPLATE = [
-  "Hello, $customer.name!",
-  "",
-  "#if($customer.active)",
-  "Your items:",
-  "#foreach($item in $items)",
-  "- $item",
-  "#end",
-  "#else",
-  "Your account is inactive.",
-  "#end",
-].join("\n");
-const DEFAULT_CONTEXT = JSON.stringify({ customer: { name: "Maya", active: true }, items: ["One", "Two"] }, null, 2);
-
 function contextPaths(value, prefix = "", depth = 0) {
   if (!value || typeof value !== "object" || Array.isArray(value) || depth > 5) return [];
   return Object.entries(value).flatMap(([key, nested]) => {
@@ -85,6 +73,7 @@ class VelocityTemplateTool extends BaseTool {
     this._paneStateStorageKey = "tool:velocity-template:pane-state";
     this._sqlImportRows = [];
     this._sqlImportColumns = [];
+    this._sqlImportEditor = null;
     this.documentStore = null;
     this.documents = [];
     this.activeDocumentId = null;
@@ -125,9 +114,11 @@ class VelocityTemplateTool extends BaseTool {
     this.editor?.dispose();
     this.contextEditor?.dispose();
     this.previewEditor?.dispose();
+    this._sqlImportEditor?.dispose();
     this.editor = null;
     this.contextEditor = null;
     this.previewEditor = null;
+    this._sqlImportEditor = null;
     const store = this.documentStore;
     const finalSave = this.flushActiveDocument().catch(() => {});
     this.documents.forEach((document) => {
@@ -315,7 +306,7 @@ class VelocityTemplateTool extends BaseTool {
     this.documentStore = store;
     try {
       await store.open();
-      const saved = await store.load(DEFAULT_TEMPLATE, DEFAULT_CONTEXT, () => this.createId());
+      const saved = await store.load(DEFAULT_VELOCITY_TEMPLATE, DEFAULT_VELOCITY_CONTEXT, () => this.createId());
       this.documents = saved.documents.map((document) => this.createDocumentModels(document));
       this.activeDocumentId = saved.activeId;
     } catch (error) {
@@ -324,8 +315,8 @@ class VelocityTemplateTool extends BaseTool {
       const document = this.createDocumentModels({
         id: this.createId(),
         name: "Untitled 1",
-        template: this.readStored("tool:velocity-template:editor", DEFAULT_TEMPLATE),
-        context: this.readStored("tool:velocity-template:context", DEFAULT_CONTEXT),
+        template: this.readStored("tool:velocity-template:editor", DEFAULT_VELOCITY_TEMPLATE),
+        context: this.readStored("tool:velocity-template:context", DEFAULT_VELOCITY_CONTEXT),
         createdAt: now,
         updatedAt: now,
       });
@@ -730,7 +721,20 @@ class VelocityTemplateTool extends BaseTool {
     document.getElementById("btnApplyVelocitySqlImport").disabled = true;
     document.getElementById("velocitySqlImportOverlay").hidden = false;
     dialog.showModal();
-    document.getElementById("velocitySqlQuery")?.focus();
+    if (!this._sqlImportEditor) {
+      this._sqlImportEditor = createOracleEditor(document.getElementById("velocitySqlQuery"), {
+        value: "SELECT * FROM SCHEMA.TEMPLATE_TABLE WHERE TEMPLATE_ID = 1",
+        automaticLayout: true,
+        scrollbar: { alwaysConsumeMouseWheel: true },
+        minimap: { enabled: false },
+        scrollBeyondLastLine: false,
+        fontSize: 13,
+        ariaLabel: "Oracle SELECT query",
+      });
+    } else {
+      this._sqlImportEditor.layout();
+    }
+    this._sqlImportEditor.focus();
   }
 
   closeSqlImport() {
@@ -768,7 +772,7 @@ class VelocityTemplateTool extends BaseTool {
     const connection = this._sqlImportConnections?.find((item) => item.name === document.getElementById("velocitySqlConnection")?.value);
     if (!connection) return this.showSqlImportError("Select an Oracle connection.");
     try {
-      const sql = parseTemplateImportQuery(document.getElementById("velocitySqlQuery")?.value);
+      const sql = parseTemplateImportQuery(this._sqlImportEditor?.getValue());
       fetchButton.disabled = true;
       fetchButton.textContent = "Fetching…";
       const result = await OracleConnectionService.queryViaSidecar(connection.name, connection, sql, 100);
@@ -809,7 +813,7 @@ class VelocityTemplateTool extends BaseTool {
 
   applySqlImport() {
     const rowIndex = Number(document.getElementById("velocitySqlRow")?.value || 0);
-    const query = document.getElementById("velocitySqlQuery")?.value || "";
+    const query = this._sqlImportEditor?.getValue() || "";
     const identity = getTemplateImportIdentity(query, this._sqlImportColumns, this._sqlImportRows[rowIndex] || []);
     this.editor?.setValue(document.getElementById("velocitySqlPreview")?.value || "");
     if (identity && this.activeDocument) {
