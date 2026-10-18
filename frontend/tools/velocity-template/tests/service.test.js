@@ -1,6 +1,6 @@
 import {
   extractContextPaths,
-  buildVelocityUpdateQuery,
+  buildVelocityQuickQueryDraft,
   getTemplateImportIdentity,
   extractVelocityVariables,
   formatRenderedResult,
@@ -139,35 +139,40 @@ describe("Velocity template service", () => {
     });
   });
 
-  it("builds an update query from imported source identity without executing it", () => {
-    expect(
-      buildVelocityUpdateQuery(
-        {
-          schema: "APP",
-          table: "MESSAGE_TEMPLATE",
-          templateColumn: "TEMPLATE_BODY",
-          identifiers: { SERVICE_CODE: "PAYMENT", ENVIRONMENT: "DEV" },
-        },
-        "Hello $customer.name\nIt's ready",
-      ),
-    ).toBe(
-      "UPDATE APP.MESSAGE_TEMPLATE\nSET TEMPLATE_BODY = to_clob('Hello $customer.name\nIt''s ready')\nWHERE SERVICE_CODE = 'PAYMENT'\n  AND ENVIRONMENT = 'DEV';",
+  it("builds a Quick Query update draft from imported source identity", () => {
+    const draft = buildVelocityQuickQueryDraft(
+      {
+        schema: "APP",
+        table: "MESSAGE_TEMPLATE",
+        templateColumn: "TEMPLATE_BODY",
+        identifiers: { SERVICE_CODE: "PAYMENT", ENVIRONMENT: "DEV" },
+      },
+      "Hello $customer.name\nIt's ready 👋",
     );
+
+    expect(draft).toEqual({
+      title: "Velocity template",
+      tableName: "APP.MESSAGE_TEMPLATE",
+      queryType: "update",
+      schemaData: [
+        ["SERVICE_CODE", "VARCHAR2", "No", "", "", "Yes"],
+        ["ENVIRONMENT", "VARCHAR2", "No", "", "", "Yes"],
+        ["TEMPLATE_BODY", "CLOB", "Yes", "", "", "No"],
+      ],
+      inputData: [
+        ["SERVICE_CODE", "ENVIRONMENT", "TEMPLATE_BODY"],
+        ["PAYMENT", "DEV", "Hello $customer.name\nIt's ready 👋"],
+      ],
+      source: "velocity-template",
+    });
   });
 
-  it("chunks long templates into Oracle CLOB expressions", () => {
-    const sql = buildVelocityUpdateQuery({ table: "MESSAGE_TEMPLATE", templateColumn: "BODY", identifiers: { ID: "7" } }, "x".repeat(2200));
-
-    expect(sql.match(/to_clob\('/g)).toHaveLength(3);
-    expect(sql).toContain("') ||\n  to_clob('");
-  });
-
-  it("rejects update generation without a table, template field, or row identifier", () => {
-    expect(() => buildVelocityUpdateQuery({ schema: "APP", table: "MESSAGE_TEMPLATE", identifiers: {} }, "content")).toThrow(
+  it("rejects Quick Query drafts without a table, template field, or row identifier", () => {
+    expect(() => buildVelocityQuickQueryDraft({ schema: "APP", table: "MESSAGE_TEMPLATE", identifiers: {} }, "content")).toThrow(
       "template column",
     );
     expect(() =>
-      buildVelocityUpdateQuery({ schema: "APP", table: "MESSAGE_TEMPLATE", templateColumn: "BODY", identifiers: {} }, "content"),
+      buildVelocityQuickQueryDraft({ schema: "APP", table: "MESSAGE_TEMPLATE", templateColumn: "BODY", identifiers: {} }, "content"),
     ).toThrow("row identifier");
   });
 

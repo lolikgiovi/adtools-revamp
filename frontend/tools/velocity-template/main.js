@@ -10,7 +10,7 @@ import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
 import { getIconSvg } from "./icon.js";
 import {
-  buildVelocityUpdateQuery,
+  buildVelocityQuickQueryDraft,
   extractContextPaths,
   extractVelocityVariables,
   formatRenderedResult,
@@ -837,10 +837,10 @@ class VelocityTemplateTool extends BaseTool {
   createUpdateQuery() {
     try {
       const source = this.activeDocument?.sourceIdentity;
-      const sql = buildVelocityUpdateQuery(source, this.editor?.getValue() || "");
-      const tableName = source.schema ? `${source.schema}.${source.table}` : source.table;
+      const draft = buildVelocityQuickQueryDraft(source, this.editor?.getValue() || "");
+      draft.title = this.activeDocument.name;
       window.app?.router?.navigate("quick-query", {
-        createQuery: { sql, title: this.activeDocument.name, tableName },
+        createQuery: draft,
       });
     } catch (error) {
       this.showError(error?.message || "Could not create the update query.");

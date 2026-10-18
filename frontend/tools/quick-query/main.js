@@ -30,6 +30,7 @@ import {
 import { splitSqlStatementsSafely, calcUtf8Bytes, groupBySize, groupByQueryCount, deriveBaseName } from "./services/SplitService.js";
 import { QueryExecutionService } from "./services/QueryExecutionService.js";
 import { SplitWorkerService } from "./services/SplitWorkerService.js";
+import { analyzeJenkinsSql, convertJenkinsUnsafeLiterals } from "./services/JenkinsSqlSafetyService.js";
 import { TableAutosaveService } from "./services/TableAutosaveService.js";
 import { isTabDraftContentEmpty } from "./services/TabDraftStateService.js";
 import {
@@ -112,8 +113,9 @@ export class QuickQuery extends BaseTool {
   }
 
   onRouteData({ tableName, createQuery } = {}) {
-    if (createQuery?.sql) void this.ui?.openCreatedQuery(createQuery);
-    else if (tableName) void this.ui?.openTableTab(tableName);
+    if (createQuery?.sql || (Array.isArray(createQuery?.schemaData) && Array.isArray(createQuery?.inputData))) {
+      void this.ui?.openCreatedQuery(createQuery);
+    } else if (tableName) void this.ui?.openTableTab(tableName);
   }
 }
 
@@ -1852,9 +1854,10 @@ export class QuickQueryUI {
     return tab;
   }
 
-  async openCreatedQuery({ sql, title = "Untitled", tableName = "" } = {}) {
+  async openCreatedQuery({ sql, title = "Untitled", tableName = "", queryType, schemaData, inputData, source } = {}) {
     await this.ready;
-    if (!String(sql || "").trim()) return null;
+    const hasDraftData = Array.isArray(schemaData) && Array.isArray(inputData);
+    if (!hasDraftData && !String(sql || "").trim()) return null;
     const tab = await this.createNewTab();
     if (!tab) {
       this.eventBus?.emit("notification:error", { message: "Quick Query already has 15 tabs." });
@@ -1862,8 +1865,11 @@ export class QuickQueryUI {
     }
     tab.title = String(title || "Untitled").trim() || "Untitled";
     tab.tableName = this.sanitizeTableInputValue(tableName);
-    tab.generatedSql = String(sql);
-    tab.source = "velocity-template";
+    tab.queryType = ["merge", "insert", "update"].includes(queryType) ? queryType : tab.queryType;
+    tab.schemaData = hasDraftData ? schemaData.map((row) => [...row]) : tab.schemaData;
+    tab.inputData = hasDraftData ? inputData.map((row) => [...row]) : tab.inputData;
+    tab.generatedSql = String(sql || "");
+    tab.source = source || "created-query";
     tab.dirty = true;
     await this.applyTabDraft(tab);
     await this.storageService.saveQueryTab(tab);
@@ -3158,11 +3164,34 @@ export class QuickQueryUI {
     this.elements.downloadAsOverlay.classList.add("hidden");
   }
 
-  handleExecuteInJenkinsRunner() {
+  async handleExecuteInJenkinsRunner() {
     try {
       const sql = (this.editor?.getValue() || "").trim();
       if (!sql) {
         this.showError("No SQL to execute. Please generate or write a query first.");
+        return;
+      }
+
+      const safety = analyzeJenkinsSql(sql);
+      if (!safety.safe) {
+        const characterList = safety.characters.map((character) => (character === "#" ? "# (hash)" : character)).join(", ");
+        const shouldConvert = await confirmAction({
+          title: "Prepare this SQL for Jenkins?",
+          description: `${safety.literalCount} SQL value${safety.literalCount === 1 ? "" : "s"} contain ${characterList}. These characters can be changed by Jenkins shell processing. Convert only those values to Oracle Base64 decode expressions in the Quick Query editor?`,
+          confirmLabel: "Convert in editor",
+          cancelLabel: "Keep current SQL",
+          destructive: false,
+        });
+        if (!shouldConvert) return;
+        const converted = convertJenkinsUnsafeLiterals(sql);
+        this.editor.setValue(converted);
+        this.trackQuickQueryEvent("jenkins_sql_converted", {
+          ...this.getCurrentQuickQueryContext(),
+          sql_size: sql.length,
+          converted_sql_size: converted.length,
+          converted_literal_count: safety.literalCount,
+        });
+        this.showSuccess("Jenkins-sensitive values converted in the editor. Review the SQL, then click Run Query again.");
         return;
       }
 

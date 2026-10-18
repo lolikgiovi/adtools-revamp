@@ -270,40 +270,22 @@ function sqlIdentifier(value, label) {
   return identifier;
 }
 
-function sqlString(value) {
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
-
-function sqlClob(value) {
-  const chunks = [];
-  let chunk = "";
-  for (const character of String(value)) {
-    const escaped =
-      character === "'" || character === "‘" || character === "’" ? "''" : character === "“" || character === "”" ? '"' : character;
-    if (chunk.length + escaped.length > 1000) {
-      chunks.push(chunk);
-      chunk = "";
-    }
-    chunk += escaped;
-  }
-  chunks.push(chunk);
-  return chunks.map((part) => `to_clob('${part}')`).join(" ||\n  ");
-}
-
-export function buildVelocityUpdateQuery(sourceIdentity, template) {
+export function buildVelocityQuickQueryDraft(sourceIdentity, template) {
   const schema = sourceIdentity?.schema ? sqlIdentifier(sourceIdentity.schema, "schema") : "";
   const table = sqlIdentifier(sourceIdentity?.table, "table");
-  const templateColumn = sourceIdentity?.templateColumn;
-  if (!templateColumn) throw new Error("The imported template column is unavailable.");
-  const column = sqlIdentifier(templateColumn, "template column");
+  const templateColumn = sqlIdentifier(sourceIdentity?.templateColumn, "template column");
   const identifiers = Object.entries(sourceIdentity?.identifiers || {});
   if (!identifiers.length) throw new Error("At least one imported row identifier is required.");
-  const target = schema ? `${schema}.${table}` : table;
-  const predicates = identifiers.map(([name, value], index) => {
-    const prefix = index === 0 ? "WHERE" : "  AND";
-    return `${prefix} ${sqlIdentifier(name, "identifier column")} = ${sqlString(value)}`;
-  });
-  return [`UPDATE ${target}`, `SET ${column} = ${sqlClob(template)}`, ...predicates].join("\n") + ";";
+  const identifierSchema = identifiers.map(([name]) => [sqlIdentifier(name, "identifier column"), "VARCHAR2", "No", "", "", "Yes"]);
+  const headers = [...identifiers.map(([name]) => name), templateColumn];
+  return {
+    title: "Velocity template",
+    tableName: schema ? `${schema}.${table}` : table,
+    queryType: "update",
+    schemaData: [...identifierSchema, [templateColumn, "CLOB", "Yes", "", "", "No"]],
+    inputData: [headers, [...identifiers.map(([, value]) => value), String(template)]],
+    source: "velocity-template",
+  };
 }
 
 export function normalizeImportedTemplateValue(value) {
