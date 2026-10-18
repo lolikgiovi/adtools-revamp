@@ -48,6 +48,17 @@ class Base64Tools extends BaseTool {
     } catch (_) {}
   }
 
+  resizeOutputToContent(outputArea) {
+    if (!outputArea) return;
+
+    outputArea.style.height = "auto";
+    const viewportSpace = Math.max(0, window.innerHeight - outputArea.getBoundingClientRect().top - 24);
+    const outputHeight = Math.min(outputArea.scrollHeight, viewportSpace);
+    outputArea.style.maxHeight = `${viewportSpace}px`;
+    outputArea.style.height = `${outputHeight}px`;
+    outputArea.style.overflowY = outputArea.scrollHeight > viewportSpace ? "auto" : "hidden";
+  }
+
   restoreFileCards() {
     if (this.selectedFiles.size === 0) return;
     const container = this.validateContainer();
@@ -775,6 +786,7 @@ class Base64Tools extends BaseTool {
         if (isTextContent) {
           outputArea.value = decoded;
           outputArea.style.display = "block";
+          this.resizeOutputToContent(outputArea);
           this.decodedBlob = null;
           this.decodedFilename = null;
 
@@ -967,10 +979,26 @@ class Base64Tools extends BaseTool {
       }
     }
 
-    // Display processed files
-    this.displayProcessedFiles(processedFiles, mode);
+    const singleDecodedText =
+      mode === "decode" &&
+      selectedFilesForMode.length === 1 &&
+      processedFiles.length === 1 &&
+      typeof processedFiles[0].content === "string";
+
+    if (singleDecodedText) {
+      const outputArea = this.validateContainer().querySelector("#decode-output");
+      outputArea.value = processedFiles[0].content;
+      outputArea.style.display = "block";
+      this.resizeOutputToContent(outputArea);
+      this.decodedBlob = null;
+      this.decodedFilename = null;
+      this.updateOutputHeaderButtons("decode", false);
+    } else {
+      this.displayProcessedFiles(processedFiles, mode);
+    }
+
     this.trackAnalytics(`${mode}_success`, {
-      input_mode: "multi_file",
+      input_mode: selectedFilesForMode.length === 1 ? "file" : "multi_file",
       output_file_count: processedFiles.length,
       output_size: processedFiles.reduce((sum, file) => sum + (Number(file.size) || 0), 0),
       ...summarizeFiles(selectedFilesForMode.map(([, data]) => data.file)),
@@ -1249,6 +1277,9 @@ class Base64Tools extends BaseTool {
     if (outputTextfield) {
       outputTextfield.value = "";
       outputTextfield.style.display = "block";
+      outputTextfield.style.height = "";
+      outputTextfield.style.maxHeight = "";
+      outputTextfield.style.overflowY = "";
     }
 
     const processedDisplay = container.querySelector(`#${mode}-processed-files`);
