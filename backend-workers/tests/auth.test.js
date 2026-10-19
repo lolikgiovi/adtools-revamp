@@ -103,11 +103,19 @@ describe("registration and config access", () => {
       subject: "[AD Tools] OTP for AD Tools",
       tags: [{ name: "category", value: "otp" }],
     });
-    expect(emailPayload.html).toContain("Here's your OTP");
-    expect(emailPayload.html).toMatch(/>\s*\d{6}\s*<\/td>/);
-    expect(emailPayload.html).toContain("USE WITHIN 30 MINUTES");
-    expect(emailPayload.html).toContain("SELECT TO COPY");
-    expect(emailPayload.html).toContain("Select the code to copy.");
+    expect(emailPayload.html).toContain("Here’s your OTP.");
+    const sentCode = emailPayload.text.match(/verification code is (\d{6})/)[1];
+    expect(emailPayload.html).toContain(sentCode);
+    expect(emailPayload.html).toContain("30 minutes.");
+    expect(emailPayload.html).toContain("Select the code to copy it.");
+    expect(emailPayload.html).toContain('name="color-scheme" content="light dark"');
+    expect(emailPayload.html).toContain("@media (prefers-color-scheme: dark)");
+    for (const className of ["ground", "sheet", "panel", "ink", "muted", "accent", "digits"]) {
+      expect(emailPayload.html).toContain(`[data-ogsb] .${className}`);
+    }
+    expect(emailPayload.html).toContain('.sheet:not([class^="x_"])');
+    expect(emailPayload.html).toContain("data-email-theme-wrapper");
+    expect(emailPayload.html).toContain("user-select: all");
     expect(emailPayload.html).not.toContain("<script");
     expect(emailPayload.text).toMatch(/verification code is \d{6}/);
     expect(emailPayload.text).toContain("30 minutes");

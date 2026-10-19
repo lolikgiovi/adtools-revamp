@@ -10,9 +10,9 @@ assets = { directory = "./dist", binding = "ASSETS" }
 [vars]
 DEV_MODE = "false"
 SECRET_SALT = "change-me-in-production"
-MAIL_FROM = "otp@adtools.mgnv.cloud"
+MAIL_FROM = "otp-adtools@lolik.cloud"
 MAIL_SUBJECT_PREFIX = "[AD Tools]"
-REGISTRATION_AUTH_MODE = "manual"
+REGISTRATION_AUTH_MODE = "otp"
 REGISTRATION_ADMIN_EMAIL = "fashalli.giovi@gmail.com"
 WHITELIST_ENABLED = "false"
 ALLOWED_ORIGINS = "http://localhost:1234,tauri://localhost"
@@ -28,9 +28,9 @@ bucket_name = "adtools-updates"
 [env.production]
 [env.production.vars]
 DEV_MODE = "false"
-MAIL_FROM = "otp@adtools.mgnv.cloud"
+MAIL_FROM = "otp-adtools@lolik.cloud"
 MAIL_SUBJECT_PREFIX = "[AD Tools]"
-REGISTRATION_AUTH_MODE = "manual"
+REGISTRATION_AUTH_MODE = "otp"
 REGISTRATION_ADMIN_EMAIL = "fashalli.giovi@gmail.com"
 WHITELIST_ENABLED = "false"
 ALLOWED_EMAIL_DOMAINS = "bankmandiri.co.id"

@@ -1,3 +1,4 @@
+import { OtpRequestFlow } from "../core/OtpRequestFlow.js";
 // Reusable OTP overlay component for vanilla JS apps
 // Usage: import { openOtpOverlay } from './OtpOverlay.js';
 // const { token, kvValue } = await openOtpOverlay({ email, kvKey: 'default-config' });
@@ -6,10 +7,6 @@ function createElement(html) {
   const tpl = document.createElement("template");
   tpl.innerHTML = html.trim();
   return tpl.content.firstElementChild;
-}
-
-function nowMs() {
-  return Date.now();
 }
 
 import { manualApprovalMonitor } from "../core/ManualApprovalMonitor.js";
@@ -23,8 +20,6 @@ export async function openOtpOverlay({
   email,
   requestEndpoint = "/register/request-otp",
   verifyEndpoint = "/register/verify",
-  rateLimitMs = 60_000,
-  storageScope = "default", // scope for localStorage cooldown
   kvKey, // optional: if provided, fetch KV after verification
   onClose,
   // Centralized behavior: prefer using cached session token before showing UI
@@ -110,17 +105,16 @@ export async function openOtpOverlay({
               </select>
             </label>
             <div class="otp-actions">
-              ${
-                manual
-                  ? '<button type="button" class="btn btn-primary otp-manual-request">Request Manual Approval</button>'
-                  : '<button type="button" class="btn btn-primary otp-request">Request OTP</button>'
-              }
+              <button type="button" class="btn btn-primary otp-request" ${manual ? "hidden" : ""}>Request OTP</button>
+              <button type="button" class="btn btn-secondary otp-manual-request" ${manual ? "" : "hidden"}>Request Manual Approval</button>
             </div>
-            ${
-              manual
-                ? '<p class="otp-manual-status" role="status" hidden></p><button type="button" class="btn btn-secondary otp-manual-check" hidden>Check Approval Status</button>'
-                : '<div class="otp-input-row"><input type="text" class="otp-code-input" maxlength="6" inputmode="numeric" autocomplete="one-time-code" placeholder="Enter 6-digit OTP" /><button type="button" class="btn btn-secondary otp-confirm">Confirm</button></div>'
-            }
+            <p class="otp-fallback-countdown"></p>
+            <p class="otp-manual-status" role="status" hidden></p>
+            <button type="button" class="btn btn-secondary otp-manual-check" hidden>Check Approval Status</button>
+            <div class="otp-input-row" ${manual ? "hidden" : ""}>
+              <input type="text" class="otp-code-input" maxlength="6" inputmode="numeric" autocomplete="one-time-code" placeholder="Enter 6-digit OTP" />
+              <button type="button" class="btn btn-secondary otp-confirm">Confirm</button>
+            </div>
             <div class="otp-error" aria-live="polite"></div>
             <div class="otp-footer app-modal-actions">
               <button type="button" class="btn otp-close">Close</button>
@@ -149,7 +143,7 @@ export async function openOtpOverlay({
       let approvedToken = null;
       let finishingApproval = false;
       let closed = false;
-      if (manual) {
+      {
         try {
           const saved = JSON.parse(localStorage.getItem(manualKey) || "null");
           if (saved?.requestId && saved.email === email?.trim().toLowerCase() && saved.deviceId === deviceId) {
@@ -162,17 +156,15 @@ export async function openOtpOverlay({
         }
       }
 
-      const lastKey = `otp.lastRequest.${storageScope}`;
-      const cooldownLeft = () => {
-        try {
-          const last = Number(localStorage.getItem(lastKey) || 0);
-          const left = rateLimitMs - (nowMs() - last);
-          return left > 0 ? left : 0;
-        } catch (_) {
-          return 0;
-        }
-      };
-      let countdownTimer = null;
+      const flow = new OtpRequestFlow({
+        identity: () => ({ email, deviceId, role: roleInput.value, department: departmentInput.value }),
+        retry: btnReq,
+        manual: btnManual,
+        hint: overlay.querySelector(".otp-fallback-countdown"),
+        endpoint: requestEndpoint,
+        manualMode: manual,
+        showInitial: true,
+      });
 
       // Initialize status
       if (!email) {
@@ -186,12 +178,11 @@ export async function openOtpOverlay({
         err.textContent = "";
         if (manualRequest) showManualStatus("Approval requested. Contact Lolik to review it.");
       } else {
-        status.textContent = `Send a code to ${email}. Delivery takes around 1 minute. Contact Lolik directly for faster access.`;
+        status.textContent =
+          flow.state()?.manualApprovalAvailable && !flow.state()?.sent
+            ? "Email could not be sent. Request manual approval instead."
+            : `Send a code to ${email}. Please allow 1–3 minutes for delivery and check your spam folder.`;
         err.textContent = "";
-        const left = cooldownLeft();
-        if (left > 0) {
-          disableWithCountdown(btnReq, left);
-        }
       }
 
       function showManualStatus(message) {
@@ -271,6 +262,7 @@ export async function openOtpOverlay({
       async function requestManualApproval() {
         if (!email || !validateProfile()) return;
         btnManual.disabled = true;
+        flow.manualPending = true;
         err.textContent = "";
         try {
           const displayName = (localStorage.getItem("user.username") || email.split("@")[0]).trim().slice(0, 15);
@@ -297,53 +289,20 @@ export async function openOtpOverlay({
           err.textContent = error.message || "Could not submit the approval request.";
         } finally {
           btnManual.disabled = false;
+          flow.manualPending = false;
         }
-      }
-
-      function disableWithCountdown(button, ms) {
-        clearInterval(countdownTimer);
-        let remain = Math.ceil(ms / 1000);
-        button.disabled = true;
-        button.dataset.originalLabel = button.textContent;
-        button.textContent = `Resend in ${remain}s`;
-        countdownTimer = setInterval(() => {
-          remain -= 1;
-          if (remain <= 0) {
-            clearInterval(countdownTimer);
-            button.disabled = false;
-            button.textContent = button.dataset.originalLabel || "Request OTP";
-            return;
-          }
-          button.textContent = `Resend in ${remain}s`;
-        }, 1000);
       }
 
       async function requestOtp() {
         if (!email || !validateProfile()) return;
-        // Rate-limit immediately upon click
-        try {
-          localStorage.setItem(lastKey, String(nowMs()));
-        } catch (_) {}
-        disableWithCountdown(btnReq, rateLimitMs);
         err.textContent = "";
         try {
-          const BASE = (import.meta?.env?.VITE_WORKER_BASE || "").trim();
-          const reqUrl = BASE ? `${BASE}${requestEndpoint}` : requestEndpoint;
-          const res = await fetch(reqUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, role: roleInput.value, department: departmentInput.value }),
-          });
-          const j = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(j?.error || `Network error (${res.status})`);
-          status.textContent = `Code requested for ${email}. Delivery takes around 1 minute. Contact Lolik directly for faster access.`;
-          // Dev-mode convenience: prefill OTP if provided by backend
-          if (j?.devCode) {
-            input.value = String(j.devCode);
-            status.textContent = `${status.textContent} (Dev: OTP auto-filled)`;
-          }
-        } catch (e) {
-          err.textContent = String(e?.message || e || "Failed to request OTP");
+          const data = await flow.request();
+          if (!data || closed) return;
+          status.textContent = `Code requested for ${email}. Please allow 1–3 minutes for delivery and check your spam folder.`;
+          if (data.devCode) input.value = String(data.devCode);
+        } catch (error) {
+          if (!closed) err.textContent = error.message || "Email could not be sent. Request manual approval instead.";
         }
       }
 
@@ -374,7 +333,7 @@ export async function openOtpOverlay({
       function cleanup() {
         closed = true;
         unsubscribeApproval?.();
-        clearInterval(countdownTimer);
+        flow.destroy();
         overlay.remove();
         if (onClose) {
           try {

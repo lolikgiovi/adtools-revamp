@@ -60,74 +60,167 @@ export async function sendOtpEmail(env, to, code) {
     const html = `<!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8">
-    <meta name="color-scheme" content="dark">
-    <meta name="supported-color-schemes" content="dark">
-    <title>AD / Tools OTP</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="supported-color-schemes" content="light dark" />
+    <title>AD Tools verification code</title>
+    <style>
+      body {
+        color: #20251f;
+        margin: 0;
+        padding: 0;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+      @media (max-width: 480px) {
+        .pad {
+          padding: 28px 22px !important;
+        }
+        .digits {
+          font-size: 42px !important;
+          letter-spacing: 6px !important;
+        }
+        .outer {
+          padding: 20px 12px !important;
+        }
+        h1 {
+          font-size: 28px !important;
+        }
+      }
+      @media (prefers-color-scheme: dark) {
+        .ground:not([class^="x_"]) {
+          background-color: #101410 !important;
+        }
+        .sheet:not([class^="x_"]) {
+          background-color: #1b211b !important;
+        }
+        .panel:not([class^="x_"]) {
+          background-color: #111711 !important;
+        }
+        .ink:not([class^="x_"]) {
+          color: #f5f2e9 !important;
+        }
+        .muted:not([class^="x_"]) {
+          color: #bec7ba !important;
+        }
+        .accent:not([class^="x_"]) {
+          color: #e3bd79 !important;
+        }
+        .expiry:not([class^="x_"]) {
+          background-color: #303124 !important;
+          color: #f5f2e9 !important;
+        }
+        .digits:not([class^="x_"]) {
+          color: #f5f2e9 !important;
+        }
+      }
+      [data-ogsb] .ground {
+        background-color: #101410 !important;
+      }
+      [data-ogsb] .sheet {
+        background-color: #1b211b !important;
+      }
+      [data-ogsb] .panel {
+        background-color: #111711 !important;
+      }
+      [data-ogsb] .ink {
+        color: #f5f2e9 !important;
+      }
+      [data-ogsb] .muted {
+        color: #bec7ba !important;
+      }
+      [data-ogsb] .accent {
+        color: #e3bd79 !important;
+      }
+      [data-ogsb] .expiry {
+        background-color: #303124 !important;
+        color: #f5f2e9 !important;
+      }
+      [data-ogsb] .digits {
+        color: #f5f2e9 !important;
+      }
+    </style>
   </head>
-  <body style="margin:0;padding:0;background:#0e110f;color:#f2efe7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
-    <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Your AD Tools verification code is ${code}.</div>
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#0e110f;">
+  <body class="ground" style="margin: 0; background-color: #f0f0ec">
+    <div data-email-theme-wrapper style="background-color: #ffffff; color: #20251f">
+    <div style="display: none; max-height: 0; overflow: hidden">Your AD Tools verification code is ${code}. Expires in ${OTP_EXPIRY_MINUTES} minutes.</div>
+    <table
+      role="presentation"
+      width="100%"
+      cellpadding="0"
+      cellspacing="0"
+      border="0"
+      class="ground"
+      bgcolor="#f0f0ec"
+      style="width: 100%; background-color: #f0f0ec"
+    >
       <tr>
-        <td align="center" style="padding:32px 12px;">
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
-            style="width:100%;max-width:496px;background:#181c19;border:1px solid #384039;border-radius:16px;">
+        <td class="outer" align="center" style="padding: 40px 20px">
+          <table
+            role="presentation"
+            width="100%"
+            cellpadding="0"
+            cellspacing="0"
+            border="0"
+            class="sheet"
+            bgcolor="#ffffff"
+            style="width: 100%; max-width: 480px; background-color: #ffffff; border-radius: 16px"
+          >
             <tr>
-              <td style="padding:23px 28px 21px;border-bottom:1px dashed #384039;">
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+              <td class="pad" style="padding: 36px">
+                <p class="accent" style="margin: 0 0 36px; color: #846021; font-size: 19px; line-height: 24px; font-weight: 700">
+                  AD / Tools
+                </p>
+                <h1
+                  class="ink"
+                  style="margin: 0 0 14px; color: #20251f; font-size: 30px; line-height: 1.15; letter-spacing: -0.8px; font-weight: 700"
+                >
+                  Here’s your OTP.
+                </h1>
+                <p class="muted" style="margin: 0 0 28px; color: #50594f; font-size: 16px; line-height: 1.6">
+                  Enter this code to verify your email<br />and continue to AD Tools.
+                </p>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                   <tr>
-                    <td style="color:#f2efe7;font-family:'SFMono-Regular',Consolas,'Liberation Mono',monospace;font-size:14px;
-                      line-height:1;font-weight:700;letter-spacing:2px;">AD / TOOLS</td>
-                    <td align="right" style="color:#7f887e;font-family:'SFMono-Regular',Consolas,'Liberation Mono',monospace;
-                      font-size:11px;line-height:1;letter-spacing:1.76px;">SIGN-IN RECEIPT</td>
+                    <td
+                      class="panel"
+                      align="center"
+                      bgcolor="#f1eee5"
+                      style="background-color: #f1eee5; padding: 26px 12px; border-radius: 12px"
+                    >
+                      <div
+                        class="digits"
+                        style="
+                          color: #20251f;
+                          font-family: Arial, Helvetica, sans-serif;
+                          font-size: 48px;
+                          line-height: 1.2;
+                          font-weight: 700;
+                          letter-spacing: 8px;
+                          font-variant-numeric: tabular-nums;
+                          user-select: all;
+                          -webkit-user-select: all;
+                        "
+                      >
+                        ${code}
+                      </div>
+                    </td>
                   </tr>
                 </table>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:39px 28px 32px;">
-                <h1 style="margin:0;color:#f2efe7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:32px;
-                  line-height:1.08;font-weight:700;letter-spacing:-1.4px;">Here's your OTP.</h1>
-                <p style="margin:12px 0 0;color:#a7ada4;font-size:15px;line-height:1.55;">Use it to finish signing in while it's still fresh.</p>
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
-                  style="width:100%;margin-top:31px;background:#101411;border:1px solid #384039;border-radius:12px;">
-                  <tr>
-                    <td style="padding:18px 18px 0;color:#7f887e;font-family:'SFMono-Regular',Consolas,'Liberation Mono',monospace;
-                      font-size:11px;line-height:1;letter-spacing:1.76px;">ONE-TIME PASSCODE</td>
-                    <td align="right" style="padding:18px 18px 0;color:#d2aa6e;font-family:'SFMono-Regular',Consolas,'Liberation Mono',monospace;
-                      font-size:10px;line-height:1;font-weight:700;letter-spacing:0.8px;">SELECT TO COPY</td>
-                  </tr>
-                  <tr>
-                    <td colspan="2" align="center" style="padding:24px 18px 27px;color:#f2efe7;font-family:'SFMono-Regular',Consolas,
-                      'Liberation Mono',monospace;font-size:52px;line-height:1;font-weight:700;letter-spacing:8px;user-select:all;-webkit-user-select:all;">
-                      ${code}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td colspan="2" align="center" style="padding:0 18px 17px;color:#7f887e;font-size:12px;line-height:1.45;">
-                      Select the code to copy.
-                    </td>
-                  </tr>
-                  <tr>
-                    <td colspan="2" align="center" style="padding:13px 16px 12px;background:#c49a5b;color:#17140f;font-family:'SFMono-Regular',Consolas,
-                      'Liberation Mono',monospace;font-size:11px;line-height:1;font-weight:800;letter-spacing:1.76px;">
-                      USE WITHIN ${OTP_EXPIRY_MINUTES} MINUTES
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:21px 28px 25px;border-top:1px dashed #384039;color:#7f887e;font-family:'SFMono-Regular',Consolas,
-                'Liberation Mono',monospace;font-size:12px;line-height:1.7;letter-spacing:0.22px;">
-                Not your request? Ignore this receipt.<br>
-                Keep the code private.
+                <p class="ink" style="margin: 18px 0 0; color: #20251f; font-size: 15px; line-height: 24px">
+                  Use within <strong>${OTP_EXPIRY_MINUTES} minutes.</strong>
+                </p>
+                <p class="muted" style="margin: 4px 0 0; color: #50594f; font-size: 14px; line-height: 23px">Select the code to copy it.</p>
+                <p class="muted" style="margin: 34px 0 0; color: #50594f; font-size: 14px; line-height: 23px">
+                  Didn’t request this code? You can ignore this email. Keep your code private.
+                </p>
               </td>
             </tr>
           </table>
         </td>
       </tr>
     </table>
+    </div>
   </body>
 </html>`;
 

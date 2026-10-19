@@ -1,0 +1,6 @@
+{
+  "scope": "Chromium selector simulation, not real Outlook",
+  "osDark": "rgb(27, 33, 27)",
+  "outlookLightWhileOSDark": "rgb(255, 255, 255)",
+  "outlookDark": "rgb(27, 33, 27)"
+}

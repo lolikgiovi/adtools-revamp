@@ -2597,3 +2597,18 @@ body.global-search-open {
   outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;
 }
+
+/* Flex and button rules must preserve conditional verification controls. */
+.otp-modal [hidden] {
+  display: none;
+}
+
+.otp-fallback-countdown {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.otp-fallback-countdown:empty {
+  display: none;
+}

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OTP first — local verification fixture</title>
+    <style>
+      body { margin: 0; padding: 20px; font-family: system-ui; }
+      .fixture-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+      .fixture-controls button { padding: 8px; }
+      #fixture-log { white-space: pre-wrap; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <p>Local fixture: simulated API responses. No email is sent.</p>
+    <div class="fixture-controls">
+      <button id="success">Reset: send succeeds</button>
+      <button id="failure">Reset: send fails</button>
+      <button id="minute">Advance one minute</button>
+      <button id="remount">Remount registration</button>
+      <button id="overlay">Open verification overlay</button>
+      <button id="theme">Toggle theme</button>
+    </div>
+    <pre id="fixture-log" role="status"></pre>
+    <div id="root"></div>
+    <script type="module">
+      import "/styles/reset.css";
+      import "/styles/themes.css";
+      import "/styles/buttons.css";
+      import "/styles/components.css";
+      import "/styles/overlays.css";
+      import { RegisterPage } from "/pages/register/main.js";
+      import { openOtpOverlay } from "/components/OtpOverlay.js";
+      import { UsageTracker } from "/core/UsageTracker.js";
+      import { manualApprovalMonitor } from "/core/ManualApprovalMonitor.js";
+      const realNow = Date.now.bind(Date);
+      let offset = 0;
+      Date.now = () => realNow() + offset;
+      let fail = false;
+      let firstAt = null;
+      let calls = 0;
+      let page;
+      const email = "otp.fixture@bankmandiri.co.id";
+      const log = document.querySelector("#fixture-log");
+      const stateKey = `otp.flow:${email}:${UsageTracker.getDeviceId()}`;
+      const report = () => { log.textContent = `Email attempts: ${calls}. Clock advanced: ${offset / 1000}s. Send: ${fail ? "fails" : "succeeds"}.`; };
+      window.fetch = async (url) => {
+        const path = new URL(url, location.origin).pathname;
+        if (path.endsWith("auth-mode")) return Response.json({ ok: true, mode: "otp" });
+        if (path.endsWith("request-otp")) {
+          calls++;
+          firstAt ??= Date.now();
+          report();
+          return Response.json({ ok: !fail, retryAt: Date.now() + 60_000,
+            manualAvailableAt: fail ? Date.now() : firstAt + 180_000,
+            manualApprovalAvailable: fail, error: fail ? "Email could not be sent. Request manual approval instead." : undefined,
+          }, { status: fail ? 502 : 200 });
+        }
+        if (path.endsWith("request-manual-approval")) return Response.json({ ok: true, requestId: "fixture-request", status: "pending" });
+        if (path.endsWith("manual-approval-status")) return Response.json({ ok: true, status: "pending" });
+        if (path.endsWith("verify")) return Response.json({ ok: false, error: "Fixture: use the isolated tests for OTP completion." }, { status: 400 });
+        return Response.json({ ok: false }, { status: 404 });
+      };
+      function mount() {
+        page?.unmount();
+        page = new RegisterPage();
+        page.mount(document.querySelector("#root"));
+        document.querySelector("#reg-username").value = "OTP Fixture";
+        document.querySelector("#reg-email").value = email;
+        document.querySelector("#reg-email").dispatchEvent(new Event("input"));
+        document.querySelector("#reg-department").value = "RETAIL";
+        document.querySelector("#reg-role").value = "ENGINEER";
+        report();
+      }
+      function reset(failed) {
+        fail = failed; offset = 0; calls = 0; firstAt = null;
+        localStorage.removeItem(stateKey);
+        const pending = JSON.parse(localStorage.getItem("manual.approval.request") || "null");
+        if (pending?.requestId === "fixture-request") {
+          manualApprovalMonitor.stop();
+          localStorage.removeItem("manual.approval.request");
+        }
+        mount();
+      }
+      document.querySelector("#success").onclick = () => reset(false);
+      document.querySelector("#failure").onclick = () => reset(true);
+      document.querySelector("#minute").onclick = () => { offset += 60_000; page.otpFlow.render(); report(); };
+      document.querySelector("#remount").onclick = mount;
+      document.querySelector("#theme").onclick = () => document.documentElement.classList.toggle("dark");
+      document.querySelector("#overlay").onclick = () => openOtpOverlay({ email, preferCachedToken: false }).catch(() => {});
+      mount();
+    </script>
+  </body>
+</html>
