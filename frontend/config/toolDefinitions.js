@@ -1,4 +1,8 @@
 const TOOL_MODULES = {
+  "compress-image": {
+    description: "Compress multiple PNG images losslessly with before and after previews",
+    load: () => import("../tools/compress-image/main.js").then((module) => ({ ToolClass: module.CompressImage })),
+  },
   "uuid-generator": {
     description: "Generate UUID v4 strings for unique identifiers",
     load: () => import("../tools/uuid-generator/main.js").then((module) => ({ ToolClass: module.UUIDGenerator })),

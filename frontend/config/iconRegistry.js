@@ -1,3 +1,4 @@
+import { getIconSvg as getCompressImageIconSvg } from "../tools/compress-image/icon.js";
 import { getIconSvg as getAboutIconSvg } from "../pages/about/icon.js";
 import { getIconSvg as getAnalyticsDashboardIconSvg } from "../pages/analytics-dashboard/icon.js";
 import { getIconSvg as getApprovalIconSvg } from "../pages/approval/icon.js";
@@ -26,6 +27,7 @@ import { getIconSvg as getTlvIconSvg } from "../tools/tlv-viewer/icon.js";
 import { getIconSvg as getUuidIconSvg } from "../tools/uuid-generator/icon.js";
 
 const ICON_REGISTRY = new Map([
+  ["compress-image", getCompressImageIconSvg],
   ["about", getAboutIconSvg],
   ["analytics-dashboard", getAnalyticsDashboardIconSvg],
   ["approval", getApprovalIconSvg],

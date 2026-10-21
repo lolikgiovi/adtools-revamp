@@ -5,6 +5,7 @@
     "boundary": "valid output is produced"
   },
   "base64-tools": { "actions": ["encode", "decode"], "boundary": "at least one output is produced" },
+  "compress-image": { "actions": ["compress"], "boundary": "a validated PNG below 300,000 bytes is ready for download" },
   "char-counter": { "actions": ["count"], "boundary": "non-empty text is counted" },
   "tlv-viewer": { "actions": ["parse"], "boundary": "input parses and results render" },
   "qr-tools": { "actions": ["download_png", "download_svg"], "boundary": "download is initiated from valid rendered content" },

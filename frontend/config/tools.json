@@ -71,6 +71,13 @@
       "order": 40
     },
     {
+      "id": "compress-image",
+      "name": "Compress Image",
+      "category": "general",
+      "icon": "compress-image",
+      "order": 45
+    },
+    {
       "id": "quick-query",
       "name": "Quick Query",
       "category": "config",

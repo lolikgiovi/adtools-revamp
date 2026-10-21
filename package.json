@@ -73,6 +73,7 @@
     "html2canvas": "^1.4.1",
     "jszip": "^3.10.1",
     "moment": "^2.30.1",
+    "pako": "1.0.11",
     "monaco-editor": "^0.54.0",
     "qrcode": "^1.5.4",
     "velocityjs": "^2.1.5",

@@ -1,0 +1,248 @@
+.tool-container.compress-image {
+  max-width: none;
+  padding: 0;
+  color: hsl(var(--foreground));
+}
+.compress-image [hidden] {
+  display: none !important;
+}
+.ci-toolbar,
+.ci-result-header,
+.ci-preview-toolbar,
+.ci-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.ci-toolbar {
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+.ci-toolbar h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.ci-toolbar p,
+.ci-metrics,
+.ci-status,
+.ci-summary,
+.ci-drop small {
+  font-size: 0.78rem;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.6;
+}
+.ci-toolbar p {
+  margin: 0.25rem 0 0;
+}
+.ci-actions {
+  gap: 0.5rem;
+}
+.ci-drop {
+  padding: 1.5rem 1rem;
+  text-align: center;
+  border: 1px dashed hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--card));
+}
+.ci-drop p {
+  margin: 0.6rem 0 0.25rem;
+  font-size: 0.85rem;
+}
+.ci-drop.is-dragging,
+.ci-drop:focus-within {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+.ci-results {
+  display: grid;
+  gap: 1rem;
+}
+.ci-result {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--card));
+  overflow: hidden;
+}
+.ci-result-header {
+  padding: 1rem 1rem 0;
+}
+.ci-file-info {
+  min-width: 0;
+}
+.ci-result h3 {
+  font-size: 0.88rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.ci-metrics {
+  margin: 0.3rem 0 0;
+}
+.ci-result-header button {
+  flex-shrink: 0;
+}
+.ci-status {
+  margin: 0.5rem 1rem 1rem;
+}
+.ci-error .ci-status {
+  color: hsl(var(--destructive));
+}
+.ci-preview {
+  border-top: 1px solid hsl(var(--border));
+}
+.ci-preview-toolbar {
+  padding: 0.6rem 1rem;
+  font-size: 0.78rem;
+  flex-wrap: wrap;
+}
+.ci-preview-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+}
+.ci-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.ci-pair figure {
+  margin: 0;
+  min-width: 0;
+}
+.ci-pair figure + figure {
+  border-left: 1px solid hsl(var(--border));
+}
+.ci-pair figcaption {
+  padding: 0.4rem 1rem;
+  font-size: 0.75rem;
+  background: hsl(var(--muted));
+}
+.ci-checker {
+  background-color: hsl(var(--background));
+  background-image: conic-gradient(hsl(var(--muted)) 25%, transparent 0 50%, hsl(var(--muted)) 0 75%, transparent 0);
+  background-size: 16px 16px;
+}
+.ci-pair .ci-checker {
+  height: 280px;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+.ci-pair img {
+  width: 100%;
+  height: 100%;
+  max-height: 248px;
+  object-fit: contain;
+}
+.ci-overlay-images {
+  position: relative;
+  height: 360px;
+}
+.ci-overlay-images img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.ci-slider {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.78rem;
+}
+.ci-slider input {
+  flex: 1;
+  min-width: 0;
+  accent-color: hsl(var(--primary));
+}
+.compress-image input:focus-visible,
+.compress-image button:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+@media (max-width: 640px) {
+  .ci-result-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .ci-pair {
+    grid-template-columns: 1fr;
+  }
+  .ci-pair figure + figure {
+    border-left: 0;
+    border-top: 1px solid hsl(var(--border));
+  }
+  .ci-drop small {
+    display: block;
+  }
+}
+
+.ci-diagnostics {
+  margin: 0 1rem 1rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  font-size: 0.78rem;
+}
+.ci-diagnostics summary {
+  cursor: pointer;
+}
+.ci-diagnostics button {
+  margin-top: 0.6rem;
+}
+.ci-diagnostics pre {
+  margin: 0.6rem 0 0;
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.72rem;
+  line-height: 1.6;
+}
+
+.ci-mobile {
+  margin: 0 1rem 1rem;
+  padding: 0.75rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--muted) / 0.35);
+  font-size: 0.78rem;
+}
+.ci-mobile summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.ci-mobile p {
+  color: hsl(var(--muted-foreground));
+  line-height: 1.6;
+  max-width: 90ch;
+}
+.ci-resize-controls {
+  display: flex;
+  align-items: end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.ci-resize-controls label {
+  display: grid;
+  gap: 0.3rem;
+}
+.ci-resize-controls input,
+.ci-resize-controls select {
+  padding: 0.45rem 0.55rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font: inherit;
+  min-height: 34px;
+}
+.ci-resize-controls input {
+  width: 120px;
+}
+.ci-resize-note {
+  margin-bottom: 0;
+}
