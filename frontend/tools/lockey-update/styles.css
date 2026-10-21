@@ -89,17 +89,10 @@
 
 .lu-controls {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
   flex: 0 0 auto;
-}
-
-.lu-mast-fields {
-  display: flex;
-  align-items: flex-end;
-  gap: 12px;
-  min-width: 0;
 }
 
 .lu-field-release {
@@ -110,26 +103,40 @@
   width: 220px;
 }
 
-.lu-source {
+.lu-row-actions {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 8px;
-  min-width: 0;
   margin-left: auto;
 }
 
-.lu-source-field {
+.lu-row-action {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.lu-row-action:focus-visible {
+  outline: 2px solid hsl(var(--foreground) / 0.72);
+  outline-offset: 2px;
+}
+
+.lu-row-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.lu-source {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
 }
 
-.lu-source-field > span {
-  color: hsl(var(--muted-foreground));
-  font-size: 11.5px;
-  font-weight: 500;
-  line-height: 1.2;
+.lu-env-select {
+  min-width: 140px;
 }
 
 .lu-select,
@@ -236,24 +243,6 @@
   flex-direction: column;
   gap: 12px;
   min-height: 0;
-}
-
-.lu-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.lu-field-label {
-  color: hsl(var(--muted-foreground));
-  font-size: 11.5px;
-  font-weight: 500;
-  line-height: 1.2;
-}
-
-.lu-field .lu-input {
-  width: 100%;
 }
 
 .lu-count {
@@ -513,6 +502,15 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.lu-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  flex: 0 0 auto;
 }
 
 .lu-history-summary {
@@ -893,40 +891,34 @@
 @media (max-width: 720px) {
   .lu-controls {
     align-items: stretch;
-    flex-direction: column;
+    flex-wrap: wrap;
     gap: 10px;
-  }
-
-  .lu-mast-fields {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    width: 100%;
   }
 
   .lu-field-release,
   .lu-field-audit {
+    flex: 1 1 140px;
     width: auto;
   }
 
-  .lu-source {
-    align-items: flex-end;
-    width: 100%;
+  .lu-row-actions {
     margin-left: 0;
   }
 
-  .lu-source-field {
-    flex: 1;
+  .lu-source {
+    flex: 1 1 100%;
+    justify-content: flex-end;
   }
 
-  .lu-source-field .lu-select {
-    width: 100%;
+  .lu-env-select {
+    flex: 1;
     max-width: none;
   }
 
   .lu-select,
   .lu-input,
-  .lu-load {
+  .lu-load,
+  .lu-row-action {
     height: 40px;
   }
 

@@ -10,31 +10,17 @@ export const LockeyUpdateTemplate = /* html */ `
     </div>
   </div>
 
-  <div class="lu-controls" id="lu-controls">
-    <div class="lu-mast-fields">
-      <label class="lu-field lu-field-release">
-        <span class="lu-field-label">Release ID</span>
-        <input id="lu-release-id" class="lu-input" type="text" maxlength="10" placeholder="x.x.x" list="lu-release-options" autocomplete="off" spellcheck="false" aria-describedby="lu-validation" title="The generated script allocates the next version as MAX(LANGUAGE_PACK_VERSION) + 1 at run.">
-        <datalist id="lu-release-options"></datalist>
-      </label>
-      <label class="lu-field lu-field-audit">
-        <span class="lu-field-label">Audit trail</span>
-        <input id="lu-audit-user" class="lu-input" type="text" maxlength="50" placeholder="SYSTEM" autocapitalize="characters" autocomplete="off" spellcheck="false" aria-describedby="lu-validation">
-      </label>
-    </div>
-    <div class="lu-source">
-      <label class="lu-source-field" for="lu-connection">
-        <span>Environment</span>
-        <select id="lu-connection" class="lu-select"></select>
-      </label>
-      <button id="lu-fetch-oracle" class="btn btn-secondary btn-sm lu-load" type="button">Load from Oracle</button>
-    </div>
-  </div>
-
-  <p class="lu-source-error" id="lu-source-error" role="alert" hidden></p>
-
   <section class="lu-panel active" id="lu-create-panel" data-panel="create" role="tabpanel" aria-labelledby="lu-tab-create">
     <div class="lu-create">
+      <div class="lu-controls" id="lu-controls">
+        <input id="lu-release-id" class="lu-input lu-field-release" type="text" maxlength="10" placeholder="Release ID" list="lu-release-options" autocomplete="off" spellcheck="false" aria-label="Release ID" aria-describedby="lu-validation" title="Format x.x.x. The generated script allocates the next version as MAX(LANGUAGE_PACK_VERSION) + 1 at run.">
+        <datalist id="lu-release-options"></datalist>
+        <input id="lu-audit-user" class="lu-input lu-field-audit" type="text" maxlength="50" placeholder="Audit trail" autocapitalize="characters" autocomplete="off" spellcheck="false" aria-label="Audit trail" aria-describedby="lu-validation">
+        <div class="lu-row-actions">
+          <button id="lu-add-row" class="btn btn-secondary btn-sm lu-row-action" type="button" title="Add a localization row">Add row</button>
+          <button id="lu-remove-row" class="btn btn-secondary btn-sm lu-row-action" type="button" title="Remove the selected row(s), or the last row">Remove row</button>
+        </div>
+      </div>
       <div class="lu-grid-shell">
         <div id="lu-grid" class="lu-grid" aria-label="Localization rows"></div>
       </div>
@@ -64,7 +50,14 @@ export const LockeyUpdateTemplate = /* html */ `
 
   <section class="lu-panel" id="lu-history-panel" data-panel="history" role="tabpanel" aria-labelledby="lu-tab-history">
     <div class="lu-history">
-      <p class="lu-history-summary" id="lu-history-summary">No localization data loaded.</p>
+      <div class="lu-history-head">
+        <p class="lu-history-summary" id="lu-history-summary">No localization data loaded.</p>
+        <div class="lu-source">
+          <select id="lu-connection" class="lu-select lu-env-select" aria-label="Environment"></select>
+          <button id="lu-fetch-oracle" class="btn btn-secondary btn-sm lu-load" type="button">Load from Oracle</button>
+        </div>
+      </div>
+      <p class="lu-source-error" id="lu-source-error" role="alert" hidden></p>
       <div class="lu-data-warnings" id="lu-data-warnings" hidden aria-live="polite"></div>
 
       <div class="lu-history-toolbar" id="lu-history-toolbar">

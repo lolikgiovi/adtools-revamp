@@ -150,6 +150,8 @@ export class LockeyUpdate extends BaseTool {
       releaseOptions: "lu-release-options",
       releaseId: "lu-release-id",
       auditUser: "lu-audit-user",
+      addRow: "lu-add-row",
+      removeRow: "lu-remove-row",
       grid: "lu-grid",
       validation: "lu-validation",
       copySql: "lu-copy-sql",
@@ -244,6 +246,8 @@ export class LockeyUpdate extends BaseTool {
 
     this.el.copySql?.addEventListener("click", () => this.copySql());
     this.el.downloadSql?.addEventListener("click", () => this.downloadSql());
+    this.el.addRow?.addEventListener("click", () => this.addRow());
+    this.el.removeRow?.addEventListener("click", () => this.removeSelectedRows());
 
     this.handleWindowResize = () => this.resizeGrid();
     window.addEventListener("resize", this.handleWindowResize);
@@ -262,7 +266,6 @@ export class LockeyUpdate extends BaseTool {
       colHeaders: ["Localization key", "EN value", "ID value"],
       columns: [{ data: 0 }, { data: 1 }, { data: 2 }],
       rowHeaders: true,
-      minSpareRows: 1,
       rowHeights: 26,
       autoRowSize: false,
       contextMenu: true,
@@ -284,6 +287,54 @@ export class LockeyUpdate extends BaseTool {
       },
     });
     this.gridHeightValue = this.gridHeight();
+    this.updateRowActions();
+  }
+
+  rowCount() {
+    const count = this.grid?.countRows?.();
+    return typeof count === "number" ? count : this.draft.rows.length;
+  }
+
+  addRow() {
+    if (!this.grid) return;
+    const rowCount = this.rowCount();
+    if (rowCount === 0) this.grid.alter("insert_row_above", 0, 1);
+    else this.grid.alter("insert_row_below", rowCount - 1, 1);
+    this.grid.selectCell?.(rowCount, 0);
+    this.grid.scrollViewportTo?.({ row: rowCount, col: 0 });
+    this.updateRowActions();
+  }
+
+  removeSelectedRows() {
+    if (!this.grid) return;
+    const rowCount = this.rowCount();
+    if (rowCount === 0) return;
+
+    const selection = this.grid.getSelected?.();
+    const ranges = Array.isArray(selection) && Array.isArray(selection[0]) ? selection : selection ? [selection] : [];
+    const rows = new Set();
+    ranges.forEach((range) => {
+      if (!Array.isArray(range) || range.length < 3) return;
+      const start = Math.min(range[0], range[2]);
+      const end = Math.max(range[0], range[2]);
+      for (let row = start; row <= end; row += 1) {
+        if (row >= 0 && row < rowCount) rows.add(row);
+      }
+    });
+    if (rows.size === 0) rows.add(rowCount - 1);
+
+    this.grid.alter(
+      "remove_row",
+      Array.from(rows)
+        .sort((left, right) => left - right)
+        .map((row) => [row, 1]),
+    );
+    this.updateRowActions();
+  }
+
+  updateRowActions() {
+    if (this.el.removeRow) this.el.removeRow.disabled = this.rowCount() === 0;
+    if (this.el.addRow) this.el.addRow.disabled = !this.grid;
   }
 
   initializeEditor() {
@@ -312,7 +363,7 @@ export class LockeyUpdate extends BaseTool {
   }
 
   gridHeight() {
-    const rows = this.grid?.countRows?.() || this.draft.rows.length + 1;
+    const rows = this.rowCount();
     return Math.max(78, Math.min(rows * 26 + 26, 420));
   }
 
@@ -334,6 +385,7 @@ export class LockeyUpdate extends BaseTool {
     this.scheduleDraftSave();
     this.renderPreview();
     this.resizeGrid();
+    this.updateRowActions();
   }
 
   syncInputs() {
@@ -343,6 +395,7 @@ export class LockeyUpdate extends BaseTool {
 
   restoreDraft() {
     this.draft.auditUser = quickQueryAuditUser();
+    let hasDraftRows = false;
     try {
       const saved = JSON.parse(localStorage.getItem(DRAFT_STORAGE_KEY) || "null");
       if (saved && typeof saved === "object") {
@@ -351,6 +404,7 @@ export class LockeyUpdate extends BaseTool {
           this.draft.auditUser = saved.auditUser.trim().toUpperCase();
         }
         if (Array.isArray(saved.rows)) {
+          hasDraftRows = true;
           this.draft.rows = saved.rows.map((row) => ({
             key: String(row?.key ?? ""),
             idValue: String(row?.idValue ?? ""),
@@ -362,7 +416,7 @@ export class LockeyUpdate extends BaseTool {
       // Ignore malformed drafts.
     }
     if (!this.draft.auditUser) this.draft.auditUser = "SYSTEM";
-    if (this.draft.rows.length === 0) this.draft.rows = [blankRow()];
+    if (!hasDraftRows) this.draft.rows = [blankRow()];
   }
 
   restoreActiveTab() {
