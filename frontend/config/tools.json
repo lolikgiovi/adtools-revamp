@@ -80,6 +80,13 @@
       "order": 52
     },
     {
+      "id": "lockey-update",
+      "name": "Lockey Update",
+      "category": "config",
+      "icon": "lockey-update",
+      "order": 54
+    },
+    {
       "id": "redis-cache",
       "name": "Redis Cache",
       "category": "execute",

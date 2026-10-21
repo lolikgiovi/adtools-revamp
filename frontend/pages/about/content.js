@@ -138,6 +138,16 @@ export const toolGuides = {
     ],
     notes: "Batch checks are useful for finding missing or inaccessible campaign assets.",
   },
+  "lockey-update": {
+    summary: "Generate one combined Oracle script for a localization release, with the version allocated by MAX + 1 at execution.",
+    howToUse: [
+      "Type or pick the target release as x.x.x and confirm the audit trail.",
+      "Enter each localization key with its EN and ID values in the grid.",
+      "Fix any validation issues, then copy or download the combined script for both localization tables.",
+    ],
+    notes:
+      "The script allocates the next global version with MAX + 1 inside the INSERT, so it is safe to run without loading the ledger. Loading an environment only adds release suggestions and the version-history view. Uses the same audit trail preference as Quick Query.",
+  },
   "master-lockey": {
     summary: "View, search, and inspect localization keys from configured language-pack domains.",
     howToUse: [

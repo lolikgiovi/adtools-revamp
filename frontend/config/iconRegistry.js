@@ -10,6 +10,7 @@ import { getIconSvg as getHtmlIconSvg } from "../tools/html-editor/icon.js";
 import { getIconSvg as getImageCheckerIconSvg } from "../tools/image-checker/icon.js";
 import { getIconSvg as getJsonIconSvg } from "../tools/json-tools/icon.js";
 import { getIconSvg as getMasterLockeyIconSvg } from "../tools/master-lockey/icon.js";
+import { getIconSvg as getLockeyUpdateIconSvg } from "../tools/lockey-update/icon.js";
 import { getIconSvg as getMergeSqlIconSvg } from "../tools/merge-sql/icon.js";
 import { getIconSvg as getQrIconSvg } from "../tools/qr-tools/icon.js";
 import { getIconSvg as getQuickQueryIconSvg } from "../tools/quick-query/icon.js";
@@ -40,6 +41,7 @@ const ICON_REGISTRY = new Map([
   ["jenkins-batch", getRunBatchIconSvg],
   ["jenkins-query", getRunQueryIconSvg],
   ["language", getMasterLockeyIconSvg],
+  ["lockey-update", getLockeyUpdateIconSvg],
   ["merge-sql", getMergeSqlIconSvg],
   ["qr", getQrIconSvg],
   ["querify", getQuerifyIconSvg],

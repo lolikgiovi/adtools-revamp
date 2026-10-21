@@ -31,6 +31,10 @@ const TOOL_MODULES = {
     description: "Generate SQL in bulk from Excel files using Quick Query schemas",
     load: () => import("../tools/querify/main.js").then((module) => ({ ToolClass: module.QuerifyTool })),
   },
+  "lockey-update": {
+    description: "Generate combined language-pack version and update SQL for a release",
+    load: () => import("../tools/lockey-update/main.js").then((module) => ({ ToolClass: module.LockeyUpdate })),
+  },
   "redis-cache": {
     description: "Find, save, and safely clear Redis cache keys",
     load: () => import("../tools/redis-cache/main.js").then((module) => ({ ToolClass: module.RedisCacheTool })),
