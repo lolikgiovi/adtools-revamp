@@ -434,10 +434,11 @@ class Sidebar {
           const svg = ensureSvgClass(rawSvg);
           const toolId = this.escapeHtml(tool.id);
           const toolName = this.escapeHtml(tool.name);
+          const toolTitle = this.escapeHtml(tool.description || tool.name);
           const isPinned = pinnedToolIds.has(tool.id);
           return `
             <div class="sidebar-menu-item" data-tool="${toolId}" data-pinned="${isPinned ? "true" : "false"}">
-              <button class="sidebar-menu-button" type="button">
+              <button class="sidebar-menu-button" type="button" title="${toolTitle}">
                 ${isPinned ? `<span class="sidebar-pin-indicator" title="Pinned" aria-label="Pinned">${this.getPinIconSvg()}</span>` : ""}
                 ${svg}
                 <span class="sidebar-menu-label">${toolName}</span>
@@ -554,10 +555,11 @@ class Sidebar {
           const dataAttr =
             item.type === "tool" ? `data-tool="${itemId}"` : item.type === "action" ? `data-action="${itemId}"` : `data-page="${itemId}"`;
           const itemName = this.escapeHtml(item.name);
+          const itemTitle = this.escapeHtml(item.description || item.name);
           const isPinned = item.type === "tool" && this.getPinnedToolIds().has(item.id);
           return `
             <div class=\"sidebar-menu-item\" ${dataAttr} data-pinned=\"${isPinned ? "true" : "false"}\">
-              <button class=\"sidebar-menu-button\" type=\"button\">
+              <button class=\"sidebar-menu-button\" type=\"button\" title=\"${itemTitle}\">
                 ${isPinned ? `<span class=\"sidebar-pin-indicator\" title=\"Pinned\" aria-label=\"Pinned\">${this.getPinIconSvg()}</span>` : ""}
                 ${svg}
                 <span class=\"sidebar-menu-label\">${itemName}</span>

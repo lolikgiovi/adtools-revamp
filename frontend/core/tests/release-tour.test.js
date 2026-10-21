@@ -278,6 +278,51 @@ describe("release tour", () => {
     tips.destroy();
   });
 
+  it("shows a shared-chrome tip on any route and never navigates for it", async () => {
+    document.body.innerHTML = '<aside class="sidebar"><button class="sidebar-menu-button">Velocity Template</button></aside>';
+    document.querySelector(".sidebar-menu-button").getBoundingClientRect = () => ({
+      width: 180,
+      height: 34,
+      top: 120,
+      right: 200,
+      bottom: 154,
+      left: 20,
+    });
+    const navigated = [];
+    let route = "quick-query";
+    const tips = new ReleaseTips({
+      release: {
+        releaseId: "release-shared-chrome-tip",
+        tips: [
+          {
+            id: "velocity-sidebar",
+            route: "*",
+            target: ".sidebar-menu-button",
+            title: "New: Velocity Template",
+            body: "Open it from the sidebar.",
+            guided: true,
+            completeOn: { event: "click", target: ".sidebar-menu-button" },
+          },
+        ],
+      },
+      getRoute: () => route,
+      onNavigate: ({ route: nextRoute }) => navigated.push(nextRoute),
+    });
+
+    tips.startGuided();
+    expect(navigated).toEqual([]);
+    expect(tips.openForCurrentRoute()).toBe(true);
+    expect(document.querySelector(".release-feature-tip")?.textContent).toContain("New: Velocity Template");
+
+    document.querySelector(".sidebar-menu-button").click();
+    await Promise.resolve();
+    expect(localStorage.getItem("releaseTip.opened.release-shared-chrome-tip.velocity-sidebar")).toBe("true");
+
+    route = "velocity-template";
+    expect(tips.openForCurrentRoute()).toBe(false);
+    tips.destroy();
+  });
+
   it("spotlights the preview control each HTML dropdown tip points at", () => {
     for (const [tipId, selectId] of [
       ["html-template-preview-width", "previewViewportSelect"],

@@ -23,6 +23,11 @@ function safeString(value) {
   return String(value).trim();
 }
 
+// A "*" tip targets chrome that exists on every route, such as the sidebar.
+function tipMatchesRoute(tip, route) {
+  return Boolean(tip) && (tip.route === "*" || tip.route === route);
+}
+
 function isRecord(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
@@ -880,7 +885,7 @@ export class ReleaseTips {
     if (this.started || this.release.tips.length === 0) return false;
     this.started = true;
     const unsubscribe = this.eventBus?.on?.("page:changed", () => {
-      if (this.layerEl && this.activeTip?.route !== this.getRoute()) {
+      if (this.layerEl && !tipMatchesRoute(this.activeTip, this.getRoute())) {
         this.close();
         if (this.guided) this.finishGuided();
       }
@@ -928,7 +933,7 @@ export class ReleaseTips {
     this.activeStageIndex = 0;
     this.guidedOpenAttempts = 0;
     const currentRoute = safeString(this.getRoute()) || "home";
-    if (currentRoute !== this.guidedTip.route) {
+    if (this.guidedTip.route !== "*" && currentRoute !== this.guidedTip.route) {
       try {
         this.onNavigate?.({ route: this.guidedTip.route });
       } catch (_) {}
@@ -984,10 +989,12 @@ export class ReleaseTips {
     if (!this.guided && this.deferredRoute === route) return false;
     if (this.deferredRoute && this.deferredRoute !== route) this.deferredRoute = null;
     const candidates = this.guided
-      ? this.guidedTip?.route === route
+      ? tipMatchesRoute(this.guidedTip, route)
         ? [this.guidedTip]
         : []
-      : this.release.tips.filter((item) => item.route === route && (this.preview || !hasHandledTip(this.release.releaseId, item.id)));
+      : this.release.tips.filter(
+          (item) => tipMatchesRoute(item, route) && (this.preview || !hasHandledTip(this.release.releaseId, item.id)),
+        );
     let tip = null;
     let target = null;
     for (const candidate of candidates) {
@@ -1021,7 +1028,7 @@ export class ReleaseTips {
       if (tip) break;
     }
     if (!tip || !target) {
-      if (this.guided && this.guidedTip?.route === route) {
+      if (this.guided && tipMatchesRoute(this.guidedTip, route)) {
         this.guidedOpenAttempts += 1;
         if (this.guidedOpenAttempts < 3) this.schedule(160);
         else {

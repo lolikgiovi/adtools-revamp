@@ -167,7 +167,11 @@
           "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$",
           "description": "Stable identity used to remember that this tip has been completed."
         },
-        "route": { "type": "string", "minLength": 1 },
+        "route": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Route that owns the tip, or \"*\" for chrome visible on every route such as the sidebar."
+        },
         "target": { "type": "string", "minLength": 1 },
         "placement": {
           "type": "string",

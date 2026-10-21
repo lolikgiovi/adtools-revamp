@@ -57,6 +57,32 @@
   "tour": [],
   "tips": [
     {
+      "id": "lockey-update-sidebar",
+      "route": "*",
+      "target": "[data-tool=\"lockey-update\"] .sidebar-menu-button",
+      "placement": "right",
+      "title": "New Feature: Lockey Update",
+      "body": "Add release targets and localization values, then copy the validated Oracle update script.",
+      "guided": false,
+      "completeOn": {
+        "event": "click",
+        "target": "[data-tool=\"lockey-update\"] .sidebar-menu-button"
+      }
+    },
+    {
+      "id": "velocity-template-sidebar",
+      "route": "*",
+      "target": "[data-tool=\"velocity-template\"] .sidebar-menu-button",
+      "placement": "right",
+      "title": "New Feature: Velocity Template",
+      "body": "Edit VTL with JSON Context Data, preview locally, then validate against your configured API.",
+      "guided": false,
+      "completeOn": {
+        "event": "click",
+        "target": "[data-tool=\"velocity-template\"] .sidebar-menu-button"
+      }
+    },
+    {
       "id": "velocity-template-validation",
       "route": "velocity-template",
       "target": "#btnValidateVelocity",
