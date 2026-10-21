@@ -17,7 +17,7 @@ export class QueryExecutionService {
 
   async generateQuery({ tableName, queryType, schemaData, inputData, attachments = [], options = {}, onProgress } = {}) {
     this.validationService.validateSchema(schemaData, tableName);
-    this.validationService.matchSchemaWithData(schemaData, inputData);
+    this.validationService.matchSchemaWithData(schemaData, inputData, { allowPartialData: queryType === "update" });
 
     if ((inputData?.length || 0) - 1 < this.workerRowThreshold) {
       return {

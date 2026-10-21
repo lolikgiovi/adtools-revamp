@@ -167,11 +167,13 @@ class BaseTool {
   /**
    * Copy text to clipboard
    * @param {string} text - Text to copy
+   * @param {HTMLElement|null} targetEl - Optional element to flash as copied
+   * @param {string} successMessage - Confirmation shown after the write succeeds
    */
-  async copyToClipboard(text, targetEl = null) {
+  async copyToClipboard(text, targetEl = null, successMessage = "Copied to clipboard!") {
     try {
       await navigator.clipboard.writeText(text);
-      this.showSuccess("Copied to clipboard!");
+      this.showSuccess(successMessage);
       if (targetEl) {
         try {
           targetEl.classList.add("copied");

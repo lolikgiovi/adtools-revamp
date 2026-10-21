@@ -68,6 +68,76 @@ for (const useWorker of [false, true]) {
       service.terminate();
     });
 
+    // Failure modes: omitted audit fields ignore UI options, worker and direct
+    // paths diverge, absent schema fields get invented, explicit values get lost,
+    // source data mutates, or partial data bypasses primary-key checks.
+    it.each([
+      [{ defaultSysdate: true, auditUserMode: "system" }, "updated_time = SYSDATE", "updated_by = 'SYSTEM'"],
+      [{ defaultSysdate: false, auditUserMode: "custom", customAuditUser: "operator" }, null, "updated_by = 'OPERATOR'"],
+    ])("honors audit options on partial UPDATE data (%j)", async (options, timestamp, auditUser) => {
+      const service = execution(useWorker);
+      const inputData = [
+        ["ID", "NAME"],
+        ["101", "Alice"],
+      ];
+      const result = await service.generateQuery({
+        tableName: "app.customers",
+        queryType: "update",
+        schemaData: schema,
+        inputData,
+        options,
+      });
+      if (timestamp) expect(result.sql).toContain(timestamp);
+      else expect(result.sql).not.toContain("updated_time =");
+      expect(result.sql).toContain(auditUser);
+      expect(result.sql).toContain("WHERE id = 101");
+      expect(result.sql).not.toContain("notes =");
+      expect(result.sql).not.toContain("created_time =");
+      expect(result.sql).not.toContain("created_by =");
+      expect(inputData).toEqual([
+        ["ID", "NAME"],
+        ["101", "Alice"],
+      ]);
+      service.terminate();
+    });
+
+    it("preserves explicit audit values and never invents absent schema columns", async () => {
+      const service = execution(useWorker);
+      const inputData = [
+        ["ID", "NAME", "UPDATED_TIME", "UPDATED_BY"],
+        ["101", "Alice", "SYSDATE", "editor"],
+      ];
+      const result = await service.generateQuery({
+        tableName: "app.customers",
+        queryType: "update",
+        schemaData: schema,
+        inputData,
+        options: { defaultSysdate: false, auditUserMode: "off" },
+      });
+      expect(result.sql).toContain("updated_time = SYSDATE");
+      expect(result.sql).toContain("updated_by = 'EDITOR'");
+      const noAudit = await service.generateQuery({
+        tableName: "app.customers",
+        queryType: "update",
+        schemaData: schema.slice(0, 3),
+        inputData: [
+          ["ID", "NAME"],
+          ["101", "Alice"],
+        ],
+      });
+      expect(noAudit.sql).not.toContain("updated_time");
+      expect(noAudit.sql).not.toContain("updated_by");
+      await expect(
+        service.generateQuery({
+          tableName: "app.customers",
+          queryType: "update",
+          schemaData: schema,
+          inputData: [["NAME"], ["Alice"]],
+        }),
+      ).rejects.toThrow("Primary key values are required");
+      service.terminate();
+    });
+
     it.each(["insert", "merge"])("rejects missing required fields for %s", async (queryType) => {
       const service = execution(useWorker);
       await expect(

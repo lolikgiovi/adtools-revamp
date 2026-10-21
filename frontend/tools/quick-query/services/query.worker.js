@@ -14,7 +14,7 @@ const schemaValidationService = new SchemaValidationService();
 function generateQueryWithProgress(tableName, queryType, schemaData, inputData, attachments, options) {
   // Validate first
   schemaValidationService.validateSchema(schemaData);
-  schemaValidationService.matchSchemaWithData(schemaData, inputData);
+  schemaValidationService.matchSchemaWithData(schemaData, inputData, { allowPartialData: queryType === "update" });
 
   // Generate query (QueryGenerationService already optimized with Array.join)
   const sql = queryService.generateQuery(tableName, queryType, schemaData, inputData, attachments, options);

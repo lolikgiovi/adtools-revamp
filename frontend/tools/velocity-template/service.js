@@ -351,7 +351,7 @@ export function parseTemplateImportQuery(sql = "") {
   return statement;
 }
 
-export function getTemplateImportIdentity(sql = "", columns = [], row = []) {
+export function getTemplateImportTable(sql = "") {
   const source = String(sql)
     .replace(/--[^\n]*/g, " ")
     .replace(/\/\*[\s\S]*?\*\//g, " ");
@@ -361,6 +361,13 @@ export function getTemplateImportIdentity(sql = "", columns = [], row = []) {
   const table = names.at(-1) || "";
   const schema = names.length > 1 ? names.at(-2) : "";
   if (!table) return null;
+  return { schema, table, qualifiedTable: schema ? `${schema}.${table}` : table };
+}
+
+export function getTemplateImportIdentity(sql = "", columns = [], row = []) {
+  const source = getTemplateImportTable(sql);
+  if (!source) return null;
+  const { schema, table } = source;
 
   const columnMap = new Map(columns.map((column, index) => [String(column).toUpperCase(), index]));
   const identifierNames = ["SERVICE_CODE", "ENVIRONMENT", "TEMPLATE_ID", "ID"];

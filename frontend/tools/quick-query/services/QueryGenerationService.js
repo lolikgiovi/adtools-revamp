@@ -284,6 +284,20 @@ export class QueryGenerationService {
     const importedBlobs = new Map();
     const primaryKeys = this.ValueProcessorService.findPrimaryKeys(schemaData, tableName);
 
+    // Partial UPDATEs still use the existing audit-value rules. Only append
+    // audit columns present in the schema, without changing the source grid.
+    if (queryType === "update") {
+      const missingAuditFields = schemaData
+        .map((row) => row[0])
+        .filter(
+          (field) =>
+            ["updated_time", "updated_by"].includes(field.toLowerCase()) &&
+            !fieldNames.includes(field) &&
+            !primaryKeys.includes(field),
+        );
+      fieldNames.push(...missingAuditFields);
+    }
+
     // 4. Process each row of data
     const processedRows = dataRows.map((rowData, rowIndex) => {
       try {
@@ -305,7 +319,7 @@ export class QueryGenerationService {
             // Extract dataType and nullable from schema
             const [, dataType, nullable] = schemaRow;
             // Get the actual value from the data
-            let value = rowData[colIndex];
+            let value = colIndex < inputData[0].length ? rowData[colIndex] : null;
 
             // BLOB attachments are reconstructed as PL/SQL variables before the DML runs.
             const matchingBlob = options.blobAttachmentMode !== "filename" && dataType.trim().toUpperCase() === "BLOB" && attachments?.find(

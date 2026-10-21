@@ -32,7 +32,7 @@ import { QueryExecutionService } from "./services/QueryExecutionService.js";
 import { SplitWorkerService } from "./services/SplitWorkerService.js";
 import { analyzeJenkinsSql, convertJenkinsUnsafeLiterals } from "./services/JenkinsSqlSafetyService.js";
 import { TableAutosaveService } from "./services/TableAutosaveService.js";
-import { isTabDraftContentEmpty } from "./services/TabDraftStateService.js";
+import { isTabDraftContentEmpty, mergeDraftSchema } from "./services/TabDraftStateService.js";
 import {
   buildQuickQueryGeneratedMeta,
   cleanQuickQueryAnalyticsMeta,
@@ -1858,16 +1858,27 @@ export class QuickQueryUI {
     await this.ready;
     const hasDraftData = Array.isArray(schemaData) && Array.isArray(inputData);
     if (!hasDraftData && !String(sql || "").trim()) return null;
+    const draftTableName = this.sanitizeTableInputValue(tableName);
+    let savedSchema = null;
+    if (hasDraftData && draftTableName) {
+      savedSchema = await this.storageService.loadSchema(draftTableName);
+      const hasColumns = (rows) => Array.isArray(rows) && rows.some((row) => String(row?.[0] || "").trim());
+      if (!hasColumns(savedSchema)) {
+        const existingTab = this.tabs.find((item) => item.tableName?.toUpperCase() === draftTableName);
+        savedSchema = hasColumns(existingTab?.schemaData) ? existingTab.schemaData : null;
+      }
+    }
     const tab = await this.createNewTab();
     if (!tab) {
       this.eventBus?.emit("notification:error", { message: "Quick Query already has 15 tabs." });
       return null;
     }
     tab.title = String(title || "Untitled").trim() || "Untitled";
-    tab.tableName = this.sanitizeTableInputValue(tableName);
+    tab.tableName = draftTableName;
     tab.queryType = ["merge", "insert", "update"].includes(queryType) ? queryType : tab.queryType;
-    tab.schemaData = hasDraftData ? schemaData.map((row) => [...row]) : tab.schemaData;
-    tab.inputData = hasDraftData ? inputData.map((row) => [...row]) : tab.inputData;
+    tab.schemaData = hasDraftData ? mergeDraftSchema(savedSchema, schemaData) : tab.schemaData;
+    // Use the merged schema's order and spelling before the grid can rebuild headers.
+    tab.inputData = hasDraftData ? prepareExcelDataForSchema(inputData, tab.schemaData) : tab.inputData;
     tab.generatedSql = String(sql || "");
     tab.source = source || "created-query";
     tab.dirty = true;

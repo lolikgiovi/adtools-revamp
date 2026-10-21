@@ -16,6 +16,7 @@ import {
   extractVelocityVariables,
   formatRenderedResult,
   getTemplateImportIdentity,
+  getTemplateImportTable,
   normalizeImportedTemplateValue,
   parseVelocityContext,
   parseTemplateImportQuery,
@@ -37,6 +38,9 @@ const DIRECTIVES = [
   ["#macro", "#macro(${1:name} $${2:argument})\n$0\n#end"],
 ];
 
+const IMPORT_QUERY_STORAGE_KEY = "tool:velocity-template:import-queries";
+const IMPORT_QUERY_LIMIT = 25;
+
 const VELOCITY_FUNCTIONS = [
   ["toString", "Convert the value to text", "toString()"],
   ["size", "Return the collection, map, or text size", "size()"],
@@ -53,6 +57,30 @@ const VELOCITY_FUNCTIONS = [
   ["endsWith", "Check whether text ends with a value", "endsWith(${1:value})"],
   ["replace", "Replace text occurrences", "replace(${1:search}, ${2:replacement})"],
 ];
+
+function byteLength(value) {
+  return new TextEncoder().encode(String(value)).length;
+}
+
+function sqlCellPreview(value, limit = 160) {
+  if (value == null) return "NULL";
+  let text;
+  if (typeof value === "object") {
+    try {
+      text = normalizeImportedTemplateValue(value);
+    } catch (_) {
+      try {
+        text = JSON.stringify(value);
+      } catch (_) {
+        text = String(value);
+      }
+    }
+  } else {
+    text = String(value);
+  }
+  const compact = text.replace(/\s+/g, " ").trim();
+  return compact.length > limit ? `${compact.slice(0, limit)}…` : compact;
+}
 
 function contextPaths(value, prefix = "", depth = 0) {
   if (!value || typeof value !== "object" || Array.isArray(value) || depth > 5) return [];
@@ -74,6 +102,8 @@ class VelocityTemplateTool extends BaseTool {
     this._paneStateStorageKey = "tool:velocity-template:pane-state";
     this._sqlImportRows = [];
     this._sqlImportColumns = [];
+    this._sqlImportRowIndex = 0;
+    this._sqlImportSql = "";
     this._sqlImportEditor = null;
     this.documentStore = null;
     this.documents = [];
@@ -81,6 +111,12 @@ class VelocityTemplateTool extends BaseTool {
     this._documentWriteQueue = Promise.resolve();
     this._tabTransition = false;
     this._mountSequence = 0;
+    this._lastRender = null;
+    this._renderState = "idle";
+    this._hadRenderError = false;
+    this._undoAction = null;
+    this._undoTimer = null;
+    this._pendingSyncFields = [];
   }
 
   getIconSvg() {
@@ -100,7 +136,7 @@ class VelocityTemplateTool extends BaseTool {
     this.initializeResizer();
     this.bindEvents();
     this.initializePaneState();
-    this.initializeSqlImport();
+    this.initializePlatformActions();
     this.updatePreview();
     UsageTracker.trackFeature("velocity-template", "mount", "", 5000);
   }
@@ -110,6 +146,7 @@ class VelocityTemplateTool extends BaseTool {
     clearTimeout(this._templateTimer);
     clearTimeout(this._contextTimer);
     clearTimeout(this._previewTimer);
+    clearTimeout(this._undoTimer);
     this._languageDisposables.forEach((disposable) => disposable.dispose());
     this._languageDisposables = [];
     this.editor?.dispose();
@@ -130,6 +167,10 @@ class VelocityTemplateTool extends BaseTool {
     void Promise.allSettled([finalSave, this._documentWriteQueue]).then(() => store?.close());
     const importDialog = document.getElementById("velocitySqlImportDialog");
     if (importDialog) importDialog.hidden = true;
+    const syncDialog = document.getElementById("velocitySyncDialog");
+    if (syncDialog) syncDialog.hidden = true;
+    const undoToast = document.getElementById("velocityUndoToast");
+    if (undoToast) undoToast.hidden = true;
     this.cleanupResizer();
   }
 
@@ -598,6 +639,47 @@ class VelocityTemplateTool extends BaseTool {
     }
   }
 
+  readImportQueries() {
+    try {
+      const parsed = JSON.parse(this.readStored(IMPORT_QUERY_STORAGE_KEY, "{}"));
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  rememberImportQuery(sql, connection) {
+    const source = getTemplateImportTable(sql);
+    if (!source) return null;
+    const queries = this.readImportQueries();
+    queries[source.qualifiedTable] = {
+      sql,
+      connection: connection?.name || "",
+      updatedAt: Date.now(),
+    };
+    const retained = Object.entries(queries)
+      .sort((left, right) => (right[1]?.updatedAt || 0) - (left[1]?.updatedAt || 0))
+      .slice(0, IMPORT_QUERY_LIMIT);
+    this.persist(IMPORT_QUERY_STORAGE_KEY, JSON.stringify(Object.fromEntries(retained)));
+    return source;
+  }
+
+  restoreImportQuery() {
+    const queries = this.readImportQueries();
+    const source = this.activeDocument?.sourceIdentity;
+    const activeKey = source?.table ? [source.schema, source.table].filter(Boolean).join(".") : "";
+    const fallbackKey = Object.entries(queries).sort((left, right) => (right[1]?.updatedAt || 0) - (left[1]?.updatedAt || 0))[0]?.[0];
+    const tableKey = activeKey ? (queries[activeKey] ? activeKey : "") : fallbackKey;
+    const saved = tableKey ? queries[tableKey] : null;
+    if (!saved?.sql) return null;
+    if (this._sqlImportEditor?.getValue() !== saved.sql) this._sqlImportEditor?.setValue(saved.sql);
+    const connectionSelect = document.getElementById("velocitySqlConnection");
+    if (saved.connection && [...(connectionSelect?.options || [])].some((option) => option.value === saved.connection)) {
+      connectionSelect.value = saved.connection;
+    }
+    return { tableKey, ...saved };
+  }
+
   readContext() {
     const parsed = parseVelocityContext(this.contextEditor?.getValue());
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Context must be a JSON object.");
@@ -643,6 +725,13 @@ class VelocityTemplateTool extends BaseTool {
       status.classList.remove("is-error");
       contextError.hidden = true;
       contextError.textContent = "";
+      this._lastRender = { at: Date.now(), bytes: byteLength(displayValue) };
+      this.setRenderMeta("valid");
+      if (this._hadRenderError) {
+        const announcement = document.getElementById("velocityRenderAnnouncement");
+        if (announcement) announcement.textContent = `Result updated at ${this.formatRenderTime(this._lastRender.at)}.`;
+        this._hadRenderError = false;
+      }
     } catch (error) {
       const message = error?.message || "Unable to render template.";
       const isJsonError = error instanceof SyntaxError;
@@ -683,40 +772,216 @@ class VelocityTemplateTool extends BaseTool {
           },
         ]);
         output.classList.remove("is-stale");
+        this._lastRender = { at: Date.now(), bytes: byteLength(rendered) };
       } else {
         monaco.editor.setModelMarkers(this.previewEditor.getModel(), "velocity-output", []);
         output.classList.add("is-stale");
       }
-      status.textContent = isJsonError
-        ? `Context JSON error — ${message}`
-        : isOutputError
-          ? `Rendered JSON error · Output line ${line}, column ${column}${error?.templateLine ? ` · Template line ${templateLine}, column ${templateColumn}` : ""} — ${message}`
-          : `${error?.kind === "syntax" ? "Velocity syntax error" : "Velocity rendering error"} · Line ${line}, column ${column} — ${message}`;
+      if (isJsonError) {
+        status.hidden = true;
+        status.textContent = "";
+        status.classList.remove("is-error");
+        contextError.textContent = `Invalid JSON: ${message}`;
+        contextError.hidden = false;
+        this._hadRenderError = true;
+        this.setRenderMeta("stale");
+        return;
+      }
+      this._hadRenderError = true;
+      status.textContent = isOutputError
+        ? `Rendered JSON error · Output line ${line}, column ${column}${error?.templateLine ? ` · Template line ${templateLine}, column ${templateColumn}` : ""} — ${message}`
+        : `${error?.kind === "syntax" ? "Velocity syntax error" : "Velocity rendering error"} · Line ${line}, column ${column} — ${message}`;
       status.hidden = false;
       status.classList.add("is-error");
-      contextError.textContent = isJsonError ? `Invalid JSON: ${message}` : "";
-      contextError.hidden = !isJsonError;
+      contextError.textContent = "";
+      contextError.hidden = true;
+      this.setRenderMeta(isOutputError ? "invalid" : "error");
     }
   }
 
-  buildSampleContext(existing = {}) {
-    const result = structuredClone(existing && typeof existing === "object" && !Array.isArray(existing) ? existing : {});
-    const hasPath = (path) => path.split(".").reduce((value, key) => value?.[key], result) !== undefined;
+  markResultStale() {
+    document.getElementById("velocityPreview")?.classList.add("is-stale");
+    this.setRenderMeta("stale");
+  }
+
+  setRenderMeta(state) {
+    const meta = document.getElementById("velocityResultMeta");
+    if (!meta) return;
+    const last = this._lastRender;
+    const time = last ? this.formatRenderTime(last.at) : "";
+    const size = last ? this.formatByteSize(last.bytes) : "";
+    let text;
+    if (state === "valid") text = `Valid · ${time} · ${size}`;
+    else if (state === "invalid") text = `Invalid JSON · ${time} · ${size}`;
+    else if (state === "stale") text = last ? `Stale · last valid ${time} · ${size}` : "Stale · no valid render yet";
+    else if (state === "error") text = last ? `Stale · last valid ${time} · ${size}` : "Stale · render failed";
+    else text = "Not rendered yet";
+    meta.textContent = text;
+    meta.dataset.state = state;
+    const copy = document.getElementById("btnCopyVelocityPreview");
+    if (copy) {
+      copy.disabled = state !== "valid" && state !== "invalid";
+      copy.title = copy.disabled ? "Copy is available after the result renders." : "";
+    }
+    this._renderState = state;
+  }
+
+  formatRenderTime(timestamp) {
+    return new Intl.DateTimeFormat(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).format(new Date(timestamp));
+  }
+
+  formatByteSize(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10240 ? 1 : 0)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  captureDocumentSnapshot() {
+    const document = this.activeDocument;
+    if (!document) return null;
+    return {
+      id: document.id,
+      name: document.name,
+      template: document.templateModel.getValue(),
+      context: document.contextModel.getValue(),
+      sourceIdentity: document.sourceIdentity ? structuredClone(document.sourceIdentity) : null,
+    };
+  }
+
+  restoreDocumentSnapshot(snapshot) {
+    if (!snapshot) return;
+    const document = this.documents.find((item) => item.id === snapshot.id);
+    if (!document) return;
+    document.templateModel.setValue(snapshot.template);
+    document.contextModel.setValue(snapshot.context);
+    document.name = snapshot.name;
+    document.sourceIdentity = snapshot.sourceIdentity;
+    if (document.id === this.activeDocumentId) {
+      this.renderDocumentTabs();
+      this.schedulePreview();
+      this.editor?.focus();
+    }
+    void this.writeDocumentStore(() => this.documentStore.saveDocument(this.documentRecord(document)));
+  }
+
+  showUndo(message, action) {
+    const toast = document.getElementById("velocityUndoToast");
+    const label = document.getElementById("velocityUndoMessage");
+    if (!toast || !label) return;
+    clearTimeout(this._undoTimer);
+    this._undoAction = action;
+    label.textContent = message;
+    toast.hidden = false;
+    this._undoTimer = setTimeout(() => this.hideUndo(), 8000);
+  }
+
+  hideUndo() {
+    clearTimeout(this._undoTimer);
+    this._undoAction = null;
+    const toast = document.getElementById("velocityUndoToast");
+    if (toast) toast.hidden = true;
+  }
+
+  undoLastAction() {
+    const action = this._undoAction;
+    this.hideUndo();
+    action?.();
+  }
+
+  missingContextFields(context) {
+    const missing = [];
     extractContextPaths(this.editor?.getValue() || "").forEach((path) => {
-      if (hasPath(path)) return;
+      const existing = path.split(".").reduce((value, key) => value?.[key], context);
+      if (existing !== undefined) return;
       const leaf = path.split(".").at(-1).toLowerCase();
       let value = `sample-${leaf}`;
       if (/^(?:is|has)|active|enabled|success/.test(leaf)) value = true;
       else if (/items|list|rows|entries|users/.test(leaf)) value = [];
       else if (/count|amount|total|price|age/.test(leaf)) value = 1;
-      setNestedValue(result, path, value);
+      missing.push({ path, value });
     });
-    return result;
+    return missing;
   }
 
-  syncContext() {
-    const value = this.buildSampleContext(this.readContext());
-    this.contextEditor?.setValue(JSON.stringify(value, null, 2));
+  openSyncDialog() {
+    let context;
+    try {
+      context = this.readContext();
+    } catch (error) {
+      this.showError(`Fix Context Data JSON before adding fields. ${error?.message || ""}`.trim());
+      return;
+    }
+    const missing = this.missingContextFields(context);
+    if (!missing.length) {
+      this.showSuccess("No missing context fields");
+      return;
+    }
+    this._pendingSyncFields = missing;
+    this._syncReturnFocus = document.activeElement;
+    this.container?.querySelector(".velocity-document-bar")?.setAttribute("inert", "");
+    this.container?.querySelector(".vtl-layout")?.setAttribute("inert", "");
+    const list = document.getElementById("velocitySyncFields");
+    list.replaceChildren(
+      ...missing.map(({ path, value }) => {
+        const item = document.createElement("li");
+        const key = document.createElement("code");
+        key.textContent = path;
+        const sample = document.createElement("span");
+        sample.textContent = JSON.stringify(value);
+        item.append(key, sample);
+        return item;
+      }),
+    );
+    document.getElementById("velocitySyncOverlay").hidden = false;
+    document.getElementById("velocitySyncDialog").hidden = false;
+    document.getElementById("btnApplyVelocitySync")?.focus();
+  }
+
+  closeSyncDialog({ returnFocus = true } = {}) {
+    const dialog = document.getElementById("velocitySyncDialog");
+    if (dialog) dialog.hidden = true;
+    const overlay = document.getElementById("velocitySyncOverlay");
+    if (overlay) overlay.hidden = true;
+    this._pendingSyncFields = [];
+    this.container?.querySelector(".velocity-document-bar")?.removeAttribute("inert");
+    this.container?.querySelector(".vtl-layout")?.removeAttribute("inert");
+    if (returnFocus) {
+      const target =
+        this._syncReturnFocus?.isConnected && this._syncReturnFocus !== document.body
+          ? this._syncReturnFocus
+          : document.getElementById("btnSyncVelocityContext");
+      target?.focus();
+    }
+    this._syncReturnFocus = null;
+  }
+
+  applySyncFields() {
+    const missing = this._pendingSyncFields;
+    if (!missing.length) {
+      this.closeSyncDialog();
+      return;
+    }
+    let context;
+    try {
+      context = this.readContext();
+    } catch (error) {
+      this.closeSyncDialog();
+      this.showError(`Could not add fields: ${error?.message || "Context Data is not valid JSON."}`);
+      return;
+    }
+    const snapshot = this.captureDocumentSnapshot();
+    missing.forEach(({ path, value }) => setNestedValue(context, path, value));
+    this.contextEditor?.setValue(JSON.stringify(context, null, 2));
+    this.closeSyncDialog();
+    this.schedulePreview();
+    this.showUndo(`Added ${missing.length} context ${missing.length === 1 ? "field" : "fields"}`, () =>
+      this.restoreDocumentSnapshot(snapshot),
+    );
   }
 
   setResultType(mode, { updatePreview = true } = {}) {
@@ -760,9 +1025,13 @@ class VelocityTemplateTool extends BaseTool {
     });
   }
 
-  initializeSqlImport() {
-    const button = document.getElementById("btnImportVelocitySql");
-    if (button) button.hidden = !isTauri();
+  initializePlatformActions() {
+    const tauri = isTauri();
+    const importButton = document.getElementById("btnImportVelocitySql");
+    if (importButton) importButton.hidden = !tauri;
+    const createButton = document.getElementById("btnCreateVelocityQuery");
+    if (createButton) createButton.hidden = !tauri;
+    this.updateCreateQueryButton();
   }
 
   loadOracleConnections() {
@@ -792,8 +1061,6 @@ class VelocityTemplateTool extends BaseTool {
     );
     const dialog = document.getElementById("velocitySqlImportDialog");
     document.getElementById("velocitySqlImportError").hidden = true;
-    document.getElementById("velocitySqlSelection").hidden = true;
-    document.getElementById("btnApplyVelocitySqlImport").disabled = true;
     document.getElementById("velocitySqlImportOverlay").hidden = false;
     dialog.hidden = false;
     if (!this._sqlImportEditor) {
@@ -809,6 +1076,19 @@ class VelocityTemplateTool extends BaseTool {
     } else {
       this._sqlImportEditor.layout();
     }
+    const saved = this.restoreImportQuery();
+    this.setSqlImportHint(saved ? `Restored the last query for ${saved.tableKey}.` : "");
+    let currentSql = "";
+    try {
+      currentSql = parseTemplateImportQuery(this._sqlImportEditor?.getValue());
+    } catch (_) {
+      // Keep the editor value; results cannot apply until the query parses again.
+    }
+    if (currentSql !== this._sqlImportSql) this.resetSqlImportResults();
+    const activeSource = this.activeDocument?.sourceIdentity;
+    const activeTable = activeSource?.table ? [activeSource.schema, activeSource.table].filter(Boolean).join(".") : "";
+    const fetchedTable = getTemplateImportTable(this._sqlImportSql)?.qualifiedTable || "";
+    if (activeTable && fetchedTable && activeTable !== fetchedTable) this.resetSqlImportResults();
     this._sqlImportEditor.focus();
   }
 
@@ -825,8 +1105,132 @@ class VelocityTemplateTool extends BaseTool {
     output.hidden = false;
   }
 
+  setSqlImportHint(message = "") {
+    const hint = document.getElementById("velocitySqlQueryHint");
+    if (!hint) return;
+    hint.textContent = message;
+    hint.hidden = !message;
+  }
+
+  resetSqlImportResults() {
+    this._sqlImportRows = [];
+    this._sqlImportColumns = [];
+    this._sqlImportRowIndex = 0;
+    this._sqlImportSql = "";
+    document.getElementById("velocitySqlRowTable")?.replaceChildren();
+    const count = document.getElementById("velocitySqlRowCount");
+    if (count) count.textContent = "";
+    const identity = document.getElementById("velocitySqlRowIdentity");
+    if (identity) identity.textContent = "";
+    document.getElementById("velocitySqlField")?.replaceChildren();
+    const preview = document.getElementById("velocitySqlPreview");
+    if (preview) preview.value = "";
+    document.getElementById("velocitySqlSelection").hidden = true;
+    document.getElementById("btnApplyVelocitySqlImport").disabled = true;
+  }
+
+  renderSqlImportRows() {
+    const container = document.getElementById("velocitySqlRowTable");
+    if (!container) return;
+    const columns = this._sqlImportColumns;
+    const rows = this._sqlImportRows;
+    this._sqlImportRowIndex = Math.max(0, Math.min(this._sqlImportRowIndex, rows.length - 1));
+    const table = document.createElement("table");
+    table.className = "vtl-import-grid";
+    table.setAttribute("role", "grid");
+    table.setAttribute("aria-label", "Query results");
+    const headRow = table.createTHead().insertRow();
+    const numberHead = document.createElement("th");
+    numberHead.scope = "col";
+    numberHead.className = "vtl-import-row-number";
+    numberHead.textContent = "#";
+    headRow.append(numberHead);
+    columns.forEach((column) => {
+      const cell = document.createElement("th");
+      cell.scope = "col";
+      cell.textContent = column;
+      cell.title = column;
+      headRow.append(cell);
+    });
+    const body = table.createTBody();
+    rows.forEach((row, rowIndex) => {
+      const tr = body.insertRow();
+      tr.dataset.rowIndex = String(rowIndex);
+      tr.tabIndex = 0;
+      tr.setAttribute("aria-selected", String(rowIndex === this._sqlImportRowIndex));
+      if (rowIndex === this._sqlImportRowIndex) tr.classList.add("is-selected");
+      const numberCell = document.createElement("th");
+      numberCell.scope = "row";
+      numberCell.className = "vtl-import-row-number";
+      numberCell.textContent = String(rowIndex + 1);
+      tr.append(numberCell);
+      columns.forEach((column, columnIndex) => {
+        const cell = document.createElement("td");
+        cell.dataset.columnIndex = String(columnIndex);
+        cell.textContent = sqlCellPreview(row[columnIndex]);
+        cell.title = sqlCellPreview(row[columnIndex], 600);
+        if (row[columnIndex] == null) cell.classList.add("is-null");
+        tr.append(cell);
+      });
+    });
+    container.replaceChildren(table);
+    const count = document.getElementById("velocitySqlRowCount");
+    if (count) {
+      count.textContent = `${rows.length} row${rows.length === 1 ? "" : "s"} · ${columns.length} field${columns.length === 1 ? "" : "s"}`;
+    }
+    this.updateSqlImportIdentity();
+  }
+
+  selectSqlImportRow(index, { columnIndex, focus = false } = {}) {
+    if (!this._sqlImportRows.length) return;
+    const next = Math.max(0, Math.min(Number(index) || 0, this._sqlImportRows.length - 1));
+    this._sqlImportRowIndex = next;
+    document.querySelectorAll("#velocitySqlRowTable tbody tr").forEach((row) => {
+      const selected = Number(row.dataset.rowIndex) === next;
+      row.classList.toggle("is-selected", selected);
+      row.setAttribute("aria-selected", String(selected));
+    });
+    if (Number.isInteger(columnIndex)) document.getElementById("velocitySqlField").value = String(columnIndex);
+    if (focus) document.querySelector(`#velocitySqlRowTable tbody tr[data-row-index="${next}"]`)?.focus();
+    this.updateSqlImportIdentity();
+    this.updateSqlImportPreview();
+  }
+
+  updateSqlImportIdentity() {
+    const output = document.getElementById("velocitySqlRowIdentity");
+    if (!output) return;
+    const identity = getTemplateImportIdentity(
+      this._sqlImportEditor?.getValue() || "",
+      this._sqlImportColumns,
+      this._sqlImportRows[this._sqlImportRowIndex] || [],
+    );
+    output.textContent = Object.entries(identity?.identifiers || {})
+      .map(([name, value]) => `${name}=${value}`)
+      .join(" · ");
+  }
+
+  handleSqlImportGridKeydown(event) {
+    const row = event.target.closest?.("tr[data-row-index]");
+    if (!row) return;
+    const current = Number(row.dataset.rowIndex);
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      this.selectSqlImportRow(current);
+      return;
+    }
+    const next = {
+      ArrowDown: current + 1,
+      ArrowUp: current - 1,
+      Home: 0,
+      End: this._sqlImportRows.length - 1,
+    }[event.key];
+    if (next === undefined) return;
+    event.preventDefault();
+    this.selectSqlImportRow(next, { focus: true });
+  }
+
   updateSqlImportPreview() {
-    const rowIndex = Number(document.getElementById("velocitySqlRow")?.value || 0);
+    const rowIndex = this._sqlImportRowIndex;
     const columnIndex = Number(document.getElementById("velocitySqlField")?.value || 0);
     const preview = document.getElementById("velocitySqlPreview");
     const apply = document.getElementById("btnApplyVelocitySqlImport");
@@ -857,16 +1261,9 @@ class VelocityTemplateTool extends BaseTool {
       if (!result.columns.length) throw new Error("The query returned no fields.");
       this._sqlImportColumns = result.columns.map(String);
       this._sqlImportRows = result.rows;
-      const rowSelect = document.getElementById("velocitySqlRow");
+      this._sqlImportRowIndex = 0;
+      this._sqlImportSql = sql;
       const fieldSelect = document.getElementById("velocitySqlField");
-      rowSelect.replaceChildren(
-        ...result.rows.map((_, index) => {
-          const option = document.createElement("option");
-          option.value = String(index);
-          option.textContent = `Row ${index + 1}`;
-          return option;
-        }),
-      );
       fieldSelect.replaceChildren(
         ...this._sqlImportColumns.map((column, index) => {
           const option = document.createElement("option");
@@ -875,11 +1272,16 @@ class VelocityTemplateTool extends BaseTool {
           return option;
         }),
       );
-      document.getElementById("velocitySqlSelection").hidden = false;
+      this.renderSqlImportRows();
+      const selection = document.getElementById("velocitySqlSelection");
+      selection.hidden = false;
+      selection.scrollIntoView({ block: "nearest" });
+      const source = this.rememberImportQuery(sql, connection);
+      this.setSqlImportHint(source ? `Saved this query for ${source.qualifiedTable}.` : "");
       this.updateSqlImportPreview();
     } catch (fetchError) {
-      document.getElementById("velocitySqlSelection").hidden = true;
-      document.getElementById("btnApplyVelocitySqlImport").disabled = true;
+      this.resetSqlImportResults();
+      this.setSqlImportHint("");
       this.showSqlImportError(fetchError);
     } finally {
       fetchButton.disabled = false;
@@ -888,8 +1290,17 @@ class VelocityTemplateTool extends BaseTool {
   }
 
   applySqlImport() {
-    const rowIndex = Number(document.getElementById("velocitySqlRow")?.value || 0);
-    const query = this._sqlImportEditor?.getValue() || "";
+    const snapshot = this.captureDocumentSnapshot();
+    let query;
+    try {
+      query = parseTemplateImportQuery(this._sqlImportEditor?.getValue() || "");
+    } catch (error) {
+      return this.showSqlImportError(error);
+    }
+    if (!this._sqlImportRows.length || query !== this._sqlImportSql) {
+      return this.showSqlImportError("Fetch fields for the current query before importing.");
+    }
+    const rowIndex = this._sqlImportRowIndex;
     const identity = getTemplateImportIdentity(query, this._sqlImportColumns, this._sqlImportRows[rowIndex] || []);
     this.editor?.setValue(document.getElementById("velocitySqlPreview")?.value || "");
     if (identity && this.activeDocument) {
@@ -901,7 +1312,7 @@ class VelocityTemplateTool extends BaseTool {
       this.scheduleDocumentSave();
     }
     this.closeSqlImport();
-    this.showSuccess("Velocity template imported from SQL");
+    this.showUndo("Template imported from SQL", () => this.restoreDocumentSnapshot(snapshot));
   }
 
   updateCreateQueryButton() {
@@ -912,6 +1323,8 @@ class VelocityTemplateTool extends BaseTool {
     button.title = button.disabled
       ? "Import this template from SQL before creating an update query"
       : "Open an update draft in Quick Query";
+    if (button.disabled) button.setAttribute("aria-describedby", "velocityCreateQueryHint");
+    else button.removeAttribute("aria-describedby");
   }
 
   createUpdateQuery() {
@@ -940,24 +1353,14 @@ class VelocityTemplateTool extends BaseTool {
   bindEvents() {
     this.editor?.onDidChangeModelContent(() => {
       this.scheduleDocumentSave();
+      this.markResultStale();
       this.schedulePreview();
     });
     this.contextEditor?.onDidChangeModelContent(() => {
       this.scheduleDocumentSave();
-      document.getElementById("velocityPreview")?.classList.add("is-stale");
-      const contextError = document.getElementById("velocityContextError");
-      if (contextError) {
-        contextError.hidden = true;
-        contextError.textContent = "";
-      }
-      const previewStatus = document.getElementById("velocityPreviewStatus");
-      if (previewStatus?.textContent.startsWith("Context JSON error")) {
-        previewStatus.hidden = true;
-        previewStatus.textContent = "";
-        previewStatus.classList.remove("is-error");
-      }
+      this.markResultStale();
+      this.schedulePreview();
     });
-    this.contextEditor?.onDidBlurEditorWidget(() => this.schedulePreview());
     const tabs = this.container?.querySelector("#velocityDocumentTabs");
     tabs?.addEventListener("click", (event) => {
       const tab = event.target.closest(".velocity-document-tab");
@@ -984,25 +1387,29 @@ class VelocityTemplateTool extends BaseTool {
     this.container?.querySelector("#btnNewVelocityDocument")?.addEventListener("click", () => void this.newDocument());
     this.container?.querySelector("#btnCreateVelocityQuery")?.addEventListener("click", () => this.createUpdateQuery());
     document.getElementById("btnCopyVelocity")?.addEventListener("click", async () => {
-      if (await this.copyToClipboard(this.editor.getValue())) this.track("copy", this.editor.getValue());
+      if (await this.copyToClipboard(this.editor.getValue(), null, "Template copied")) this.track("copy", this.editor.getValue());
     });
-    document
-      .getElementById("btnCopyVelocityPreview")
-      ?.addEventListener("click", () => this.copyToClipboard(this.previewEditor?.getValue() || ""));
+    document.getElementById("btnCopyVelocityPreview")?.addEventListener("click", () => {
+      if (this._renderState !== "valid" && this._renderState !== "invalid") return;
+      this.copyToClipboard(this.previewEditor?.getValue() || "", null, "Rendered output copied");
+    });
     document.getElementById("btnPasteVelocity")?.addEventListener("click", async () => {
       try {
         const value = await navigator.clipboard.readText();
         if (!value) return this.showError("Clipboard is empty");
+        const snapshot = this.captureDocumentSnapshot();
         this.editor.setValue(value);
         document.getElementById("velocityMoreActions")?.removeAttribute("open");
-        this.showSuccess("Template pasted from clipboard");
+        this.showUndo("Template replaced from clipboard", () => this.restoreDocumentSnapshot(snapshot));
       } catch (_) {
         this.showError("Could not read the clipboard. Check browser permission and try again.");
       }
     });
     document.getElementById("btnClearVelocity")?.addEventListener("click", () => {
+      const snapshot = this.captureDocumentSnapshot();
       this.editor.setValue("");
       document.getElementById("velocityMoreActions")?.removeAttribute("open");
+      this.showUndo("Template cleared", () => this.restoreDocumentSnapshot(snapshot));
     });
     document.getElementById("btnFormatVelocityContext")?.addEventListener("click", () => {
       try {
@@ -1012,14 +1419,7 @@ class VelocityTemplateTool extends BaseTool {
         this.showError(`Invalid JSON: ${error?.message || "Check the Context Data syntax."}`);
       }
     });
-    document.getElementById("btnSyncVelocityContext")?.addEventListener("click", () => {
-      try {
-        this.syncContext();
-        this.showSuccess("Context fields synchronized");
-      } catch (_) {
-        this.showError("Fix the Context Data JSON, then try Sync fields again.");
-      }
-    });
+    document.getElementById("btnSyncVelocityContext")?.addEventListener("click", () => this.openSyncDialog());
     this.container?.querySelectorAll("[data-result-type]").forEach((button) => {
       button.addEventListener("click", () => this.setResultType(button.dataset.resultType));
     });
@@ -1033,7 +1433,16 @@ class VelocityTemplateTool extends BaseTool {
     });
     document.getElementById("btnImportVelocitySql")?.addEventListener("click", () => this.openSqlImport());
     document.getElementById("btnFetchVelocitySql")?.addEventListener("click", () => this.fetchSqlImportFields());
-    document.getElementById("velocitySqlRow")?.addEventListener("change", () => this.updateSqlImportPreview());
+    const sqlImportRows = document.getElementById("velocitySqlRowTable");
+    sqlImportRows?.addEventListener("click", (event) => {
+      const row = event.target.closest?.("tr[data-row-index]");
+      if (!row) return;
+      const cell = event.target.closest?.("td[data-column-index]");
+      this.selectSqlImportRow(Number(row.dataset.rowIndex), {
+        columnIndex: cell ? Number(cell.dataset.columnIndex) : undefined,
+      });
+    });
+    sqlImportRows?.addEventListener("keydown", (event) => this.handleSqlImportGridKeydown(event));
     document.getElementById("velocitySqlField")?.addEventListener("change", () => this.updateSqlImportPreview());
     document.getElementById("btnApplyVelocitySqlImport")?.addEventListener("click", () => this.applySqlImport());
     document.getElementById("btnCloseVelocitySqlImport")?.addEventListener("click", () => this.closeSqlImport());
@@ -1043,6 +1452,34 @@ class VelocityTemplateTool extends BaseTool {
       if (event.key === "Escape") {
         event.preventDefault();
         this.closeSqlImport();
+      }
+    });
+    document.getElementById("btnUndoVelocity")?.addEventListener("click", () => this.undoLastAction());
+    document.getElementById("btnApplyVelocitySync")?.addEventListener("click", () => this.applySyncFields());
+    document.getElementById("btnCloseVelocitySync")?.addEventListener("click", () => this.closeSyncDialog());
+    document.getElementById("btnCancelVelocitySync")?.addEventListener("click", () => this.closeSyncDialog());
+    document.getElementById("velocitySyncOverlay")?.addEventListener("click", () => this.closeSyncDialog());
+    document.getElementById("velocitySyncDialog")?.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.closeSyncDialog();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusables = [
+        ...event.currentTarget.querySelectorAll(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ].filter((element) => element.offsetParent !== null);
+      if (!focusables.length) return;
+      const first = focusables[0];
+      const last = focusables.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
       }
     });
     document.getElementById("btnToggleVelocityWrap")?.addEventListener("click", (event) => {

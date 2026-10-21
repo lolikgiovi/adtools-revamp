@@ -122,7 +122,7 @@ export class SchemaValidationService {
     return validValues.includes(pk);
   }
 
-  matchSchemaWithData(schemaData, inputData) {
+  matchSchemaWithData(schemaData, inputData, { allowPartialData = false } = {}) {
     const hasSchemaData = schemaData.some((row) => row.some((cell) => cell !== null && cell !== ""));
     const hasFieldNames = inputData[0]?.some((cell) => cell !== null && cell !== "");
     const hasFirstDataRow = inputData[1]?.some((cell) => cell !== null && cell !== "");
@@ -141,7 +141,7 @@ export class SchemaValidationService {
     const missingInSchema = inputFieldNames.filter((field) => !schemaFieldNames.includes(field));
     const missingInData = schemaFieldNames.filter((field) => !inputFieldNames.includes(field));
 
-    if (missingInSchema.length > 0 || missingInData.length > 0) {
+    if (missingInSchema.length > 0 || (missingInData.length > 0 && !allowPartialData)) {
       const errors = [];
       if (missingInSchema.length > 0) {
         errors.push(`Fields in data but not in schema: ${missingInSchema.join(", ")}`);

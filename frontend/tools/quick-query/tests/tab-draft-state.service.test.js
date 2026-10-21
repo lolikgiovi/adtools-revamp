@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isTabDraftContentEmpty } from "../services/TabDraftStateService.js";
+import { isTabDraftContentEmpty, mergeDraftSchema } from "../services/TabDraftStateService.js";
 
 describe("TabDraftStateService", () => {
   it("treats a completely blank tab as empty", () => {
@@ -7,7 +7,10 @@ describe("TabDraftStateService", () => {
       isTabDraftContentEmpty({
         tableName: "",
         schemaData: [["", "", "", "", "", ""]],
-        inputData: [[null, null], ["", ""]],
+        inputData: [
+          [null, null],
+          ["", ""],
+        ],
         sql: "",
         attachments: [],
       }),
@@ -20,7 +23,10 @@ describe("TabDraftStateService", () => {
         {
           tableName: "loan.config",
           schemaData: [["", "", "", "", "", ""]],
-          inputData: [[null, null], ["", ""]],
+          inputData: [
+            [null, null],
+            ["", ""],
+          ],
           sql: "",
           attachments: [],
         },
@@ -34,7 +40,10 @@ describe("TabDraftStateService", () => {
       isTabDraftContentEmpty({
         tableName: "loan.config",
         schemaData: [["", "", "", "", "", ""]],
-        inputData: [[null, null], ["", ""]],
+        inputData: [
+          [null, null],
+          ["", ""],
+        ],
         sql: "",
         attachments: [],
       }),
@@ -46,5 +55,36 @@ describe("TabDraftStateService", () => {
     expect(isTabDraftContentEmpty({ inputData: [["1"]] }, { ignoreTableName: true })).toBe(false);
     expect(isTabDraftContentEmpty({ sql: "MERGE INTO loan.config" }, { ignoreTableName: true })).toBe(false);
     expect(isTabDraftContentEmpty({ attachments: [{ name: "payload.json" }] }, { ignoreTableName: true })).toBe(false);
+  });
+
+  it("keeps the saved table schema while applying draft primary keys and column order", () => {
+    const saved = [
+      ["CONFIG_INTEGRATION_ID", "VARCHAR2(36)", "No", "", "", "Yes"],
+      ["SERVICE_CODE", "VARCHAR2(50)", "No", "", "", "No"],
+      ["ENVIRONMENT", "VARCHAR2(10)", "No", "", "", "No"],
+      ["REQ_MAP_TEMPLATE", "CLOB", "Yes", "", "", "No"],
+      ["CREATED_TIME", "TIMESTAMP(6)", "No", "", "", "No"],
+    ];
+    const draft = [
+      ["SERVICE_CODE", "VARCHAR2", "No", "", "", "Yes"],
+      ["ENVIRONMENT", "VARCHAR2", "No", "", "", "Yes"],
+      ["REQ_MAP_TEMPLATE", "CLOB", "Yes", "", "", "No"],
+      ["NEW_FIELD", "NUMBER", "Yes", "", "", "No"],
+    ];
+
+    expect(mergeDraftSchema(saved, draft)).toEqual([
+      ["CONFIG_INTEGRATION_ID", "VARCHAR2(36)", "No", "", "", "No"],
+      ["SERVICE_CODE", "VARCHAR2(50)", "No", "", "", "Yes"],
+      ["ENVIRONMENT", "VARCHAR2(10)", "No", "", "", "Yes"],
+      ["REQ_MAP_TEMPLATE", "CLOB", "Yes", "", "", "No"],
+      ["CREATED_TIME", "TIMESTAMP(6)", "No", "", "", "No"],
+      ["NEW_FIELD", "NUMBER", "Yes", "", "", "No"],
+    ]);
+  });
+
+  it("falls back to the draft when the table has no saved schema", () => {
+    const draft = [["service_code", "VARCHAR2", "No", "", "", "Yes"]];
+    expect(mergeDraftSchema(null, draft)).toEqual([["service_code", "VARCHAR2", "No", "", "", "Yes"]]);
+    expect(mergeDraftSchema([["", "", "", "", "", ""]], draft)).toEqual([["service_code", "VARCHAR2", "No", "", "", "Yes"]]);
   });
 });

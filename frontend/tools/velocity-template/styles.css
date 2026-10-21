@@ -123,6 +123,15 @@
   min-height: 0;
 }
 
+.velocity-template-tool .vtl-preview-pane .vtl-compact-header {
+  flex-wrap: wrap;
+  row-gap: 0.3rem;
+}
+
+.velocity-template-tool .vtl-preview-pane .vtl-panel-actions {
+  flex-wrap: wrap;
+}
+
 .velocity-template-tool .vtl-preview-output {
   padding: 0;
 }
@@ -139,6 +148,81 @@
 .velocity-template-tool .velocity-preview-error {
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+.velocity-template-tool .vtl-result-meta {
+  flex: 0 0 auto;
+  padding: 0.28rem 0.6rem;
+  overflow: hidden;
+  background: hsl(var(--muted) / 0.3);
+  color: hsl(var(--muted-foreground));
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.velocity-template-tool .vtl-result-meta[data-state="stale"] {
+  color: #dcdcaa;
+}
+
+.velocity-template-tool .vtl-result-meta[data-state="invalid"],
+.velocity-template-tool .vtl-result-meta[data-state="error"] {
+  color: hsl(var(--destructive));
+}
+
+.velocity-template-tool .vtl-undo-toast {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 1200;
+  max-width: min(420px, calc(100vw - 2rem));
+}
+
+.velocity-template-tool .vtl-undo-toast span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.velocity-template-tool .vtl-sync-intro {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.velocity-template-tool .vtl-sync-list {
+  display: grid;
+  gap: 0.4rem;
+  max-height: min(360px, 45vh);
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.velocity-template-tool .vtl-sync-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: baseline;
+  padding: 0.45rem 0.55rem;
+  border-radius: 6px;
+  background: hsl(var(--muted) / 0.35);
+  font-size: 0.8rem;
+}
+
+.velocity-template-tool .vtl-sync-list code {
+  overflow-wrap: anywhere;
+  color: hsl(var(--foreground));
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+.velocity-template-tool .vtl-sync-list span {
+  color: hsl(var(--muted-foreground));
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .velocity-template-tool .vtl-result-type-label {
@@ -226,7 +310,7 @@
 }
 
 .velocity-template-tool .vtl-import-dialog {
-  width: min(820px, 94vw);
+  width: min(980px, 94vw);
   max-width: none;
   max-height: 86vh;
   display: flex;
@@ -316,7 +400,8 @@
 
 .velocity-template-tool .vtl-import-selection {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr);
+  align-items: start;
   gap: 0.85rem;
   padding-top: 0.15rem;
 }
@@ -325,8 +410,141 @@
   display: none;
 }
 
+.velocity-template-tool .vtl-import-results-field {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.velocity-template-tool .vtl-import-details {
+  display: grid;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.velocity-template-tool .vtl-import-results-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  color: hsl(var(--foreground));
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.velocity-template-tool .vtl-import-results-count {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.velocity-template-tool .vtl-import-results {
+  max-height: min(300px, 36vh);
+  overflow: auto;
+  border: 1px solid hsl(var(--border));
+  border-radius: 7px;
+  background: hsl(var(--background));
+}
+
+.velocity-template-tool .vtl-import-grid {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.velocity-template-tool .vtl-import-grid th,
+.velocity-template-tool .vtl-import-grid td {
+  max-width: 260px;
+  padding: 0.4rem 0.6rem;
+  overflow: hidden;
+  border-bottom: 1px solid hsl(var(--border));
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.velocity-template-tool .vtl-import-grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  font-weight: 600;
+}
+
+.velocity-template-tool .vtl-import-grid tbody tr {
+  cursor: pointer;
+}
+
+.velocity-template-tool .vtl-import-grid tbody tr:hover {
+  background: hsl(var(--muted) / 0.4);
+}
+
+.velocity-template-tool .vtl-import-grid tbody tr.is-selected {
+  background: hsl(var(--primary) / 0.16);
+  box-shadow: inset 2px 0 0 hsl(var(--primary));
+}
+
+.velocity-template-tool .vtl-import-grid tbody tr:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: -2px;
+}
+
+.velocity-template-tool .vtl-import-grid .vtl-import-row-number {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  width: 1%;
+  background: hsl(var(--background));
+  color: hsl(var(--muted-foreground));
+  text-align: right;
+}
+
+.velocity-template-tool .vtl-import-grid thead .vtl-import-row-number {
+  z-index: 2;
+  background: hsl(var(--muted));
+}
+
+.velocity-template-tool .vtl-import-grid tbody tr:hover .vtl-import-row-number {
+  background: hsl(var(--muted));
+}
+
+.velocity-template-tool .vtl-import-grid tbody tr.is-selected .vtl-import-row-number {
+  background: hsl(var(--primary) / 0.16);
+  color: hsl(var(--foreground));
+}
+
+.velocity-template-tool .vtl-import-grid td.is-null {
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
+}
+
+.velocity-template-tool .vtl-import-hint {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.velocity-template-tool .vtl-import-hint[hidden] {
+  display: none;
+}
+
+.velocity-template-tool .vtl-import-row-identity {
+  color: hsl(var(--muted-foreground));
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.75rem;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
 .velocity-template-tool .vtl-import-preview-field {
-  grid-column: 1 / -1;
+  align-self: start;
 }
 
 .velocity-template-tool .vtl-import-footer {
@@ -349,12 +567,13 @@
   }
 }
 
-@media (max-width: 560px) {
+@media (max-width: 760px) {
   .velocity-template-tool .vtl-import-selection {
     grid-template-columns: 1fr;
   }
 
-  .velocity-template-tool .vtl-import-preview-field {
-    grid-column: auto;
+  .velocity-template-tool .vtl-sql-editor {
+    height: 150px;
+    min-height: 130px;
   }
 }

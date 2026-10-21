@@ -32,6 +32,22 @@ describe("QueryExecutionService", () => {
     expect(deps.validationService.validateSchema).toHaveBeenCalledWith(request.schemaData, request.tableName);
   });
 
+  it("allows partial data only for update generation", async () => {
+    const deps = dependencies();
+    const execution = new QueryExecutionService({ ...deps, workerRowThreshold: 1000 });
+
+    await execution.generateQuery({ ...request, queryType: "update" });
+    expect(deps.validationService.matchSchemaWithData).toHaveBeenCalledWith(request.schemaData, request.inputData, {
+      allowPartialData: true,
+    });
+
+    deps.validationService.matchSchemaWithData.mockClear();
+    await execution.generateQuery({ ...request, queryType: "merge" });
+    expect(deps.validationService.matchSchemaWithData).toHaveBeenCalledWith(request.schemaData, request.inputData, {
+      allowPartialData: false,
+    });
+  });
+
   it("normalizes worker progress and results behind the same interface", async () => {
     const deps = dependencies();
     const worker = { postMessage: vi.fn(), terminate: vi.fn(), onmessage: null, onerror: null };

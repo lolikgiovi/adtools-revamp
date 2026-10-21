@@ -19,7 +19,7 @@ export const VelocityTemplate = /* html */ `
           </div>
           <div class="vtl-panel-actions">
             <button id="btnImportVelocitySql" class="btn btn-secondary btn-sm" type="button" hidden>Import SQL</button>
-            <button id="btnCopyVelocity" class="btn btn-secondary btn-sm" type="button">Copy</button>
+            <button id="btnCopyVelocity" class="btn btn-secondary btn-sm" type="button">Copy template</button>
             <details id="velocityMoreActions" class="vtl-actions-menu">
               <summary class="btn btn-secondary btn-sm">More</summary>
               <div class="vtl-actions-menu-popover app-popover-surface">
@@ -27,7 +27,15 @@ export const VelocityTemplate = /* html */ `
                 <button id="btnClearVelocity" class="is-destructive" type="button">Clear template</button>
               </div>
             </details>
-            <button id="btnCreateVelocityQuery" class="btn btn-primary btn-sm" type="button" disabled>Create query</button>
+            <button
+              id="btnCreateVelocityQuery"
+              class="btn btn-primary btn-sm"
+              type="button"
+              disabled
+              aria-describedby="velocityCreateQueryHint"
+              hidden
+            >Create query</button>
+            <span id="velocityCreateQueryHint" class="sr-only">Import a template from SQL to enable this action.</span>
           </div>
         </div>
         <div id="velocityEditor" class="monaco-editor-container"></div>
@@ -44,7 +52,7 @@ export const VelocityTemplate = /* html */ `
             <h3 id="velocityContextTitle">Context Data</h3>
           </div>
           <div class="vtl-panel-actions">
-            <button id="btnSyncVelocityContext" class="btn btn-secondary btn-sm" type="button">Sync fields</button>
+            <button id="btnSyncVelocityContext" class="btn btn-secondary btn-sm" type="button">Add missing fields…</button>
             <button id="btnFormatVelocityContext" class="btn btn-secondary btn-sm" type="button">Format JSON</button>
           </div>
         </div>
@@ -67,12 +75,47 @@ export const VelocityTemplate = /* html */ `
               </div>
             </details>
             <button id="btnToggleVelocityWrap" class="btn btn-secondary btn-sm" type="button" aria-pressed="true">Wrap</button>
-            <button id="btnCopyVelocityPreview" class="btn btn-secondary btn-sm" type="button">Copy</button>
+            <button id="btnCopyVelocityPreview" class="btn btn-primary btn-sm" type="button" disabled>Copy output</button>
           </div>
         </div>
+        <div id="velocityResultMeta" class="vtl-result-meta" data-state="idle">Not rendered yet</div>
+        <span id="velocityRenderAnnouncement" class="sr-only" role="status" aria-live="polite"></span>
         <div id="velocityPreviewStatus" class="vtl-inline-error velocity-preview-error" role="alert" hidden></div>
         <div id="velocityPreview" class="vtl-preview-output" aria-label="Rendered Velocity template"></div>
       </section>
+    </div>
+
+    <div id="velocityUndoToast" class="vtl-undo-toast" role="status" hidden>
+      <span id="velocityUndoMessage"></span>
+      <button id="btnUndoVelocity" type="button">Undo</button>
+    </div>
+
+    <div id="velocitySyncOverlay" class="vtl-import-overlay app-overlay-backdrop" hidden></div>
+    <div
+      id="velocitySyncDialog"
+      class="vtl-import-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="velocitySyncTitle"
+      hidden
+    >
+      <div class="vtl-import-dialog app-overlay-surface">
+        <div class="vtl-import-header">
+          <h3 id="velocitySyncTitle">Add missing context fields</h3>
+          <button id="btnCloseVelocitySync" class="overlay-close-button app-overlay-close" type="button" aria-label="Close">×</button>
+        </div>
+        <div class="vtl-import-body">
+          <p class="vtl-sync-intro">
+            These fields are referenced in the template but missing from Context Data. Placeholder values will be added so the
+            template can render; edit them after adding.
+          </p>
+          <ul id="velocitySyncFields" class="vtl-sync-list"></ul>
+        </div>
+        <div class="vtl-import-footer app-modal-actions">
+          <button id="btnApplyVelocitySync" class="btn btn-primary" type="button">Add fields</button>
+          <button id="btnCancelVelocitySync" class="btn" type="button">Cancel</button>
+        </div>
+      </div>
     </div>
 
     <div id="velocitySqlImportOverlay" class="vtl-import-overlay app-overlay-backdrop" hidden></div>
@@ -88,20 +131,28 @@ export const VelocityTemplate = /* html */ `
             <select id="velocitySqlConnection"></select>
           </label>
           <div id="velocitySqlQuery" class="vtl-sql-editor" aria-label="Oracle SELECT query"></div>
+          <p id="velocitySqlQueryHint" class="vtl-import-hint" aria-live="polite" hidden></p>
           <div id="velocitySqlImportError" class="vtl-inline-error" role="alert" hidden></div>
           <div id="velocitySqlSelection" class="vtl-import-selection" hidden>
-            <label class="vtl-import-field">
-              <span>Row</span>
-              <select id="velocitySqlRow"></select>
-            </label>
-            <label class="vtl-import-field">
-              <span>Template field</span>
-              <select id="velocitySqlField"></select>
-            </label>
-            <label class="vtl-import-field vtl-import-preview-field">
-              <span>Value preview</span>
-              <textarea id="velocitySqlPreview" rows="7" readonly></textarea>
-            </label>
+            <div class="vtl-import-results-field">
+              <div class="vtl-import-results-head">
+                <span>Results</span>
+                <span id="velocitySqlRowCount" class="vtl-import-results-count"></span>
+              </div>
+              <div id="velocitySqlRowTable" class="vtl-import-results" role="region" aria-label="Query results"></div>
+              <small class="vtl-import-hint">Click a row to select it; click a cell to also use that field as the template.</small>
+            </div>
+            <div class="vtl-import-details">
+              <label class="vtl-import-field">
+                <span>Template field</span>
+                <select id="velocitySqlField"></select>
+                <small id="velocitySqlRowIdentity" class="vtl-import-row-identity"></small>
+              </label>
+              <label class="vtl-import-field vtl-import-preview-field">
+                <span>Value preview</span>
+                <textarea id="velocitySqlPreview" rows="7" readonly></textarea>
+              </label>
+            </div>
           </div>
         </div>
         <div class="vtl-import-footer app-modal-actions">
