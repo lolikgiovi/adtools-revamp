@@ -1,0 +1,143 @@
+Browser tab: 3, Title: "Compress Image browser verification", URL: "http://127.0.0.1:1235/tools/compress-image/tests/browser.html".
+0 AXWebArea Compress Image browser verification, URL: 127.0.0.1:1235/tools/compress-image/tests/browser.html
+	1 heading Compress Image browser verification, Value: 1
+		2 text Compress Image browser verification
+	50 text PASS: 39 browser checks. Open details for the repeatable evidence.
+	4 button (collapsed) Verification evidence, Secondary Actions: Expand
+		5 text Verification evidence
+	6 container Compress Image
+		7 container
+			8 heading Compress Image, Value: 2
+				9 text Compress Image
+			10 text Smaller files. A clear view of what changed. Images stay on your device.
+			11 button Clear all
+			12 button Download ZIP
+		13 button Choose Files, ID: ci-files
+		14 button Add images
+		15 text or drop your files here
+		16 text PNG, JPEG, WebP · 20 files · 32 MB each
+		17 container Compression settings
+			18 text Compression settings
+			19 container
+				20 text Preset
+				21 pop up button (collapsed, settable) Preset, Value: Balanced, Secondary Actions: Expand
+					22 menu
+						23 High Quality
+						24 (selected) Balanced
+						25 Smaller File
+			26 container
+				27 text JPEG / WebP quality
+				28 container JPEG / WebP quality 85
+					51 text 85
+				30 slider (settable, integer) Description: JPEG and WebP quality, Value: 85
+			31 checkbox (settable, integer) Description: Allow lossy PNG, Value: 0
+			52 text PNG stays lossless by default. JPEG and WebP use lossy compression. Original format kept.
+			33 checkbox (settable, integer) Description: Reduce dimensions, Value: 0
+			34 button Compress again
+			53 text Original dimensions kept
+		122 text 5 files · 5 ready · 1.44 MB before / 5.15 KB after · 1.44 MB saved (99.6% smaller)
+		37 container Image results
+			38 table
+				39 row
+					40 cell
+						41 text Image
+					42 cell
+						43 text Before
+					44 cell
+						45 text After
+					46 cell
+						47 text Saved
+					48 cell
+						49 text Download
+				56 row
+					57 cell
+						58 button sample.png 640 × 400 px · Optimized
+							59 text sample.png
+							123 text 640 × 400 px · Optimized
+					61 cell
+						62 text 1.02 MB
+					63 cell
+						124 text 2.36 KB
+					65 cell
+						125 text 99.8% smaller
+					67 cell
+						68 button Download sample.png
+				69 row
+					70 cell
+						71 button sample.png 240 × 320 px · Optimized
+							72 text sample.png
+							126 text 240 × 320 px · Optimized
+					74 cell
+						75 text 307.64 KB
+					76 cell
+						127 text 1.21 KB
+					78 cell
+						128 text 99.6% smaller
+					80 cell
+						81 button Download sample.png
+				82 row
+					83 cell
+						84 button color-study.png 640 × 240 px · Optimized
+							85 text color-study.png
+							129 text 640 × 240 px · Optimized
+					87 cell
+						88 text 108.17 KB
+					89 cell
+						130 text 1.4 KB
+					91 cell
+						131 text 98.7% smaller
+					93 cell
+						94 button Download color-study.png
+				95 row
+					96 cell
+						97 button interlaced.png 17 × 13 px · Optimized
+							98 text interlaced.png
+							132 text 17 × 13 px · Optimized
+					100 cell
+						101 text 978 B
+					102 cell
+						133 text 90 B
+					104 cell
+						134 text 90.8% smaller
+					106 cell
+						107 button Download interlaced.png
+				108 row
+					109 cell
+						110 button depth16.png 16 × 16 px · Optimized
+							111 text depth16.png
+							135 text 16 × 16 px · Optimized
+					113 cell
+						114 text 2.13 KB
+					115 cell
+						136 text 98 B
+					117 cell
+						137 text 95.4% smaller
+					119 cell
+						120 button Download depth16.png
+		121 container Image comparison
+			138 container
+				139 heading sample.png, Value: 3
+					140 text sample.png
+				141 text Dimensions unchanged. PNG pixels and rendering metadata preserved.
+				142 container Comparison view
+					143 checkbox Side by side, Value: 1
+					144 checkbox Slider, Value: 0
+			145 container
+				146 text Zoom
+				147 slider (settable, integer) Zoom, Value: 1
+				148 text Fit
+			149 button Reset view
+			150 button Download original
+			151 text Zoom is linked. Drag to pan, or use arrow keys.
+			152 container
+				153 text Original 1.02 MB
+				154 container Original image. Arrow keys pan; plus and minus zoom.
+					155 image Original image
+			156 container
+				157 text Result 2.36 KB
+				158 container Result image. Arrow keys pan; plus and minus zoom.
+					159 image Compressed result
+			160 button (collapsed) Processing details, Secondary Actions: Expand
+				161 text Processing details
+
+The focused UI element is 0 AXWebArea Compress Image browser verification, URL: 127.0.0.1:1235/tools/compress-image/tests/browser.html

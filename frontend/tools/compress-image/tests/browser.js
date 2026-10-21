@@ -33,15 +33,20 @@ function fixture(width, height, noise = false, level = 0) {
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width * 4; x++) {
       seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-      data[y * (width * 4 + 1) + 1 + x] = noise
-        ? seed >>> 24
-        : x % 4 === 3
-          ? 127
-          : x % 4 === 0
-            ? Math.floor((x / 4 / width) * 255)
-            : x % 4 === 1
-              ? Math.floor((y / height) * 255)
-              : ((Math.floor(x / 4 / 32) + Math.floor(y / 32)) % 2) * 160;
+      data[y * (width * 4 + 1) + 1 + x] =
+        noise === "gentle"
+          ? x % 4 === 3
+            ? 127
+            : Math.max(0, Math.min(255, Math.floor((x % 4 === 1 ? y / height : x / 4 / width) * 200) + 28 + (seed >>> 28)))
+          : noise
+            ? seed >>> 24
+            : x % 4 === 3
+              ? 127
+              : x % 4 === 0
+                ? Math.floor((x / 4 / width) * 255)
+                : x % 4 === 1
+                  ? Math.floor((y / height) * 255)
+                  : ((Math.floor(x / 4 / 32) + Math.floor(y / 32)) % 2) * 160;
     }
   }
   return join([
@@ -58,6 +63,61 @@ function withText(bytes, chunkBytes) {
   text[7] = 0;
   return join([bytes.slice(0, 33), makeChunk("tEXt", text), bytes.slice(33)]);
 }
+function interlacedFixture() {
+  const width = 17,
+    height = 13;
+  const header = new Uint8Array(13);
+  new DataView(header.buffer).setUint32(0, width);
+  new DataView(header.buffer).setUint32(4, height);
+  header[8] = 8;
+  header[9] = 6;
+  header[12] = 1;
+  const rows = [];
+  for (const [sx, sy, dx, dy] of [
+    [0, 0, 8, 8],
+    [4, 0, 8, 8],
+    [0, 4, 4, 8],
+    [2, 0, 4, 4],
+    [0, 2, 2, 4],
+    [1, 0, 2, 2],
+    [0, 1, 1, 2],
+  ]) {
+    for (let y = sy; y < height; y += dy) {
+      const row = [0];
+      for (let x = sx; x < width; x += dx) row.push(x * 13, y * 17, 80, (x + y) % 2 ? 127 : 255);
+      if (row.length > 1) rows.push(new Uint8Array(row));
+    }
+  }
+  return join([
+    new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
+    makeChunk("IHDR", header),
+    makeChunk("IDAT", pako.deflate(join(rows), { level: 0 })),
+    makeChunk("IEND", new Uint8Array()),
+  ]);
+}
+function depth16Fixture() {
+  const header = new Uint8Array(13);
+  new DataView(header.buffer).setUint32(0, 16);
+  new DataView(header.buffer).setUint32(4, 16);
+  header[8] = 16;
+  header[9] = 6;
+  const raw = new Uint8Array((16 * 8 + 1) * 16);
+  const view = new DataView(raw.buffer);
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 16; x++) {
+      const offset = y * 129 + 1 + x * 8;
+      view.setUint16(offset, 0x1234 + x);
+      view.setUint16(offset + 2, 0x4567 + y);
+      view.setUint16(offset + 4, 0x89ab);
+      view.setUint16(offset + 6, 65535);
+    }
+  return join([
+    new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
+    makeChunk("IHDR", header),
+    makeChunk("IDAT", pako.deflate(raw, { level: 0 })),
+    makeChunk("IEND", new Uint8Array()),
+  ]);
+}
 function select(files) {
   const transfer = new DataTransfer();
   files.forEach((file) => transfer.items.add(file));
@@ -66,7 +126,7 @@ function select(files) {
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 async function settle(tool) {
-  const deadline = Date.now() + 20000;
+  const deadline = Date.now() + 60000;
   while (tool.running) {
     if (Date.now() > deadline) throw new Error("Browser processing timed out");
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -98,9 +158,12 @@ async function compress() {
   await settle(tool);
 }
 try {
-  check(control("mode").value === "lossless" && !control("resize").checked, "Lossless with original dimensions is the default.");
+  check(
+    control("preset").value === "balanced" && !control("lossy-png").checked && !control("resize").checked,
+    "Lossless with original dimensions is the default.",
+  );
   select([
-    new File([fixture(320, 320)], "transparent.png", { type: "image/png" }),
+    new File([fixture(320, 320, "gentle")], "transparent.png", { type: "image/png" }),
     new File([fixture(320, 320, true)], "noise.png", { type: "image/png" }),
     new File(["invalid"], "invalid.png", { type: "image/png" }),
     new File([withText(fixture(800, 500, false, 9), 343421)], "text-heavy.png", { type: "image/png" }),
@@ -147,50 +210,126 @@ try {
   tool.download = (blob, name) => {
     downloaded = { blob, name };
   };
+  control("original").click();
+  check(
+    downloaded.blob === tool.selected.file && downloaded.name === tool.selected.file.name,
+    "Original bytes remain directly downloadable alongside the comparison.",
+  );
+  check(
+    tool.outputName({ file: { name: "photo.jpeg" }, blob: { type: "image/jpeg" } }) === "photo.jpeg",
+    "JPEG output preserves the original jpeg extension.",
+  );
   await tool.downloadZip();
   const zip = await JSZip.loadAsync(await downloaded.blob.arrayBuffer());
   check(
     Object.keys(zip.files).length === 3 && downloaded.name.endsWith(".zip"),
     "ZIP includes every successful image and excludes failures.",
   );
-  change("mode", "lossy");
-  change("quality", "70");
+  const reusableWorker = tool.worker;
+  change("lossy-png", true);
   await compress();
-  check(first.blob.type === "image/webp" && first.result.lossy, "Explicit lossy mode encodes WebP.");
-  check(first.result.width === 320 && !first.result.resized, "Lossy compression keeps original dimensions by default.");
+  check(first.blob.type === "image/png" && first.result.lossy, "Opt-in lossy PNG stays PNG and accepts a useful quantized result.");
+  check(
+    first.logs.some((entry) => entry.stage === "Quantizing"),
+    "Quantization reports a named stage.",
+  );
+  check(
+    first.logs.some((entry) => entry.stage === "png.candidates"),
+    "Lossy PNG compares both candidates.",
+  );
+  check(tool.worker === reusableWorker, "A warm worker is reused across files and runs.");
   const previousLossy = first.blob;
-  const originalToBlob = HTMLCanvasElement.prototype.toBlob;
-  HTMLCanvasElement.prototype.toBlob = function (callback) {
-    originalToBlob.call(this, callback, "image/png");
+  const originalRunWorker = tool.runWorker;
+  tool.runWorker = async function () {
+    const source = fixture(320, 320);
+    const bytes = join([source.slice(0, 33), makeChunk("IDAT", new Uint8Array(1024 * 1024)), makeChunk("IEND", new Uint8Array())]);
+    return { bytes, width: 320, height: 320, type: "image/png", lossy: true };
   };
   try {
     await compress();
   } finally {
-    HTMLCanvasElement.prototype.toBlob = originalToBlob;
+    tool.runWorker = originalRunWorker;
   }
   check(
     first.blob === previousLossy && first.status === "Error",
-    "Unsupported WebP encoding keeps the prior result and reports the failure.",
+    "Invalid candidates preserve prior results and cannot hide behind size fallback.",
   );
   const canvas = document.createElement("canvas");
-  canvas.width = 120;
-  canvas.height = 80;
-  const jpeg = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg"));
+  canvas.width = 640;
+  canvas.height = 400;
+  const context = canvas.getContext("2d");
+  const gradient = context.createLinearGradient(0, 0, 640, 400);
+  gradient.addColorStop(0, "#e73658");
+  gradient.addColorStop(1, "#1946ea");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, 640, 400);
+  const jpeg = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 1));
+  context.clearRect(0, 0, 640, 400);
+  context.globalAlpha = 0.5;
+  context.fillRect(0, 0, 640, 400);
+  const webp = await new Promise((resolve) => canvas.toBlob(resolve, "image/webp", 1));
   const transfer = new DataTransfer();
-  transfer.items.add(new File([jpeg], "photo.jpg", { type: "image/jpeg" }));
+  transfer.items.add(new File([jpeg], "photo.jpeg", { type: "image/jpeg" }));
+  transfer.items.add(new File([webp], "asset.webp", { type: "image/webp" }));
+  const exif = new Uint8Array([
+    255, 225, 0, 34, 69, 120, 105, 102, 0, 0, 73, 73, 42, 0, 8, 0, 0, 0, 1, 0, 18, 1, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0,
+  ]);
+  const jpegBytes = new Uint8Array(await jpeg.arrayBuffer());
+  transfer.items.add(new File([join([jpegBytes.slice(0, 2), exif, jpegBytes.slice(2)])], "rotated.jpg", { type: "image/jpeg" }));
   const drop = new Event("drop", { bubbles: true, cancelable: true });
   Object.defineProperty(drop, "dataTransfer", { value: transfer });
   root.querySelector(".ci-drop").dispatchEvent(drop);
+  change("preset", "small");
+  check(control("quality").value === "75" && control("png-min").value === "65", "Preset changes update all codec quality controls.");
   await compress();
-  check(tool.items.at(-1).result && tool.items.at(-1).result.width === 120, "JPEG input works in lossy mode through drag and drop.");
-  change("mode", "lossless");
+  const jpegItem = tool.items.find((item) => item.file.name === "photo.jpeg"),
+    webpItem = tool.items.find((item) => item.file.name === "asset.webp");
+  const rotated = tool.items.find((item) => item.file.name === "rotated.jpg");
+  check(rotated.result?.width === 400 && rotated.result.height === 640, "EXIF-rotated JPEG retains displayed orientation and dimensions.");
+  const originalWebp = new Image(),
+    optimizedWebp = new Image();
+  originalWebp.src = webpItem.before;
+  optimizedWebp.src = webpItem.after;
+  await Promise.all([originalWebp.decode(), optimizedWebp.decode()]);
+  check(pixels(originalWebp)[3] === pixels(optimizedWebp)[3], "WebP preserves the semi-transparent alpha sample.");
+  check(
+    jpegItem.result && jpegItem.blob.type === "image/jpeg" && tool.outputName(jpegItem) === "photo.jpeg",
+    "MozJPEG preserves JPEG format and extension.",
+  );
+  check(webpItem.result && webpItem.blob.type === "image/webp", "libwebp preserves WebP format.");
+  check(
+    jpegItem.logs.some((entry) => entry.details.codec === "MozJPEG") && webpItem.logs.some((entry) => entry.details.codec === "libwebp"),
+    "Real WASM codecs report their identities.",
+  );
+  change("lossy-png", false);
   change("resize", true);
   change("width", "160");
   change("height", "120");
   await compress();
-  check(text.result.width === 160 && text.result.height === 100 && text.result.resized, "Opt-in resizing fits bounds without stretching.");
-  check(text.row.textContent.includes("Resized"), "Resized output is never labeled pixel-identical lossless.");
-  check(tool.items.at(-1).status === "Error", "JPEG in strict lossless mode explains unsupported input.");
+  check(
+    text.result.width === 160 && text.result.height === 100 && text.result.resized,
+    "Resize happens before optimization and fits bounds without stretching.",
+  );
+  check(
+    jpegItem.result.width === 160 && jpegItem.result.height === 100 && jpegItem.blob.type === "image/jpeg",
+    "JPEG resizing retains target dimensions and format.",
+  );
+  check(text.row.textContent.includes("Resized"), "Resized output is never labeled identical to original pixels.");
+  change("lossy-png", true);
+  change("png-min", "100");
+  change("png-target", "100");
+  await compress();
+  check(
+    !text.result.lossy && text.blob.type === "image/png",
+    "Unattainable quantization quality falls back to lossless PNG at the target dimensions.",
+  );
+  change("png-min", "99");
+  change("png-target", "80");
+  const previousQuality = first.blob;
+  await compress();
+  check(first.blob === previousQuality && !tool.running, "Invalid PNG quality bounds preserve previous results.");
+  change("preset", "balanced");
+  change("lossy-png", false);
   change("width", "0");
   const previous = first.blob;
   await compress();
@@ -208,8 +347,29 @@ try {
     new File([fixture(640, 400)], "sample.png", { type: "image/png" }),
     new File([fixture(240, 320)], "sample.png", { type: "image/png" }),
     new File([fixture(640, 240, false, 9)], "color-study.png", { type: "image/png" }),
+    new File([interlacedFixture()], "interlaced.png", { type: "image/png" }),
+    new File([depth16Fixture()], "depth16.png", { type: "image/png" }),
   ]);
   await compress();
+  const interlaced = tool.items[3];
+  const interlacedBefore = new Image(),
+    interlacedAfter = new Image();
+  interlacedBefore.src = interlaced.before;
+  interlacedAfter.src = interlaced.after;
+  await Promise.all([interlacedBefore.decode(), interlacedAfter.decode()]);
+  const adamBefore = pixels(interlacedBefore),
+    adamAfter = pixels(interlacedAfter);
+  check(
+    adamBefore.every((value, i) => value === adamAfter[i]),
+    "Adam7 PNG remains pixel-identical after deinterlacing optimization.",
+  );
+  change("lossy-png", true);
+  await compress();
+  check(
+    !tool.items[4].result.lossy && tool.items[4].logs.some((entry) => entry.stage === "png.lossless-fallback"),
+    "16-bit PNG stays on the lossless path even when color reduction is enabled.",
+  );
+  change("lossy-png", false);
   await tool.downloadZip();
   const finalZip = await JSZip.loadAsync(await downloaded.blob.arrayBuffer());
   check(finalZip.files["sample.png"] && finalZip.files["sample (2).png"], "ZIP keeps duplicate filenames as separate files.");

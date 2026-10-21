@@ -128,112 +128,29 @@ function inflateChecked(parsed) {
   }
   return decoded;
 }
-export function optimizePng(bytes, report = () => {}) {
-  report("validation.start", { inputBytes: bytes.length });
+export function validatePng(bytes) {
   const parsed = parsePng(bytes);
-  const chunks = {};
-  let idatBytes = 0;
-  for (const chunk of parsed.chunks) {
-    chunks[chunk.type] ??= { count: 0, bytes: 0 };
-    chunks[chunk.type].count++;
-    chunks[chunk.type].bytes += chunk.raw.length;
-    if (chunk.type === "IDAT") idatBytes += chunk.raw.length;
-  }
-  const preservedBytes = bytes.length - idatBytes;
-  report("validation.complete", {
-    width: parsed.width,
-    height: parsed.height,
-    bitDepth: parsed.chunks[0].data[8],
-    colorType: parsed.chunks[0].data[9],
-    interlaced: Boolean(parsed.chunks[0].data[12]),
-    chunks,
-    preservedBytes,
-    imageDataBytes: idatBytes,
-    inflatedBytes: parsed.decodedSize,
-  });
-  report("inflate.start", {});
-  const decoded = inflateChecked(parsed);
-  report("inflate.complete", { inflatedBytes: decoded.length, validFilters: true });
-  // tEXt holds human-readable comments, not PNG rendering information:
-  // https://www.w3.org/TR/png-3/#11tEXt. Preserve every other chunk.
-  const retainedChunks = parsed.chunks.filter((chunk) => chunk.type !== "tEXt");
-  const metadataRemovedBytes = chunks.tEXt?.bytes || 0;
-  const retainedBytes = preservedBytes - metadataRemovedBytes;
-  report("metadata.complete", {
-    removedBytes: metadataRemovedBytes,
-    removedChunks: chunks.tEXt ? { tEXt: chunks.tEXt } : {},
-    retainedBytes,
-    policy: "Remove tEXt comments only; preserve color profiles, transparency and all other chunks.",
-  });
-  report("compression.start", {
-    optimizer: "pako 1.0.11",
-    level: 9,
-    strategies: ["default", "filtered", "rle"],
-    refiltering: false,
-    metadataRemoval: metadataRemovedBytes > 0,
-    scope: "Recompresses existing filtered scanlines; does not try all possible lossless PNG encodings.",
-  });
-  let best = metadataRemovedBytes ? join([SIGNATURE, ...retainedChunks.map((chunk) => chunk.raw)]) : bytes;
-  for (const [strategy, name] of [
-    [0, "default"],
-    [1, "filtered"],
-    [3, "rle"],
-  ]) {
-    const started = performance.now();
-    report("compression.attempt.start", { strategy: name, level: 9 });
-    const compressed = pako.deflate(decoded, { level: 9, strategy });
-    let inserted = false;
-    const parts = [SIGNATURE];
-    for (const chunk of retainedChunks) {
-      if (chunk.type !== "IDAT") parts.push(chunk.raw);
-      else if (!inserted) {
-        parts.push(makeChunk("IDAT", compressed));
-        inserted = true;
-      }
-    }
-    const candidate = join(parts);
-    const improved = candidate.length < best.length;
-    if (improved) best = candidate;
-    report("compression.attempt.complete", {
-      strategy: name,
-      outputBytes: candidate.length,
-      compressedDataBytes: compressed.length,
-      selected: improved,
-      bestBytes: best.length,
-      durationMs: Math.round(performance.now() - started),
-    });
-  }
-  report("integrity.start", { outputBytes: best.length });
-  // Identical filtered scanlines plus byte-identical retained non-IDAT chunks prove that
-  // pixels (including 16-bit samples), palette, transparency and profiles survived.
-  const output = parsePng(best);
-  const verified = inflateChecked(output);
-  const sourceRendering = retainedChunks.filter((chunk) => chunk.type !== "IDAT");
-  const outputRendering = output.chunks.filter((chunk) => chunk.type !== "IDAT");
-  const chunksPreserved =
-    sourceRendering.length === outputRendering.length &&
-    sourceRendering.every((chunk, index) => {
-      const actual = outputRendering[index].raw;
-      return chunk.raw.length === actual.length && chunk.raw.every((byte, offset) => byte === actual[offset]);
-    });
+  inflateChecked(parsed);
+  return parsed;
+}
+
+export function removePngText(bytes) {
+  const parsed = parsePng(bytes);
+  const retained = parsed.chunks.filter((chunk) => chunk.type !== "tEXt");
+  const removedBytes = parsed.chunks.filter((chunk) => chunk.type === "tEXt").reduce((total, chunk) => total + chunk.raw.length, 0);
+  return { bytes: removedBytes ? join([SIGNATURE, ...retained.map((chunk) => chunk.raw)]) : bytes, removedBytes };
+}
+
+export function verifyPngMetadata(source, output) {
+  const metadata = (parsed) => parsed.chunks.filter((chunk) => !["IHDR", "PLTE", "tRNS", "IDAT", "IEND", "tEXt"].includes(chunk.type));
+  const before = metadata(source);
+  const after = metadata(output);
   if (
-    !chunksPreserved ||
-    output.width !== parsed.width ||
-    output.height !== parsed.height ||
-    verified.length !== decoded.length ||
-    !verified.every((byte, i) => byte === decoded[i])
+    before.length !== after.length ||
+    before.some((chunk, i) => chunk.raw.length !== after[i].raw.length || !chunk.raw.every((value, j) => value === after[i].raw[j]))
   ) {
-    throw new Error("Lossless verification failed. The original image has been preserved.");
+    throw new Error("PNG metadata changed during lossless optimization. Original image kept available.");
   }
-  report("integrity.verified", {
-    identicalFilteredScanlines: true,
-    preservedRenderingAndOtherChunks: true,
-    removedTextBytes: metadataRemovedBytes,
-    width: output.width,
-    height: output.height,
-  });
-  report("result", { eligible: true, outputBytes: best.length, savedBytes: bytes.length - best.length, reason: "verified" });
-  return { bytes: best, width: parsed.width, height: parsed.height, eligible: true, changed: best !== bytes, metadataRemovedBytes };
 }
 
 export function fitDimensions(width, height, maxWidth, maxHeight) {

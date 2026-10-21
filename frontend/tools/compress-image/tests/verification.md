@@ -1,116 +1,181 @@
 # Compress Image verification
 
-Verified locally on 2026-10-21. The UI is implemented; the stronger OxiPNG
-optimizer remains a dependency handoff described below.
+Updated 2026-10-22. This supersedes the earlier Pako/browser-WebP contract.
 
-## Reproduce
+## Implemented contract
 
-1. Run `npm run dev -- --host 127.0.0.1` from the repository root, or reuse the
-   existing server on that address.
-2. Open [browser.html](http://127.0.0.1:1234/tools/compress-image/tests/browser.html).
-3. Wait for **PASS: 26 browser checks**. Expand Verification evidence to see
-   each assertion. The page leaves three synthetic results for manual inspection.
-4. Open [review.html](http://127.0.0.1:1234/tools/compress-image/tests/review.html)
-   to repeat the checks inside a real 390px iframe viewport.
+| Input | Pipeline | Output |
+| --- | --- | --- |
+| PNG, default | Oxipng | PNG, lossless |
+| PNG, optional color reduction | libimagequant → Oxipng, compared with a separate lossless Oxipng result | PNG |
+| JPG/JPEG | Browser orientation/color decoding → MozJPEG | JPG/JPEG, original extension retained |
+| WebP | Browser color decoding → libwebp | WebP |
 
-The harness uses real file inputs/drop events, module workers, browser decoding,
-canvas encoders, and ZIP generation. It stubs usage tracking. Final clipboard
-and download callbacks are intercepted; system clipboard permissions and files
-written to Downloads are not verified.
+Images stay on-device. All WASM assets are bundled locally. Processing is
+sequential in a reusable module worker; single-thread Oxipng does not require
+cross-origin isolation headers. Clear/unmount terminates the worker and revokes
+object URLs. A codec error preserves any previous successful result.
 
-Checks cover lossless defaults; explicit batch compression; identical decoded
-RGBA including transparency; text metadata removal; independently failing
-inputs; downloads above 300 KB; real byte totals; linked zoom and keyboard pan;
-matching cursor positions; overlay clipping/divider position; opt-in WebP;
-JPEG drop input; resizing with aspect ratio preserved; invalid resize bounds;
-unsupported WebP encoding preserving the previous result; cancellation;
-individual PNG output; duplicate ZIP filenames; and horizontal viewport fit.
-Synthetic color-study fixtures are test data, not representative compression
-benchmarks. Current sample: 1.02 MB becomes 120.21 KB (88.3% smaller); observed
-savings vary with encoding and image content.
+Balanced is the default. High Quality/Balanced/Smaller File use Oxipng levels
+2/3/4, JPEG and WebP quality 92/85/75, WebP method 4/4/5, and PNG quantization
+minimum–target values 90–100/80–95/65–85. All presets keep PNG alpha optimization
+off. Quantization uses up to 256 colors at speed 4. JPEG/WebP quality and PNG
+minimum/target quality can be adjusted separately from the preset. These scores
+are codec-specific starting values; compare the actual result visually.
+
+PNG remains lossless unless explicitly enabled. Sixteen-bit PNG stays on the
+lossless path. Lossless PNG consumes original bytes directly, removes only
+`tEXt` comments, validates PNG structure/CRC/zlib/filter data, and checks that
+non-image metadata survives. Oxipng may refilter, change palettes/bit depth, or
+deinterlace. Real-WASM tests compare decoded samples including transparent RGB
+and full 16-bit precision; identical compressed scanlines are not required.
+
+JPEG/WebP, lossy PNG, and resized images use browser-managed orientation and
+sRGB rendering before encoding. These paths do not copy original metadata.
+Quantized/resized PNG is explicitly tagged sRGB. WebP uses lossy encoding even
+when its input was lossless, with alpha quality 100. Animated PNG/WebP is
+rejected. Before/after views and direct original downloads remain available.
+
+Resize is independent and happens before quantization/encoding. It preserves
+aspect ratio to integer-pixel precision and never upscales or crops. A requested
+resize retains its target dimensions even if its output is larger. PNG encoding
+after resize is lossless relative to the resized pixels, not the original.
+
+Every candidate is checked for expected format and dimensions and decoded in
+the browser before size acceptance. PNG candidates also undergo strict stream
+validation: WebKit may accept a corrupt zlib stream during image decoding, so
+browser decode success alone is insufficient. The larger-corrupt-candidate
+regression was observed failing before this boundary check was added.
+
+Acceptance:
+
+- Lossless PNG must be strictly smaller than the original; otherwise original
+  bytes are retained.
+- JPEG/WebP must save at least `max(ceil(originalBytes * 0.01), 1024)` bytes unless
+  resizing was explicitly requested.
+- Lossy PNG must meet its quality floor and save the same threshold relative to
+  the best lossless alternative at the same dimensions. Otherwise that lossless
+  result or the original is selected.
+- A quality floor that cannot be met is a normal lossless fallback. Actual codec
+  or verification errors are reported as failures, never as successful fallback.
+
+Progress uses named stages, not fabricated percentages. Logs record actual
+codec/options, quality/fallback decisions, candidate sizes, selected outcome,
+and timing, without image payloads. Outcomes distinguish Optimized, Lossy PNG
+accepted, Lossless result used, Original kept, and Failed. Unchanged output says
+“No worthwhile reduction found. Original kept.”
+
+Input bounds remain 20 files, 32 MiB each, 128 MiB total; 16 megapixels and
+16,384 pixels per side; 64 MiB inflated PNG data; 60-second worker timeout.
 
 ## Automated checks
 
+Run from the repository root:
+
 ```sh
-./node_modules/.bin/vitest run frontend/tools/compress-image/tests/service.test.js
-./node_modules/.bin/vitest run frontend/core/tests/tool-usage-coverage.test.js frontend/components/tests/sidebar.test.js frontend/core/tests/router.test.js
-./node_modules/.bin/eslint frontend/tools/compress-image frontend/config/toolDefinitions.js
+./node_modules/.bin/vitest run frontend/tools/compress-image/tests
+npm run test:ci
+./node_modules/.bin/eslint frontend/tools/compress-image vite.config.mjs
+./node_modules/.bin/prettier --check frontend/tools/compress-image/*.js frontend/tools/compress-image/tests/*.js frontend/tools/compress-image/tests/*.mjs vite.config.mjs
 ./node_modules/.bin/vite build
+./node_modules/.bin/vite build --mode tauri
 ```
 
-Results: 22 service tests, 6 integration tests, 26 browser checks pass. ESLint
-and production Vite build pass. Vite reports existing mixed-import and large
-chunk warnings. This is not the full suite or `npm run build` prebuild checks.
-The changed size-limit expectations were written and observed failing before
-implementation. E2E behavior scenarios were authored before the UI rewrite.
+Observed: 31 focused tests pass; the full suite passes 1,545 tests in 131 files.
+ESLint, formatting, and production/Tauri-mode Vite builds pass. Vite retains
+existing mixed-import/large-chunk warnings. The build emits separate WASM files
+for Oxipng, MozJPEG, libwebp (standard/SIMD), and libimagequant. Existing generated
+worker constructors, including split/Monaco workers, use module workers under
+the shared ES worker configuration.
 
-The full app route was opened through General → Compress Image and its empty
-state inspected. Batch behavior was verified in the harness, not the full app
-shell. A later full-app OS file chooser attempt was interrupted by dev-server
-reload and timed out; it does not count as file-picker integration proof.
-Packaged Tauri, Safari, Firefox, real touch devices, interlaced/16-bit/profile
-fixtures, and animation rejection in WebP have not been exercised here.
+The new isolated tests were designed and observed failing before implementation.
+They cover immutable preset contracts, candidate thresholds/resize behavior,
+header preflight, corrupt PNG data, real WASM sample equivalence, metadata/text
+handling, and repeated optimization without inflation. Earlier diagnostics tests
+for Pako strategy counts were replaced by actual Oxipng behavior checks.
 
-## Design evidence
-
-Desktop and 390px iframe screenshots were inspected together. Mobile results
-show Before, After and Saved in a compact grid. Side by side opens first;
-zoom/pan and cursor positions are linked. An independent finish reviewer gave
-**ship** for the inspected UI/source scope, with no material fixes. Its captures
-showed one successful PNG; expanded three-file cases were exercised afterward.
-See [design-review.md](./design-review.md) for inherited design conventions and
-[comparison-result.png](./comparison-result.png) for the final browser artifact.
-
-Impeccable's detector ran once. Its only warnings were image templates without
-static `src`; every source is assigned synchronously from validated object URLs
-before paint. The checkerboard is functional transparency visualization.
-
-## Compression contract
-
-- Lossless PNG uses installed Pako 1.0.11, three DEFLATE strategies, and existing
-  filtered scanlines. Original dimensions and all rendering/profile chunks are
-  retained byte-for-byte; inflated scanlines are compared byte-for-byte.
-  Only `tEXt` comments may be removed. Output is never larger than the input.
-- Already optimized files may show no savings and retain their original bytes.
-  There is no arbitrary 300,000-byte download restriction.
-- Lossy uses the browser's WebP encoder with explicit quality. Actual MIME and
-  decoded dimensions must match; silent PNG fallback is rejected. Full-size
-  outputs that are larger retain the source instead. JPEG and still WebP are
-  accepted here; strict lossless mode is PNG-only.
-- Resize is opt-in, fits maximum width/height, preserves aspect ratio to integer
-  pixel precision, and never upscales. Canvas converts to sRGB and changes
-  pixels. The UI does not claim equivalence to original pixels after resizing.
-- Failed reprocessing keeps the previous successful downloadable result and
-  states that it was kept. Clear cancels the worker and releases object URLs.
-
-Input bounds: 20 files, 32 MiB each, 128 MiB total; 16 megapixels and 16,384 px
-per side; 64 MiB inflated PNG data; 60-second worker timeout. All image processing
-stays on-device. No server upload or backend change is required.
-
-## Library research and dependency handoff
-
-[OxiPNG](https://github.com/oxipng/oxipng) is a dedicated lossless PNG optimizer
-with filter/encoding optimization beyond the current Pako path.
-[@jsquash/oxipng](https://github.com/jamsinclair/jSquash/tree/main/packages/oxipng)
-provides its browser WebAssembly integration, derived from Squoosh. Its
-`optimiseAlpha` option must be false for an exact-pixel contract. Integration
-must also verify sample values and rendering/profile preservation rather than
-assuming every optimization preserves source metadata.
-
-The package is not installed. AGENTS.md prohibits agent dependency installation;
-no package, binary or WASM was downloaded. For this next optimization upgrade,
-the user must run:
+## Browser verification
 
 ```sh
-npm install --save-exact @jsquash/oxipng
+npm run dev -- --host 127.0.0.1
 ```
 
-Installation alone does not enable OxiPNG: worker integration, WASM bundling and
-preservation verification remain necessary afterward. No placeholder OxiPNG
-integration is shipped.
+Open `http://127.0.0.1:1234/tools/compress-image/tests/browser.html` and wait for
+**PASS: 39 browser checks**. Expand Verification evidence to inspect each result.
+For the same checks at a real 390px iframe viewport, open
+`http://127.0.0.1:1234/tools/compress-image/tests/review.html`.
 
-[WebP compression](https://developers.google.com/speed/webp/docs/compression)
-and [canvas toBlob](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/toBlob)
-document the lossy encoder and browser-dependent encoding behavior.
-UI review used the current
-[Web Interface Guidelines](https://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/main/command.md).
+Both passed in the in-app WebKit browser. Current production screenshot:
+[codec-result.png](./codec-result.png). The harness uses real WASM codecs,
+file input/drop events, worker messages, browser decoding, resizing, comparison,
+and ZIP generation. Only analytics and final download callbacks are intercepted;
+OS file-picker, clipboard permissions and actual files written to Downloads are
+not established by this harness.
+
+Checks include lossless defaults, corrupt-input isolation, original downloads,
+JPEG extension preservation, both PNG candidates, useful lossy PNG acceptance,
+quality-floor fallback, warm-worker reuse, rejection of invalid candidates before
+size fallback, EXIF-rotated JPEG, semi-transparent WebP, Adam7 pixel equivalence,
+16-bit lossless fallback, aspect-ratio resize, invalid controls, cancellation,
+linked zoom/pan/cursors, slider clipping, ZIP collisions, and horizontal fit.
+Fixtures are synthetic correctness data, not representative compression benchmarks.
+
+## Production asset verification
+
+```sh
+./node_modules/.bin/vite build --mode tauri --config frontend/tools/compress-image/tests/vite.config.mjs
+./node_modules/.bin/vite preview --host 127.0.0.1 --port 1235 --strictPort --outDir "$PWD/tauri/target/image-optimizer-verification"
+```
+
+Open `http://127.0.0.1:1235/tools/compress-image/tests/browser.html`.
+Observed **PASS: 39 browser checks** against production worker/chunk/WASM URLs.
+The normal application build does not include the verification HTML entry.
+
+## Packaged desktop verification
+
+Build a dedicated verification application using the same Rust application,
+CSP and production frontend assets, with a different bundle identifier and the
+verification page as its initial window:
+
+```sh
+node frontend/tools/compress-image/tests/build-desktop-verification.mjs
+```
+
+The script uses installed tools and offline Cargo mode; it neither installs nor
+downloads dependencies. It omits the Oracle sidecar and skips signing. The result
+is an unsigned debug `.app`, not a signed/notarized release or installer test.
+The verification identifier keeps its browser storage separate from normal AD
+Tools. The reused native shutdown handler still cleans up the Oracle sidecar
+port, so run this check when no Oracle sidecar is active. Launch the `.app` from `tauri/target/debug/bundle/macos/` and inspect the
+same PASS/FAIL result.
+
+Observed: the offline native build succeeded and produced
+`tauri/target/debug/bundle/macos/AD Tools Image Optimizer Verification.app`.
+The running page was observed at `tauri://localhost/tools/compress-image/tests/browser.html`
+and processed real PNG/Oxipng/libimagequant results. The native window initially
+rendered blank to the automation interface; opening/closing its inspector made
+window targeting unreliable. A clean relaunch also did not yield a conclusive
+final PASS/FAIL observation. Therefore native runtime verification remains
+inconclusive: the native build and partial native codec execution are not a
+claim that the full packaged harness passed. No CSP/security weakening or
+application window-behavior changes were made to work around this.
+
+For a manual native check, launch that `.app`, keep its main window in the
+foreground, and wait for the same **PASS: 39 browser checks**. This app contains
+its assets and needs no development/preview server. This is the remaining
+verification boundary; the web/development/mobile harnesses did pass.
+
+## Licensing and release boundary
+
+Application metadata now declares GPL-3.0-or-later, following the user's stated
+GPL licensing intent. Root LICENSE includes the GPLv3 terms. Bundled library
+notices are under `frontend/public/licenses/image-optimizer/` and accessible from
+Processing details. Third-party terms remain separate: jSquash wrappers are
+Apache-2.0; codec notices are retained; the libimagequant WASM wrapper is MIT and
+its underlying engine is GPL. Installed versions are documented in NOTICE.txt.
+
+No package/WASM/source archive was downloaded by the agent. The user installed
+the four dependencies. Before publishing binaries/WASM, prepare corresponding
+source and build materials for the exact shipped versions alongside the release;
+upstream links alone are not the release source artifact. This task does not
+publish a release, sign/notarize an app, or change deployed services.

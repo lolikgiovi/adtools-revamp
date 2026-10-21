@@ -14,6 +14,7 @@ export default defineConfig(({ mode }) => ({
           "import.meta.env.VITE_WORKER_BASE": JSON.stringify(WORKER_BASE),
         }
       : {},
+  worker: { format: "es" },
   build: {
     outDir: "../dist",
     emptyOutDir: true,

@@ -1,7 +1,9 @@
 import { BaseTool } from "../../core/BaseTool.js";
 import JSZip from "jszip";
 import { UsageTracker } from "../../core/UsageTracker.js";
-import { MAX_FILE_SIZE, fitDimensions, parsePng } from "./service.js";
+import { MAX_FILE_SIZE, fitDimensions, validatePng } from "./service.js";
+import { inspectImage } from "./image-info.js";
+import { PRESETS, selectCandidate } from "./config.js";
 import { getIconSvg } from "./icon.js";
 import "./styles.css";
 
@@ -37,11 +39,18 @@ export class CompressImage extends BaseTool {
         <button class="btn btn-secondary" data-ci="choose">Add images</button>
         <p>or drop your files here</p><small>PNG, JPEG, WebP · 20 files · 32 MB each</small>
       </div><fieldset class="ci-settings"><legend class="sr-only">Compression settings</legend>
-        <div class="ci-settings-line"><label>Compression<select data-ci="mode" name="compression" data-searchable-dropdown-ignore>
-          <option value="lossless">Lossless PNG</option><option value="lossy">Lossy WebP</option></select></label>
-          <label data-ci="quality-field" hidden>Quality <output data-ci="quality-value">80%</output>
-          <input data-ci="quality" name="quality" type="range" min="10" max="100" value="80"></label></div>
-        <p data-ci="mode-note">Identical pixels, colors and dimensions. PNG only. Savings depend on the image.</p>
+        <div class="ci-settings-line"><label>Preset<select data-ci="preset" name="preset" data-searchable-dropdown-ignore>
+          <option value="high">High Quality</option><option value="balanced" selected>Balanced</option>
+          <option value="small">Smaller File</option></select></label>
+          <label>JPEG / WebP quality <output data-ci="quality-value">85</output>
+          <input data-ci="quality" name="quality" aria-label="JPEG and WebP quality" type="range" min="1" max="100" value="85"></label></div>
+        <label class="ci-toggle"><input data-ci="lossy-png" type="checkbox"> Allow lossy PNG</label>
+        <div class="ci-bounds" data-ci="png-quality" hidden>
+          <label>PNG minimum quality<input data-ci="png-min" type="number" min="0" max="100" step="1" value="80"></label>
+          <label>PNG target quality<input data-ci="png-target" type="number" min="0" max="100" step="1" value="95"></label>
+          <small>Reduces colors. Compare the result visually. 16-bit PNG stays on the lossless path.</small>
+        </div>
+        <p data-ci="mode-note">PNG stays lossless by default. JPEG and WebP use lossy compression. Original format kept.</p>
         <label class="ci-toggle"><input data-ci="resize" type="checkbox" name="resize"> Reduce dimensions</label>
         <div class="ci-bounds" data-ci="bounds" hidden><label>Max width (px)<input data-ci="width" name="max-width" type="number" min="1" max="16384" step="1" value="1920"></label>
           <label>Max height (px)<input data-ci="height" name="max-height" type="number" min="1" max="16384" step="1" value="1920"></label>
@@ -82,23 +91,26 @@ export class CompressImage extends BaseTool {
     this.container.querySelectorAll(".ci-settings input, .ci-settings select").forEach((input) => {
       input.addEventListener("change", () => this.updateSettings());
     });
-    this.$("quality").addEventListener("input", () => {
-      this.$("quality-value").textContent = `${this.$("quality").value}%`;
+    this.$("preset").addEventListener("change", () => {
+      const preset = PRESETS[this.$("preset").value];
+      this.$("quality").value = preset.jpeg.quality;
+      this.$("png-min").value = preset.quantize.quality.min;
+      this.$("png-target").value = preset.quantize.quality.target;
+      this.updateSettings();
     });
+    this.$("quality").addEventListener("input", () => this.updateSettings());
   }
   updateSettings() {
-    const lossy = this.$("mode").value === "lossy";
+    const lossy = this.$("lossy-png").checked;
     const resize = this.$("resize").checked;
-    this.$("quality-field").hidden = !lossy;
+    this.$("png-quality").hidden = !lossy;
     this.$("bounds").hidden = !resize;
     this.$("mode-note").textContent = lossy
-      ? "Smaller WebP files with some detail and color changes. PNG, JPEG and still WebP supported."
-      : resize
-        ? "PNG encoding is lossless, but resizing changes the original pixels and colors."
-        : "Identical pixels, colors and dimensions. PNG only. Savings depend on the image.";
-    this.$("settings-note").textContent = resize ? "Aspect ratio kept" : "Original dimensions kept";
+      ? "PNG color reduction is enabled. JPEG and WebP are lossy. Original format kept; compare before downloading."
+      : "PNG stays lossless by default. JPEG and WebP use lossy compression. Original format kept.";
+    this.$("settings-note").textContent = resize ? "Resize first, then compress" : "Original dimensions kept";
     this.$("changed").hidden = !this.items.some((item) => item.result);
-    this.$("quality-value").textContent = `${this.$("quality").value}%`;
+    this.$("quality-value").textContent = this.$("quality").value;
   }
   error(message) {
     this.$("error").hidden = !message;
@@ -136,12 +148,29 @@ export class CompressImage extends BaseTool {
   async processQueue() {
     if (this.running || this.zipping || !this.items.length) return;
     const settings = {
-      lossy: this.$("mode").value === "lossy",
+      preset: this.$("preset").value,
+      lossyPng: this.$("lossy-png").checked,
+      pngQuality: { min: Number(this.$("png-min").value), target: Number(this.$("png-target").value) },
       resize: this.$("resize").checked,
-      quality: Number(this.$("quality").value) / 100,
+      quality: Number(this.$("quality").value),
       width: Number(this.$("width").value),
       height: Number(this.$("height").value),
     };
+    if (
+      !PRESETS[settings.preset] ||
+      !Number.isInteger(settings.quality) ||
+      settings.quality < 1 ||
+      settings.quality > 100 ||
+      (settings.lossyPng &&
+        (!Number.isInteger(settings.pngQuality.min) ||
+          !Number.isInteger(settings.pngQuality.target) ||
+          settings.pngQuality.min < 0 ||
+          settings.pngQuality.target > 100 ||
+          settings.pngQuality.min > settings.pngQuality.target))
+    ) {
+      this.error("Choose quality values between 0 and 100, with PNG minimum no higher than its target.");
+      return;
+    }
     if (settings.resize) {
       try {
         fitDimensions(1, 1, settings.width, settings.height);
@@ -171,6 +200,7 @@ export class CompressImage extends BaseTool {
           await this.compressItem(item, settings, generation);
           if (generation !== this.generation) return;
           item.status = "Ready";
+          this.log(item, "Completed", { outcome: item.result.outcome });
           item.error = null;
           try {
             UsageTracker.trackToolUse("compress-image", "compress");
@@ -195,106 +225,133 @@ export class CompressImage extends BaseTool {
     }
   }
   async compressItem(item, settings, generation) {
+    item.logs = [];
+    item.startedAt = performance.now();
+    this.log(item, "Reading", { inputBytes: item.file.size });
     if (!item.file.size || item.file.size > MAX_FILE_SIZE) throw new Error("Choose an image between 1 byte and 32 MB.");
     const bytes = new Uint8Array(await item.file.arrayBuffer());
     if (generation !== this.generation) return;
-    const png = bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71;
-    const jpeg = bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
-    const webp = String.fromCharCode(...bytes.subarray(0, 4)) === "RIFF" && String.fromCharCode(...bytes.subarray(8, 12)) === "WEBP";
-    if (!png && !jpeg && !webp) throw new Error("Choose a valid PNG, JPEG or still WebP image.");
-    if (!settings.lossy && !png) throw new Error("Lossless compression supports PNG. Choose Lossy WebP for JPEG or WebP.");
-    if (webp) {
-      for (let offset = 12; offset + 8 <= bytes.length; ) {
-        const chunk = String.fromCharCode(...bytes.subarray(offset, offset + 4));
-        if (chunk === "ANIM" || chunk === "ANMF" || (chunk === "VP8X" && bytes[offset + 8] & 2)) {
-          throw new Error("Animated WebP is unsupported. Choose a still image.");
-        }
-        offset += 8 + new DataView(bytes.buffer).getUint32(offset + 4, true) + (bytes[offset + 4] & 1);
-      }
-    }
-    if (png) parsePng(bytes);
-    const inputType = png ? "image/png" : jpeg ? "image/jpeg" : "image/webp";
-    const before = URL.createObjectURL(new Blob([bytes], { type: inputType }));
-    let after;
+    this.log(item, "Validating", {});
+    const info = inspectImage(bytes);
+    const before = URL.createObjectURL(new Blob([bytes], { type: info.type }));
     const canvas = document.createElement("canvas");
+    const temporaryUrls = new Set([before]);
     try {
+      this.log(item, "Decoding", { decoder: "browser", colorSpace: "sRGB", orientation: "from image" });
       const image = new Image();
       image.src = before;
       await image.decode();
       if (generation !== this.generation) return;
       const width = image.naturalWidth,
         height = image.naturalHeight;
-      if (width > 16384 || height > 16384 || width * height > 16000000)
+      if (!width || !height || width > 16384 || height > 16384 || width * height > 16000000) {
         throw new Error("Choose an image under 16 megapixels and 16,384 pixels per side.");
+      }
       const target = settings.resize ? fitDimensions(width, height, settings.width, settings.height) : { width, height };
       const resized = target.width !== width || target.height !== height;
-      let result, blob;
-      if (!settings.lossy && !resized) {
-        result = await this.runWorker(bytes.buffer, (stage, details) => this.log(item, stage, details));
-        blob = new Blob([result.bytes], { type: "image/png" });
-      } else {
+      let pixels;
+      if (info.type !== "image/png" || resized || (settings.lossyPng && info.depth !== 16)) {
+        if (resized) this.log(item, "Resizing", { ...target });
         canvas.width = target.width;
         canvas.height = target.height;
         const context = canvas.getContext("2d", { colorSpace: "srgb" });
-        if (!context) throw new Error("Image encoding is unavailable in this browser.");
+        if (!context) throw new Error("Image decoding is unavailable in this browser.");
         context.imageSmoothingEnabled = true;
         context.imageSmoothingQuality = "high";
         context.drawImage(image, 0, 0, target.width, target.height);
-        const type = settings.lossy ? "image/webp" : "image/png";
-        blob = await new Promise((resolve, reject) =>
-          canvas.toBlob(
-            (value) => (value ? resolve(value) : reject(new Error("Image encoding failed. Try a smaller image."))),
-            type,
-            settings.quality,
-          ),
-        );
-        if (generation !== this.generation) return;
-        if (blob.type !== type) throw new Error("WebP encoding is unavailable in this browser. Choose Lossless PNG.");
-        if (!settings.lossy) {
-          result = await this.runWorker(await blob.arrayBuffer(), (stage, details) => this.log(item, stage, details));
-          blob = new Blob([result.bytes], { type });
-        } else result = { ...target, eligible: true };
+        pixels = context.getImageData(0, 0, target.width, target.height);
       }
+      const result = await this.runWorker(
+        {
+          bytes: bytes.buffer,
+          image: pixels,
+          type: info.type,
+          resized,
+          ...settings,
+        },
+        (stage, details) => this.log(item, stage, details),
+      );
       if (generation !== this.generation) return;
-      if (result.width !== target.width || result.height !== target.height) throw new Error("Output dimensions failed verification.");
-      const originalKept = !resized && blob.size >= item.file.size;
-      if (originalKept) blob = new Blob([await item.file.arrayBuffer()], { type: inputType });
+      if (result.type !== info.type || result.width !== target.width || result.height !== target.height) {
+        throw new Error("Output format or dimensions failed verification.");
+      }
+      this.log(item, "Verifying", { codec: result.codec });
+      const verify = async (candidate) => {
+        if (info.type === "image/png") validatePng(candidate);
+        const header = inspectImage(candidate);
+        if (header.type !== info.type || header.width !== target.width || header.height !== target.height) {
+          throw new Error("Candidate format or dimensions failed verification.");
+        }
+        const blob = new Blob([candidate], { type: info.type });
+        const url = URL.createObjectURL(blob);
+        temporaryUrls.add(url);
+        const decoded = new Image();
+        decoded.src = url;
+        await decoded.decode();
+        if (decoded.naturalWidth !== target.width || decoded.naturalHeight !== target.height) {
+          throw new Error("Candidate preview failed dimension verification.");
+        }
+        return { blob, url };
+      };
+      const candidate = await verify(result.bytes);
+      const baseline = result.baseline ? await verify(result.baseline) : null;
       if (generation !== this.generation) return;
-      after = URL.createObjectURL(blob);
-      const output = new Image();
-      output.src = after;
-      await output.decode();
-      if (generation !== this.generation) return;
-      if (output.naturalWidth !== target.width || output.naturalHeight !== target.height)
-        throw new Error("Image preview failed dimension verification.");
+      const selection = selectCandidate({
+        original: item.file.size,
+        baseline: baseline ? baseline.blob.size : result.lossy ? undefined : candidate.blob.size,
+        candidate: result.lossy ? candidate.blob.size : undefined,
+        resized,
+      });
+      const originalKept = selection === "original";
+      const selected = originalKept
+        ? { blob: new Blob([item.file], { type: info.type }), url: before }
+        : selection === "baseline" && baseline
+          ? baseline
+          : candidate;
+      const lossy = !originalKept && selection === "candidate" && result.lossy;
+      const outcome = originalKept
+        ? "Original kept"
+        : lossy
+          ? info.type === "image/png"
+            ? "Lossy PNG accepted"
+            : "Optimized"
+          : settings.lossyPng
+            ? "Lossless result used"
+            : "Optimized";
       item.urls.forEach((url) => URL.revokeObjectURL(url));
       item.before = before;
-      item.after = after;
-      item.urls = [before, after];
-      item.blob = blob;
+      item.after = selected.url;
+      item.urls = [...new Set([before, selected.url])];
+      item.urls.forEach((url) => temporaryUrls.delete(url));
+      item.blob = selected.blob;
       item.result = {
-        ...result,
+        width: target.width,
+        height: target.height,
         originalWidth: width,
         originalHeight: height,
         resized,
-        lossy: settings.lossy && !originalKept,
+        lossy,
         originalKept,
+        outcome,
+        codec: lossy ? result.codec : info.type === "image/png" ? "Oxipng" : result.codec,
         quality: settings.quality,
-        metadataRemovedBytes: originalKept ? 0 : result.metadataRemovedBytes || 0,
+        quantizationQuality: lossy ? result.quantizationQuality : undefined,
+        fallbackReason: result.fallbackReason,
+        metadataRemovedBytes: originalKept || lossy ? 0 : result.metadataRemovedBytes || 0,
       };
-      this.log(item, "output.verified", {
+      this.log(item, "output.accepted", {
+        outcome,
+        selection,
         width: target.width,
         height: target.height,
+        outputBytes: selected.blob.size,
+        inputBytes: item.file.size,
         resized,
-        lossy: item.result.lossy,
-        originalKept,
-        outputBytes: blob.size,
+        lossy,
       });
-      after = null;
     } finally {
       canvas.width = canvas.height = 1;
-      if (after) URL.revokeObjectURL(after);
-      if (item.before !== before) URL.revokeObjectURL(before);
+      temporaryUrls.forEach((url) => URL.revokeObjectURL(url));
     }
   }
   updateRow(item) {
@@ -305,10 +362,9 @@ export class CompressImage extends BaseTool {
     row.classList.toggle("ci-error", item.status === "Error");
     const note =
       item.error ||
-      (result
-        ? `${result.width} × ${result.height} px · ${result.originalKept ? "Original kept" : result.resized ? "Resized" : result.lossy ? "Lossy WebP" : "Lossless PNG"}`
-        : item.status);
-    row.querySelector(".ci-file-state").textContent = ["Queued", "Compressing…"].includes(item.status) ? item.status : note;
+      (result ? `${result.width} × ${result.height} px · ${result.resized ? "Resized · " : ""}${result.outcome}` : item.status);
+    row.querySelector(".ci-file-state").textContent =
+      item.status === "Compressing…" ? `${item.stage || "Reading"}…` : item.status === "Queued" ? item.status : note;
     if (result) {
       row.querySelector(".ci-after").textContent = size(item.blob.size);
       row.querySelector(".ci-saved").textContent = savings(item.file.size, item.blob.size);
@@ -324,7 +380,8 @@ export class CompressImage extends BaseTool {
       <div class="ci-view-controls" role="group" aria-label="Comparison view"><button class="btn btn-sm btn-secondary" data-ci="pair">Side by side</button>
       <button class="btn btn-sm btn-secondary" data-ci="overlay">Slider</button></div></header>
       <div class="ci-preview"></div><details class="ci-diagnostics"><summary>Processing details</summary>
-      <p>Lossless PNG: Pako recompresses existing image data and removes text comments. Color profiles and rendering data stay intact. Further optimization may be possible.</p>
+      <p>PNG uses Oxipng; optional color reduction uses libimagequant first. JPEG uses MozJPEG; WebP uses libwebp. Quality values across codecs are not equivalent. JPEG/WebP and lossy PNG are rendered in sRGB; orientation is applied before encoding. Other metadata is not copied on these paths.</p>
+      <a href="./licenses/image-optimizer/NOTICE.txt" target="_blank" rel="noopener">Image library licenses</a>
       <button class="btn btn-secondary btn-sm" data-ci="copy-log">Copy log</button><pre></pre></details>`;
     inspector.querySelector("h3").textContent = item.file.name;
     const result = item.result;
@@ -332,8 +389,8 @@ export class CompressImage extends BaseTool {
       item.error ||
       (result
         ? result.originalKept
-          ? "No smaller file found. The original is kept without changes."
-          : `${result.resized ? `Resized from ${result.originalWidth} × ${result.originalHeight} to ${result.width} × ${result.height} px. Pixels changed; colors converted to sRGB. ` : "Dimensions unchanged. "}${result.lossy ? `Lossy WebP at ${Math.round(result.quality * 100)}% quality; detail and colors may change.` : result.resized ? "PNG encoding is lossless." : "Pixels, transparency and color profiles preserved."}${result.metadataRemovedBytes ? ` Removed ${size(result.metadataRemovedBytes)} of text comments.` : ""}`
+          ? "No worthwhile reduction found. Original kept."
+          : `${result.resized ? `Resized from ${result.originalWidth} × ${result.originalHeight} to ${result.width} × ${result.height} px. Pixels changed; rendered in sRGB. ` : "Dimensions unchanged. "}${result.lossy ? `${result.codec}. ${item.blob.type === "image/png" ? "PNG colors reduced." : `Quality ${result.quality}.`} Compare detail, colors and transparency before downloading.` : result.resized ? "PNG encoding is lossless relative to the resized pixels." : "PNG pixels and rendering metadata preserved."}${result.fallbackReason ? ` ${result.fallbackReason}` : ""}${result.metadataRemovedBytes ? ` Removed ${size(result.metadataRemovedBytes)} of text comments.` : ""}`
         : "Choose another file or correct the input and compress again.");
     inspector.querySelector("pre").textContent = item.logs.map((entry) => `${entry.stage} ${JSON.stringify(entry.details)}`).join("\n");
     this.$("copy-log").addEventListener("click", () =>
@@ -358,7 +415,8 @@ export class CompressImage extends BaseTool {
       return;
     }
     preview.innerHTML = `<div class="ci-zoom-controls"><label>Zoom <input data-ci="zoom" type="range" min="1" max="8" step="0.25" value="1"><output data-ci="zoom-value">Fit</output></label>
-      <button class="btn btn-ghost btn-sm" data-ci="fit">Reset view</button><span>Zoom is linked. Drag to pan, or use arrow keys.</span></div>
+      <button class="btn btn-ghost btn-sm" data-ci="fit">Reset view</button>
+      <button class="btn btn-secondary btn-sm" data-ci="original">Download original</button><span>Zoom is linked. Drag to pan, or use arrow keys.</span></div>
       <div class="ci-pair" ${this.view === "pair" ? "" : "hidden"}>
       <figure><figcaption>Original <span>${size(item.file.size)}</span></figcaption><div class="ci-viewport ci-checker" tabindex="0" role="group" aria-label="Original image. Arrow keys pan; plus and minus zoom."><img alt="Original image"><span class="ci-cursor" hidden></span></div></figure>
       <figure><figcaption>Result <span>${size(item.blob.size)}</span></figcaption><div class="ci-viewport ci-checker" tabindex="0" role="group" aria-label="Result image. Arrow keys pan; plus and minus zoom."><img alt="Compressed result"><span class="ci-cursor" hidden></span></div></figure></div>
@@ -366,6 +424,7 @@ export class CompressImage extends BaseTool {
         <img alt="Original image"><div class="ci-reveal ci-checker"><img alt="Compressed result"></div><span class="ci-divider" aria-hidden="true"></span>
         <span class="ci-overlay-label ci-label-before">Original</span><span class="ci-overlay-label ci-label-after">Result</span></div>
         <label class="ci-slider">Original <input data-ci="split" type="range" min="0" max="100" value="50" aria-label="Before and after comparison"> Result</label></div>`;
+    this.$("original").addEventListener("click", () => this.download(item.file, item.file.name));
     const images = preview.querySelectorAll("img");
     [item.before, item.after, item.before, item.after].forEach((url, i) => {
       images[i].src = url;
@@ -457,48 +516,52 @@ export class CompressImage extends BaseTool {
   log(item, stage, details) {
     item.logs.push({ elapsedMs: Math.round(performance.now() - item.startedAt), stage, details });
     if (item.logs.length > 160) item.logs.shift();
+    if (
+      [
+        "Reading",
+        "Validating",
+        "Decoding",
+        "Resizing",
+        "Loading optimizer",
+        "Quantizing",
+        "Encoding",
+        "Optimizing",
+        "Verifying",
+        "Completed",
+      ].includes(stage)
+    ) {
+      item.stage = stage;
+      this.updateRow(item);
+    }
   }
-  runWorker(bytes, report) {
+  runWorker(payload, report) {
     return new Promise((resolve, reject) => {
-      report("worker.start", {});
-      const worker = new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
+      const worker = (this.worker ||= new Worker(new URL("./worker.js", import.meta.url), { type: "module" }));
+      let finished = false;
       const finish = (error, result) => {
+        if (finished) return;
+        finished = true;
         clearTimeout(timer);
-        worker.terminate();
+        worker.onmessage = worker.onerror = worker.onmessageerror = null;
         this.cancelWorker = null;
-        if (error) reject(error);
-        else resolve(result);
+        if (error) {
+          worker.terminate();
+          if (this.worker === worker) this.worker = null;
+          reject(error);
+        } else resolve(result);
       };
-      const timer = setTimeout(() => {
-        report("worker.timeout", { timeoutMs: 60000 });
-        finish(new Error("Compression timed out. Please select a smaller image."));
-      }, 60000);
-      this.cancelWorker = () => {
-        report("worker.cancelled", {});
-        finish(new Error("Cancelled"));
-      };
+      const timer = setTimeout(() => finish(new Error("Compression timed out. Try a smaller image.")), 60000);
+      this.cancelWorker = () => finish(new Error("Cancelled"));
       worker.onmessage = ({ data }) => {
-        if (data.log) {
-          report(data.log.stage, data.log.details);
-          return;
-        }
-        report(
-          data.error ? "worker.failed" : "worker.complete",
-          data.error ? { message: data.error } : { outputBytes: data.result.bytes.length },
-        );
-        finish(data.error ? new Error(data.error) : null, data.result);
+        if (data.log) report(data.log.stage, data.log.details);
+        else finish(data.error ? new Error(data.error) : null, data.result);
       };
-      worker.onerror = (event) => {
-        report("worker.error", { message: event.message || "Worker could not load or execute" });
-        finish(new Error("Compression worker failed. See the processing log for details."));
-      };
-      worker.onmessageerror = () => {
-        report("worker.message-error", {});
-        finish(new Error("Unable to read the compression worker response."));
-      };
-      worker.postMessage(bytes, [bytes]);
+      worker.onerror = (event) => finish(new Error(event.message || "Compression worker failed."));
+      worker.onmessageerror = () => finish(new Error("Unable to read the compression worker response."));
+      worker.postMessage(payload, [payload.bytes, ...(payload.image ? [payload.image.data.buffer] : [])]);
     });
   }
+
   updateSummary() {
     if (!this.container) return;
     const ready = this.items.filter((item) => item.result && item.status !== "Compressing…");
@@ -526,7 +589,9 @@ export class CompressImage extends BaseTool {
     });
   }
   outputName(item) {
-    return `${item.file.name.replace(/\.[^.]+$/, "") || "image"}.${extension(item.blob.type)}`;
+    const sourceExtension = item.file.name.split(".").at(-1).toLowerCase();
+    const ext = item.blob.type === "image/jpeg" && sourceExtension === "jpeg" ? "jpeg" : extension(item.blob.type);
+    return `${item.file.name.replace(/\.[^.]+$/, "") || "image"}.${ext}`;
   }
   download(blob, name) {
     const url = URL.createObjectURL(blob),
@@ -547,7 +612,7 @@ export class CompressImage extends BaseTool {
       const zip = new JSZip(),
         names = new Set();
       for (const item of this.items.filter((entry) => entry.result)) {
-        const ext = extension(item.blob.type);
+        const ext = this.outputName(item).split(".").at(-1);
         const base = item.file.name.replace(/\.[^.]+$/, "").replace(/[\\/\p{Cc}]/gu, "_") || "image";
         let name = `${base}.${ext}`,
           suffix = 2;
@@ -567,6 +632,8 @@ export class CompressImage extends BaseTool {
   clear() {
     this.generation++;
     this.cancelWorker?.();
+    this.worker?.terminate();
+    this.worker = null;
     this.items.forEach((item) => item.urls.forEach((url) => URL.revokeObjectURL(url)));
     this.items = [];
     this.selected = null;

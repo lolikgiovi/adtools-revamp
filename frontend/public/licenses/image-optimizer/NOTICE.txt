@@ -1,0 +1,23 @@
+AD Tools image optimizer
+Application: GPL-3.0-or-later; see GPL-3.0.txt and the repository LICENSE.
+
+Bundled image libraries:
+- @jsquash/oxipng 2.3.0: Apache-2.0 wrapper; MIT codec notice included.
+- @jsquash/jpeg 1.6.0: Apache-2.0 wrapper; MozJPEG codec notices included.
+- @jsquash/webp 1.5.0: Apache-2.0 wrapper; libwebp codec notices included.
+- libimagequant-wasm 0.3.0: MIT wrapper; underlying libimagequant is GPL-3.0-or-later.
+  The installed WASM contains imagequant 4.4.1 build references.
+
+All adjacent LICENSE files retain upstream notices verbatim. The MIT wrapper
+license does not replace the underlying libimagequant license.
+
+Upstream sources and build instructions:
+https://github.com/jamsinclair/jSquash
+https://github.com/akshetpandey/libimagequant-wasm
+https://github.com/ImageOptim/libimagequant
+
+Before publishing binaries/WASM, include the corresponding source and build
+materials for the exact shipped engine versions alongside the release. These
+upstream links identify provenance; they are not a substitute for preparing
+that corresponding-source release artifact. No source archive was downloaded
+or release published during this implementation.
