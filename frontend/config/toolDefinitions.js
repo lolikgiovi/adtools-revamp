@@ -1,6 +1,6 @@
 const TOOL_MODULES = {
   "compress-image": {
-    description: "Compress multiple PNG images losslessly with before and after previews",
+    description: "Compress images losslessly or as smaller WebP files, with linked before and after previews",
     load: () => import("../tools/compress-image/main.js").then((module) => ({ ToolClass: module.CompressImage })),
   },
   "uuid-generator": {

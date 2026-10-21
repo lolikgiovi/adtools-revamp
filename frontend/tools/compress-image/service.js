@@ -1,6 +1,5 @@
 import pako from "pako";
 
-export const SIZE_LIMIT = 300000;
 export const MAX_FILE_SIZE = 32 * 1024 * 1024;
 const MAX_DECODED_SIZE = 64 * 1024 * 1024;
 const SIGNATURE = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -130,7 +129,7 @@ function inflateChecked(parsed) {
   return decoded;
 }
 export function optimizePng(bytes, report = () => {}) {
-  report("validation.start", { inputBytes: bytes.length, maxOutputBytes: SIZE_LIMIT - 1 });
+  report("validation.start", { inputBytes: bytes.length });
   const parsed = parsePng(bytes);
   const chunks = {};
   let idatBytes = 0;
@@ -233,16 +232,8 @@ export function optimizePng(bytes, report = () => {}) {
     width: output.width,
     height: output.height,
   });
-  const eligible = best.length < SIZE_LIMIT;
-  report("result", {
-    eligible,
-    outputBytes: best.length,
-    savedBytes: bytes.length - best.length,
-    maxOutputBytes: SIZE_LIMIT - 1,
-    bytesOverLimit: Math.max(0, best.length - (SIZE_LIMIT - 1)),
-    reason: eligible ? "target-reached" : retainedBytes + 12 >= SIZE_LIMIT ? "preserved-chunks-exceed-limit" : "target-not-reached",
-  });
-  return { bytes: best, width: parsed.width, height: parsed.height, eligible, changed: best !== bytes, metadataRemovedBytes };
+  report("result", { eligible: true, outputBytes: best.length, savedBytes: bytes.length - best.length, reason: "verified" });
+  return { bytes: best, width: parsed.width, height: parsed.height, eligible: true, changed: best !== bytes, metadataRemovedBytes };
 }
 
 export function fitDimensions(width, height, maxWidth, maxHeight) {

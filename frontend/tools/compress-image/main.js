@@ -1,12 +1,16 @@
 import { BaseTool } from "../../core/BaseTool.js";
 import JSZip from "jszip";
 import { UsageTracker } from "../../core/UsageTracker.js";
-import { MAX_FILE_SIZE, fitDimensions } from "./service.js";
+import { MAX_FILE_SIZE, fitDimensions, parsePng } from "./service.js";
 import { getIconSvg } from "./icon.js";
 import "./styles.css";
 
-const size = (bytes) => `${(bytes / 1000).toLocaleString(undefined, { maximumFractionDigits: 2 })} KB`;
-const OPTIMIZER_LIMIT = "Image data uses existing PNG filters; further lossless optimization may be possible.";
+const size = (bytes) =>
+  bytes < 1000
+    ? `${bytes.toLocaleString()} B`
+    : `${(bytes / (bytes >= 1000000 ? 1000000 : 1000)).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${bytes >= 1000000 ? "MB" : "KB"}`;
+const savings = (before, after) => `${Math.abs((1 - after / before) * 100).toFixed(1)}% ${after <= before ? "smaller" : "larger"}`;
+const extension = (type) => ({ "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" })[type] || "png";
 
 export class CompressImage extends BaseTool {
   constructor(eventBus) {
@@ -14,33 +18,52 @@ export class CompressImage extends BaseTool {
     this.items = [];
     this.generation = 0;
     this.running = false;
+    this.view = "pair";
   }
   getIconSvg() {
     return getIconSvg();
   }
+  $(name) {
+    return this.container.querySelector(`[data-ci="${name}"]`);
+  }
   render() {
     return `<section class="tool-container compress-image" aria-label="Compress Image">
-      <header class="ci-toolbar">
-        <div><h2>Compress Image</h2><p>Optimize every PNG losslessly, or choose a smaller size for mobile. Everything stays on your device.</p></div>
-        <div class="ci-actions">
-          <button type="button" class="btn btn-secondary btn-sm" data-ci="clear" disabled>Clear all</button>
-          <button type="button" class="btn btn-primary btn-sm" data-ci="zip" disabled>Download ZIP</button>
-        </div>
-      </header>
-      <div class="ci-drop">
-        <input type="file" accept="image/png,.png" multiple id="ci-files" class="sr-only">
-        <label for="ci-files" class="btn btn-secondary">Choose PNG images</label>
-        <p>or drop multiple images here</p>
-        <small>Below 300 KB per result · Up to 20 images · 32 MB per image · Processed on your device</small>
-      </div>
-      <p class="ci-summary" role="status" aria-live="polite">Add images to compare the original and compressed results.</p>
-      <div class="ci-results"></div>
+      <header class="ci-toolbar"><div><h2>Compress Image</h2>
+        <p>Smaller files. A clear view of what changed. Images stay on your device.</p></div>
+        <div class="ci-actions"><button class="btn btn-ghost btn-sm" data-ci="clear" disabled>Clear all</button>
+        <button class="btn btn-secondary btn-sm" data-ci="zip" disabled>Download ZIP</button></div></header>
+      <div class="ci-setup"><div class="ci-drop">
+        <input type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" multiple id="ci-files" class="sr-only">
+        <button class="btn btn-secondary" data-ci="choose">Add images</button>
+        <p>or drop your files here</p><small>PNG, JPEG, WebP · 20 files · 32 MB each</small>
+      </div><fieldset class="ci-settings"><legend class="sr-only">Compression settings</legend>
+        <div class="ci-settings-line"><label>Compression<select data-ci="mode" name="compression" data-searchable-dropdown-ignore>
+          <option value="lossless">Lossless PNG</option><option value="lossy">Lossy WebP</option></select></label>
+          <label data-ci="quality-field" hidden>Quality <output data-ci="quality-value">80%</output>
+          <input data-ci="quality" name="quality" type="range" min="10" max="100" value="80"></label></div>
+        <p data-ci="mode-note">Identical pixels, colors and dimensions. PNG only. Savings depend on the image.</p>
+        <label class="ci-toggle"><input data-ci="resize" type="checkbox" name="resize"> Reduce dimensions</label>
+        <div class="ci-bounds" data-ci="bounds" hidden><label>Max width (px)<input data-ci="width" name="max-width" type="number" min="1" max="16384" step="1" value="1920"></label>
+          <label>Max height (px)<input data-ci="height" name="max-height" type="number" min="1" max="16384" step="1" value="1920"></label>
+          <small>Fits within these bounds. No cropping or upscaling. Resizing changes pixels and converts colors to sRGB.</small></div>
+        <div class="ci-run"><button class="btn btn-primary" data-ci="compress" disabled>Compress images</button>
+        <span data-ci="settings-note">Original dimensions kept</span></div>
+      </fieldset></div>
+      <p class="ci-error-message" data-ci="error" role="alert" hidden></p>
+      <div class="ci-batch"><p class="ci-summary" role="status" aria-live="polite">Add images, choose compression, then compare the results.</p>
+        <p class="ci-settings-hint" data-ci="changed" hidden>Settings changed. Compress again to update your results.</p>
+        <div class="ci-list" role="region" aria-label="Image results" tabindex="0" hidden>
+          <table><thead><tr><th scope="col">Image</th><th scope="col">Before</th><th scope="col">After</th><th scope="col">Saved</th><th scope="col"><span class="sr-only">Download</span></th></tr></thead>
+          <tbody class="ci-results"></tbody></table></div></div>
+      <section class="ci-inspector" aria-label="Image comparison" hidden></section>
     </section>`;
   }
   onMount() {
-    this.container.querySelector("#ci-files").addEventListener("change", (event) => {
-      this.addFiles(event.target.files);
-      event.target.value = "";
+    const input = this.container.querySelector("#ci-files");
+    this.$("choose").addEventListener("click", () => input.click());
+    input.addEventListener("change", () => {
+      this.addFiles(input.files);
+      input.value = "";
     });
     const drop = this.container.querySelector(".ci-drop");
     drop.addEventListener("dragover", (event) => {
@@ -53,145 +76,116 @@ export class CompressImage extends BaseTool {
       drop.classList.remove("is-dragging");
       this.addFiles(event.dataTransfer.files);
     });
-    this.container.querySelector('[data-ci="clear"]').addEventListener("click", () => this.clear());
-    this.container.querySelector('[data-ci="zip"]').addEventListener("click", () => this.downloadZip());
+    this.$("clear").addEventListener("click", () => this.clear());
+    this.$("zip").addEventListener("click", () => this.downloadZip());
+    this.$("compress").addEventListener("click", () => this.processQueue());
+    this.container.querySelectorAll(".ci-settings input, .ci-settings select").forEach((input) => {
+      input.addEventListener("change", () => this.updateSettings());
+    });
+    this.$("quality").addEventListener("input", () => {
+      this.$("quality-value").textContent = `${this.$("quality").value}%`;
+    });
+  }
+  updateSettings() {
+    const lossy = this.$("mode").value === "lossy";
+    const resize = this.$("resize").checked;
+    this.$("quality-field").hidden = !lossy;
+    this.$("bounds").hidden = !resize;
+    this.$("mode-note").textContent = lossy
+      ? "Smaller WebP files with some detail and color changes. PNG, JPEG and still WebP supported."
+      : resize
+        ? "PNG encoding is lossless, but resizing changes the original pixels and colors."
+        : "Identical pixels, colors and dimensions. PNG only. Savings depend on the image.";
+    this.$("settings-note").textContent = resize ? "Aspect ratio kept" : "Original dimensions kept";
+    this.$("changed").hidden = !this.items.some((item) => item.result);
+    this.$("quality-value").textContent = `${this.$("quality").value}%`;
+  }
+  error(message) {
+    this.$("error").hidden = !message;
+    this.$("error").textContent = message;
   }
   addFiles(files) {
+    if (this.running || this.zipping) return this.error("Wait for this batch to finish before adding more images.");
     let total = this.items.reduce((sum, item) => sum + item.file.size, 0);
     for (const file of files) {
       if (this.items.length >= 20 || total + file.size > 128 * 1024 * 1024) {
-        this.showError("Add up to 20 images and 128 MB in total. Clear the current batch to add more.");
+        this.error("Add up to 20 images and 128 MB in total. Clear this batch to add more.");
         break;
       }
       total += file.size;
       const item = { file, status: "Queued", urls: [], logs: [], startedAt: performance.now(), logId: this.items.length + 1 };
       this.items.push(item);
       this.createRow(item);
-      this.log(item, "queued", { inputBytes: file.size, mime: file.type || "not provided" });
     }
     this.updateSummary();
-    this.processQueue();
   }
   createRow(item) {
-    const row = document.createElement("article");
-    row.className = "ci-result";
-    row.innerHTML = `<div class="ci-result-header"><div class="ci-file-info"><h3></h3><p class="ci-metrics"></p></div>
-      <button type="button" class="btn btn-secondary btn-sm" disabled>Download PNG</button></div>
-      <p class="ci-status" role="status"></p>
-      <details class="ci-diagnostics"><summary>Processing log</summary>
-        <button type="button" class="btn btn-secondary btn-sm" data-ci="copy-log">Copy log</button>
-        <pre aria-label="Image processing log"></pre>
-      </details><details class="ci-mobile" hidden><summary>For mobile? Try a smaller image</summary>
-        <p>Resize to fit a phone screen, then compress the PNG. Resizing changes dimensions and pixels; PNG encoding is lossless.
-        Colors are converted to sRGB. The full-size version stays available.</p>
-        <div class="ci-resize-controls">
-          <label>Size suggestion<select class="ci-resize-preset">
-            <option value="1920">1920 px long edge</option><option value="1440">1440 px long edge</option>
-            <option value="portrait">Portrait · 1080 × 1920</option><option value="landscape">Landscape · 1920 × 1080</option>
-            <option value="custom">Custom bounds</option>
-          </select></label>
-          <label>Max width (px)<input class="ci-max-width" type="number" min="1" max="16384" step="1" value="1920"></label>
-          <label>Max height (px)<input class="ci-max-height" type="number" min="1" max="16384" step="1" value="1920"></label>
-          <button type="button" class="btn btn-secondary btn-sm ci-resize-apply" disabled>Resize + compress</button>
-          <button type="button" class="btn btn-ghost btn-sm ci-restore" hidden>Use full-size version</button>
-        </div><p class="ci-resize-note" role="status"></p>
-      </details><div class="ci-preview" hidden></div>`;
-    row.querySelector("h3").textContent = item.file.name;
-    row.querySelector(".ci-metrics").textContent = `Original: ${size(item.file.size)}`;
-    row.querySelector(".ci-status").textContent = item.status;
-    row.querySelector("button").addEventListener("click", () => {
-      if (item.result?.eligible) this.download(item.blob, item.file.name);
-    });
-    row.querySelector('[data-ci="copy-log"]').addEventListener("click", () => {
-      this.copyToClipboard(JSON.stringify({ tool: "compress-image", image: item.logId, entries: item.logs }, null, 2));
-    });
-    row.querySelector(".ci-resize-preset").addEventListener("change", (event) => {
-      const bounds = { 1920: [1920, 1920], 1440: [1440, 1440], portrait: [1080, 1920], landscape: [1920, 1080] }[event.target.value];
-      if (bounds) {
-        row.querySelector(".ci-max-width").value = bounds[0];
-        row.querySelector(".ci-max-height").value = bounds[1];
-      }
-      this.updateResizeSuggestion(item);
-    });
-    row.querySelectorAll(".ci-mobile input").forEach((input) =>
-      input.addEventListener("input", () => {
-        row.querySelector(".ci-resize-preset").value = "custom";
-        this.updateResizeSuggestion(item);
-      }),
-    );
-    row.querySelector(".ci-resize-apply").addEventListener("click", () => this.resizeForMobile(item));
-    row.querySelector(".ci-restore").addEventListener("click", () => {
-      if (this.running || this.zipping) return;
-      this.log(item, "variant.selected", { variant: "full-size", pixelIdenticalToOriginal: true });
-      this.applyVariant(item, item.fullSize);
-      this.updateSummary();
-    });
+    const row = document.createElement("tr");
+    row.className = "ci-file-row";
+    row.innerHTML = `<th scope="row"><button class="ci-select" disabled><span class="ci-filename"></span><span class="ci-file-state">Queued</span></button></th>
+      <td class="ci-before"></td><td class="ci-after">—</td><td class="ci-saved">—</td>
+      <td><button class="btn btn-ghost btn-sm ci-download" disabled>Download</button></td>`;
+    row.querySelector(".ci-filename").textContent = item.file.name;
+    row.querySelector(".ci-before").textContent = size(item.file.size);
+    row.querySelector(".ci-select").addEventListener("click", () => this.selectItem(item));
+    row.querySelector(".ci-download").addEventListener("click", () => this.download(item.blob, this.outputName(item)));
+    row.querySelector(".ci-download").setAttribute("aria-label", `Download ${item.file.name}`);
     item.row = row;
     this.container.querySelector(".ci-results").appendChild(row);
   }
   async processQueue() {
-    if (this.running) return;
+    if (this.running || this.zipping || !this.items.length) return;
+    const settings = {
+      lossy: this.$("mode").value === "lossy",
+      resize: this.$("resize").checked,
+      quality: Number(this.$("quality").value) / 100,
+      width: Number(this.$("width").value),
+      height: Number(this.$("height").value),
+    };
+    if (settings.resize) {
+      try {
+        fitDimensions(1, 1, settings.width, settings.height);
+      } catch (error) {
+        this.error(error.message);
+        this.$("width").focus();
+        return;
+      }
+    }
+    this.error("");
+    this.$("changed").hidden = true;
     this.running = true;
     const generation = this.generation;
+    const pending = [...this.items];
+    pending.forEach((item) => {
+      item.status = "Queued";
+      this.updateRow(item);
+    });
+    this.updateSummary();
     try {
-      for (const item of this.items) {
-        if (item.status !== "Queued") continue;
+      for (const item of pending) {
+        if (generation !== this.generation) return;
         item.status = "Compressing…";
-        item.row.querySelector(".ci-status").textContent = item.status;
+        this.updateRow(item);
+        this.updateSummary();
         try {
-          if (item.file.type && item.file.type !== "image/png") throw new Error("Only PNG images are supported.");
-          if (!item.file.type && !/\.png$/i.test(item.file.name)) throw new Error("Only PNG images are supported.");
-          if (item.file.size > MAX_FILE_SIZE) throw new Error("PNG exceeds the 32 MB input limit.");
-          this.log(item, "file.read.start", { inputBytes: item.file.size });
-          const bytes = await item.file.arrayBuffer();
+          await this.compressItem(item, settings, generation);
           if (generation !== this.generation) return;
-          this.log(item, "file.read.complete", { inputBytes: bytes.byteLength });
-          const result = await this.runWorker(bytes, (stage, details) => this.log(item, stage, details));
-          if (generation !== this.generation) return;
-          item.blob = new Blob([result.bytes], { type: "image/png" });
-          const before = URL.createObjectURL(item.file);
-          const after = URL.createObjectURL(item.blob);
-          item.urls.push(before, after);
-          // Browser decoding additionally checks palette/profile and PNG semantics.
-          const original = new Image();
-          const optimized = new Image();
-          original.src = before;
-          optimized.src = after;
-          this.log(item, "browser.decode.start", {});
-          await Promise.all([original.decode(), optimized.decode()]);
-          if (generation !== this.generation) return;
-          if (
-            original.naturalWidth !== result.width ||
-            original.naturalHeight !== result.height ||
-            optimized.naturalWidth !== result.width ||
-            optimized.naturalHeight !== result.height
-          ) {
-            throw new Error("Image dimension verification failed.");
-          }
-          this.log(item, "browser.decode.verified", { width: result.width, height: result.height });
-          item.fullSize = { result, blob: item.blob, before, after, resized: false };
-          this.applyVariant(item, item.fullSize);
-          item.row.querySelector(".ci-mobile").hidden = false;
-          this.updateResizeSuggestion(item);
-          if (result.eligible) {
-            try {
-              UsageTracker.trackToolUse("compress-image", "compress");
-            } catch (_) {
-              // Analytics must not interrupt local image processing.
-            }
+          item.status = "Ready";
+          item.error = null;
+          try {
+            UsageTracker.trackToolUse("compress-image", "compress");
+          } catch (_) {
+            /* Analytics cannot interrupt local processing. */
           }
         } catch (error) {
           if (generation !== this.generation) return;
-          item.status = error.message || "Unable to decode this PNG. Select a valid image.";
-          this.log(item, "processing.failed", { message: item.status });
-          item.row.querySelector(".ci-diagnostics").open = true;
-          item.row.classList.add("ci-error");
-          item.urls.forEach((url) => URL.revokeObjectURL(url));
-          item.urls = [];
-          item.blob = null;
+          item.status = "Error";
+          item.error = `${error.message}${item.result ? " Previous result kept." : ""}`;
+          this.log(item, "processing.failed", { message: error.message });
         }
-        item.row.querySelector(".ci-status").textContent = item.status;
+        this.updateRow(item);
         this.updateSummary();
+        if (!this.selected || this.selected === item) this.selectItem(item);
       }
     } finally {
       if (generation === this.generation) {
@@ -200,150 +194,269 @@ export class CompressImage extends BaseTool {
       }
     }
   }
-  applyVariant(item, variant) {
-    item.result = variant.result;
-    item.blob = variant.blob;
-    item.selectedVariant = variant;
-    const result = variant.result;
-    const original = item.fullSize.result;
-    item.status = result.eligible
-      ? variant.resized
-        ? "Ready · Resized for mobile · Dimensions and pixels changed; PNG encoding verified"
-        : result.changed
-          ? "Ready · Lossless image data verified"
-          : "Ready · No smaller result found; original kept"
-      : `Compression completed, but the result is ${(result.bytes.length - 299999).toLocaleString()} bytes above the limit. ${OPTIMIZER_LIMIT}`;
-    if (result.metadataRemovedBytes) item.status += ` · Removed ${size(result.metadataRemovedBytes)} of text metadata.`;
-    if (variant.resized && !result.eligible) item.status += " Resized output; original pixels have changed.";
-    item.row.querySelector(".ci-status").textContent = item.status;
-    item.row.classList.toggle("ci-error", !result.eligible);
-    item.row.querySelector(".ci-result-header button").disabled = !result.eligible;
-    const saved = (1 - result.bytes.length / item.file.size) * 100;
-    const savingText = saved >= 0 ? `${saved.toFixed(1)}% smaller` : `${(-saved).toFixed(1)}% larger after resizing`;
-    item.row.querySelector(".ci-metrics").textContent =
-      `Original: ${original.width} × ${original.height} px, ${size(item.file.size)} · Result: ${result.width} × ${result.height} px, ${size(result.bytes.length)} · ${savingText}`;
-    item.row.querySelector(".ci-restore").hidden = !variant.resized;
-    this.showPreview(item, variant.before, variant.after);
-    this.log(item, "download.decision", {
-      variant: variant.resized ? "mobile" : "full-size",
-      allowed: result.eligible,
-      outputBytes: result.bytes.length,
-      maxOutputBytes: 299999,
-      reason: result.eligible ? "validated-and-below-limit" : "output-size-limit",
-    });
-    if (!result.eligible) item.row.querySelector(".ci-diagnostics").open = true;
-  }
-  updateResizeSuggestion(item) {
-    if (!item.fullSize) return;
-    const row = item.row;
-    try {
-      const { width, height } = item.fullSize.result;
-      const target = fitDimensions(
-        width,
-        height,
-        Number(row.querySelector(".ci-max-width").value),
-        Number(row.querySelector(".ci-max-height").value),
-      );
-      item.resizeTarget = target;
-      const smaller = target.width !== width || target.height !== height;
-      row.querySelector(".ci-resize-note").textContent = smaller
-        ? `${width} × ${height} → ${target.width} × ${target.height} px. Aspect ratio preserved; no cropping.`
-        : `${width} × ${height} px already fits these bounds. Choose smaller bounds to reduce dimensions. Images are never upscaled.`;
-      row.querySelector(".ci-resize-apply").disabled = !smaller || this.running || this.zipping;
-    } catch (error) {
-      item.resizeTarget = null;
-      row.querySelector(".ci-resize-note").textContent = error.message;
-      row.querySelector(".ci-resize-apply").disabled = true;
+  async compressItem(item, settings, generation) {
+    if (!item.file.size || item.file.size > MAX_FILE_SIZE) throw new Error("Choose an image between 1 byte and 32 MB.");
+    const bytes = new Uint8Array(await item.file.arrayBuffer());
+    if (generation !== this.generation) return;
+    const png = bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71;
+    const jpeg = bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
+    const webp = String.fromCharCode(...bytes.subarray(0, 4)) === "RIFF" && String.fromCharCode(...bytes.subarray(8, 12)) === "WEBP";
+    if (!png && !jpeg && !webp) throw new Error("Choose a valid PNG, JPEG or still WebP image.");
+    if (!settings.lossy && !png) throw new Error("Lossless compression supports PNG. Choose Lossy WebP for JPEG or WebP.");
+    if (webp) {
+      for (let offset = 12; offset + 8 <= bytes.length; ) {
+        const chunk = String.fromCharCode(...bytes.subarray(offset, offset + 4));
+        if (chunk === "ANIM" || chunk === "ANMF" || (chunk === "VP8X" && bytes[offset + 8] & 2)) {
+          throw new Error("Animated WebP is unsupported. Choose a still image.");
+        }
+        offset += 8 + new DataView(bytes.buffer).getUint32(offset + 4, true) + (bytes[offset + 4] & 1);
+      }
     }
-    row.querySelector(".ci-restore").disabled = this.running || this.zipping;
-  }
-  async resizeForMobile(item) {
-    if (this.running || this.zipping || !item.fullSize) return;
-    this.updateResizeSuggestion(item);
-    const target = item.resizeTarget;
-    const source = item.fullSize.result;
-    if (!target || (target.width === source.width && target.height === source.height)) return;
-    const generation = this.generation;
-    this.running = true;
-    item.busy = true;
-    this.updateSummary();
-    item.row.querySelector(".ci-status").textContent = "Resizing for mobile and compressing…";
-    const canvas = document.createElement("canvas");
+    if (png) parsePng(bytes);
+    const inputType = png ? "image/png" : jpeg ? "image/jpeg" : "image/webp";
+    const before = URL.createObjectURL(new Blob([bytes], { type: inputType }));
     let after;
+    const canvas = document.createElement("canvas");
     try {
-      this.log(item, "resize.start", {
-        from: { width: source.width, height: source.height },
-        to: target,
-        pixelIdenticalToOriginal: false,
-        colorSpace: "sRGB",
-        sampling: "high",
-      });
       const image = new Image();
-      image.src = item.fullSize.before;
+      image.src = before;
       await image.decode();
       if (generation !== this.generation) return;
-      canvas.width = target.width;
-      canvas.height = target.height;
-      const context = canvas.getContext("2d", { colorSpace: "srgb" });
-      if (!context) throw new Error("Image resizing is unavailable in this browser.");
-      context.imageSmoothingEnabled = true;
-      context.imageSmoothingQuality = "high";
-      context.drawImage(image, 0, 0, target.width, target.height);
-      const encoded = await new Promise((resolve, reject) =>
-        canvas.toBlob((blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error("Unable to encode the resized PNG."));
-        }, "image/png"),
-      );
+      const width = image.naturalWidth,
+        height = image.naturalHeight;
+      if (width > 16384 || height > 16384 || width * height > 16000000)
+        throw new Error("Choose an image under 16 megapixels and 16,384 pixels per side.");
+      const target = settings.resize ? fitDimensions(width, height, settings.width, settings.height) : { width, height };
+      const resized = target.width !== width || target.height !== height;
+      let result, blob;
+      if (!settings.lossy && !resized) {
+        result = await this.runWorker(bytes.buffer, (stage, details) => this.log(item, stage, details));
+        blob = new Blob([result.bytes], { type: "image/png" });
+      } else {
+        canvas.width = target.width;
+        canvas.height = target.height;
+        const context = canvas.getContext("2d", { colorSpace: "srgb" });
+        if (!context) throw new Error("Image encoding is unavailable in this browser.");
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = "high";
+        context.drawImage(image, 0, 0, target.width, target.height);
+        const type = settings.lossy ? "image/webp" : "image/png";
+        blob = await new Promise((resolve, reject) =>
+          canvas.toBlob(
+            (value) => (value ? resolve(value) : reject(new Error("Image encoding failed. Try a smaller image."))),
+            type,
+            settings.quality,
+          ),
+        );
+        if (generation !== this.generation) return;
+        if (blob.type !== type) throw new Error("WebP encoding is unavailable in this browser. Choose Lossless PNG.");
+        if (!settings.lossy) {
+          result = await this.runWorker(await blob.arrayBuffer(), (stage, details) => this.log(item, stage, details));
+          blob = new Blob([result.bytes], { type });
+        } else result = { ...target, eligible: true };
+      }
       if (generation !== this.generation) return;
-      this.log(item, "resize.encoded", { bytes: encoded.size, ...target, type: encoded.type });
-      const bytes = await encoded.arrayBuffer();
+      if (result.width !== target.width || result.height !== target.height) throw new Error("Output dimensions failed verification.");
+      const originalKept = !resized && blob.size >= item.file.size;
+      if (originalKept) blob = new Blob([await item.file.arrayBuffer()], { type: inputType });
       if (generation !== this.generation) return;
-      const result = await this.runWorker(bytes, (stage, details) => this.log(item, stage, { variant: "mobile", ...details }));
-      if (generation !== this.generation) return;
-      if (result.width !== target.width || result.height !== target.height) throw new Error("Resized PNG dimensions failed verification.");
-      const blob = new Blob([result.bytes], { type: "image/png" });
       after = URL.createObjectURL(blob);
       const output = new Image();
       output.src = after;
       await output.decode();
       if (generation !== this.generation) return;
       if (output.naturalWidth !== target.width || output.naturalHeight !== target.height)
-        throw new Error("Resized preview dimensions failed verification.");
-      if (item.mobile) {
-        URL.revokeObjectURL(item.mobile.after);
-        item.urls = item.urls.filter((url) => url !== item.mobile.after);
-      }
-      item.mobile = { result, blob, before: item.fullSize.before, after, resized: true };
-      item.urls.push(after);
+        throw new Error("Image preview failed dimension verification.");
+      item.urls.forEach((url) => URL.revokeObjectURL(url));
+      item.before = before;
+      item.after = after;
+      item.urls = [before, after];
+      item.blob = blob;
+      item.result = {
+        ...result,
+        originalWidth: width,
+        originalHeight: height,
+        resized,
+        lossy: settings.lossy && !originalKept,
+        originalKept,
+        quality: settings.quality,
+        metadataRemovedBytes: originalKept ? 0 : result.metadataRemovedBytes || 0,
+      };
+      this.log(item, "output.verified", {
+        width: target.width,
+        height: target.height,
+        resized,
+        lossy: item.result.lossy,
+        originalKept,
+        outputBytes: blob.size,
+      });
       after = null;
-      this.log(item, "resize.verified", { ...target, pixelIdenticalToOriginal: false, pngEncodingVerified: true });
-      this.applyVariant(item, item.mobile);
-    } catch (error) {
-      if (generation !== this.generation) return;
-      this.log(item, "resize.failed", { message: error.message });
-      item.row.querySelector(".ci-diagnostics").open = true;
-      item.row.querySelector(".ci-status").textContent = item.status;
-      this.showError(`Resize failed: ${error.message} The previous result is still selected.`);
     } finally {
       canvas.width = canvas.height = 1;
       if (after) URL.revokeObjectURL(after);
-      if (generation === this.generation) {
-        item.busy = false;
-        this.running = false;
-        this.updateSummary();
-        this.processQueue();
-      }
+      if (item.before !== before) URL.revokeObjectURL(before);
     }
   }
+  updateRow(item) {
+    const row = item.row,
+      result = item.result;
+    row.querySelector(".ci-select").disabled = !result && item.status !== "Error";
+    row.querySelector(".ci-download").disabled = !result || item.status === "Compressing…";
+    row.classList.toggle("ci-error", item.status === "Error");
+    const note =
+      item.error ||
+      (result
+        ? `${result.width} × ${result.height} px · ${result.originalKept ? "Original kept" : result.resized ? "Resized" : result.lossy ? "Lossy WebP" : "Lossless PNG"}`
+        : item.status);
+    row.querySelector(".ci-file-state").textContent = ["Queued", "Compressing…"].includes(item.status) ? item.status : note;
+    if (result) {
+      row.querySelector(".ci-after").textContent = size(item.blob.size);
+      row.querySelector(".ci-saved").textContent = savings(item.file.size, item.blob.size);
+      row.querySelector(".ci-saved").classList.toggle("ci-reduced", item.blob.size < item.file.size);
+    }
+  }
+  selectItem(item) {
+    this.selected = item;
+    this.items.forEach((entry) => entry.row.classList.toggle("is-selected", entry === item));
+    const inspector = this.container.querySelector(".ci-inspector");
+    inspector.hidden = false;
+    inspector.innerHTML = `<header class="ci-inspector-header"><div><h3></h3><p class="ci-detail"></p></div>
+      <div class="ci-view-controls" role="group" aria-label="Comparison view"><button class="btn btn-sm btn-secondary" data-ci="pair">Side by side</button>
+      <button class="btn btn-sm btn-secondary" data-ci="overlay">Slider</button></div></header>
+      <div class="ci-preview"></div><details class="ci-diagnostics"><summary>Processing details</summary>
+      <p>Lossless PNG: Pako recompresses existing image data and removes text comments. Color profiles and rendering data stay intact. Further optimization may be possible.</p>
+      <button class="btn btn-secondary btn-sm" data-ci="copy-log">Copy log</button><pre></pre></details>`;
+    inspector.querySelector("h3").textContent = item.file.name;
+    const result = item.result;
+    inspector.querySelector(".ci-detail").textContent =
+      item.error ||
+      (result
+        ? result.originalKept
+          ? "No smaller file found. The original is kept without changes."
+          : `${result.resized ? `Resized from ${result.originalWidth} × ${result.originalHeight} to ${result.width} × ${result.height} px. Pixels changed; colors converted to sRGB. ` : "Dimensions unchanged. "}${result.lossy ? `Lossy WebP at ${Math.round(result.quality * 100)}% quality; detail and colors may change.` : result.resized ? "PNG encoding is lossless." : "Pixels, transparency and color profiles preserved."}${result.metadataRemovedBytes ? ` Removed ${size(result.metadataRemovedBytes)} of text comments.` : ""}`
+        : "Choose another file or correct the input and compress again.");
+    inspector.querySelector("pre").textContent = item.logs.map((entry) => `${entry.stage} ${JSON.stringify(entry.details)}`).join("\n");
+    this.$("copy-log").addEventListener("click", () =>
+      this.copyToClipboard(JSON.stringify({ tool: "compress-image", entries: item.logs }, null, 2)),
+    );
+    this.$("pair").addEventListener("click", () => {
+      this.view = "pair";
+      this.showPreview(item);
+    });
+    this.$("overlay").addEventListener("click", () => {
+      this.view = "overlay";
+      this.showPreview(item);
+    });
+    this.showPreview(item);
+  }
+  showPreview(item) {
+    const preview = this.container.querySelector(".ci-preview");
+    this.$("pair").setAttribute("aria-pressed", String(this.view === "pair"));
+    this.$("overlay").setAttribute("aria-pressed", String(this.view === "overlay"));
+    if (!item.result) {
+      preview.replaceChildren();
+      return;
+    }
+    preview.innerHTML = `<div class="ci-zoom-controls"><label>Zoom <input data-ci="zoom" type="range" min="1" max="8" step="0.25" value="1"><output data-ci="zoom-value">Fit</output></label>
+      <button class="btn btn-ghost btn-sm" data-ci="fit">Reset view</button><span>Zoom is linked. Drag to pan, or use arrow keys.</span></div>
+      <div class="ci-pair" ${this.view === "pair" ? "" : "hidden"}>
+      <figure><figcaption>Original <span>${size(item.file.size)}</span></figcaption><div class="ci-viewport ci-checker" tabindex="0" role="group" aria-label="Original image. Arrow keys pan; plus and minus zoom."><img alt="Original image"><span class="ci-cursor" hidden></span></div></figure>
+      <figure><figcaption>Result <span>${size(item.blob.size)}</span></figcaption><div class="ci-viewport ci-checker" tabindex="0" role="group" aria-label="Result image. Arrow keys pan; plus and minus zoom."><img alt="Compressed result"><span class="ci-cursor" hidden></span></div></figure></div>
+      <div class="ci-overlay" ${this.view === "overlay" ? "" : "hidden"}><div class="ci-viewport ci-checker" tabindex="0" role="group" aria-label="Image comparison. Arrow keys pan; plus and minus zoom.">
+        <img alt="Original image"><div class="ci-reveal ci-checker"><img alt="Compressed result"></div><span class="ci-divider" aria-hidden="true"></span>
+        <span class="ci-overlay-label ci-label-before">Original</span><span class="ci-overlay-label ci-label-after">Result</span></div>
+        <label class="ci-slider">Original <input data-ci="split" type="range" min="0" max="100" value="50" aria-label="Before and after comparison"> Result</label></div>`;
+    const images = preview.querySelectorAll("img");
+    [item.before, item.after, item.before, item.after].forEach((url, i) => {
+      images[i].src = url;
+      images[i].draggable = false;
+      images[i].width = i % 2 ? item.result.width : item.result.originalWidth;
+      images[i].height = i % 2 ? item.result.height : item.result.originalHeight;
+    });
+    let zoom = 1,
+      x = 0,
+      y = 0,
+      drag;
+    const update = () => {
+      const bound = (zoom - 1) / 2;
+      x = Math.max(-bound, Math.min(bound, x));
+      y = Math.max(-bound, Math.min(bound, y));
+      images.forEach((img) => {
+        img.style.transform = `translate(${x * 100}%, ${y * 100}%) scale(${zoom})`;
+      });
+      preview.querySelectorAll(".ci-viewport").forEach((pane) => {
+        pane.style.touchAction = zoom > 1 ? "none" : "pan-y";
+        pane.classList.toggle("is-zoomed", zoom > 1);
+      });
+      this.$("zoom").value = zoom;
+      this.$("zoom-value").textContent = zoom === 1 ? "Fit" : `${zoom}×`;
+    };
+    this.$("zoom").addEventListener("input", () => {
+      zoom = Number(this.$("zoom").value);
+      update();
+    });
+    this.$("fit").addEventListener("click", () => {
+      zoom = 1;
+      x = y = 0;
+      update();
+    });
+    preview.querySelectorAll(".ci-viewport").forEach((pane) => {
+      pane.addEventListener("pointerdown", (event) => {
+        if (zoom === 1 || event.button !== 0) return;
+        drag = { id: event.pointerId, x: event.clientX, y: event.clientY };
+        pane.setPointerCapture(event.pointerId);
+      });
+      pane.addEventListener("pointermove", (event) => {
+        const rect = pane.getBoundingClientRect();
+        if (drag?.id === event.pointerId) {
+          x += (event.clientX - drag.x) / rect.width;
+          y += (event.clientY - drag.y) / rect.height;
+          drag.x = event.clientX;
+          drag.y = event.clientY;
+          update();
+        }
+        preview.querySelectorAll(".ci-cursor").forEach((cursor) => {
+          cursor.hidden = false;
+          cursor.style.left = `${Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100))}%`;
+          cursor.style.top = `${Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100))}%`;
+        });
+      });
+      for (const name of ["pointerup", "pointercancel", "lostpointercapture"])
+        pane.addEventListener(name, () => {
+          drag = null;
+        });
+      pane.addEventListener("pointerleave", () =>
+        preview.querySelectorAll(".ci-cursor").forEach((cursor) => {
+          cursor.hidden = true;
+        }),
+      );
+      pane.addEventListener("keydown", (event) => {
+        const delta = { ArrowLeft: [0.1, 0], ArrowRight: [-0.1, 0], ArrowUp: [0, 0.1], ArrowDown: [0, -0.1] }[event.key];
+        if (delta) {
+          event.preventDefault();
+          x += delta[0];
+          y += delta[1];
+          update();
+        }
+        if (["+", "=", "-"].includes(event.key)) {
+          event.preventDefault();
+          zoom = Math.min(8, Math.max(1, zoom + (event.key === "-" ? -0.25 : 0.25)));
+          update();
+        }
+      });
+    });
+    const split = () => {
+      const value = this.$("split").value;
+      preview.querySelector(".ci-reveal").style.clipPath = `inset(0 0 0 ${value}%)`;
+      preview.querySelector(".ci-divider").style.left = `${value}%`;
+    };
+    this.$("split").addEventListener("input", split);
+    split();
+    update();
+  }
   log(item, stage, details) {
-    const entry = { elapsedMs: Math.round(performance.now() - item.startedAt), stage, details };
-    item.logs.push(entry);
-    const output = item.row.querySelector(".ci-diagnostics pre");
-    const atBottom = output.scrollHeight - output.scrollTop - output.clientHeight < 24;
-    output.textContent = item.logs.map((log) => `[${log.elapsedMs} ms] ${log.stage} ${JSON.stringify(log.details)}`).join("\n");
-    if (atBottom) output.scrollTop = output.scrollHeight;
-    console.info("[Compress Image]", { image: item.logId, ...entry });
+    item.logs.push({ elapsedMs: Math.round(performance.now() - item.startedAt), stage, details });
+    if (item.logs.length > 160) item.logs.shift();
   }
   runWorker(bytes, report) {
     return new Promise((resolve, reject) => {
@@ -386,79 +499,66 @@ export class CompressImage extends BaseTool {
       worker.postMessage(bytes, [bytes]);
     });
   }
-  showPreview(item, before, after) {
-    const preview = item.row.querySelector(".ci-preview");
-    preview.hidden = false;
-    preview.innerHTML = `<div class="ci-preview-toolbar"><span>Visual comparison</span>
-      <label><input type="checkbox"> Overlay comparison</label></div>
-      <div class="ci-pair"><figure><figcaption>Before</figcaption><div class="ci-checker"><img alt="Original PNG"></div></figure>
-      <figure><figcaption>After${item.selectedVariant?.resized ? " · Resized" : ""}${item.result.eligible ? "" : " · Above size limit"}</figcaption>
-      <div class="ci-checker"><img alt="${item.selectedVariant?.resized ? "Resized and PNG-compressed image" : "Losslessly compressed PNG"}"></div></figure></div>
-      <div class="ci-overlay" hidden><div class="ci-overlay-images ci-checker"><img class="ci-checker" alt="Original for comparison">
-      <img class="ci-overlay-after ci-checker" alt="Compressed for comparison"></div>
-      <label class="ci-slider">Before <input type="range" min="0" max="100" value="50" aria-label="Before and after comparison"> After</label></div>`;
-    const images = preview.querySelectorAll("img");
-    [before, after, before, after].forEach((url, index) => {
-      images[index].src = url;
-    });
-    preview.querySelector('input[type="checkbox"]').addEventListener("change", (event) => {
-      preview.querySelector(".ci-pair").hidden = event.target.checked;
-      preview.querySelector(".ci-overlay").hidden = !event.target.checked;
-    });
-    const slider = preview.querySelector('input[type="range"]');
-    const update = () => {
-      images[3].style.clipPath = `inset(0 0 0 ${slider.value}%)`;
-    };
-    slider.addEventListener("input", update);
-    update();
-  }
   updateSummary() {
     if (!this.container) return;
-    const ready = this.items.filter((item) => item.result?.eligible && !item.busy).length;
-    const pending = this.items.filter((item) => item.busy || ["Queued", "Compressing…"].includes(item.status)).length;
+    const ready = this.items.filter((item) => item.result && item.status !== "Compressing…");
+    const before = ready.reduce((sum, item) => sum + item.file.size, 0),
+      after = ready.reduce((sum, item) => sum + item.blob.size, 0);
+    const errors = this.items.filter((item) => item.status === "Error").length;
     this.container.querySelector(".ci-summary").textContent = this.items.length
-      ? `${this.items.length} images · ${ready} ready to download · ${pending} processing · ${this.items.length - ready - pending} unable to meet requirements`
-      : "Add images to compare the original and compressed results.";
-    this.container.querySelector('[data-ci="clear"]').disabled = !this.items.length;
-    this.container.querySelector('[data-ci="zip"]').disabled = !ready || this.zipping || this.running;
-    for (const item of this.items) {
-      item.row.querySelector(".ci-result-header button").disabled = !item.result?.eligible || Boolean(item.busy);
-      this.updateResizeSuggestion(item);
-    }
+      ? `${this.items.length} ${this.items.length === 1 ? "file" : "files"} · ${ready.length} ready${errors ? ` · ${errors} failed` : ""}${ready.length ? ` · ${size(before)} before / ${size(after)} after · ${after <= before ? `${size(before - after)} saved` : `${size(after - before)} larger`} (${savings(before, after)})` : ""}${this.running ? " · Compressing…" : ""}`
+      : "Add images, choose compression, then compare the results.";
+    this.container.querySelector(".ci-list").hidden = !this.items.length;
+    this.$("clear").disabled = !this.items.length;
+    this.$("zip").disabled = !ready.length || this.running || this.zipping;
+    this.$("compress").disabled = !this.items.length || this.running || this.zipping;
+    this.$("compress").textContent = this.running
+      ? "Compressing…"
+      : this.items.some((item) => item.result)
+        ? "Compress again"
+        : "Compress images";
+    this.container.querySelectorAll(".ci-settings input, .ci-settings select").forEach((input) => {
+      input.disabled = this.running || this.zipping;
+    });
+    this.$("choose").disabled = this.running || this.zipping;
+    this.items.forEach((item) => {
+      item.row.querySelector(".ci-download").disabled = !item.result || this.running || this.zipping;
+    });
+  }
+  outputName(item) {
+    return `${item.file.name.replace(/\.[^.]+$/, "") || "image"}.${extension(item.blob.type)}`;
   }
   download(blob, name) {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob),
+      link = document.createElement("a");
     link.href = url;
-    link.download = /\.png$/i.test(name) || /\.zip$/i.test(name) ? name : `${name}.png`;
+    link.download = name;
     document.body.appendChild(link);
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   async downloadZip() {
+    if (this.running || this.zipping || !this.items.some((item) => item.result)) return;
     const generation = this.generation;
     this.zipping = true;
     this.updateSummary();
     try {
-      const zip = new JSZip();
-      const names = new Set();
-      for (const item of this.items.filter((entry) => entry.result?.eligible && !entry.busy)) {
-        const base =
-          item.file.name
-            .replace(/\.png$/i, "")
-            .replace(/[\\/]/g, "_")
-            .replace(/\p{Cc}/gu, "_") || "image";
-        let name = `${base}.png`;
-        let suffix = 2;
-        while (names.has(name.toLowerCase())) name = `${base} (${suffix++}).png`;
+      const zip = new JSZip(),
+        names = new Set();
+      for (const item of this.items.filter((entry) => entry.result)) {
+        const ext = extension(item.blob.type);
+        const base = item.file.name.replace(/\.[^.]+$/, "").replace(/[\\/\p{Cc}]/gu, "_") || "image";
+        let name = `${base}.${ext}`,
+          suffix = 2;
+        while (names.has(name.toLowerCase())) name = `${base} (${suffix++}).${ext}`;
         names.add(name.toLowerCase());
         zip.file(name, await item.blob.arrayBuffer());
       }
       const blob = await zip.generateAsync({ type: "blob" });
       if (generation === this.generation) this.download(blob, "compressed-images.zip");
     } catch (_) {
-      if (generation === this.generation) this.showError("Unable to create ZIP. Download the PNG images individually.");
+      if (generation === this.generation) this.error("Unable to create ZIP. Download the images individually.");
     } finally {
       this.zipping = false;
       this.updateSummary();
@@ -469,8 +569,18 @@ export class CompressImage extends BaseTool {
     this.cancelWorker?.();
     this.items.forEach((item) => item.urls.forEach((url) => URL.revokeObjectURL(url)));
     this.items = [];
+    this.selected = null;
     this.running = false;
     this.container?.querySelector(".ci-results").replaceChildren();
+    const inspector = this.container?.querySelector(".ci-inspector");
+    if (inspector) {
+      inspector.hidden = true;
+      inspector.replaceChildren();
+    }
+    if (this.container) {
+      this.error("");
+      this.$("changed").hidden = true;
+    }
     this.updateSummary();
   }
   hasActiveBackgroundWork() {

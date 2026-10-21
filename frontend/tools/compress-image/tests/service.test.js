@@ -1,5 +1,5 @@
 // Failure cases: corrupt signatures/CRC/zlib, APNG, oversized dimensions/inflation,
-// changed pixels/profiles, larger output, and the strict 300,000-byte boundary.
+// changed pixels/profiles, larger output, and downloadable results regardless of output size.
 import { PNG } from "pngjs";
 import { optimizePng, parsePng, makeChunk, fitDimensions } from "../service.js";
 
@@ -38,18 +38,18 @@ describe("lossless PNG compression", () => {
       parsePng(source).chunks.find((chunk) => chunk.type === "gAMA").raw,
     );
   });
-  it("keeps an incompressible PNG blocked and never returns a larger result", () => {
+  it("keeps an incompressible PNG downloadable and never returns a larger result", () => {
     const source = fixture(320, 320, true);
     const result = optimizePng(source);
-    expect(result.eligible).toBe(false);
+    expect(result.eligible).toBe(true);
     expect(result.bytes.length).toBeLessThanOrEqual(source.length);
     expect(PNG.sync.read(Buffer.from(result.bytes)).data).toEqual(PNG.sync.read(Buffer.from(source)).data);
   });
-  it("does not accept an output equal to 300,000 bytes", () => {
+  it("accepts a verified output equal to 300,000 bytes", () => {
     const source = optimizePng(fixture()).bytes;
     const padded = insert(source, makeChunk("vpAg", new Uint8Array(300000 - source.length - 12)));
     expect(padded.length).toBe(300000);
-    expect(optimizePng(padded).eligible).toBe(false);
+    expect(optimizePng(padded).eligible).toBe(true);
   });
   it("rejects animation, bad CRC, trailing data, missing IDAT and invalid signatures", () => {
     const source = fixture(2, 2);
@@ -73,7 +73,7 @@ describe("lossless PNG compression", () => {
 // Diagnostic failure cases: no explanation for size rejection, hidden metadata
 // overhead, misleading claims that DEFLATE exhausted every lossless encoding.
 describe("compression diagnostics", () => {
-  it("reports each candidate and the exact size-limit decision", () => {
+  it("reports each candidate and the verified result", () => {
     const logs = [];
     const source = fixture(320, 320, true);
     const result = optimizePng(source, (stage, details) => logs.push({ stage, details }));
@@ -85,11 +85,10 @@ describe("compression diagnostics", () => {
     expect(logs.at(-1)).toMatchObject({
       stage: "result",
       details: {
-        eligible: false,
+        eligible: true,
         outputBytes: result.bytes.length,
-        maxOutputBytes: 299999,
-        bytesOverLimit: result.bytes.length - 299999,
-        reason: "target-not-reached",
+        savedBytes: source.length - result.bytes.length,
+        reason: "verified",
       },
     });
     expect(logs.find((log) => log.stage === "compression.start").details).toMatchObject({
@@ -105,14 +104,14 @@ describe("compression diagnostics", () => {
     const validation = logs.find((log) => log.stage === "validation.complete").details;
     expect(validation.chunks.vpAg).toEqual({ count: 1, bytes: 300012 });
     expect(validation.preservedBytes).toBeGreaterThan(300000);
-    expect(logs.at(-1).details.reason).toBe("preserved-chunks-exceed-limit");
+    expect(logs.at(-1).details.reason).toBe("verified");
     expect(JSON.stringify(logs)).not.toContain("data:image");
   });
   it("runs compression attempts for images already below the size limit", () => {
     const logs = [];
     optimizePng(fixture(2, 2), (stage, details) => logs.push({ stage, details }));
     expect(logs.filter((log) => log.stage === "compression.attempt.complete")).toHaveLength(3);
-    expect(logs.at(-1)).toMatchObject({ stage: "result", details: { reason: "target-reached", eligible: true } });
+    expect(logs.at(-1)).toMatchObject({ stage: "result", details: { reason: "verified", eligible: true } });
   });
 });
 
@@ -140,7 +139,7 @@ describe("non-rendering text metadata optimization", () => {
       removedBytes: 343421,
       removedChunks: { tEXt: { count: 1, bytes: 343421 } },
     });
-    expect(logs.at(-1).details.reason).toBe("target-reached");
+    expect(logs.at(-1).details.reason).toBe("verified");
   });
   it("removes text metadata from small PNGs too", () => {
     const source = insert(fixture(2, 2), makeChunk("tEXt", new Uint8Array([65, 0, 66])));

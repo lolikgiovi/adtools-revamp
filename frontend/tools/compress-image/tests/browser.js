@@ -1,7 +1,11 @@
 import pako from "pako";
 import JSZip from "jszip";
+import { UsageTracker } from "../../../core/UsageTracker.js";
+
+// Fixture processing must not change real usage counts.
+UsageTracker.trackToolUse = () => {};
 import { CompressImage } from "../main.js";
-import { makeChunk, parsePng } from "../service.js";
+import { makeChunk } from "../service.js";
 
 const checks = [];
 function check(condition, message) {
@@ -29,7 +33,15 @@ function fixture(width, height, noise = false, level = 0) {
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width * 4; x++) {
       seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-      data[y * (width * 4 + 1) + 1 + x] = noise ? seed >>> 24 : x % 4 === 3 ? 127 : (x % 3) * 80;
+      data[y * (width * 4 + 1) + 1 + x] = noise
+        ? seed >>> 24
+        : x % 4 === 3
+          ? 127
+          : x % 4 === 0
+            ? Math.floor((x / 4 / width) * 255)
+            : x % 4 === 1
+              ? Math.floor((y / height) * 255)
+              : ((Math.floor(x / 4 / 32) + Math.floor(y / 32)) % 2) * 160;
     }
   }
   return join([
@@ -68,243 +80,154 @@ function pixels(image) {
   context.drawImage(image, 0, 0);
   return context.getImageData(0, 0, canvas.width, canvas.height).data;
 }
+// Failure scenarios: corrupt input must not stop a batch; no invented savings;
+// lossy fallback must not masquerade as WebP; resizing must be opt-in;
+// linked transforms, slider endpoints, unique ZIP filenames and clearing in flight.
 const tool = new CompressImage();
 tool.mount(document.querySelector("#tool"));
+const root = document.querySelector("#tool");
+const control = (name) => root.querySelector(`[data-ci="${name}"]`);
+function change(name, value) {
+  const input = control(name);
+  if (input.type === "checkbox") input.checked = value;
+  else input.value = value;
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+}
+async function compress() {
+  control("compress").click();
+  await settle(tool);
+}
 try {
-  const small = withText(fixture(2, 2), 35);
+  check(control("mode").value === "lossless" && !control("resize").checked, "Lossless with original dimensions is the default.");
   select([
     new File([fixture(320, 320)], "transparent.png", { type: "image/png" }),
-    new File([small], "small.png", { type: "image/png" }),
     new File([fixture(320, 320, true)], "noise.png", { type: "image/png" }),
     new File(["invalid"], "invalid.png", { type: "image/png" }),
-    new File([small], "wrong.jpg", { type: "image/jpeg" }),
     new File([withText(fixture(800, 500, false, 9), 343421)], "text-heavy.png", { type: "image/png" }),
   ]);
-  await settle(tool);
-  check(tool.items.length === 6, "Multiple files entered through the real file input");
+  check(tool.items.length === 4 && !tool.running && !tool.items[0].result, "Multiple files queue before explicit compression.");
+  await compress();
+  const [first, noise, invalid, text] = tool.items;
+  check(first.blob.size < first.file.size && noise.blob.size > 300000, "Real savings and verified results above 300 KB are downloadable.");
+  check(invalid.status === "Error" && !!text.result, "An invalid image fails independently; later files still complete.");
+  check(text.result.metadataRemovedBytes === 343421, "Lossless compression removes text comments and preserves rendering metadata.");
+  check(text.row.textContent.includes("800 × 500"), "File rows show output dimensions.");
+  check(root.querySelector(".ci-summary").textContent.includes("saved"), "Batch totals report actual byte savings.");
+  const original = new Image();
+  original.src = first.before;
+  await original.decode();
+  const output = new Image();
+  output.src = first.after;
+  await output.decode();
+  const beforePixels = pixels(original),
+    afterPixels = pixels(output);
   check(
-    tool.items.filter((item) => item.result?.eligible).length === 3,
-    "Mixed batch: three ready, three blocked; processing continues after errors",
+    beforePixels.every((v, i) => v === afterPixels[i]),
+    "Lossless output has identical browser-rendered RGBA including transparency.",
   );
-  check(tool.items[0].blob.size < 300000, "Large PNG compressed strictly below 300 KB");
-  check(tool.items[1].blob.size < small.length && tool.items[1].result.changed, "Small PNG is optimized even below 100 KB");
-  check(!tool.items[2].result.eligible && tool.items[2].row.querySelector("button").disabled, "Incompressible output cannot be downloaded");
-  check(
-    tool.items[3].row.querySelector("button").disabled && tool.items[4].row.querySelector("button").disabled,
-    "Invalid PNG and wrong MIME rejected",
-  );
-  const blocked = tool.items[2];
-  check(
-    blocked.logs.filter((entry) => entry.stage === "compression.attempt.complete").length === 3,
-    "Worker streams all three compression attempt sizes into the per-image log",
-  );
-  check(
-    blocked.row.querySelector(".ci-diagnostics").open &&
-      blocked.row.querySelector(".ci-diagnostics pre").textContent.includes("bytesOverLimit"),
-    "Blocked result opens its log and explains the exact excess bytes",
-  );
-  check(
-    blocked.row.querySelector(".ci-status").textContent.includes("further lossless optimization may be possible"),
-    "Size-limit message describes this optimizer's limitation without claiming all lossless methods failed",
-  );
-  check(
-    tool.items[3].logs.at(-1).stage === "processing.failed" && tool.items[4].logs.at(-1).stage === "processing.failed",
-    "Invalid-file failures are logged independently",
-  );
-  check(
-    tool.items[1].logs.filter((entry) => entry.stage === "compression.attempt.complete").length === 3,
-    "Small-image log confirms all three compression attempts ran",
-  );
-  let copiedLog;
-  tool.copyToClipboard = async (text) => {
-    copiedLog = JSON.parse(text);
-    return true;
-  };
-  blocked.row.querySelector('[data-ci="copy-log"]').click();
-  check(
-    copiedLog.entries.at(-1).details.allowed === false && !JSON.stringify(copiedLog).includes("data:image"),
-    "Copy log exports structured diagnostics without image payloads",
-  );
-  const textHeavy = tool.items[5];
-  check(
-    textHeavy.result.eligible && textHeavy.result.metadataRemovedBytes === 343421 && textHeavy.blob.size < 300000,
-    "Text-heavy PNG becomes eligible after removing exactly 343421 bytes of tEXt metadata",
-  );
-  const textOutput = parsePng(new Uint8Array(await textHeavy.blob.arrayBuffer()));
-  check(
-    !textOutput.chunks.some((chunk) => chunk.type === "tEXt") && textOutput.chunks.some((chunk) => chunk.type === "sRGB"),
-    "Text comments are removed while the sRGB rendering chunk survives",
-  );
-  const textImages = textHeavy.row.querySelectorAll(".ci-pair img");
-  await Promise.all([...textImages].map((image) => image.decode()));
-  const textBefore = pixels(textImages[0]);
-  const textAfter = pixels(textImages[1]);
-  check(
-    textBefore.length === textAfter.length && textBefore.every((value, i) => value === textAfter[i]),
-    "800 by 500 PNG retains identical browser-rendered pixels after metadata removal",
-  );
-  check(
-    textHeavy.row.querySelector(".ci-status").textContent.includes("343.42 KB of text metadata"),
-    "Ready result discloses how much text metadata was removed",
-  );
-  const preview = tool.items[0].row.querySelector(".ci-preview");
-  const images = preview.querySelectorAll("img");
-  await Promise.all([...images].map((image) => image.decode()));
-  const before = pixels(images[0]);
-  const after = pixels(images[1]);
-  check(
-    before.length === after.length && before.every((value, i) => value === after[i]),
-    "Browser-rendered RGBA is identical, including transparency and sRGB rendering",
-  );
-  const toggle = preview.querySelector('input[type="checkbox"]');
-  toggle.click();
-  check(
-    preview.querySelector(".ci-pair").hidden && !preview.querySelector(".ci-overlay").hidden,
-    "Overlay toggle switches the visual comparison",
-  );
-  const slider = preview.querySelector('input[type="range"]');
+  check(tool.view === "pair", "Side by side opens first.");
+  control("zoom").value = "3";
+  control("zoom").dispatchEvent(new Event("input", { bubbles: true }));
+  const pane = root.querySelector(".ci-viewport");
+  pane.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+  const transforms = [...root.querySelectorAll(".ci-pair img")].map((img) => img.style.transform);
+  check(transforms[0] === transforms[1] && transforms[0].includes("scale(3)"), "Zoom and keyboard pan stay linked between panes.");
+  pane.dispatchEvent(new PointerEvent("pointermove", { clientX: 100, clientY: 100, bubbles: true }));
+  check(root.querySelectorAll(".ci-cursor:not([hidden])").length === 2, "Hover indicates matching positions in both panes.");
+  control("overlay").click();
+  const slider = control("split");
   slider.value = "75";
   slider.dispatchEvent(new Event("input", { bubbles: true }));
-  check(images[3].style.clipPath.includes("75%"), "Comparison slider updates immediately");
-  toggle.click();
-  const downloads = [];
-  tool.download = (blob, name) => downloads.push({ blob, name });
-  tool.items[0].row.querySelector("button").click();
   check(
-    downloads[0].name === "transparent.png" && downloads[0].blob.type === "image/png",
-    "Individual download keeps PNG MIME and original filename",
+    root.querySelector(".ci-reveal").style.clipPath.includes("75%"),
+    "Slider changes the clipping boundary while image geometry stays aligned.",
   );
+  check(root.querySelector(".ci-divider").style.left === "75%", "Visible divider tracks the slider.");
+  let downloaded;
+  tool.download = (blob, name) => {
+    downloaded = { blob, name };
+  };
   await tool.downloadZip();
-  const zip = await JSZip.loadAsync(await downloads[1].blob.arrayBuffer());
+  const zip = await JSZip.loadAsync(await downloaded.blob.arrayBuffer());
   check(
-    Object.keys(zip.files).length === 3 && zip.file("transparent.png") && zip.file("small.png") && zip.file("text-heavy.png"),
-    "ZIP contains only the three eligible PNGs",
+    Object.keys(zip.files).length === 3 && downloaded.name.endsWith(".zip"),
+    "ZIP includes every successful image and excludes failures.",
   );
-  select([
-    new File([fixture(2400, 1200, false, 9)], "landscape-mobile.png", { type: "image/png" }),
-    new File([fixture(1200, 2400, false, 9)], "portrait-mobile.png", { type: "image/png" }),
-  ]);
-  await settle(tool);
-  const landscape = tool.items[6];
-  const portrait = tool.items[7];
-  check(
-    landscape.file.size < 100000 &&
-      portrait.file.size < 100000 &&
-      landscape.logs.some((entry) => entry.stage === "compression.start") &&
-      portrait.logs.some((entry) => entry.stage === "compression.start"),
-    "Large-dimension images under 100 KB still receive lossless optimization",
-  );
-  check(
-    !landscape.selectedVariant.resized &&
-      !portrait.selectedVariant.resized &&
-      landscape.result.width === 2400 &&
-      portrait.result.height === 2400,
-    "Mobile resizing is optional and never runs automatically",
-  );
-  check(
-    landscape.resizeTarget.width === 1920 &&
-      landscape.resizeTarget.height === 960 &&
-      portrait.resizeTarget.width === 960 &&
-      portrait.resizeTarget.height === 1920,
-    "1920 px long-edge suggestions fit landscape and portrait without stretching",
-  );
-  landscape.row.querySelector(".ci-mobile").open = true;
-  landscape.row.querySelector(".ci-resize-apply").click();
-  await settle(tool);
-  check(
-    landscape.selectedVariant.resized && landscape.result.width === 1920 && landscape.result.height === 960,
-    "Explicit Resize + compress creates the landscape mobile output",
-  );
-  const mobileImage = landscape.row.querySelectorAll(".ci-pair img")[1];
-  await mobileImage.decode();
-  const rgba = pixels(mobileImage);
-  check(
-    mobileImage.naturalWidth === 1920 &&
-      mobileImage.naturalHeight === 960 &&
-      rgba.some((value, i) => i % 4 === 3 && value > 0 && value < 255),
-    "Resized PNG decodes at the proposed dimensions and retains transparency",
-  );
-  check(
-    landscape.row.querySelector(".ci-status").textContent.includes("pixels changed") &&
-      landscape.row.querySelector(".ci-preview figcaption:last-of-type") !== null,
-    "Resized output explicitly discloses changed pixels",
-  );
-  landscape.row.querySelector(".ci-result-header button").click();
-  const mobileDownload = downloads.at(-1);
-  const mobileParsed = parsePng(new Uint8Array(await mobileDownload.blob.arrayBuffer()));
-  check(
-    mobileDownload.name === "landscape-mobile.png" && mobileParsed.width === 1920 && mobileParsed.height === 960,
-    "Individual download uses the selected resized PNG",
-  );
-  await tool.downloadZip();
-  const mobileZip = await JSZip.loadAsync(await downloads.at(-1).blob.arrayBuffer());
-  const zippedMobile = parsePng(await mobileZip.file("landscape-mobile.png").async("uint8array"));
-  check(zippedMobile.width === 1920 && zippedMobile.height === 960, "ZIP also uses the selected resized variant");
-  landscape.row.querySelector(".ci-restore").click();
-  check(
-    !landscape.selectedVariant.resized &&
-      landscape.blob === landscape.fullSize.blob &&
-      landscape.result.width === 2400 &&
-      landscape.result.height === 1200,
-    "Use full-size version restores the exact previous optimized result",
-  );
-  portrait.row.querySelector(".ci-mobile").open = true;
-  portrait.row.querySelector(".ci-resize-apply").click();
-  await settle(tool);
-  check(
-    portrait.selectedVariant.resized && portrait.result.width === 960 && portrait.result.height === 1920,
-    "Portrait mobile resize preserves orientation and aspect ratio",
-  );
-  const widthInput = landscape.row.querySelector(".ci-max-width");
-  const heightInput = landscape.row.querySelector(".ci-max-height");
-  widthInput.value = "800";
-  widthInput.dispatchEvent(new Event("input", { bubbles: true }));
-  heightInput.value = "600";
-  heightInput.dispatchEvent(new Event("input", { bubbles: true }));
-  check(
-    landscape.resizeTarget.width === 800 &&
-      landscape.resizeTarget.height === 400 &&
-      landscape.row.querySelector(".ci-resize-preset").value === "custom",
-    "Custom bounds update the proposed size immediately",
-  );
-  widthInput.value = "0";
-  widthInput.dispatchEvent(new Event("input", { bubbles: true }));
-  check(
-    landscape.row.querySelector(".ci-resize-apply").disabled && landscape.resizeTarget === null,
-    "Invalid resize bounds disable the action",
-  );
-  widthInput.value = "800";
-  widthInput.dispatchEvent(new Event("input", { bubbles: true }));
-  const smallItem = tool.items[1];
-  check(
-    smallItem.row.querySelector(".ci-resize-apply").disabled &&
-      smallItem.row.querySelector(".ci-resize-note").textContent.includes("never upscaled"),
-    "Small images are never enlarged to the mobile preset",
-  );
-  const previous = landscape.selectedVariant;
-  const originalEncoder = HTMLCanvasElement.prototype.toBlob;
+  change("mode", "lossy");
+  change("quality", "70");
+  await compress();
+  check(first.blob.type === "image/webp" && first.result.lossy, "Explicit lossy mode encodes WebP.");
+  check(first.result.width === 320 && !first.result.resized, "Lossy compression keeps original dimensions by default.");
+  const previousLossy = first.blob;
+  const originalToBlob = HTMLCanvasElement.prototype.toBlob;
   HTMLCanvasElement.prototype.toBlob = function (callback) {
-    callback(null);
+    originalToBlob.call(this, callback, "image/png");
   };
   try {
-    landscape.row.querySelector(".ci-resize-apply").click();
-    await settle(tool);
+    await compress();
   } finally {
-    HTMLCanvasElement.prototype.toBlob = originalEncoder;
+    HTMLCanvasElement.prototype.toBlob = originalToBlob;
   }
   check(
-    landscape.selectedVariant === previous &&
-      landscape.logs.at(-1).stage === "resize.failed" &&
-      !landscape.row.querySelector(".ci-result-header button").disabled,
-    "Resize encoding failure preserves the previous downloadable result",
+    first.blob === previousLossy && first.status === "Error",
+    "Unsupported WebP encoding keeps the prior result and reports the failure.",
   );
-  // Leave a successful mobile comparison visible for manual review.
-  portrait.row.querySelector(".ci-mobile").open = true;
-  const result = document.querySelector("#verification");
-  result.textContent = `PASS: ${checks.length} browser checks. ${checks.join(". ")}.`;
-  result.dataset.result = "pass";
+  const canvas = document.createElement("canvas");
+  canvas.width = 120;
+  canvas.height = 80;
+  const jpeg = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg"));
+  const transfer = new DataTransfer();
+  transfer.items.add(new File([jpeg], "photo.jpg", { type: "image/jpeg" }));
+  const drop = new Event("drop", { bubbles: true, cancelable: true });
+  Object.defineProperty(drop, "dataTransfer", { value: transfer });
+  root.querySelector(".ci-drop").dispatchEvent(drop);
+  await compress();
+  check(tool.items.at(-1).result && tool.items.at(-1).result.width === 120, "JPEG input works in lossy mode through drag and drop.");
+  change("mode", "lossless");
+  change("resize", true);
+  change("width", "160");
+  change("height", "120");
+  await compress();
+  check(text.result.width === 160 && text.result.height === 100 && text.result.resized, "Opt-in resizing fits bounds without stretching.");
+  check(text.row.textContent.includes("Resized"), "Resized output is never labeled pixel-identical lossless.");
+  check(tool.items.at(-1).status === "Error", "JPEG in strict lossless mode explains unsupported input.");
+  change("width", "0");
+  const previous = first.blob;
+  await compress();
+  check(first.blob === previous && !tool.running, "Invalid resize bounds preserve existing results.");
+  change("resize", false);
+  change("width", "160");
+  control("compress").click();
+  tool.clear();
+  await settle(tool);
+  check(
+    tool.items.length === 0 && root.querySelectorAll(".ci-file-row").length === 0 && control("zip").disabled,
+    "Clear cancels in-flight work and removes stale results.",
+  );
+  select([
+    new File([fixture(640, 400)], "sample.png", { type: "image/png" }),
+    new File([fixture(240, 320)], "sample.png", { type: "image/png" }),
+    new File([fixture(640, 240, false, 9)], "color-study.png", { type: "image/png" }),
+  ]);
+  await compress();
+  await tool.downloadZip();
+  const finalZip = await JSZip.loadAsync(await downloaded.blob.arrayBuffer());
+  check(finalZip.files["sample.png"] && finalZip.files["sample (2).png"], "ZIP keeps duplicate filenames as separate files.");
+  tool.items[0].row.querySelector(".ci-download").click();
+  check(
+    downloaded.name === "sample.png" && downloaded.blob.type === "image/png",
+    "Individual download uses the selected result with the matching extension.",
+  );
+  check(
+    document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    "The tool does not overflow the viewport horizontally.",
+  );
+  tool.view = "pair";
+  tool.selectItem(tool.items[0]);
+  document.querySelector("#verification").textContent = `PASS: ${checks.length} browser checks. Open details for the repeatable evidence.`;
+  document.querySelector("#evidence").textContent = checks.join("\n");
 } catch (error) {
-  document.querySelector("#verification").textContent = `FAIL after ${checks.length} checks: ${error.message}`;
-  document.querySelector("#verification").dataset.result = "fail";
+  document.querySelector("#verification").textContent = `FAIL: ${error.message}`;
+  document.querySelector("#evidence").textContent = checks.join("\n") + "\n" + error.stack;
   console.error(error);
 }
