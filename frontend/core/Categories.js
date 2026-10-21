@@ -5,6 +5,7 @@ export const CATEGORIES = {
   TEMPLATE: "template",
   EXECUTE: "execute",
   JIRA: "jira",
+  LOCKEY: "lockey",
 };
 
 // Normalize raw category strings to a known set
@@ -24,6 +25,9 @@ export function normalizeCategory(value) {
   const jiraAliases = ["jira"];
   if (jiraAliases.includes(v)) return CATEGORIES.JIRA;
 
+  const lockeyAliases = ["lockey", "lockeys", "localization"];
+  if (lockeyAliases.includes(v)) return CATEGORIES.LOCKEY;
+
   return CATEGORIES.GENERAL;
 }
 
@@ -35,6 +39,7 @@ export function categorizeTool(tool) {
   if (base === CATEGORIES.TEMPLATE) return CATEGORIES.TEMPLATE;
   if (base === CATEGORIES.EXECUTE) return CATEGORIES.EXECUTE;
   if (base === CATEGORIES.JIRA) return CATEGORIES.JIRA;
+  if (base === CATEGORIES.LOCKEY) return CATEGORIES.LOCKEY;
 
   const id = (tool.id || "").toLowerCase();
   const name = (tool.name || "").toLowerCase();

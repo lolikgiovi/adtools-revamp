@@ -6,6 +6,11 @@
       "order": 10
     },
     {
+      "id": "lockey",
+      "name": "Lockey",
+      "order": 12
+    },
+    {
       "id": "template",
       "name": "Template",
       "order": 15
@@ -82,9 +87,9 @@
     {
       "id": "lockey-update",
       "name": "Lockey Update",
-      "category": "config",
+      "category": "lockey",
       "icon": "lockey-update",
-      "order": 54
+      "order": 10
     },
     {
       "id": "redis-cache",
@@ -170,10 +175,10 @@
     {
       "id": "master-lockey",
       "name": "Master Lockey",
-      "category": "config",
+      "category": "lockey",
       "icon": "language",
       "requiresTauri": true,
-      "order": 100
+      "order": 20
     }
   ]
 }
