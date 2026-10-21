@@ -9,7 +9,8 @@ vi.mock("../../../core/MonacoOracle.js", () => ({
   ORACLE_THEME: "oracle-theme",
 }));
 
-import { QuickQueryUI } from "../main.js";
+import { QuickQuery, QuickQueryUI } from "../main.js";
+import { App } from "../../../App.js";
 
 function createTab(id) {
   return {
@@ -43,6 +44,34 @@ function createUi(tabs, activeTabId = tabs[0]?.id) {
 }
 
 describe("Quick Query tab management", () => {
+  it("routes New Tab through the wrapper to the UI with its existing activation and limit rules", async () => {
+    // The wrapper must reach the UI, preserve its return value, and tolerate disposal.
+    const tool = new QuickQuery();
+    const tab = createTab("new-tab");
+    tool.ui = { createNewTab: vi.fn().mockResolvedValue(tab) };
+    const app = Object.assign(Object.create(App.prototype), { currentTool: tool });
+    await app.createNewToolTab();
+    expect(tool.ui.createNewTab).toHaveBeenCalledOnce();
+    await expect(tool.createNewTab()).resolves.toBe(tab);
+    tool.ui = null;
+    await expect(app.createNewToolTab()).resolves.toBeUndefined();
+  });
+
+  it("routes the App desktop command through the tool wrapper and preserves the last tab", async () => {
+    const ui = createUi([createTab("tab-1"), createTab("tab-2")], "tab-2");
+    const tool = new QuickQuery();
+    tool.ui = ui;
+    const app = Object.assign(Object.create(App.prototype), { currentTool: tool });
+    await app.closeActiveToolTab();
+    expect(ui.tabs.map((tab) => tab.id)).toEqual(["tab-1"]);
+    expect(ui.activeTabId).toBe("tab-1");
+    await app.closeActiveToolTab();
+    expect(ui.tabs.map((tab) => tab.id)).toEqual(["tab-1"]);
+    expect(ui.storageService.updateQueryTabs).toHaveBeenCalledOnce();
+    tool.ui = null;
+    await expect(app.closeActiveToolTab()).resolves.toBeUndefined();
+  });
+
   it("closes every tab except the tab used for the command", async () => {
     const tabs = [createTab("tab-1"), createTab("tab-2"), createTab("tab-3")];
     const ui = createUi(tabs, "tab-2");

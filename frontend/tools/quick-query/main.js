@@ -112,6 +112,14 @@ export class QuickQuery extends BaseTool {
     this.ui?.refreshLayouts?.();
   }
 
+  closeActiveTab() {
+    return this.ui?.closeActiveTab();
+  }
+
+  createNewTab() {
+    return this.ui?.createNewTab();
+  }
+
   onRouteData({ tableName, createQuery } = {}) {
     if (createQuery?.sql || (Array.isArray(createQuery?.schemaData) && Array.isArray(createQuery?.inputData))) {
       void this.ui?.openCreatedQuery(createQuery);
@@ -1910,6 +1918,10 @@ export class QuickQueryUI {
     await this.applyTabDraft(duplicate);
     await this.saveTabSession();
     return duplicate;
+  }
+
+  closeActiveTab() {
+    return this.closeTab(this.activeTabId);
   }
 
   async closeTab(tabId) {

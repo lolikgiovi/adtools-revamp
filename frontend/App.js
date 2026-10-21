@@ -150,6 +150,7 @@ class App {
     this.router.navigate("home");
 
     this.bindGlobalEvents();
+    void this.setupDesktopTabShortcuts();
     manualApprovalMonitor.start({ eventBus: this.eventBus });
     this.setupDevReleaseTourPreview();
     this._releaseTips = new ReleaseTips({
@@ -1281,6 +1282,45 @@ class App {
     return this.currentTool;
   }
 
+  async setupDesktopTabShortcuts() {
+    if (!isTauri()) return;
+    try {
+      const { listen } = await import("@tauri-apps/api/event");
+      const unlisten = await listen("close-active-tab", () => this.closeActiveToolTab());
+      if (this._desktopTabShortcutsDisposed) {
+        unlisten();
+        return;
+      }
+      this._unlistenCloseTab = unlisten;
+      const unlistenNewTab = await listen("new-tab", () => this.createNewToolTab());
+      if (this._desktopTabShortcutsDisposed) unlistenNewTab();
+      else this._unlistenNewTab = unlistenNewTab;
+    } catch (error) {
+      console.error("Failed to register desktop tab commands", error);
+    }
+  }
+
+  closeActiveToolTab() {
+    return this.performToolTabAction("closeActiveTab", "Could not close the active tab. Please try again.");
+  }
+
+  createNewToolTab() {
+    return this.performToolTabAction("createNewTab", "Could not create a new tab. Please try again.");
+  }
+
+  async performToolTabAction(action, errorMessage) {
+    if (this._changingToolTab || this._desktopTabShortcutsDisposed) return;
+    this._changingToolTab = true;
+    try {
+      await this.currentTool?.[action]?.();
+    } catch (error) {
+      console.error(`Failed to perform tool tab action: ${action}`, error);
+      this.showNotification(errorMessage, "error");
+    } finally {
+      this._changingToolTab = false;
+    }
+  }
+
   getToolDefinitions() {
     return getToolDefinitionsList(this.toolDefinitions);
   }
@@ -1499,6 +1539,11 @@ class App {
    * Destroy the application
    */
   destroy() {
+    this._desktopTabShortcutsDisposed = true;
+    this._unlistenCloseTab?.();
+    this._unlistenCloseTab = null;
+    this._unlistenNewTab?.();
+    this._unlistenNewTab = null;
     manualApprovalMonitor.stop();
     // Cleanup event listeners
     this.eventBus.clear();

@@ -767,6 +767,10 @@ export class KafkaTool extends BaseTool {
     }
   }
 
+  closeActiveTab() {
+    return this.closeTab(this.activeTabId);
+  }
+
   closeTab(tabId) {
     const index = this.tabs.findIndex((tab) => tab.id === tabId);
     if (this.tabs.length <= 1 || index < 0) return false;

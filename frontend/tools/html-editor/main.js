@@ -663,6 +663,14 @@ class HTMLTemplateTool extends BaseTool {
     input.addEventListener("blur", () => finish(true));
   }
 
+  closeActiveTab() {
+    return this.closeDocument(this.activeDocumentId);
+  }
+
+  createNewTab() {
+    return this.newDocument();
+  }
+
   closeDocument(id) {
     if (this.documents.length <= 1) return;
     return this.closeDocuments([id]);

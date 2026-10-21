@@ -547,6 +547,14 @@ class VelocityTemplateTool extends BaseTool {
     }
   }
 
+  closeActiveTab() {
+    return this.closeDocument(this.activeDocumentId);
+  }
+
+  createNewTab() {
+    return this.newDocument();
+  }
+
   async closeDocument(id) {
     if (this._tabTransition || this.documents.length <= 1) return;
     this._tabTransition = true;

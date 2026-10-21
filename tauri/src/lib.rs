@@ -133,6 +133,14 @@ pub fn run() {
       Ok(())
     })
     .on_window_event(|window, event| {
+      #[cfg(target_os = "macos")]
+      if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+        api.prevent_close();
+        if let Err(error) = window.hide() {
+          log::warn!("Failed to hide the window: {}", error);
+        }
+        return;
+      }
       match event {
         tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed => {
           let app = window.app_handle().clone();
@@ -151,14 +159,36 @@ pub fn run() {
     .on_menu_event(|app, event| {
       let id = event.id().as_ref();
       match id {
+        "new_tab" => {
+          if let Err(error) = app.emit_to("main", "new-tab", ()) {
+            log::warn!("Failed to send New Tab command: {}", error);
+          }
+        }
+        "close_tab" => {
+          if let Err(error) = app.emit_to("main", "close-active-tab", ()) {
+            log::warn!("Failed to send Close Tab command: {}", error);
+          }
+        }
         "zoom_in" => adjust_zoom(app, ZOOM_STEP),
         "zoom_out" => adjust_zoom(app, -ZOOM_STEP),
         "zoom_reset" => set_zoom(app, ZOOM_DEFAULT),
         _ => {}
       }
     })
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
+    .build(tauri::generate_context!())
+    .expect("error while building tauri application")
+    .run(|_app, event| {
+      #[cfg(target_os = "macos")]
+      if let tauri::RunEvent::Reopen { .. } = event {
+        if let Some(window) = _app.get_webview_window("main") {
+          let _ = window.show();
+          let _ = window.set_focus();
+        }
+      }
+      if let tauri::RunEvent::Exit = event {
+        oracle_sidecar::kill_sidecar_by_port();
+      }
+    });
 }
 
 fn build_menu(handle: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, tauri::Error> {
@@ -223,15 +253,23 @@ fn build_menu(handle: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, tauri::Erro
   menu.append(&view_menu)?;
 
   // Window menu
+  #[cfg(target_os = "macos")]
+  let new_tab_item = MenuItem::with_id(handle, "new_tab", "New Tab", true, Some("Cmd+T"))?;
+  #[cfg(target_os = "macos")]
+  let close_item = MenuItem::with_id(handle, "close_tab", "Close Tab", true, Some("Cmd+W"))?;
+  #[cfg(not(target_os = "macos"))]
+  let close_item = PredefinedMenuItem::close_window(handle, None)?;
   let window_menu = Submenu::with_items(
     handle,
     "Window",
     true,
     &[
+      #[cfg(target_os = "macos")]
+      &new_tab_item,
       &PredefinedMenuItem::minimize(handle, None)?,
       &PredefinedMenuItem::maximize(handle, None)?,
       &PredefinedMenuItem::separator(handle)?,
-      &PredefinedMenuItem::close_window(handle, None)?,
+      &close_item,
     ],
   )?;
   menu.append(&window_menu)?;

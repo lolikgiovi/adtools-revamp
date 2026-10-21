@@ -91,6 +91,12 @@ class BaseTool {
     return false;
   }
 
+  /** Close the active document/workspace tab, preserving the tool's normal close safeguards. */
+  closeActiveTab() {}
+
+  /** Create and activate a workspace/document tab when the tool supports tabs. */
+  createNewTab() {}
+
   /**
    * Mount the tool to a container
    * @param {HTMLElement} container - Container element
