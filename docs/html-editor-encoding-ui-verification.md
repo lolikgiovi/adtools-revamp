@@ -1,5 +1,29 @@
 # HTML editor encoding phase verification
 
+## Encoding warnings in Edit mode (2026-10-21)
+
+Repeat with this UTF-8 fixture:
+
+```html
+<!doctype html><html><head><meta charset="utf-8"></head><body>
+<p>Broken apostrophe: itâ€™s</p>
+<p>Lost character: �</p>
+<p>Valid Unicode: café</p>
+</body></html>
+```
+
+1. Import the file in Edit mode. Confirm Encoding shows a red `!` warning without opening Encoding.
+2. Confirm `â€™` and `�` have red highlights and overview-ruler marks; `é` has an amber review highlight.
+3. Open Encoding and return to Edit. Confirm the highlights remain.
+4. Replace the source with `<p>Clean</p>`. After the 300 ms update delay, confirm the tab warning and highlights clear.
+5. Undo. Confirm the red warning and highlights return.
+6. Switch to a clean document. Confirm no warning remains; switch back and confirm it returns.
+7. Switch to the LS/PS fixture below. Confirm Encoding shows an amber review warning rather than a corruption error.
+
+Result: all steps passed in the local Vite browser. DOM checks confirmed exact highlighted text `â€™` and `�`
+as errors, `é` as a review warning, and zero highlights after correcting the source. The focused encoding suite
+passed 18 tests. ESLint reported zero errors (17 existing warnings). The installed desktop app was not rebuilt or launched.
+
 ## Unusual line terminators (2026-10-21)
 
 Create a UTF-8 import fixture with literal U+2028 (LS) and U+2029 (PS):
@@ -58,7 +82,7 @@ Verified in a local Vite browser session on 2026-09-30.
 
 1. Use a longer HTML file with non-ASCII characters on separated lines and open Encoding.
 2. Confirm amber marks appear in the source editor's right overview ruler at each risky line. Click a finding and confirm its active location gets a red mark; click again to move that mark.
-3. Open Review fix diff. Confirm Monaco's overview ruler marks the changed source regions. Return to Edit and confirm the encoding marks clear.
+3. Open Review fix diff. Confirm Monaco's overview ruler marks the changed source regions. Return to Edit and confirm encoding highlights remain.
 
 ## Rendered comparison check
 

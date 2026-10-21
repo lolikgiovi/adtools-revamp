@@ -42,12 +42,20 @@ export function analyzeHtmlEncoding(html) {
     issues.push({ code: "charset", message: `HTML declares ${charset}; UTF-8 export will declare UTF-8.` });
   }
   if (String(html).includes("\ufffd")) {
-    issues.push({ code: "replacement", message: "Replacement character (�) found. The original byte cannot be recovered from this text." });
+    issues.push({
+      code: "replacement",
+      message: "Replacement character (�) found. The original byte cannot be recovered from this text.",
+      ranges: [...String(html).matchAll(/\ufffd/g)].map((match) => ({ offset: match.index, length: match[0].length })),
+    });
   }
   // High-signal UTF-8-as-Windows-1252 sequences. These are clues, not automatic repair instructions.
-  const suspects = String(html).match(/(?:â[€\u0080-\u009f][\u0080-\u009f\u00a0-\u00ff]|â[€\u0080-\u009f][’“”˜œž¦]|Ã[\u0080-\u00bf]|Â[\u0080-\u00bf]|Â(?=\s|<))/g);
-  if (suspects?.length) {
-    issues.push({ code: "mojibake", message: `Possible misdecoded UTF-8 found (${[...new Set(suspects)].slice(0, 3).join(", ")}). Check the source before export.` });
+  const suspects = [...String(html).matchAll(/(?:â[€\u0080-\u009f][\u0080-\u009f\u00a0-\u00ff]|â[€\u0080-\u009f][’“”˜œž¦™]|Ã[\u0080-\u00bf]|Â[\u0080-\u00bf]|Â(?=\s|<))/g)];
+  if (suspects.length) {
+    const examples = [...new Set(suspects.map((match) => match[0]))].slice(0, 3).join(", ");
+    issues.push({
+      code: "mojibake", message: `Possible misdecoded UTF-8 found (${examples}). Check the source before export.`,
+      ranges: suspects.map((match) => ({ offset: match.index, length: match[0].length })),
+    });
   }
   const nonAscii = [...String(html)].filter((character) => character.codePointAt(0) > 127);
   if (nonAscii.length) {

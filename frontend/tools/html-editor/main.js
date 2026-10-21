@@ -868,8 +868,12 @@ class HTMLTemplateTool extends BaseTool {
     this._encodingActiveDecoration = this.editor.createDecorationsCollection();
     this.editor.onDidChangeModel(() => {
       if (this.workspaceMode === "encoding") this.showEncodingReport();
-      else this.clearEncodingReview();
+      else {
+        this.clearEncodingReview();
+        this.refreshEncodingDiagnostics();
+      }
     });
+    this.refreshEncodingDiagnostics();
 
     this.inputSource = "restored";
   }
@@ -1347,7 +1351,10 @@ class HTMLTemplateTool extends BaseTool {
       this._previewTimer = setTimeout(() => {
         if (id !== this.activeDocumentId) return;
         if (this.workspaceMode === "encoding") this.showEncodingReport();
-        else if (value !== this.lastRenderedHTML) this.renderPreview(value);
+        else {
+          this.refreshEncodingDiagnostics();
+          if (value !== this.lastRenderedHTML) this.renderPreview(value);
+        }
       }, 300);
       this.scheduleDocumentSave();
     });
@@ -1696,7 +1703,6 @@ class HTMLTemplateTool extends BaseTool {
     this._encodingDiffEditor = null;
     this._encodingDiffModels.forEach((model) => model.dispose());
     this._encodingDiffModels = [];
-    this._encodingDecorations?.clear();
     this._encodingActiveDecoration?.clear();
     this._encodingReviewSource = null;
     this._encodingReviewSafe = null;
@@ -1765,25 +1771,49 @@ class HTMLTemplateTool extends BaseTool {
     if (this._encodingDiffToggle) this._encodingDiffToggle.textContent = "Back to editor";
   }
 
-  showEncodingReport(importEncoding = this.activeDocument?.importEncoding || null) {
-    const report = this.container?.querySelector("#htmlEncodingReport");
-    if (!report || !this.editor) return;
-    this.clearEncodingReview();
+  refreshEncodingDiagnostics() {
     const source = this.editor.getValue();
     const { charset, issues } = analyzeHtmlEncoding(source);
     const findings = listEncodingCharacters(source);
     const model = this.editor.getModel();
-    this._encodingDecorations?.set(findings.flatMap((finding) => finding.offsets.map((offset) => ({
+    const corruption = issues.filter((issue) => issue.code === "mojibake" || issue.code === "replacement");
+    const severity = corruption.length ? "error" : issues.length ? "warning" : "none";
+    const tab = this.container?.querySelector("#htmlModeEncoding");
+    if (tab) {
+      tab.dataset.severity = severity;
+      const description = severity === "error" ? "Possible broken encoding detected"
+        : severity === "warning" ? "Characters or charset need encoding review" : "No encoding issues detected";
+      tab.title = description;
+      tab.setAttribute("aria-label", `Encoding: ${description}`);
+    }
+    const decoration = (offset, length, error, message) => ({
       range: new monaco.Range(
         model.getPositionAt(offset).lineNumber, model.getPositionAt(offset).column,
-        model.getPositionAt(offset + finding.character.length).lineNumber, model.getPositionAt(offset + finding.character.length).column,
+        model.getPositionAt(offset + length).lineNumber, model.getPositionAt(offset + length).column,
       ),
       options: {
-        inlineClassName: "html-encoding-risk",
-        hoverMessage: { value: `${finding.name} (${finding.codePoint})` },
-        overviewRuler: { color: "#f59e0b", position: monaco.editor.OverviewRulerLane.Center },
+        inlineClassName: error ? "html-encoding-error" : "html-encoding-risk",
+        hoverMessage: { value: message },
+        overviewRuler: { color: error ? "#ef4444" : "#f59e0b", position: monaco.editor.OverviewRulerLane.Center },
       },
-    }))));
+    });
+    const errors = corruption.flatMap((issue) => issue.ranges.map((range) => ({ ...range, message: issue.message })));
+    this._encodingDecorations?.set([
+      ...findings.flatMap((finding) => finding.offsets
+        .filter((offset) => !errors.some((range) => offset >= range.offset && offset < range.offset + range.length))
+        .map((offset) => decoration(offset, finding.character.length, false,
+          `${finding.name} (${finding.codePoint}) — review before Windows text import`))),
+      ...errors.map((range) => decoration(range.offset, range.length, true, range.message)),
+    ]);
+    return { source, charset, issues, findings };
+  }
+
+  showEncodingReport(importEncoding = this.activeDocument?.importEncoding || null) {
+    const report = this.container?.querySelector("#htmlEncodingReport");
+    if (!report || !this.editor) return;
+    this.clearEncodingReview();
+    const { source, charset, issues, findings } = this.refreshEncodingDiagnostics();
+    const model = this.editor.getModel();
     report.replaceChildren();
     const summary = document.createElement("p");
     const total = findings.reduce((sum, finding) => sum + finding.count, 0);

@@ -7,6 +7,21 @@ import {
 // Failure modes: source bytes decoded with the wrong charset, preexisting mojibake,
 // replacement characters, conflicting HTML declarations, and export changing the draft.
 describe("HTML editor encoding", () => {
+  // Failure modes: a valid Unicode character is called corruption, parts of a
+  // mojibake sequence escape highlighting, or corrected content retains stale errors.
+  it("locates likely corruption separately from valid Unicode review findings", () => {
+    const html = '<p>itâ€™s �</p>';
+    const issues = analyzeHtmlEncoding(html).issues;
+    expect(issues.find((issue) => issue.code === "mojibake").ranges).toEqual([
+      { offset: html.indexOf("â€™"), length: 3 },
+    ]);
+    expect(issues.find((issue) => issue.code === "replacement").ranges).toEqual([
+      { offset: html.indexOf("�"), length: 1 },
+    ]);
+    expect(analyzeHtmlEncoding('<p>“Hello” café\u2028world</p>').issues.map((issue) => issue.code)).toEqual(["non_ascii"]);
+    expect(analyzeHtmlEncoding('<p>Fixed</p>').issues).toEqual([]);
+  });
+
   // Failure modes: hidden separators disappear on import/export, lack useful labels,
   // or get rewritten inside executable code by the optional HTML conversion.
   it("preserves unusual line separators on import and normal export and names them for review", () => {
