@@ -1,5 +1,56 @@
 # Velocity Template E2E Verification
 
+## Fixed workspace layout — 2026-10-21
+
+LOCAL Vite / Codex in-app Chromium. Confirmed at 1280×720 and 390×844:
+
+- Main content retains 16 px padding on every side; the tab row stays above the three panels.
+- Main, content, tool root, and workspace have equal client and scroll heights; no outer vertical or horizontal overflow.
+- Desktop panels end at y=704 in a 720 px viewport, leaving the 16 px bottom inset. At phone width the three panels stack and end at y=828 in an 844 px viewport.
+- Collapsing Context Data leaves a 42 px header and reallocates the remaining editor space; expanding restores the layout.
+- A 180-line template scrolled to lines 178–180 while all outer scroll positions stayed at zero. The result rendered successfully.
+- Keyboard resizing the divider, then resizing the viewport to 1100×650 and back to 1280×720, preserved bounded panels with no outer overflow.
+
+Evidence: [fixed workspace screenshot](fixed-workspace-layout.png).
+
+Reproduce: `npm run dev`, open Velocity Template from the sidebar, paste a long template and context, scroll inside each editor, and collapse/expand both input panels. Resize across the 940 px breakpoint. Resize the desktop divider with the mouse or arrow keys, then change window width; the panels must remain inside the padded workspace. Only editor content should scroll. Other tools retain their existing layouts.
+
+Focused regression: `./node_modules/.bin/vitest run frontend/tools/velocity-template/tests/` — 34 tests passed. Prettier, ESLint for the changed JS, and `git diff --check` passed. No new unit tests were added for this layout change.
+
+
+## Context inference and runtime diagnostics — 2026-10-21
+
+Environment: existing LOCAL Vite server at `http://localhost:1234/`, Codex in-app Chromium browser. Result: **PASS** for the representative journey below. This does not establish Java Velocity runtime parity or desktop-build verification.
+
+Template:
+
+```velocity
+## Shape inference verification
+#set($orders = $response.data.custodyOrders)
+#foreach($order in $orders)$order.id#end
+#if($orders && !$orders.isEmpty())ready#end
+#set($code = "$!landing.productCode")
+#foreach($entry in $errorVariables.entrySet())$entry.key#end
+```
+
+Context:
+
+```json
+{"response":{"data":{"custodyOrders":"sample-custodyorders"}},"landing":1,"errorVariables":"sample-errorvariables"}
+```
+
+1. Start with `npm run dev` if port 1234 is free. Open the application and choose **Velocity Template** in the sidebar.
+2. Paste the template and context above into the editors. On Monaco's native EditContext input, use Select All and clipboard paste rather than ordinary field filling.
+3. Verify the runtime banner names `$orders.isEmpty()`, identifies a string receiver, points to **line 4, column 17**, and recommends an array or object in Context Data. Copy output is disabled and the previous valid preview is stale.
+4. Choose **Add missing fields…**. Verify the review dialog offers exactly three changes: `response.data.custodyOrders` → `[]`, `errorVariables` → `{}`, and `landing` → `{"productCode":"sample-productcode"}`. Each identifies the existing and proposed type. No `orders`, `order`, `code`, or `entry` locals are offered. See [review screenshot](context-shape-review.png).
+5. Choose **Apply changes**. Verify the preview returns to Valid, Copy output is enabled, and the toast reports three context changes.
+6. Choose **Undo**. Verify the original context and the line 4, column 17 runtime error return.
+
+Automated regression: `./node_modules/.bin/vitest run frontend/tools/velocity-template/tests/` — **34/34 passed** across four files. ESLint on the changed JS and `git diff --check` passed. Tests include alias inference, interpolated inputs, local/macro exclusions, preserving existing data, reviewed shape repairs, ambiguous list/map methods, and runtime locations in directives and interpolated strings.
+
+The generator supplies data shapes, not helper implementations. It flags helper methods that cannot be represented in JSON. Collection method compatibility with Java Velocity remains outside this change.
+
+
 ## Latest verification — result trust and recovery
 
 - Date: 2026-10-20

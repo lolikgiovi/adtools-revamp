@@ -1,5 +1,6 @@
 import {
   extractContextPaths,
+  suggestMissingContextFields,
   buildVelocityQuickQueryDraft,
   getTemplateImportIdentity,
   extractVelocityVariables,
@@ -12,6 +13,88 @@ import {
 } from "../service.js";
 
 describe("Velocity template service", () => {
+  it("infers external input shapes through aliases, loops, methods, and interpolated strings", () => {
+    const template = [
+      "#set($orders = $response.data.custodyOrders)",
+      '#set($fullname = "$!profile.fullname")',
+      "#set($local = {})",
+      "#foreach($order in $orders)$order.orderId#end",
+      '#if(!$orders.isEmpty())$local.containsKey("x")#end',
+      "#if(!$errorVariables.isEmpty())#foreach($entry in $errorVariables.entrySet())$entry.key#end#end",
+      '$fn.now("yyyy") $requestBody.goldAccountNumber',
+    ].join("\n");
+    const fields = suggestMissingContextFields(template, {});
+    expect(Object.fromEntries(fields.map(({ path, value }) => [path, value]))).toEqual({
+      "response.data.custodyOrders": [],
+      "profile.fullname": "sample-fullname",
+      errorVariables: {},
+      fn: {},
+      "requestBody.goldAccountNumber": "sample-goldaccountnumber",
+    });
+    expect(fields.find(({ path }) => path === "fn").note).toContain("cannot define functions");
+  });
+
+  it("preserves existing context values and excludes macro arguments and branch locals", () => {
+    const template =
+      '#if($active)#set($label="yes")#else#set($label="no")#end $label ' + "#macro(card $person)$person.name#end $customer.name $amount";
+    expect(suggestMissingContextFields(template, { active: false, customer: { name: "Existing" }, amount: 0 })).toEqual([]);
+  });
+
+  it("offers reviewed shape repairs for previously generated primitives without replacing valid data", () => {
+    const template =
+      "#set($orders=$response.orders)#foreach($order in $orders)$order.id#end " +
+      '$landing.productCode $errorVariables.entrySet() $fn.now("yyyy")';
+    const context = { response: { orders: "sample-orders" }, landing: 1, errorVariables: "sample-map", fn: "sample-fn" };
+    const fields = suggestMissingContextFields(template, context);
+    expect(fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: "response.orders", value: [], note: "Replace string with array." }),
+        expect.objectContaining({ path: "landing", value: { productCode: "sample-productcode" }, note: "Replace number with object." }),
+        expect.objectContaining({ path: "errorVariables", value: {} }),
+        expect.objectContaining({ path: "fn", value: {} }),
+      ]),
+    );
+    expect(context.response.orders).toBe("sample-orders");
+  });
+
+  it("does not treat method results as aliases of their helper object", () => {
+    const template = "#set($items=$fn.convertStringToList($config.value))#foreach($item in $items)$item.name#end";
+    expect(suggestMissingContextFields(template, {})).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: "fn", value: {} }),
+        expect.objectContaining({ path: "config.value", value: "sample-value" }),
+      ]),
+    );
+  });
+
+  it("preserves both lists and maps when the template only uses ambiguous collection methods", () => {
+    expect(suggestMissingContextFields("$items.size() $map.isEmpty()", { items: [1], map: { a: 1 } })).toEqual([]);
+  });
+
+  it("locates the failing method use rather than an earlier reference to its receiver", () => {
+    const template = "## comment\n#set($orders = $response.orders)\n$orders\n#if($orders && !$orders.isEmpty())yes#end";
+    expect(() => renderVelocityTemplate(template, { response: { orders: "sample-orders" } })).toThrow(
+      expect.objectContaining({
+        kind: "runtime",
+        line: 4,
+        column: 17,
+        reference: "$orders.isEmpty()",
+        message: expect.stringMatching(/\$orders\.isEmpty\(\).*string.*Context Data/),
+      }),
+    );
+  });
+
+  it("locates runtime failures inside interpolated strings without exposing the input value", () => {
+    expect(() => renderVelocityTemplate('## comment\n#set($label = "$!data.isEmpty()")', { data: "private-value" })).toThrow(
+      expect.objectContaining({
+        line: 2,
+        column: 16,
+        reference: "$!data.isEmpty()",
+        message: expect.not.stringContaining("private-value"),
+      }),
+    );
+  });
+
   it("renders standard Velocity variables, directives, collections, and methods", () => {
     const template = [
       "Hello $customer.name!",

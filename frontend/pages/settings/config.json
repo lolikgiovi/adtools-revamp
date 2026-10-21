@@ -125,16 +125,7 @@
           "storageKey": "config.mergeSql.squadNames",
           "label": "Merge SQL Squad Names",
           "type": "string-list",
-          "default": [
-            "capella",
-            "betelgeuse",
-            "sirius",
-            "bellatrix",
-            "phoebe",
-            "regulus",
-            "canopus",
-            "antares"
-          ],
+          "default": ["capella", "betelgeuse", "sirius", "bellatrix", "phoebe", "regulus", "canopus", "antares"],
           "description": "Known squad tokens used by Merge SQL relaxed filename parsing. Enter one squad name per line."
         },
         {
@@ -191,6 +182,34 @@
           "type": "boolean",
           "default": false,
           "description": "Jira-only fallback for a corporate self-signed certificate. This disables certificate verification and can expose the PAT to interception; prefer installing the corporate CA in macOS Keychain."
+        }
+      ]
+    },
+    {
+      "id": "velocity-validator",
+      "label": "Velocity API Validator",
+      "initiallyExpanded": true,
+      "items": [
+        {
+          "key": "config.velocityValidator.url",
+          "storageKey": "config.velocityValidator.url",
+          "label": "Validator API URL",
+          "type": "string",
+          "default": "",
+          "description": "Full endpoint URL, e.g. http://sandbox.everest.supporting.devmandiri.co.id/api-migration/v1/velocity/template. Called only when you choose Validate. Desktop uses your machine's network and hosts mapping; web requires browser-compatible CORS and HTTP/HTTPS access.",
+          "validation": { "pattern": "^(https?://[^\\s]+)?$" }
+        },
+        {
+          "key": "config.velocityValidator.format",
+          "storageKey": "config.velocityValidator.format",
+          "label": "Request format",
+          "type": "enum",
+          "default": "json",
+          "options": [
+            { "value": "json", "label": "JSON" },
+            { "value": "form", "label": "Form URL encoded" }
+          ],
+          "description": "JSON sends an object with context and template. Form sends context as JSON text and template as raw Velocity in separate encoded fields."
         }
       ]
     },

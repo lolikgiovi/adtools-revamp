@@ -13,7 +13,7 @@ export const VelocityTemplate = /* html */ `
         <div class="pane-header vtl-compact-header">
           <div class="vtl-title-group">
             <button id="btnCollapseVelocityTemplate" class="vtl-collapse-button" type="button" aria-label="Collapse Velocity Template" aria-expanded="true">
-              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 10 4-4 4 4" /></svg>
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg>
             </button>
             <h3 id="velocityEditorTitle">Velocity Template</h3>
           </div>
@@ -47,7 +47,7 @@ export const VelocityTemplate = /* html */ `
         <div class="pane-header vtl-compact-header">
           <div class="vtl-title-group">
             <button id="btnCollapseVelocityContext" class="vtl-collapse-button" type="button" aria-label="Collapse Context Data" aria-expanded="true">
-              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 10 4-4 4 4" /></svg>
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg>
             </button>
             <h3 id="velocityContextTitle">Context Data</h3>
           </div>
@@ -60,13 +60,13 @@ export const VelocityTemplate = /* html */ `
         <div id="velocityContext" class="vtl-parameters-input" aria-label="Velocity context JSON"></div>
       </section>
 
-      <section class="pane vtl-preview-pane" aria-labelledby="velocityResultTitle">
+      <section class="pane vtl-preview-pane" aria-label="Velocity validation and preview">
         <div class="pane-header vtl-compact-header">
           <div class="vtl-title-group">
-            <h3 id="velocityResultTitle">Rendered Result</h3>
+            <button id="btnValidateVelocity" class="btn btn-primary btn-sm" type="button">Validate</button>
+            <button id="btnVelocityValidatorSettings" class="btn btn-secondary btn-sm" type="button" title="Velocity API Validator settings">Settings</button>
           </div>
           <div class="vtl-panel-actions">
-            <span class="vtl-result-type-label">Result type</span>
             <details id="velocityResultTypeMenu" class="vtl-actions-menu vtl-result-type-menu">
               <summary id="velocityResultType" class="btn btn-secondary btn-sm" aria-label="Result type">Text</summary>
               <div class="vtl-actions-menu-popover app-popover-surface" role="menu" aria-label="Result type">
@@ -78,6 +78,7 @@ export const VelocityTemplate = /* html */ `
             <button id="btnCopyVelocityPreview" class="btn btn-primary btn-sm" type="button" disabled>Copy output</button>
           </div>
         </div>
+        <div id="velocityValidationStatus" class="vtl-validation-status" role="status" aria-live="polite" hidden></div>
         <div id="velocityResultMeta" class="vtl-result-meta" data-state="idle">Not rendered yet</div>
         <span id="velocityRenderAnnouncement" class="sr-only" role="status" aria-live="polite"></span>
         <div id="velocityPreviewStatus" class="vtl-inline-error velocity-preview-error" role="alert" hidden></div>
@@ -101,18 +102,18 @@ export const VelocityTemplate = /* html */ `
     >
       <div class="vtl-import-dialog app-overlay-surface">
         <div class="vtl-import-header">
-          <h3 id="velocitySyncTitle">Add missing context fields</h3>
+          <h3 id="velocitySyncTitle">Review context fields</h3>
           <button id="btnCloseVelocitySync" class="overlay-close-button app-overlay-close" type="button" aria-label="Close">×</button>
         </div>
         <div class="vtl-import-body">
           <p class="vtl-sync-intro">
-            These fields are referenced in the template but missing from Context Data. Placeholder values will be added so the
-            template can render; edit them after adding.
+            Review missing inputs and values whose shape does not match the template. Apply the suggested samples, then edit
+            them with your data. Helper methods require runtime support and cannot be supplied through JSON.
           </p>
           <ul id="velocitySyncFields" class="vtl-sync-list"></ul>
         </div>
         <div class="vtl-import-footer app-modal-actions">
-          <button id="btnApplyVelocitySync" class="btn btn-primary" type="button">Add fields</button>
+          <button id="btnApplyVelocitySync" class="btn btn-primary" type="button">Apply changes</button>
           <button id="btnCancelVelocitySync" class="btn" type="button">Cancel</button>
         </div>
       </div>

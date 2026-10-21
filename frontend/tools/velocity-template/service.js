@@ -1,9 +1,10 @@
 import { Compile, parse } from "velocityjs";
 
 export class VelocityTemplateError extends Error {
-  constructor(message, { kind = "runtime", line = 1, column = 1, cause } = {}) {
+  constructor(message, { kind = "runtime", line = null, column = null, cause, reference } = {}) {
     super(message, { cause });
     this.name = "VelocityTemplateError";
+    this.reference = reference;
     this.kind = kind;
     this.line = line;
     this.column = column;
@@ -217,10 +218,228 @@ export function renderVelocityTemplate(template = "", context = {}) {
   const source = String(template);
   try {
     validateDirectiveStructure(source);
-    return new Compile(parse(source)).render(values);
+    return createDiagnosticCompiler(parse(source), source).render(values);
   } catch (error) {
     throw normalizeVelocityError(error);
   }
+}
+
+function referenceLabel(ast) {
+  return `${ast.leader || "$"}${ast.isWraped ? "{" : ""}${ast.id}${(ast.path || [])
+    .map((part) => {
+      if (part.type === "method") return `.${part.id}(${part.args?.length ? "…" : ""})`;
+      if (part.type === "property") return `.${part.id}`;
+      return `[${part.id?.value ?? "…"}]`;
+    })
+    .join("")}${ast.isWraped ? "}" : ""}`;
+}
+
+function valueType(value) {
+  return value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
+}
+
+function createDiagnosticCompiler(asts, source) {
+  const locations = new WeakMap();
+  const offset = (pos) =>
+    source
+      .split("\n")
+      .slice(0, pos.first_line - 1)
+      .join("\n").length +
+    (pos.first_line > 1 ? 1 : 0) +
+    pos.first_column;
+  function locate(node, start = 0) {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      node.forEach((child) => locate(child, start));
+      return;
+    }
+    const position = node.pos ? offset(node.pos) : start;
+    if (node.type === "references") {
+      const firstMethod = node.path?.findIndex((part) => part.type !== "property") ?? -1;
+      const path = firstMethod < 0 ? node.path || [] : node.path.slice(0, firstMethod + 1);
+      const prefix = `${node.leader || "$"}${node.isWraped ? "{" : ""}${node.id}${path
+        .filter((part) => part.type === "property" || part.type === "method")
+        .map((part) => `.${part.id}`)
+        .join("")}`;
+      const index = source.indexOf(prefix, position);
+      locations.set(node, index);
+    } else if (node.type === "string" && node.isEval) {
+      const index = source.indexOf(node.value, position);
+      locations.set(node, index);
+    }
+    Object.values(node).forEach((child) => locate(child, position));
+  }
+  locate(asts);
+  const compiler = new Compile(asts);
+  const getString = compiler.getString;
+  const getAttributes = compiler.getAttributes;
+  let stringOffset = null;
+  compiler.getString = function (literal) {
+    const previous = stringOffset;
+    stringOffset = locations.get(literal) ?? previous;
+    try {
+      return getString.call(this, literal);
+    } finally {
+      stringOffset = previous;
+    }
+  };
+  compiler.getAttributes = function (property, receiver, ast) {
+    try {
+      return getAttributes.call(this, property, receiver, ast);
+    } catch (error) {
+      if (error instanceof VelocityTemplateError) throw error;
+      const reference = referenceLabel(ast);
+      let index = locations.get(ast);
+      if (index === undefined && stringOffset !== null) {
+        index = source.indexOf(`${ast.leader || "$"}${ast.isWraped ? "{" : ""}${ast.id}`, stringOffset);
+      }
+      const location = index >= 0 ? sourceLocation(source, index) : { line: null, column: null };
+      const type = valueType(receiver);
+      const hint =
+        property.type === "method"
+          ? `Method .${property.id}() failed on a ${type} value. ${
+              ["object", "array"].includes(type)
+                ? "Check the method arguments and renderer compatibility."
+                : "Check Context Data: use an array for a list or an object for a map."
+            }`
+          : `Cannot read this property from a ${type} value. Check the value in Context Data.`;
+      throw new VelocityTemplateError(`Velocity rendering failed at ${reference}: ${hint}`, {
+        ...location,
+        reference,
+        cause: error,
+      });
+    }
+  };
+  return compiler;
+}
+
+export function suggestMissingContextFields(template = "", context = {}) {
+  let asts;
+  try {
+    asts = parse(String(template));
+  } catch (_) {
+    return [];
+  }
+  const inputs = new Map();
+  const locals = new Map();
+  function declare(node) {
+    if (!node || typeof node !== "object") return;
+    if (node.type === "set") locals.set(node.equal?.[0]?.id, null);
+    Object.values(node).forEach(declare);
+  }
+  declare(asts);
+  const resolve = (node, scope) => {
+    const path = referencePath(node);
+    if (!path) return null;
+    if (!scope.has(node.id)) return path;
+    const alias = scope.get(node.id);
+    return alias ? alias + path.slice(node.id.length) : null;
+  };
+  const record = (path, kind = "scalar", note = "") => {
+    if (!path || path === "foreach" || path.startsWith("foreach.")) return;
+    const priority = { scalar: 0, collection: 1, object: 1, array: 2, map: 3 };
+    const old = inputs.get(path);
+    if (!old || priority[kind] > priority[old.kind]) inputs.set(path, { kind, note });
+    else if (note) old.note = note;
+  };
+  function visit(node, scope = locals) {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      const header = node[0];
+      if (header?.type === "foreach") {
+        visit(header.from, scope);
+        record(resolve(header.from, scope), "array");
+        const nested = new Map(scope).set(header.to, null);
+        node.slice(1).forEach((child) => visit(child, nested));
+      } else if (header?.type === "macro") {
+        const nested = new Map(scope);
+        (header.args || []).forEach((arg) => nested.set(arg.id || String(arg).replace(/^\$/, ""), null));
+        node.slice(1).forEach((child) => visit(child, nested));
+      } else node.forEach((child) => visit(child, scope));
+      return;
+    }
+    if (node.type === "set") {
+      visit(node.equal?.[1], scope);
+      if (!node.equal?.[0]?.path) {
+        const right = node.equal[1];
+        const alias = right?.type === "references" && (right.path || []).every((part) => part.type === "property");
+        scope.set(node.equal[0].id, alias ? resolve(right, scope) : null);
+      }
+      return;
+    }
+    if (node.type === "string" && node.isEval && node.value.includes("$")) {
+      try {
+        visit(parse(node.value), scope);
+      } catch (_) {
+        /* Incomplete interpolation has no safe suggestion. */
+      }
+      return;
+    }
+    if (node.type === "references") {
+      const path = resolve(node, scope);
+      const method = node.path?.find((part) => part.type === "method");
+      const indexed = node.path?.some((part) => part.type === "index");
+      let kind = indexed ? "array" : "scalar";
+      let note = "";
+      if (method) {
+        if (["entrySet", "keySet", "values", "containsKey", "put"].includes(method.id)) kind = "map";
+        else if (["add", "subList"].includes(method.id)) kind = "array";
+        else if (["isEmpty", "size", "get"].includes(method.id)) kind = "collection";
+        else if (
+          ![
+            "trim",
+            "toString",
+            "toUpperCase",
+            "toLowerCase",
+            "substring",
+            "replace",
+            "contains",
+            "startsWith",
+            "endsWith",
+            "indexOf",
+            "equals",
+            "equalsIgnoreCase",
+          ].includes(method.id)
+        ) {
+          kind = "object";
+          note = `.${method.id}() needs a runtime helper; JSON cannot define functions.`;
+        }
+      }
+      record(path, kind, note);
+    }
+    Object.values(node).forEach((child) => visit(child, scope));
+  }
+  visit(asts);
+  const shape = {};
+  for (const [path, { kind }] of [...inputs].sort(([a], [b]) => a.length - b.length)) {
+    if ([...inputs.keys()].some((other) => other.startsWith(`${path}.`))) continue;
+    const leaf = path.split(".").at(-1).toLowerCase();
+    let value = `sample-${leaf}`;
+    if (kind === "array") value = [];
+    else if (kind === "object" || kind === "map" || kind === "collection") value = {};
+    else if (/^(?:is[A-Z_]|has[A-Z_])/.test(path.split(".").at(-1)) || /^(active|enabled|success)$/.test(leaf)) value = true;
+    else if (/^(count|amount|total|price|age)$|(?:Count|Amount|WeightGram|Price)$/.test(path.split(".").at(-1))) value = 1;
+    setNestedValue(shape, path, value);
+  }
+  const fields = [];
+  function missing(expected, actual, path) {
+    const type = valueType(expected);
+    const note = inputs.get(path)?.note;
+    if (inputs.get(path)?.kind === "collection" && ["object", "array"].includes(valueType(actual))) return;
+    if (type === "object" && Object.keys(expected).length && (actual === undefined || valueType(actual) === "object")) {
+      Object.entries(expected).forEach(([key, value]) => missing(value, actual?.[key], path ? `${path}.${key}` : key));
+    } else if (actual === undefined || (["object", "array"].includes(type) && valueType(actual) !== type)) {
+      fields.push({
+        path,
+        value: expected,
+        ...(note || actual !== undefined
+          ? { note: [actual !== undefined ? `Replace ${valueType(actual)} with ${type}.` : "", note].filter(Boolean).join(" ") }
+          : {}),
+      });
+    }
+  }
+  missing(shape, context, "");
+  return fields.sort((a, b) => a.path.localeCompare(b.path));
 }
 
 function referencePath(node) {

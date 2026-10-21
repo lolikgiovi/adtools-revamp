@@ -1,8 +1,25 @@
 @import "../splunk-template/styles.css";
 
-.velocity-template-tool {
+.main-content:has(.velocity-template-tool) {
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+
+.tool-root:has(> .velocity-template-tool) {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.velocity-template-tool.tool-container {
+  --vtl-error-foreground: color-mix(in srgb, hsl(var(--destructive)) 45%, hsl(var(--foreground)));
+
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .velocity-template-tool .velocity-document-bar {
@@ -114,8 +131,41 @@
 }
 
 .velocity-template-tool .vtl-layout {
-  flex: 1 1 auto;
+  flex: 1 1 0;
+  grid-template-columns: minmax(0, 3fr) 6px minmax(0, 2fr);
+  grid-template-rows: minmax(0, 5fr) minmax(0, 3fr);
   height: auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.velocity-template-tool .pane {
+  min-width: 0;
+}
+
+.velocity-template-tool .pane-header {
+  flex-shrink: 0;
+}
+
+.velocity-template-tool .vtl-title-group {
+  align-items: center;
+}
+
+.velocity-template-tool .vtl-validation-status {
+  flex: 0 0 auto;
+  padding: 0.35rem 0.6rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+}
+
+.velocity-template-tool .vtl-validation-status[hidden] {
+  display: none;
+}
+
+.velocity-template-tool .vtl-compact-header,
+.velocity-template-tool .vtl-panel-actions {
+  flex-wrap: wrap;
 }
 
 .velocity-template-tool .vtl-editor-pane > .monaco-editor-container {
@@ -134,6 +184,7 @@
 
 .velocity-template-tool .vtl-preview-output {
   padding: 0;
+  overflow: hidden;
 }
 
 .velocity-template-tool .vtl-preview-output > .monaco-editor {
@@ -143,6 +194,7 @@
 
 .velocity-template-tool .vtl-inline-error {
   flex: 0 0 auto;
+  color: var(--vtl-error-foreground);
 }
 
 .velocity-template-tool .velocity-preview-error {
@@ -169,7 +221,7 @@
 
 .velocity-template-tool .vtl-result-meta[data-state="invalid"],
 .velocity-template-tool .vtl-result-meta[data-state="error"] {
-  color: hsl(var(--destructive));
+  color: var(--vtl-error-foreground);
 }
 
 .velocity-template-tool .vtl-undo-toast {
@@ -270,24 +322,30 @@
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.75;
+  transform: rotate(90deg);
   transition: transform 160ms ease-out;
 }
 
 .velocity-template-tool .vtl-collapse-button[aria-expanded="false"] svg {
-  transform: rotate(180deg);
+  transform: rotate(0deg);
 }
 
 .velocity-template-tool .vtl-layout.is-template-collapsed {
-  grid-template-rows: 38px minmax(220px, 1fr);
+  grid-template-rows: min-content minmax(0, 1fr);
 }
 
 .velocity-template-tool .vtl-layout.is-context-collapsed {
-  grid-template-rows: minmax(360px, 1fr) 38px;
+  grid-template-rows: minmax(0, 1fr) min-content;
+}
+
+.velocity-template-tool .vtl-layout.is-template-collapsed .vtl-editor-pane,
+.velocity-template-tool .vtl-layout.is-context-collapsed .vtl-parameters-pane {
+  align-self: start;
 }
 
 .velocity-template-tool .vtl-layout.is-template-collapsed .vtl-editor-pane > .monaco-editor-container,
 .velocity-template-tool .vtl-layout.is-context-collapsed .vtl-parameters-pane > :not(.pane-header) {
-  visibility: hidden;
+  display: none;
 }
 
 .velocity-template-tool .vtl-import-overlay {
@@ -558,12 +616,17 @@
 }
 
 @media (max-width: 940px) {
+  .velocity-template-tool .vtl-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  }
+
   .velocity-template-tool .vtl-layout.is-template-collapsed {
-    grid-template-rows: 38px minmax(240px, 1fr) minmax(280px, 1fr);
+    grid-template-rows: min-content minmax(0, 1fr) minmax(0, 1fr);
   }
 
   .velocity-template-tool .vtl-layout.is-context-collapsed {
-    grid-template-rows: minmax(300px, 1fr) 38px minmax(280px, 1fr);
+    grid-template-rows: minmax(0, 1fr) min-content minmax(0, 1fr);
   }
 }
 

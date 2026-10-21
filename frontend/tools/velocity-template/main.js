@@ -12,7 +12,7 @@ import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
 import { getIconSvg } from "./icon.js";
 import {
   buildVelocityQuickQueryDraft,
-  extractContextPaths,
+  suggestMissingContextFields,
   extractVelocityVariables,
   formatRenderedResult,
   getTemplateImportIdentity,
@@ -26,6 +26,7 @@ import {
 import { VelocityTemplate } from "./template.js";
 import { VelocityDocumentStore } from "./documentStore.js";
 import { DEFAULT_VELOCITY_CONTEXT, DEFAULT_VELOCITY_TEMPLATE } from "./starter.js";
+import { readVelocityValidatorSettings, requestVelocityValidation } from "./validator.js";
 import "./styles.css";
 
 const DIRECTIVES = [
@@ -143,6 +144,8 @@ class VelocityTemplateTool extends BaseTool {
 
   onUnmount() {
     this._mountSequence += 1;
+    this.cancelApiValidation();
+    this._apiResult = null;
     clearTimeout(this._templateTimer);
     clearTimeout(this._contextTimer);
     clearTimeout(this._previewTimer);
@@ -712,7 +715,141 @@ class VelocityTemplateTool extends BaseTool {
     this._previewTimer = setTimeout(() => this.updatePreview(), 200);
   }
 
+  validationSnapshot() {
+    return {
+      documentId: this.activeDocumentId,
+      template: this.editor?.getValue(),
+      context: this.contextEditor?.getValue(),
+      ...readVelocityValidatorSettings(),
+    };
+  }
+
+  matchesValidationSnapshot(snapshot) {
+    return JSON.stringify(snapshot) === JSON.stringify(this.validationSnapshot());
+  }
+
+  setValidationStatus(message) {
+    const status = document.getElementById("velocityValidationStatus");
+    if (status) {
+      status.textContent = message;
+      status.hidden = !message;
+    }
+  }
+
+  cancelApiValidation() {
+    this._validationRequest?.controller.abort();
+    this._validationRequest = null;
+    const button = document.getElementById("btnValidateVelocity");
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Validate";
+      button.removeAttribute("aria-busy");
+    }
+  }
+
+  async validateWithApi() {
+    if (this._validationRequest || !this.editor || !this.previewEditor) return;
+    const snapshot = this.validationSnapshot();
+    let context;
+    try {
+      if (!snapshot.template.trim()) throw new Error("Enter a Velocity template before validating.");
+      try {
+        context = this.readContext();
+      } catch (error) {
+        throw new Error(`Invalid Context Data: ${error.message}`);
+      }
+    } catch (error) {
+      this.setValidationStatus(error.message);
+      return;
+    }
+    clearTimeout(this._previewTimer);
+    const request = { controller: new AbortController(), sequence: this._mountSequence };
+    this._validationRequest = request;
+    this._apiResult = null;
+    this.markPreviewPending();
+    const button = document.getElementById("btnValidateVelocity");
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Validating…";
+      button.setAttribute("aria-busy", "true");
+    }
+    this.setValidationStatus("Calling Velocity API validator…");
+    try {
+      const response = await requestVelocityValidation({
+        ...snapshot,
+        context,
+        signal: request.controller.signal,
+      });
+      if (this._validationRequest !== request || request.sequence !== this._mountSequence) return;
+      if (!this.matchesValidationSnapshot(snapshot)) {
+        this.setValidationStatus("API validation stale — template, context, document, or settings changed. Validate again.");
+        return;
+      }
+      this._apiResult = { snapshot, response, at: Date.now() };
+      this.showApiResult();
+    } catch (error) {
+      if (this._validationRequest === request && request.sequence === this._mountSequence) {
+        this.setValidationStatus(error?.message || "Velocity API validator unavailable.");
+      }
+    } finally {
+      if (this._validationRequest === request) this.cancelApiValidation();
+    }
+  }
+
+  showApiResult() {
+    const { response, at } = this._apiResult;
+    let value = response.body;
+    if (this._resultType === "json") {
+      try {
+        value = JSON.stringify(JSON.parse(value), null, 2);
+      } catch {
+        /* Preserve non-JSON API diagnostics. */
+      }
+    }
+    this.configurePreviewMode(this._resultType || "text");
+    this.previewEditor.setValue(value);
+    for (const [editor, owner] of [
+      [this.editor, "velocity-template"],
+      [this.contextEditor, "velocity-context"],
+      [this.previewEditor, "velocity-output"],
+    ]) {
+      monaco.editor.setModelMarkers(editor.getModel(), owner, []);
+    }
+    for (const id of ["velocityPreviewStatus", "velocityContextError"]) {
+      const status = document.getElementById(id);
+      if (status) {
+        status.hidden = true;
+        status.textContent = "";
+        status.classList.remove("is-error");
+      }
+    }
+    document.getElementById("velocityPreview")?.classList.remove("is-stale");
+    this._lastRender = { at, bytes: byteLength(value) };
+    this._hadRenderError = false;
+    this.setRenderMeta("response");
+    this.setValidationStatus(
+      response.status === 503
+        ? "Velocity API validator unavailable (HTTP 503). Template validity was not determined."
+        : response.status >= 200 && response.status < 300
+          ? "API response received. Review the validator output below."
+          : `Validator returned HTTP ${response.status}. Review the response below.`,
+    );
+  }
+
+  markPreviewPending() {
+    document.getElementById("velocityPreview")?.classList.add("is-stale");
+    this.setRenderMeta("stale");
+  }
+
   updatePreview() {
+    if (this._apiResult) {
+      if (this.matchesValidationSnapshot(this._apiResult.snapshot)) {
+        this.showApiResult();
+        return;
+      }
+      this._apiResult = null;
+      this.setValidationStatus("API validation stale — template, context, document, or settings changed. Validate again.");
+    }
     const output = document.getElementById("velocityPreview");
     const status = document.getElementById("velocityPreviewStatus");
     const contextError = document.getElementById("velocityContextError");
@@ -764,6 +901,7 @@ class VelocityTemplateTool extends BaseTool {
       const message = error?.message || "Unable to render template.";
       const isJsonError = error instanceof SyntaxError;
       const isOutputError = error?.kind === "output";
+      const hasLocation = Number(error?.line) > 0 && Number(error?.column) > 0;
       const line = Math.max(1, Number(error?.line) || 1);
       const column = Math.max(1, Number(error?.column) || 1);
       const model = this.editor.getModel();
@@ -773,7 +911,7 @@ class VelocityTemplateTool extends BaseTool {
       monaco.editor.setModelMarkers(
         this.editor.getModel(),
         "velocity-template",
-        isJsonError || (isOutputError && !error?.templateLine)
+        isJsonError || (!isOutputError && !hasLocation) || (isOutputError && !error?.templateLine)
           ? []
           : [
               {
@@ -818,7 +956,7 @@ class VelocityTemplateTool extends BaseTool {
       this._hadRenderError = true;
       status.textContent = isOutputError
         ? `Rendered JSON error · Output line ${line}, column ${column}${error?.templateLine ? ` · Template line ${templateLine}, column ${templateColumn}` : ""} — ${message}`
-        : `${error?.kind === "syntax" ? "Velocity syntax error" : "Velocity rendering error"} · Line ${line}, column ${column} — ${message}`;
+        : `${error?.kind === "syntax" ? "Velocity syntax error" : "Velocity rendering error"} · ${hasLocation ? `Line ${line}, column ${column}` : "Location unavailable"} — ${message}`;
       status.hidden = false;
       status.classList.add("is-error");
       contextError.textContent = "";
@@ -828,8 +966,12 @@ class VelocityTemplateTool extends BaseTool {
   }
 
   markResultStale() {
-    document.getElementById("velocityPreview")?.classList.add("is-stale");
-    this.setRenderMeta("stale");
+    if (this._validationRequest || this._apiResult) {
+      this.cancelApiValidation();
+      this._apiResult = null;
+      this.setValidationStatus("API validation stale — inputs changed. Validate again.");
+    }
+    this.markPreviewPending();
   }
 
   setRenderMeta(state) {
@@ -840,8 +982,9 @@ class VelocityTemplateTool extends BaseTool {
     const size = last ? this.formatByteSize(last.bytes) : "";
     let text;
     if (state === "empty") text = "Empty template";
-    else if (state === "valid") text = `Valid · ${time} · ${size}`;
-    else if (state === "invalid") text = `Invalid JSON · ${time} · ${size}`;
+    else if (state === "response") text = `API response · HTTP ${this._apiResult.response.status} · ${time} · ${size}`;
+    else if (state === "valid") text = `Local preview · ${time} · ${size}`;
+    else if (state === "invalid") text = `Local preview · Invalid JSON · ${time} · ${size}`;
     else if (state === "stale") text = last ? `Stale · last valid ${time} · ${size}` : "Stale · no valid render yet";
     else if (state === "error") text = last ? `Stale · last valid ${time} · ${size}` : "Stale · render failed";
     else text = "Not rendered yet";
@@ -849,7 +992,7 @@ class VelocityTemplateTool extends BaseTool {
     meta.dataset.state = state;
     const copy = document.getElementById("btnCopyVelocityPreview");
     if (copy) {
-      copy.disabled = state !== "valid" && state !== "invalid";
+      copy.disabled = !["valid", "invalid", "response"].includes(state);
       copy.title = copy.disabled ? "Copy is available after the result renders." : "";
     }
     this._renderState = state;
@@ -923,18 +1066,7 @@ class VelocityTemplateTool extends BaseTool {
   }
 
   missingContextFields(context) {
-    const missing = [];
-    extractContextPaths(this.editor?.getValue() || "").forEach((path) => {
-      const existing = path.split(".").reduce((value, key) => value?.[key], context);
-      if (existing !== undefined) return;
-      const leaf = path.split(".").at(-1).toLowerCase();
-      let value = `sample-${leaf}`;
-      if (/^(?:is|has)|active|enabled|success/.test(leaf)) value = true;
-      else if (/items|list|rows|entries|users/.test(leaf)) value = [];
-      else if (/count|amount|total|price|age/.test(leaf)) value = 1;
-      missing.push({ path, value });
-    });
-    return missing;
+    return suggestMissingContextFields(this.editor?.getValue() || "", context);
   }
 
   openSyncDialog() {
@@ -956,12 +1088,12 @@ class VelocityTemplateTool extends BaseTool {
     this.container?.querySelector(".vtl-layout")?.setAttribute("inert", "");
     const list = document.getElementById("velocitySyncFields");
     list.replaceChildren(
-      ...missing.map(({ path, value }) => {
+      ...missing.map(({ path, value, note }) => {
         const item = document.createElement("li");
         const key = document.createElement("code");
         key.textContent = path;
         const sample = document.createElement("span");
-        sample.textContent = JSON.stringify(value);
+        sample.textContent = `${JSON.stringify(value)}${note ? ` — ${note}` : ""}`;
         item.append(key, sample);
         return item;
       }),
@@ -1008,7 +1140,7 @@ class VelocityTemplateTool extends BaseTool {
     this.contextEditor?.setValue(JSON.stringify(context, null, 2));
     this.closeSyncDialog();
     this.schedulePreview();
-    this.showUndo(`Added ${missing.length} context ${missing.length === 1 ? "field" : "fields"}`, () =>
+    this.showUndo(`Applied ${missing.length} context ${missing.length === 1 ? "change" : "changes"}`, () =>
       this.restoreDocumentSnapshot(snapshot),
     );
   }
@@ -1380,6 +1512,11 @@ class VelocityTemplateTool extends BaseTool {
   }
 
   bindEvents() {
+    document.getElementById("btnValidateVelocity")?.addEventListener("click", () => void this.validateWithApi());
+    document.getElementById("btnVelocityValidatorSettings")?.addEventListener("click", () => {
+      localStorage.setItem("settings.focus", "config.velocityValidator.url");
+      window.app?.router?.navigate("settings");
+    });
     this.editor?.onDidChangeModelContent(() => {
       this.scheduleDocumentSave();
       this.markResultStale();
@@ -1419,7 +1556,7 @@ class VelocityTemplateTool extends BaseTool {
       if (await this.copyToClipboard(this.editor.getValue(), null, "Template copied")) this.track("copy", this.editor.getValue());
     });
     document.getElementById("btnCopyVelocityPreview")?.addEventListener("click", () => {
-      if (this._renderState !== "valid" && this._renderState !== "invalid") return;
+      if (!["valid", "invalid", "response"].includes(this._renderState)) return;
       this.copyToClipboard(this.previewEditor?.getValue() || "", null, "Rendered output copied");
     });
     document.getElementById("btnPasteVelocity")?.addEventListener("click", async () => {
@@ -1534,7 +1671,7 @@ class VelocityTemplateTool extends BaseTool {
       const rect = layout.getBoundingClientRect();
       const total = rect.width - 6;
       const left = Math.max(240, Math.min(clientX - rect.left, total - 240));
-      layout.style.gridTemplateColumns = `${left}px 6px ${total - left}px`;
+      layout.style.gridTemplateColumns = `minmax(0, ${left}fr) 6px minmax(0, ${total - left}fr)`;
       resizer.setAttribute("aria-valuenow", String(Math.round((left / total) * 100)));
     };
     const move = (event) => {

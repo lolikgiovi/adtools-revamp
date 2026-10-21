@@ -41,6 +41,7 @@ pub fn run() {
       open_url,
       get_arch,
       fetch_lockey_json,
+      validate_velocity_template,
       measure_image_size,
       save_lockey_cache,
       load_lockey_cache,
@@ -451,6 +452,37 @@ fn http_client() -> Client {
     .timeout(Duration::from_secs(30))
     .build()
     .expect("failed to build reqwest client")
+}
+
+#[derive(serde::Serialize)]
+struct VelocityValidationResponse {
+  status: u16,
+  body: String,
+}
+
+#[tauri::command]
+async fn validate_velocity_template(url: String, body: String, content_type: String) -> Result<VelocityValidationResponse, String> {
+  let endpoint = reqwest::Url::parse(&url).map_err(|_| "Invalid validator URL".to_string())?;
+  if !matches!(endpoint.scheme(), "http" | "https") || !endpoint.username().is_empty() || endpoint.password().is_some() {
+    return Err("Validator URL must use HTTP or HTTPS without embedded credentials".to_string());
+  }
+  if !matches!(content_type.as_str(), "application/json" | "application/x-www-form-urlencoded") {
+    return Err("Unsupported validator request format".to_string());
+  }
+  let client = Client::builder()
+    .timeout(Duration::from_secs(30))
+    .redirect(reqwest::redirect::Policy::none())
+    .build()
+    .map_err(|_| "Unable to create validator HTTP client".to_string())?;
+  let response = client.post(endpoint)
+    .header(reqwest::header::CONTENT_TYPE, content_type)
+    .body(body)
+    .send().await
+    .map_err(|error| if error.is_timeout() { "Velocity API validation timed out after 30 seconds".to_string() }
+      else { "Velocity API validator unavailable. Check the endpoint and your connection".to_string() })?;
+  let status = response.status().as_u16();
+  let body = response.text().await.map_err(|_| "Unable to read validator response".to_string())?;
+  Ok(VelocityValidationResponse { status, body })
 }
 
 fn jira_http_client(allow_invalid_tls: bool) -> Result<Client, String> {
