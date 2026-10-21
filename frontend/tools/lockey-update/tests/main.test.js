@@ -279,6 +279,43 @@ describe("LockeyUpdate UI", () => {
     expect(tool.sqlEditor.getValue()).toContain("Fix the validation issues");
   });
 
+  it("allows space-only language values but blocks a space-only key entered in the sheet", () => {
+    typeInto(container.querySelector("#lu-release-id"), "2.0.29");
+    setGridRows(tool, [{ key: "key", enValue: " ", idValue: "  " }]);
+    expect(tool.lastResult.ok).toBe(true);
+    expect(tool.sqlEditor.getValue()).toContain(", 'key', '  ', ' ',");
+    expect(container.querySelector("#lu-copy-sql").disabled).toBe(false);
+    setGridRows(tool, [{ key: " ", enValue: "E", idValue: "I" }]);
+    expect(tool.lastResult.ok).toBe(false);
+    expect(container.querySelector("#lu-validation").textContent).toContain("localization key is required");
+    expect(container.querySelector("#lu-copy-sql").disabled).toBe(true);
+  });
+
+  it("clears generated SQL for unsafe encoding, identifies the lockey, and recovers after correction", () => {
+    typeInto(container.querySelector("#lu-release-id"), "2.0.29");
+    const safe = { key: "accountStatusLabel", enValue: "It's safe - yes", idValue: "Aman" };
+    setGridRows(tool, [safe]);
+    expect(container.querySelector("#lu-copy-sql").disabled).toBe(false);
+
+    setGridRows(tool, [{ ...safe, enValue: "It’s unsafe – yes" }]);
+    const validation = container.querySelector("#lu-validation");
+    expect(validation.hidden).toBe(false);
+    expect(validation.textContent).toContain('Lockey "accountStatusLabel" contains unsafe encoding character');
+    expect(validation.textContent).toContain("EN_VALUE");
+    expect(validation.textContent).toContain("U+2019");
+    expect(validation.textContent).toContain("U+2013");
+    expect(container.querySelector("#lu-copy-sql").disabled).toBe(true);
+    expect(container.querySelector("#lu-download-sql").disabled).toBe(true);
+    expect(tool.lastSql).toBe("");
+    expect(tool.sqlEditor.getValue()).not.toContain("INSERT INTO");
+
+    setGridRows(tool, [safe]);
+    expect(validation.hidden).toBe(true);
+    expect(container.querySelector("#lu-copy-sql").disabled).toBe(false);
+    expect(container.querySelector("#lu-download-sql").disabled).toBe(false);
+    expect(tool.sqlEditor.getValue()).toContain("It''s safe - yes");
+  });
+
   it("filters the joined history by key", () => {
     tool.applyLedger(versions, updates);
     container.querySelector('[data-tab="history"]').click();

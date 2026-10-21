@@ -224,6 +224,22 @@ export function validateBatch({ releaseTargets = [], auditUser = "SYSTEM", rows 
   const seenLowerKeys = new Map();
   normalizedRows.forEach((row, index) => {
     const rowLabel = row.key ? `"${row.key}"` : `row ${index + 1}`;
+    // Match HTML Editor's Windows-import risk policy without rewriting localization text.
+    for (const [field, value] of [["LOCALIZATION_KEY", row.key], ["ID_VALUE", row.idValue], ["EN_VALUE", row.enValue]]) {
+      const unsafe = new Set();
+      for (const character of value) {
+        if (character.codePointAt(0) > 127) unsafe.add(character);
+      }
+      if (unsafe.size) {
+        const characters = [...unsafe].map((character) => {
+          const codePoint = character.codePointAt(0).toString(16).toUpperCase().padStart(4, "0");
+          return `${JSON.stringify(character)} (U+${codePoint})`;
+        });
+        errors.push(
+          `Lockey ${rowLabel} contains unsafe encoding character in ${field}: ${characters.join(", ")}. Replace before generating SQL.`,
+        );
+      }
+    }
     if (!row.key) {
       errors.push(`${rowLabel}: localization key is required.`);
     } else if (byteLength(row.key) > KEY_WIDTH) {

@@ -95,6 +95,68 @@ describe("analyzeLedger", () => {
 describe("validateBatch", () => {
   const validRows = [{ key: "accountStatusLabel", idValue: "Diblokir", enValue: "Blocked" }];
 
+  // Values may be empty or space-only; keys must still be trimmed and required.
+  it.each(["", " ", "   "])("preserves empty/space-only language values: %j", (value) => {
+    const result = validateBatch({
+      releaseTargets: ["2.0.29"],
+      rows: [{ key: "key", idValue: value, enValue: value }, { key: "", idValue: "", enValue: "" }],
+    });
+    expect(result.ok).toBe(true);
+    expect(result.rows).toEqual([{ key: "key", idValue: value, enValue: value }]);
+    expect(generateInsertSql(result)).toContain(`, 'key', '${value}', '${value}',`);
+  });
+
+  it("trims keys and rejects missing, space-only, or duplicate keys", () => {
+    const batch = (keys) => validateBatch({
+      releaseTargets: ["2.0.29"], rows: keys.map((key) => ({ key, idValue: "I", enValue: "E" })),
+    });
+    expect(batch([" key "]).rows[0].key).toBe("key");
+    expect(batch(["key", " key "]).errors.join(" ")).toContain('Duplicate localization key "key"');
+    expect(batch([" "]).errors.join(" ")).toContain("localization key is required");
+    expect(batch([""]).errors.join(" ")).toContain("localization key is required");
+  });
+
+  // Failure modes: either language/key is missed, invisible or damaged Unicode slips through,
+  // repeated characters flood errors, a late bad row is skipped, or safe ASCII is rejected/rewritten.
+  const unsafeInputs = ["’", "‘", "“", "”", "–", "—", "…", "\u00a0", "\u200b", "\ufeff", "\u2028",
+    "\u2029", "�", "â€™", "Ã—", "é", "e\u0301", "中文", "😀", "\ud800", "\udfff"];
+
+  it.each(unsafeInputs.flatMap((input) => ["key", "idValue", "enValue"].map((field) => [field, input])))(
+    "blocks unsafe encoding in %s: %s",
+    (field, input) => {
+      const row = { ...validRows[0], [field]: `before${input}after` };
+      const result = validateBatch({ releaseTargets: ["2.0.29"], rows: [row] });
+      expect(result.ok).toBe(false);
+      const message = result.errors.join(" ");
+      expect(message).toContain(`Lockey "${row.key}" contains unsafe encoding character`);
+      expect(message).toContain({ key: "LOCALIZATION_KEY", idValue: "ID_VALUE", enValue: "EN_VALUE" }[field]);
+      const unsafeCharacter = [...input].find((character) => character.codePointAt(0) > 127);
+      expect(message).toContain(`U+${unsafeCharacter.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}`);
+      expect(result.rows[0][field]).toBe(row[field]);
+    },
+  );
+
+  it("finds every unsafe field in a large batch and deduplicates repeated characters", () => {
+    const rows = Array.from({ length: 1000 }, (_, index) => ({ key: `key${index}`, idValue: "Aman", enValue: "Safe" }));
+    rows[0].idValue = "’".repeat(400);
+    rows[999].enValue = "–".repeat(400);
+    const result = validateBatch({ releaseTargets: ["1.0.0", "1.0.1", "1.0.2", "1.0.3"], rows });
+    expect(result.ok).toBe(false);
+    expect(result.errors).toHaveLength(2);
+    expect(result.errors[0]).toContain('Lockey "key0"');
+    expect(result.errors[1]).toContain('Lockey "key999"');
+    expect(result.errors[0].match(/U\+2019/g)).toHaveLength(1);
+    expect(result.errors[1].match(/U\+2013/g)).toHaveLength(1);
+  });
+
+  it("preserves ASCII quotes, hyphens, HTML, entities, tabs, and newlines", () => {
+    const value = "It's a test - <b>OK</b> &amp; &#8217;\n\tNext line";
+    const result = validateBatch({ releaseTargets: ["2.0.29"], rows: [{ key: "safe", idValue: value, enValue: value }] });
+    expect(result.ok).toBe(true);
+    expect(result.rows[0].enValue).toBe(value);
+    expect(generateInsertSql(result)).toContain("It''s a test -");
+  });
+
   it("accepts a valid batch without a loaded ledger", () => {
     const result = validateBatch({
       releaseTargets: ["2.0.29"],
