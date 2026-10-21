@@ -307,16 +307,12 @@ export function newUuid() {
 export function generateInsertSql({ releaseTargets = [], auditUser = "SYSTEM", rows = [], uuidFn = newUuid } = {}) {
   const targets = normalizeReleaseTargets(releaseTargets);
   const audit = escapeSqlLiteral(auditUser);
-  const lines = [
-    "SET DEFINE OFF;",
-    "-- Run all statements in order: each version number is allocated as MAX(LANGUAGE_PACK_VERSION) + 1 at execution time.",
-    "",
-  ];
+  const lines = ["SET DEFINE OFF;", ""];
 
   targets.forEach((releaseId, targetIndex) => {
     const versionId = uuidFn();
     lines.push(
-      `-- Release target ${targetIndex + 1}/${targets.length}: ${releaseId}`,
+      `-- RELEASE_ID ${targetIndex + 1}: ${releaseId}`,
       `INSERT INTO ${LANGUAGE_PACK_VERSION_TABLE} (language_pack_version_id, release_id, language_pack_version, created_by, created_time, updated_by, updated_time)`,
       "VALUES (" +
         `${escapeSqlLiteral(versionId)}, ${escapeSqlLiteral(releaseId)}, ` +
@@ -336,13 +332,22 @@ export function generateInsertSql({ releaseTargets = [], auditUser = "SYSTEM", r
     });
   });
 
+  const fetchRows = rows.length * targets.length + 10;
   lines.push(
     "------ SELECT Statement --------",
     "SELECT lpv.RELEASE_ID , lpv.LANGUAGE_PACK_VERSION AS VER, lpu.LOCALIZATION_KEY , lpu.ID_VALUE , lpu.EN_VALUE ",
     `FROM ${LANGUAGE_PACK_VERSION_TABLE} lpv`,
     `JOIN ${LANGUAGE_PACK_UPDATE_TABLE} lpu ON lpu.LANGUAGE_PACK_VERSION_ID = lpv.LANGUAGE_PACK_VERSION_ID`,
     "ORDER BY lpv.LANGUAGE_PACK_VERSION DESC",
-    "FETCH FIRST 20 ROWS ONLY;",
+    `FETCH FIRST ${fetchRows} ROWS ONLY;`,
+    "",
+    "------ Recently updated versions (last 2 minutes) --------",
+    `SELECT * FROM ${LANGUAGE_PACK_VERSION_TABLE} WHERE updated_time >= SYSDATE - INTERVAL '2' MINUTE`,
+    "ORDER BY updated_time DESC;",
+    "",
+    "------ Recently updated rows (last 2 minutes) --------",
+    `SELECT * FROM ${LANGUAGE_PACK_UPDATE_TABLE} WHERE updated_time >= SYSDATE - INTERVAL '2' MINUTE`,
+    "ORDER BY updated_time DESC;",
     "",
   );
 

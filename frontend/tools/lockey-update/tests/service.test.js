@@ -244,7 +244,9 @@ describe("generateInsertSql", () => {
     expect(sql.match(/'version-id'/g)).toHaveLength(3);
     expect(sql).toContain("'It''s here'");
     expect(sql).toContain("------ SELECT Statement --------");
-    expect(sql).toContain("FETCH FIRST 20 ROWS ONLY;");
+    expect(sql).toContain("FETCH FIRST 12 ROWS ONLY;");
+    expect(sql).toContain("SELECT * FROM LOCALIZATION.LANGUAGE_PACK_VERSION WHERE updated_time >= SYSDATE - INTERVAL '2' MINUTE");
+    expect(sql).toContain("SELECT * FROM LOCALIZATION.LANGUAGE_PACK_UPDATE WHERE updated_time >= SYSDATE - INTERVAL '2' MINUTE");
     expect(sql).not.toContain("COMMIT;");
   });
 
@@ -264,8 +266,10 @@ describe("generateInsertSql", () => {
     expect(sql.match(/INSERT INTO LOCALIZATION\.LANGUAGE_PACK_UPDATE/g)).toHaveLength(4);
     expect(sql.match(/'version-1'/g)).toHaveLength(3);
     expect(sql.match(/'version-2'/g)).toHaveLength(3);
-    expect(sql).toContain("-- Release target 1/2: 2.0.29");
-    expect(sql).toContain("-- Release target 2/2: 2.0.30");
+    expect(sql).toContain("-- RELEASE_ID 1: 2.0.29");
+    expect(sql).toContain("-- RELEASE_ID 2: 2.0.30");
+    expect(sql).not.toContain("-- Run all statements in order");
+    expect(sql).toContain("FETCH FIRST 14 ROWS ONLY;");
     ["update-1a", "update-1b", "update-2a", "update-2b"].forEach((id) => {
       expect(sql.split(`'${id}'`)).toHaveLength(2);
     });
