@@ -717,11 +717,31 @@ class VelocityTemplateTool extends BaseTool {
     const status = document.getElementById("velocityPreviewStatus");
     const contextError = document.getElementById("velocityContextError");
     if (!output || !status || !contextError || !this.editor || !this.previewEditor) return;
+    const template = this.editor.getValue();
+    if (!template.trim()) {
+      this.configurePreviewMode(this._resultType || "text");
+      monaco.editor.setModelMarkers(this.editor.getModel(), "velocity-template", []);
+      monaco.editor.setModelMarkers(this.contextEditor.getModel(), "velocity-context", []);
+      monaco.editor.setModelMarkers(this.previewEditor.getModel(), "velocity-output", []);
+      this.previewEditor.setValue("");
+      output.classList.remove("is-stale");
+      status.hidden = true;
+      status.textContent = "";
+      status.classList.remove("is-error");
+      contextError.hidden = true;
+      contextError.textContent = "";
+      const announcement = document.getElementById("velocityRenderAnnouncement");
+      if (announcement) announcement.textContent = "";
+      this._lastRender = null;
+      this._hadRenderError = false;
+      this.setRenderMeta("empty");
+      return;
+    }
     let rendered = "";
     try {
-      rendered = renderVelocityTemplate(this.editor.getValue(), this.readContext());
+      rendered = renderVelocityTemplate(template, this.readContext());
       const resultType = this._resultType || "text";
-      const displayValue = formatRenderedResult(rendered, resultType, this.editor.getValue());
+      const displayValue = formatRenderedResult(rendered, resultType, template);
       this.configurePreviewMode(resultType);
       monaco.editor.setModelMarkers(this.editor.getModel(), "velocity-template", []);
       monaco.editor.setModelMarkers(this.contextEditor.getModel(), "velocity-context", []);
@@ -819,7 +839,8 @@ class VelocityTemplateTool extends BaseTool {
     const time = last ? this.formatRenderTime(last.at) : "";
     const size = last ? this.formatByteSize(last.bytes) : "";
     let text;
-    if (state === "valid") text = `Valid · ${time} · ${size}`;
+    if (state === "empty") text = "Empty template";
+    else if (state === "valid") text = `Valid · ${time} · ${size}`;
     else if (state === "invalid") text = `Invalid JSON · ${time} · ${size}`;
     else if (state === "stale") text = last ? `Stale · last valid ${time} · ${size}` : "Stale · no valid render yet";
     else if (state === "error") text = last ? `Stale · last valid ${time} · ${size}` : "Stale · render failed";
