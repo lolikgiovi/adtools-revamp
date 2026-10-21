@@ -13,6 +13,8 @@
     "windows": [
       {
         "title": "AD Tools",
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
         "width": 1280,
         "height": 768,
         "resizable": true,

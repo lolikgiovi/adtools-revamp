@@ -1867,6 +1867,9 @@ class App {
       const tauriRuntime = isTauri();
       const rt = tauriRuntime ? "tauri" : "web";
       if (header) header.setAttribute("data-runtime", rt);
+      // The desktop shell replaces the native macOS title bar with a centered
+      // one; CSS keys its layout offsets off this attribute.
+      document.documentElement.setAttribute("data-tauri", String(tauriRuntime));
     };
 
     // Initial runtime set + delayed re-check to handle late Tauri init
