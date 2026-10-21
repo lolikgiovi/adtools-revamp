@@ -50,6 +50,7 @@ const SCHEMA_TABLE_ATTACHMENTS_FALLBACK_HEIGHT = 56;
 const SCHEMA_TABLE_SECTION_GAP = 8;
 const AUDIT_USER_PREFERENCE_KEY = "tool:quick-query:audit-user";
 const ORACLE_DATA_IMPORT_DRAFT_KEY = "tool:quick-query:oracle-data-import:";
+const ATTACHMENT_SIZE_WARNING_BYTES = 300 * 1000;
 
 function loadJsZip() {
   if (!jsZipPromise) {
@@ -2304,6 +2305,24 @@ export class QuickQueryUI {
     }
   }
 
+  _showAttachmentSizeWarning() {
+    const warnings = this.elements.warningMessages;
+    if (!warnings) return;
+    warnings.querySelector(".qq-attachment-size-warning")?.remove();
+    const count = this.processedFiles.filter((file) => file.size > ATTACHMENT_SIZE_WARNING_BYTES).length;
+    if (!count) return;
+
+    const warning = document.createElement("div");
+    warning.className = "qq-attachment-size-warning";
+    warning.setAttribute("role", "status");
+    warning.textContent =
+      `Warning: ${count} ${count === 1 ? "attachment exceeds" : "attachments exceed"} 300 KB. ` +
+      "Large attachments may produce a large query. Query generation can still continue.";
+    warnings.appendChild(warning);
+    warnings.style.display = "block";
+    warnings.style.color = "orange";
+  }
+
   // Event Handlers
 
   /**
@@ -2515,6 +2534,7 @@ export class QuickQueryUI {
     this._queryPreparationPending = true;
 
     try {
+      this._showAttachmentSizeWarning();
       await this.flushPendingDataAutosave();
 
       const tableName = this.elements.tableNameInput.value.trim();
@@ -2730,6 +2750,7 @@ export class QuickQueryUI {
       if (result.duplicateResult?.hasDuplicates && result.duplicateResult?.warningMessage) {
         this.showWarning(result.duplicateResult.warningMessage);
       }
+      this._showAttachmentSizeWarning();
 
       this._trackQueryGenerated(queryType, tableName, schemaData, inputData, dataSource, result.usedWorker);
       this.scheduleActiveTabDraftSave();
@@ -5501,6 +5522,14 @@ export class QuickQueryUI {
       fileButton.className = "file-button";
       fileButton.setAttribute("aria-label", `View ${file.name}`);
       fileButton.innerHTML = FILE_BUTTON_TEMPLATE(file);
+      if (file.size > ATTACHMENT_SIZE_WARNING_BYTES) {
+        fileButton.classList.add("file-button-oversized");
+        fileButton.setAttribute("aria-label", `View ${file.name}. Warning: Exceeds 300 KB. Query generation is still available.`);
+        const warning = document.createElement("span");
+        warning.className = "file-size-warning";
+        warning.textContent = "⚠ Exceeds 300 KB";
+        fileButton.querySelector(".file-info").appendChild(warning);
+      }
 
       const copyBtn = fileButton.querySelector(".copy-filename");
       copyBtn.addEventListener("click", (ev) => {
@@ -5782,7 +5811,7 @@ export class QuickQueryUI {
 
         // Update metadata once image is loaded
         img.onload = () => {
-          metadataElements.fileSize.textContent = `Media Size: ${(file.size / 1024).toFixed(2)} KB`;
+          metadataElements.fileSize.textContent = `Media Size: ${(file.size / 1000).toFixed(2)} KB`;
           metadataElements.base64Size.textContent = `Base64 Size: ${(file.processedFormats.base64.length / 1024).toFixed(2)} KB`;
           metadataElements.dimensions.textContent = `Dimensions: ${img.naturalWidth} × ${img.naturalHeight}`;
 
@@ -5799,7 +5828,7 @@ export class QuickQueryUI {
         obj.height = "600px";
         viewer.appendChild(obj);
 
-        metadataElements.fileSize.textContent = `Size: ${(file.size / 1024).toFixed(2)} KB`;
+        metadataElements.fileSize.textContent = `Size: ${(file.size / 1000).toFixed(2)} KB`;
         metadataElements.base64Size.textContent = `Base64 Size: ${(file.processedFormats.base64.length / 1024).toFixed(2)} KB`;
         [metadataElements.fileSize, metadataElements.base64Size].forEach((el) => el.classList.remove("hidden"));
       }

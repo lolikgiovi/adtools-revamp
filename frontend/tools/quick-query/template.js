@@ -653,7 +653,7 @@ export const FILE_BUTTON_TEMPLATE = (file) => {
     <span class="file-name">${file.name}</span>
   </div>
   <div class="file-actions">
-    <span class="file-size" aria-label="File size">${(file.size / 1024).toFixed(2)} KB</span>
+    <span class="file-size" aria-label="File size">${(file.size / 1000).toFixed(2)} KB</span>
     <button class="delete-file" title="Delete file" aria-label="Delete file">×</button>
   </div>
 `;
