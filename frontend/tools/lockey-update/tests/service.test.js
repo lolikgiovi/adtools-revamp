@@ -97,7 +97,7 @@ describe("validateBatch", () => {
 
   it("accepts a valid batch without a loaded ledger", () => {
     const result = validateBatch({
-      releaseId: "2.0.29",
+      releaseTargets: ["2.0.29"],
       auditUser: "SYSTEM",
       rows: validRows,
     });
@@ -106,9 +106,63 @@ describe("validateBatch", () => {
     expect(result.errors).toEqual([]);
   });
 
+  it("accepts two release targets and preserves their order", () => {
+    const result = validateBatch({
+      releaseTargets: ["2.0.29", "2.0.30"],
+      auditUser: "SYSTEM",
+      rows: validRows,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.releaseTargets).toEqual(["2.0.29", "2.0.30"]);
+    expect(result.targets.map((target) => target.errors)).toEqual([[], []]);
+  });
+
+  it("rejects duplicate targets and more than four targets", () => {
+    const duplicate = validateBatch({
+      releaseTargets: ["2.0.29", "2.0.29"],
+      auditUser: "SYSTEM",
+      rows: validRows,
+    });
+    expect(duplicate.ok).toBe(false);
+    expect(duplicate.errors.join(" ")).toMatch(/duplicate release target/i);
+
+    const tooMany = validateBatch({
+      releaseTargets: ["1.0.0", "1.0.1", "1.0.2", "1.0.3", "1.0.4"],
+      auditUser: "SYSTEM",
+      rows: validRows,
+    });
+    expect(tooMany.ok).toBe(false);
+    expect(tooMany.errors.join(" ")).toMatch(/up to 4 release targets/i);
+  });
+
+  it("reports which release target failed validation", () => {
+    const result = validateBatch({
+      releaseTargets: ["2.0.29", "2.0"],
+      auditUser: "SYSTEM",
+      rows: validRows,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.targets[0].errors).toEqual([]);
+    expect(result.targets[1].errors.join(" ")).toMatch(/x\.x\.x/);
+    expect(result.errors.join(" ")).toContain("Release target 2");
+  });
+
+  it("drops blank release targets", () => {
+    const result = validateBatch({
+      releaseTargets: ["2.0.29", "   "],
+      auditUser: "SYSTEM",
+      rows: validRows,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.releaseTargets).toEqual(["2.0.29"]);
+  });
+
   it("rejects duplicate keys inside one batch", () => {
     const result = validateBatch({
-      releaseId: "2.0.29",
+      releaseTargets: ["2.0.29"],
       auditUser: "SYSTEM",
       rows: [...validRows, { ...validRows[0] }],
     });
@@ -120,7 +174,7 @@ describe("validateBatch", () => {
   it("enforces column widths in bytes", () => {
     const longValue = "x".repeat(1501);
     const tooLong = validateBatch({
-      releaseId: "2.0.29",
+      releaseTargets: ["2.0.29"],
       auditUser: "SYSTEM",
       rows: [{ key: "k", idValue: longValue, enValue: "ok" }],
     });
@@ -128,33 +182,33 @@ describe("validateBatch", () => {
     expect(tooLong.errors.join(" ")).toMatch(/1500/);
 
     const longRelease = validateBatch({
-      releaseId: "123.456.789",
+      releaseTargets: ["123.456.789"],
       auditUser: "SYSTEM",
       rows: validRows,
     });
     expect(longRelease.ok).toBe(false);
-    expect(longRelease.errors.join(" ")).toMatch(/release id/i);
+    expect(longRelease.errors.join(" ")).toMatch(/release target/i);
   });
 
   it("requires an x.x.x release id and trims surrounding whitespace", () => {
-    const invalid = validateBatch({ releaseId: "2.0", auditUser: "SYSTEM", rows: validRows });
+    const invalid = validateBatch({ releaseTargets: ["2.0"], auditUser: "SYSTEM", rows: validRows });
     expect(invalid.ok).toBe(false);
     expect(invalid.errors.join(" ")).toMatch(/x\.x\.x/);
 
-    const padded = validateBatch({ releaseId: "  2.0.29  ", auditUser: "SYSTEM", rows: validRows });
+    const padded = validateBatch({ releaseTargets: ["  2.0.29  "], auditUser: "SYSTEM", rows: validRows });
     expect(padded.ok).toBe(true);
-    expect(padded.releaseId).toBe("2.0.29");
+    expect(padded.releaseTargets).toEqual(["2.0.29"]);
   });
 
   it("requires an audit trail", () => {
-    const result = validateBatch({ releaseId: "2.0.29", auditUser: "   ", rows: validRows });
+    const result = validateBatch({ releaseTargets: ["2.0.29"], auditUser: "   ", rows: validRows });
     expect(result.ok).toBe(false);
     expect(result.errors.join(" ")).toMatch(/audit trail is required/i);
   });
 
   it("ignores blank grid rows and warns about empty values", () => {
     const result = validateBatch({
-      releaseId: "2.0.29",
+      releaseTargets: ["2.0.29"],
       auditUser: "SYSTEM",
       rows: [
         { key: "", idValue: "", enValue: "" },
@@ -172,7 +226,7 @@ describe("generateInsertSql", () => {
   it("renders the Quick Query-style two-table script with a shared version id", () => {
     const ids = ["version-id", "update-id-1", "update-id-2"];
     const sql = generateInsertSql({
-      releaseId: "2.0.29",
+      releaseTargets: ["2.0.29"],
       auditUser: "O'Brien",
       rows: [
         { key: "alpha", idValue: "It's here", enValue: "It's here" },
@@ -192,6 +246,30 @@ describe("generateInsertSql", () => {
     expect(sql).toContain("------ SELECT Statement --------");
     expect(sql).toContain("FETCH FIRST 20 ROWS ONLY;");
     expect(sql).not.toContain("COMMIT;");
+  });
+
+  it("emits one version row and one update copy per release target", () => {
+    const ids = ["version-1", "update-1a", "update-1b", "version-2", "update-2a", "update-2b"];
+    const sql = generateInsertSql({
+      releaseTargets: ["2.0.29", "2.0.30"],
+      auditUser: "SYSTEM",
+      rows: [
+        { key: "alpha", idValue: "A", enValue: "Alpha" },
+        { key: "beta", idValue: "B", enValue: "Beta" },
+      ],
+      uuidFn: () => ids.shift(),
+    });
+
+    expect(sql.match(/INSERT INTO LOCALIZATION\.LANGUAGE_PACK_VERSION/g)).toHaveLength(2);
+    expect(sql.match(/INSERT INTO LOCALIZATION\.LANGUAGE_PACK_UPDATE/g)).toHaveLength(4);
+    expect(sql.match(/'version-1'/g)).toHaveLength(3);
+    expect(sql.match(/'version-2'/g)).toHaveLength(3);
+    expect(sql).toContain("-- Release target 1/2: 2.0.29");
+    expect(sql).toContain("-- Release target 2/2: 2.0.30");
+    ["update-1a", "update-1b", "update-2a", "update-2b"].forEach((id) => {
+      expect(sql.split(`'${id}'`)).toHaveLength(2);
+    });
+    expect(ids).toHaveLength(0);
   });
 
   it("escapes single quotes", () => {

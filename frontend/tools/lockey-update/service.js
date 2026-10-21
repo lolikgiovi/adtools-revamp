@@ -19,8 +19,20 @@ const KEY_WIDTH = 100;
 const VALUE_WIDTH = 1500;
 const AUDIT_WIDTH = 50;
 
+export const MAX_RELEASE_TARGETS = 4;
+
 function byteLength(value) {
   return new TextEncoder().encode(String(value)).length;
+}
+
+/** True when a release id fits the x.x.x format and the column width. */
+export function isValidReleaseId(value) {
+  const normalized = String(value ?? "").trim();
+  return RELEASE_ID_PATTERN.test(normalized) && byteLength(normalized) <= VERSION_WIDTH;
+}
+
+function normalizeReleaseTargets(releaseTargets) {
+  return (Array.isArray(releaseTargets) ? releaseTargets : []).map((target) => String(target ?? "").trim()).filter(Boolean);
 }
 
 function versionNumber(value) {
@@ -160,26 +172,43 @@ export function analyzeLedger(ledger = {}) {
 }
 
 /**
- * Validate the batch. Version allocation happens in the database through the
- * MAX + 1 subquery, so no ledger needs to be loaded here.
+ * Validate a batch across up to MAX_RELEASE_TARGETS release ids. Every target
+ * receives its own version row, so duplicates would create identical releases.
+ * Version allocation happens in the database through the MAX + 1 subquery.
  */
-export function validateBatch({ releaseId = "", auditUser = "SYSTEM", rows = [] } = {}) {
+export function validateBatch({ releaseTargets = [], auditUser = "SYSTEM", rows = [] } = {}) {
   const errors = [];
   const warnings = [];
 
-  const normalizedRelease = String(releaseId ?? "").trim();
+  const normalizedTargets = normalizeReleaseTargets(releaseTargets);
+  const targetErrors = normalizedTargets.map(() => []);
   const normalizedAudit = String(auditUser ?? "").trim();
   const normalizedRows = (Array.isArray(rows) ? rows : [])
     .map(normalizeDraftRow)
     .filter((row) => row.key !== "" || row.idValue !== "" || row.enValue !== "");
 
-  if (!normalizedRelease) {
-    errors.push("Release ID is required.");
-  } else if (!RELEASE_ID_PATTERN.test(normalizedRelease)) {
-    errors.push("Release ID must use the x.x.x format (for example 2.0.29).");
-  } else if (byteLength(normalizedRelease) > VERSION_WIDTH) {
-    errors.push(`Release ID must be ${VERSION_WIDTH} characters or fewer (got ${byteLength(normalizedRelease)}).`);
+  if (normalizedTargets.length === 0) {
+    errors.push("Add at least one release target.");
+  } else if (normalizedTargets.length > MAX_RELEASE_TARGETS) {
+    errors.push(`Up to ${MAX_RELEASE_TARGETS} release targets per batch.`);
   }
+
+  const seenTargets = new Set();
+  normalizedTargets.forEach((target, index) => {
+    const label = `Release target ${index + 1} (${target})`;
+    if (!RELEASE_ID_PATTERN.test(target)) {
+      targetErrors[index].push(`${label}: must use the x.x.x format (for example 2.0.29).`);
+    } else if (byteLength(target) > VERSION_WIDTH) {
+      targetErrors[index].push(`${label}: must be ${VERSION_WIDTH} characters or fewer (got ${byteLength(target)}).`);
+    }
+
+    if (seenTargets.has(target)) {
+      targetErrors[index].push(`${label}: duplicate release target.`);
+    } else {
+      seenTargets.add(target);
+    }
+  });
+  targetErrors.forEach((messages) => errors.push(...messages));
 
   if (!normalizedAudit) {
     errors.push("Audit trail is required.");
@@ -230,11 +259,21 @@ export function validateBatch({ releaseId = "", auditUser = "SYSTEM", rows = [] 
     }
   });
 
+  const releaseInvalid =
+    normalizedTargets.length === 0 ||
+    normalizedTargets.length > MAX_RELEASE_TARGETS ||
+    targetErrors.some((messages) => messages.length > 0);
+
   return {
     ok: errors.length === 0,
     errors,
     warnings,
-    releaseId: normalizedRelease,
+    releaseTargets: normalizedTargets,
+    targets: normalizedTargets.map((releaseId, index) => ({ releaseId, errors: targetErrors[index] })),
+    invalidFields: {
+      releaseTargets: releaseInvalid,
+      auditUser: !normalizedAudit || byteLength(normalizedAudit) > AUDIT_WIDTH,
+    },
     auditUser: normalizedAudit,
     rows: normalizedRows,
   };
@@ -260,31 +299,41 @@ export function newUuid() {
 
 /**
  * Render the same combined script Quick Query produces for the two
- * localization tables. The version is allocated by Oracle at execution time,
- * so the script is independent of any loaded ledger.
+ * localization tables. Each release target gets its own version row and its
+ * own copy of the update rows. Versions are allocated by Oracle at execution
+ * time, so the statements must run in order and the script is independent of
+ * any loaded ledger.
  */
-export function generateInsertSql({ releaseId, auditUser = "SYSTEM", rows = [], uuidFn = newUuid } = {}) {
-  const versionId = uuidFn();
+export function generateInsertSql({ releaseTargets = [], auditUser = "SYSTEM", rows = [], uuidFn = newUuid } = {}) {
+  const targets = normalizeReleaseTargets(releaseTargets);
   const audit = escapeSqlLiteral(auditUser);
   const lines = [
     "SET DEFINE OFF;",
-    "",
-    `INSERT INTO ${LANGUAGE_PACK_VERSION_TABLE} (language_pack_version_id, release_id, language_pack_version, created_by, created_time, updated_by, updated_time)`,
-    "VALUES (" +
-      `${escapeSqlLiteral(versionId)}, ${escapeSqlLiteral(releaseId)}, ` +
-      "(SELECT NVL(MAX(LANGUAGE_PACK_VERSION)+1, 1) FROM LOCALIZATION.LANGUAGE_PACK_VERSION), " +
-      `${audit}, SYSDATE, ${audit}, SYSDATE);`,
+    "-- Run all statements in order: each version number is allocated as MAX(LANGUAGE_PACK_VERSION) + 1 at execution time.",
     "",
   ];
 
-  rows.forEach((row) => {
+  targets.forEach((releaseId, targetIndex) => {
+    const versionId = uuidFn();
     lines.push(
-      `INSERT INTO ${LANGUAGE_PACK_UPDATE_TABLE} (language_pack_update_id, language_pack_version_id, localization_key, id_value, en_value, created_by, created_time, updated_by, updated_time)`,
+      `-- Release target ${targetIndex + 1}/${targets.length}: ${releaseId}`,
+      `INSERT INTO ${LANGUAGE_PACK_VERSION_TABLE} (language_pack_version_id, release_id, language_pack_version, created_by, created_time, updated_by, updated_time)`,
       "VALUES (" +
-        `${escapeSqlLiteral(uuidFn())}, ${escapeSqlLiteral(versionId)}, ${escapeSqlLiteral(row.key)}, ` +
-        `${escapeSqlLiteral(row.idValue)}, ${escapeSqlLiteral(row.enValue)}, ${audit}, SYSDATE, ${audit}, SYSDATE);`,
+        `${escapeSqlLiteral(versionId)}, ${escapeSqlLiteral(releaseId)}, ` +
+        "(SELECT NVL(MAX(LANGUAGE_PACK_VERSION)+1, 1) FROM LOCALIZATION.LANGUAGE_PACK_VERSION), " +
+        `${audit}, SYSDATE, ${audit}, SYSDATE);`,
       "",
     );
+
+    rows.forEach((row) => {
+      lines.push(
+        `INSERT INTO ${LANGUAGE_PACK_UPDATE_TABLE} (language_pack_update_id, language_pack_version_id, localization_key, id_value, en_value, created_by, created_time, updated_by, updated_time)`,
+        "VALUES (" +
+          `${escapeSqlLiteral(uuidFn())}, ${escapeSqlLiteral(versionId)}, ${escapeSqlLiteral(row.key)}, ` +
+          `${escapeSqlLiteral(row.idValue)}, ${escapeSqlLiteral(row.enValue)}, ${audit}, SYSDATE, ${audit}, SYSDATE);`,
+        "",
+      );
+    });
   });
 
   lines.push(

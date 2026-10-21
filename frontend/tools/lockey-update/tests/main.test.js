@@ -192,6 +192,52 @@ describe("LockeyUpdate UI", () => {
     expect(versionId).toBeTruthy();
     expect(sql.split(versionId)).toHaveLength(3);
     expect(container.querySelector("#lu-copy-sql").disabled).toBe(false);
+    expect(tool.lastResult.releaseTargets).toEqual(["2.0.29"]);
+  });
+
+  it("turns comma-separated release targets into chips", () => {
+    setGridRows(tool, [{ key: "k", enValue: "E", idValue: "I" }]);
+    typeInto(container.querySelector("#lu-release-id"), "0.0.0, 0.0.1");
+
+    const chips = Array.from(container.querySelectorAll(".lu-target-chip-label")).map((chip) => chip.textContent);
+    expect(chips).toEqual(["0.0.0", "0.0.1"]);
+    expect(container.querySelector("#lu-release-id").value).toBe("");
+    expect(tool.lastResult.releaseTargets).toEqual(["0.0.0", "0.0.1"]);
+    expect(tool.sqlEditor.getValue().match(/INSERT INTO LOCALIZATION\.LANGUAGE_PACK_VERSION/g)).toHaveLength(2);
+  });
+
+  it("commits on Enter and removes the last target on Backspace", () => {
+    const input = container.querySelector("#lu-release-id");
+    typeInto(input, "0.0.0");
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+
+    expect(container.querySelectorAll(".lu-target-chip-label")).toHaveLength(1);
+    expect(input.value).toBe("");
+
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Backspace", bubbles: true }));
+    expect(container.querySelectorAll(".lu-target-chip-label")).toHaveLength(0);
+  });
+
+  it("caps release targets at four", () => {
+    setGridRows(tool, [{ key: "k", enValue: "E", idValue: "I" }]);
+    const input = container.querySelector("#lu-release-id");
+    typeInto(input, "1.0.0, 1.0.1, 1.0.2, 1.0.3, 1.0.4");
+
+    const chips = Array.from(container.querySelectorAll(".lu-target-chip-label")).map((chip) => chip.textContent);
+    expect(chips).toEqual(["1.0.0", "1.0.1", "1.0.2", "1.0.3"]);
+    expect(input.value).toBe("1.0.4");
+    expect(container.querySelector("#lu-validation").textContent).toMatch(/Up to 4 release targets/);
+  });
+
+  it("keeps an invalid target in the input and blocks SQL", () => {
+    setGridRows(tool, [{ key: "k", enValue: "E", idValue: "I" }]);
+    typeInto(container.querySelector("#lu-release-id"), "0.0.0, 0.0");
+
+    expect(Array.from(container.querySelectorAll(".lu-target-chip-label")).map((chip) => chip.textContent)).toEqual(["0.0.0"]);
+    expect(container.querySelector("#lu-release-id").value).toBe("0.0");
+    expect(container.querySelector("#lu-target-shell").getAttribute("aria-invalid")).toBe("true");
+    expect(container.querySelector("#lu-validation").textContent).toMatch(/x\.x\.x/);
+    expect(container.querySelector("#lu-copy-sql").disabled).toBe(true);
   });
 
   it("uses the audit trail preference shared with Quick Query", () => {
@@ -202,6 +248,24 @@ describe("LockeyUpdate UI", () => {
     ({ tool, container } = mountTool());
 
     expect(container.querySelector("#lu-audit-user").value).toBe("RXX_SQUAD");
+  });
+
+  it("restores a legacy single-release draft as a chip", () => {
+    tool.unmount();
+    container.remove();
+    localStorage.clear();
+    localStorage.setItem(
+      "tool:lockey-update:draft",
+      JSON.stringify({
+        releaseId: "2.0.29",
+        auditUser: "SYSTEM",
+        rows: [{ key: "k", idValue: "I", enValue: "E" }],
+      }),
+    );
+    ({ tool, container } = mountTool());
+
+    expect(Array.from(container.querySelectorAll(".lu-target-chip-label")).map((chip) => chip.textContent)).toEqual(["2.0.29"]);
+    expect(container.querySelector("#lu-release-id").value).toBe("");
   });
 
   it("blocks SQL for an invalid release id", () => {

@@ -6,7 +6,7 @@ import { createOracleEditor } from "../../core/MonacoOracle.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { getIconSvg } from "./icon.js";
 import { LockeyUpdateTemplate } from "./template.js";
-import { analyzeLedger, generateInsertSql, validateBatch } from "./service.js";
+import { analyzeLedger, generateInsertSql, isValidReleaseId, MAX_RELEASE_TARGETS, validateBatch } from "./service.js";
 import "./styles.css";
 
 const DRAFT_STORAGE_KEY = "tool:lockey-update:draft";
@@ -72,7 +72,7 @@ export class LockeyUpdate extends BaseTool {
     this.ledgerLoaded = false;
     this.analysis = analyzeLedger(this.ledger);
     this.sourceWarnings = [];
-    this.draft = { releaseId: "", auditUser: "SYSTEM", rows: [blankRow()] };
+    this.draft = { releaseTargets: [], pendingRelease: "", auditUser: "SYSTEM", rows: [blankRow()] };
     this.historyFilter = "";
     this.releaseFilter = "";
     this.connections = [];
@@ -148,6 +148,8 @@ export class LockeyUpdate extends BaseTool {
       createPanel: "lu-create-panel",
       historyPanel: "lu-history-panel",
       releaseOptions: "lu-release-options",
+      targetShell: "lu-target-shell",
+      targetChips: "lu-target-chips",
       releaseId: "lu-release-id",
       auditUser: "lu-audit-user",
       addRow: "lu-add-row",
@@ -208,17 +210,40 @@ export class LockeyUpdate extends BaseTool {
     });
 
     this.el.releaseId?.addEventListener("input", () => {
-      this.draft.releaseId = this.el.releaseId.value;
+      const value = this.el.releaseId.value;
+      if (/[,\s]/.test(value)) {
+        this.commitReleaseTargets();
+        return;
+      }
+      this.draft.pendingRelease = value;
       this.scheduleDraftSave();
       this.renderPreview();
     });
-    this.el.releaseId?.addEventListener("blur", () => {
-      const trimmed = this.el.releaseId.value.trim();
-      if (trimmed === this.el.releaseId.value) return;
-      this.el.releaseId.value = trimmed;
-      this.draft.releaseId = trimmed;
-      this.scheduleDraftSave();
-      this.renderPreview();
+    this.el.releaseId?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        this.commitReleaseTargets();
+        return;
+      }
+      if (event.key === "Backspace" && !this.el.releaseId.value && this.draft.releaseTargets.length > 0) {
+        event.preventDefault();
+        this.removeReleaseTarget(this.draft.releaseTargets.length - 1);
+      }
+    });
+    this.el.releaseId?.addEventListener("blur", (event) => {
+      if (event.relatedTarget?.closest?.(".lu-target-chip-remove")) return;
+      this.commitReleaseTargets();
+    });
+
+    this.el.targetChips?.addEventListener("click", (event) => {
+      const button = event.target.closest(".lu-target-chip-remove");
+      if (!button) return;
+      event.stopPropagation();
+      this.removeReleaseTarget(Number(button.dataset.index));
+    });
+    this.el.targetShell?.addEventListener("click", (event) => {
+      if (event.target.closest(".lu-target-chip-remove")) return;
+      this.el.releaseId?.focus();
     });
 
     this.el.auditUser?.addEventListener("input", () => {
@@ -255,6 +280,80 @@ export class LockeyUpdate extends BaseTool {
       this.resizeObserver = new ResizeObserver(() => this.resizeGrid());
       this.resizeObserver.observe(this.el.grid);
     }
+  }
+
+  renderReleaseTargets() {
+    if (this.el.targetChips) {
+      this.el.targetChips.replaceChildren();
+      this.draft.releaseTargets.forEach((target, index) => {
+        const chip = document.createElement("span");
+        chip.className = "lu-target-chip";
+
+        const label = document.createElement("span");
+        label.className = "lu-target-chip-label";
+        label.textContent = target;
+
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "lu-target-chip-remove";
+        remove.dataset.index = String(index);
+        remove.setAttribute("aria-label", `Remove release target ${target}`);
+        remove.textContent = "×";
+
+        chip.append(label, remove);
+        this.el.targetChips.appendChild(chip);
+      });
+    }
+
+    if (!this.el.releaseId) return;
+    const count = this.draft.releaseTargets.length;
+    if (count >= MAX_RELEASE_TARGETS) this.el.releaseId.placeholder = `Up to ${MAX_RELEASE_TARGETS} targets`;
+    else if (count > 0) this.el.releaseId.placeholder = "Add another…";
+    else this.el.releaseId.placeholder = "Release IDs — Enter or comma";
+  }
+
+  commitReleaseTargets() {
+    const input = this.el.releaseId;
+    if (!input) return;
+
+    const raw = input.value;
+    if (!raw.trim()) {
+      if (input.value) input.value = "";
+      if (!this.draft.pendingRelease) return;
+      this.draft.pendingRelease = "";
+      this.scheduleDraftSave();
+      this.renderPreview();
+      return;
+    }
+
+    const rejected = [];
+    raw
+      .split(/[,\s]+/)
+      .map((token) => token.trim())
+      .filter(Boolean)
+      .forEach((token) => {
+        if (this.draft.releaseTargets.includes(token)) return;
+        if (this.draft.releaseTargets.length >= MAX_RELEASE_TARGETS || !isValidReleaseId(token)) {
+          rejected.push(token);
+          return;
+        }
+        this.draft.releaseTargets.push(token);
+      });
+
+    input.value = rejected.join(", ");
+    this.draft.pendingRelease = input.value;
+    this.renderReleaseTargets();
+    this.scheduleDraftSave();
+    this.renderPreview();
+  }
+
+  removeReleaseTarget(index) {
+    if (!Number.isInteger(index) || index < 0 || index >= this.draft.releaseTargets.length) return;
+    this.draft.releaseTargets.splice(index, 1);
+    this.renderReleaseTargets();
+    this.scheduleDraftSave();
+    this.renderPreview();
+    this.el.releaseId?.focus();
   }
 
   initializeGrid() {
@@ -389,8 +488,9 @@ export class LockeyUpdate extends BaseTool {
   }
 
   syncInputs() {
-    if (this.el.releaseId) this.el.releaseId.value = this.draft.releaseId;
+    if (this.el.releaseId) this.el.releaseId.value = this.draft.pendingRelease;
     if (this.el.auditUser) this.el.auditUser.value = this.draft.auditUser;
+    this.renderReleaseTargets();
   }
 
   restoreDraft() {
@@ -399,7 +499,17 @@ export class LockeyUpdate extends BaseTool {
     try {
       const saved = JSON.parse(localStorage.getItem(DRAFT_STORAGE_KEY) || "null");
       if (saved && typeof saved === "object") {
-        this.draft.releaseId = typeof saved.releaseId === "string" ? saved.releaseId.trim() : "";
+        if (Array.isArray(saved.releaseTargets)) {
+          this.draft.releaseTargets = saved.releaseTargets
+            .map((target) => String(target ?? "").trim())
+            .filter((target, index, all) => target && all.indexOf(target) === index)
+            .slice(0, MAX_RELEASE_TARGETS);
+        } else if (typeof saved.releaseId === "string" && saved.releaseId.trim()) {
+          const legacy = saved.releaseId.trim();
+          if (isValidReleaseId(legacy)) this.draft.releaseTargets = [legacy];
+          else this.draft.pendingRelease = legacy;
+        }
+        if (typeof saved.pendingRelease === "string") this.draft.pendingRelease = saved.pendingRelease;
         if (typeof saved.auditUser === "string" && saved.auditUser.trim()) {
           this.draft.auditUser = saved.auditUser.trim().toUpperCase();
         }
@@ -477,7 +587,12 @@ export class LockeyUpdate extends BaseTool {
     try {
       localStorage.setItem(
         DRAFT_STORAGE_KEY,
-        JSON.stringify({ releaseId: this.draft.releaseId, auditUser: this.draft.auditUser, rows: this.draft.rows }),
+        JSON.stringify({
+          releaseTargets: this.draft.releaseTargets,
+          pendingRelease: this.draft.pendingRelease,
+          auditUser: this.draft.auditUser,
+          rows: this.draft.rows,
+        }),
       );
     } catch (_) {
       // Storage is optional.
@@ -607,7 +722,7 @@ export class LockeyUpdate extends BaseTool {
   renderReleaseOptions() {
     if (!this.el.releaseOptions) return;
     this.el.releaseOptions.replaceChildren();
-    this.analysis.releases.forEach((release) => {
+    [...this.analysis.releases].reverse().forEach((release) => {
       const option = document.createElement("option");
       option.value = release;
       this.el.releaseOptions.appendChild(option);
@@ -719,8 +834,7 @@ export class LockeyUpdate extends BaseTool {
     if (!this.ledgerLoaded) {
       empty.hidden = false;
       empty.querySelector("strong").textContent = "No version history yet";
-      empty.querySelector("span").textContent =
-        "Choose an environment, then load from Oracle to inspect versions and their keys.";
+      empty.querySelector("span").textContent = "Choose an environment, then load from Oracle to inspect versions and their keys.";
       if (this.el.historyTable) this.el.historyTable.hidden = true;
       this.el.historyCount.textContent = "";
       this.el.historyNote.textContent = "";
@@ -827,7 +941,10 @@ export class LockeyUpdate extends BaseTool {
   renderPreview() {
     if (!this.el.validation || !this.sqlEditor) return;
 
-    const hasContent = Boolean(this.draft.releaseId) || this.draft.rows.some((row) => row.key || row.idValue || row.enValue);
+    const hasContent =
+      this.draft.releaseTargets.length > 0 ||
+      Boolean(this.draft.pendingRelease.trim()) ||
+      this.draft.rows.some((row) => row.key || row.idValue || row.enValue);
     if (!hasContent) {
       this.lastSql = "";
       this.lastResult = null;
@@ -839,8 +956,12 @@ export class LockeyUpdate extends BaseTool {
       return;
     }
 
+    const releaseTargets = [...this.draft.releaseTargets];
+    const pendingRelease = this.draft.pendingRelease.trim();
+    if (pendingRelease) releaseTargets.push(pendingRelease);
+
     const result = validateBatch({
-      releaseId: this.draft.releaseId,
+      releaseTargets,
       auditUser: this.draft.auditUser,
       rows: this.draft.rows,
     });
@@ -849,7 +970,7 @@ export class LockeyUpdate extends BaseTool {
 
     if (result.ok) {
       this.lastSql = generateInsertSql({
-        releaseId: result.releaseId,
+        releaseTargets: result.releaseTargets,
         auditUser: result.auditUser,
         rows: result.rows,
       });
@@ -871,6 +992,7 @@ export class LockeyUpdate extends BaseTool {
       this.el.validation.hidden = true;
       this.el.validation.replaceChildren();
     }
+    this.setFieldInvalid(this.el.targetShell, false);
     this.setFieldInvalid(this.el.releaseId, false);
     this.setFieldInvalid(this.el.auditUser, false);
   }
@@ -880,8 +1002,10 @@ export class LockeyUpdate extends BaseTool {
     if (!container) return;
     const errors = result.errors || [];
     const warnings = result.warnings || [];
-    this.setFieldInvalid(this.el.releaseId, errors.some((message) => message.startsWith("Release ID")));
-    this.setFieldInvalid(this.el.auditUser, errors.some((message) => message.startsWith("Audit trail")));
+    const releaseInvalid = Boolean(result.invalidFields?.releaseTargets);
+    this.setFieldInvalid(this.el.targetShell, releaseInvalid);
+    this.setFieldInvalid(this.el.releaseId, releaseInvalid);
+    this.setFieldInvalid(this.el.auditUser, Boolean(result.invalidFields?.auditUser));
 
     if (errors.length === 0 && warnings.length === 0) {
       container.hidden = true;
@@ -895,8 +1019,7 @@ export class LockeyUpdate extends BaseTool {
 
     const issueLabel = `${errors.length} issue${errors.length === 1 ? "" : "s"} to fix`;
     const warningLabel = `${warnings.length} warning${warnings.length === 1 ? "" : "s"}`;
-    const summaryText =
-      errors.length > 0 ? (warnings.length > 0 ? `${issueLabel} · ${warningLabel}` : issueLabel) : warningLabel;
+    const summaryText = errors.length > 0 ? (warnings.length > 0 ? `${issueLabel} · ${warningLabel}` : issueLabel) : warningLabel;
     container.appendChild(this.createCheckSummary(summaryText));
     if (errors.length > 0) container.appendChild(this.createCheckList(errors, "error"));
     if (warnings.length > 0) container.appendChild(this.createCheckList(warnings, "warning"));
@@ -937,10 +1060,14 @@ export class LockeyUpdate extends BaseTool {
       this.el.sqlMeta.title = "";
       return;
     }
+    const targets = result.releaseTargets.length;
     const rows = result.rows.length;
     const bytes = new TextEncoder().encode(this.lastSql).length;
-    this.el.sqlMeta.textContent = `${rows} row${rows === 1 ? "" : "s"} · ${formatBytes(bytes)}`;
-    this.el.sqlMeta.title = `${rows} update row${rows === 1 ? "" : "s"} in the generated script`;
+    const rowLabel = `${rows} row${rows === 1 ? "" : "s"}`;
+    const targetLabel = targets > 1 ? `${targets} targets · ` : "";
+    this.el.sqlMeta.textContent = `${targetLabel}${rowLabel}${targets > 1 ? " each" : ""} · ${formatBytes(bytes)}`;
+    this.el.sqlMeta.title =
+      targets > 1 ? `${rowLabel} per release target across ${targets} targets` : `${rowLabel} in the generated script`;
   }
 
   setSqlEmpty(state) {
@@ -954,7 +1081,7 @@ export class LockeyUpdate extends BaseTool {
     if (this.el.sqlEmptyBody) {
       this.el.sqlEmptyBody.textContent = paused
         ? "Resolve the issues below the rows to generate the SQL."
-        : "Add a release ID and at least one localization key. The script updates as you type.";
+        : "Add at least one release target and localization key. The script updates as you type.";
     }
   }
 
@@ -970,6 +1097,7 @@ export class LockeyUpdate extends BaseTool {
     try {
       UsageTracker.trackToolUse("lockey-update", "copy", {
         rows: this.lastResult.rows.length,
+        targets: this.lastResult.releaseTargets.length,
       });
     } catch (_) {
       // Analytics must never interrupt the tool.
@@ -979,8 +1107,8 @@ export class LockeyUpdate extends BaseTool {
   downloadSql() {
     if (!this.lastSql || !this.lastResult?.ok) return;
     try {
-      const safeRelease = String(this.lastResult.releaseId || "release").replace(/[^\w.-]+/g, "_");
-      const filename = `lockey-update-${safeRelease}.sql`;
+      const safeRelease = this.lastResult.releaseTargets.map((target) => String(target).replace(/[^\w.-]+/g, "_")).join("_");
+      const filename = `lockey-update-${safeRelease || "release"}.sql`;
       const blob = new Blob([this.lastSql], { type: "text/sql;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -994,6 +1122,7 @@ export class LockeyUpdate extends BaseTool {
       try {
         UsageTracker.trackToolUse("lockey-update", "download", {
           rows: this.lastResult.rows.length,
+          targets: this.lastResult.releaseTargets.length,
         });
       } catch (_) {
         // Analytics must never interrupt the tool.

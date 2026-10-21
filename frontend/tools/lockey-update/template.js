@@ -13,7 +13,21 @@ export const LockeyUpdateTemplate = /* html */ `
   <section class="lu-panel active" id="lu-create-panel" data-panel="create" role="tabpanel" aria-labelledby="lu-tab-create">
     <div class="lu-create">
       <div class="lu-controls" id="lu-controls">
-        <input id="lu-release-id" class="lu-input lu-field-release" type="text" maxlength="10" placeholder="Release ID" list="lu-release-options" autocomplete="off" spellcheck="false" aria-label="Release ID" aria-describedby="lu-validation" title="Format x.x.x. The generated script allocates the next version as MAX(LANGUAGE_PACK_VERSION) + 1 at run.">
+        <div class="lu-target-shell" id="lu-target-shell">
+          <div class="lu-target-chips" id="lu-target-chips"></div>
+          <input
+            id="lu-release-id"
+            class="lu-target-input"
+            type="text"
+            placeholder="Release IDs — Enter or comma"
+            list="lu-release-options"
+            autocomplete="off"
+            spellcheck="false"
+            aria-label="Release targets"
+            aria-describedby="lu-validation"
+            title="Type a release ID and press Enter or comma. Each target gets its own language-pack version row."
+          >
+        </div>
         <datalist id="lu-release-options"></datalist>
         <input id="lu-audit-user" class="lu-input lu-field-audit" type="text" maxlength="50" placeholder="Audit trail" autocapitalize="characters" autocomplete="off" spellcheck="false" aria-label="Audit trail" aria-describedby="lu-validation">
         <div class="lu-row-actions">

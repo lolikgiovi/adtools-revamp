@@ -95,8 +95,90 @@
   flex: 0 0 auto;
 }
 
-.lu-field-release {
-  width: 160px;
+.lu-target-shell {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 520px;
+  max-width: 100%;
+  min-height: 34px;
+  padding: 3px 8px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--card));
+  cursor: text;
+  transition: border-color 120ms ease;
+}
+
+.lu-target-shell[aria-invalid="true"] {
+  border-color: hsl(var(--destructive));
+}
+
+.lu-target-chips {
+  display: contents;
+}
+
+.lu-target-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 22px;
+  max-width: 100%;
+  padding: 0 2px 0 8px;
+  border-radius: 6px;
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  font-size: 12px;
+  line-height: 1;
+}
+
+.lu-target-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lu-target-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: hsl(var(--muted-foreground));
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.lu-target-chip-remove:hover,
+.lu-target-chip-remove:focus-visible {
+  background: hsl(var(--foreground) / 0.12);
+  color: hsl(var(--foreground));
+}
+
+.lockey-update .lu-target-input {
+  flex: 1 1 120px;
+  min-width: 120px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+  color: hsl(var(--foreground));
+  font: inherit;
+  font-size: 13px;
+}
+
+.lu-target-input::placeholder {
+  color: hsl(var(--muted-foreground));
 }
 
 .lu-field-audit {
@@ -895,7 +977,7 @@
     gap: 10px;
   }
 
-  .lu-field-release,
+  .lu-target-shell,
   .lu-field-audit {
     flex: 1 1 140px;
     width: auto;
