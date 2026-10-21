@@ -715,6 +715,12 @@ class VelocityTemplateTool extends BaseTool {
     this._previewTimer = setTimeout(() => this.updatePreview(), 200);
   }
 
+  renderLocally() {
+    clearTimeout(this._previewTimer);
+    this.updatePreview();
+    this.track("render", this.editor?.getValue() || "");
+  }
+
   validationSnapshot() {
     return {
       documentId: this.activeDocumentId,
@@ -1462,11 +1468,17 @@ class VelocityTemplateTool extends BaseTool {
       return this.showSqlImportError("Fetch fields for the current query before importing.");
     }
     const rowIndex = this._sqlImportRowIndex;
-    const identity = getTemplateImportIdentity(query, this._sqlImportColumns, this._sqlImportRows[rowIndex] || []);
+    const columnIndex = Number(document.getElementById("velocitySqlField")?.value || 0);
+    const templateColumn = this._sqlImportColumns[columnIndex] || "";
+    const identity = getTemplateImportIdentity(
+      query,
+      this._sqlImportColumns,
+      this._sqlImportRows[rowIndex] || [],
+      templateColumn,
+    );
     this.editor?.setValue(document.getElementById("velocitySqlPreview")?.value || "");
     if (identity && this.activeDocument) {
-      const columnIndex = Number(document.getElementById("velocitySqlField")?.value || 0);
-      identity.templateColumn = this._sqlImportColumns[columnIndex] || "";
+      identity.templateColumn = templateColumn;
       this.activeDocument.name = identity.label;
       this.activeDocument.sourceIdentity = identity;
       this.renderDocumentTabs();
@@ -1551,6 +1563,7 @@ class VelocityTemplateTool extends BaseTool {
       void this.switchDocument(this.documents[next].id, true);
     });
     this.container?.querySelector("#btnNewVelocityDocument")?.addEventListener("click", () => void this.newDocument());
+    this.container?.querySelector("#btnLocalRenderVelocity")?.addEventListener("click", () => this.renderLocally());
     this.container?.querySelector("#btnCreateVelocityQuery")?.addEventListener("click", () => this.createUpdateQuery());
     document.getElementById("btnCopyVelocity")?.addEventListener("click", async () => {
       if (await this.copyToClipboard(this.editor.getValue(), null, "Template copied")) this.track("copy", this.editor.getValue());

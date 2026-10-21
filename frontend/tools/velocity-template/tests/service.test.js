@@ -255,12 +255,13 @@ describe("Velocity template service", () => {
         'SELECT * FROM "APP"."MESSAGE_TEMPLATE" WHERE SERVICE_CODE = :service',
         ["ID", "SERVICE_CODE", "ENVIRONMENT", "TEMPLATE_BODY"],
         [17, "PAYMENT", "DEV", "Hello $name"],
+        "TEMPLATE_BODY",
       ),
     ).toEqual({
       schema: "APP",
       table: "MESSAGE_TEMPLATE",
       identifiers: { SERVICE_CODE: "PAYMENT", ENVIRONMENT: "DEV" },
-      label: "APP - PAYMENT",
+      label: "APP - TEMPLATE_BODY - PAYMENT",
     });
   });
 

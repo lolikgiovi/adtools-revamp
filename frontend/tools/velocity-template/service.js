@@ -583,7 +583,7 @@ export function getTemplateImportTable(sql = "") {
   return { schema, table, qualifiedTable: schema ? `${schema}.${table}` : table };
 }
 
-export function getTemplateImportIdentity(sql = "", columns = [], row = []) {
+export function getTemplateImportIdentity(sql = "", columns = [], row = [], templateColumn = "") {
   const source = getTemplateImportTable(sql);
   if (!source) return null;
   const { schema, table } = source;
@@ -597,8 +597,10 @@ export function getTemplateImportIdentity(sql = "", columns = [], row = []) {
   const identifiers = Object.fromEntries(selected.map((name) => [name, String(row[columnMap.get(name)])]));
   const qualifiedTable = schema ? `${schema}.${table}` : table;
   const tabNamespace = schema || table;
+  const field = String(templateColumn || "").trim();
   const tabIdentifier = identifiers.SERVICE_CODE || identifiers.ENVIRONMENT || Object.values(identifiers)[0];
-  return { schema, table, identifiers, label: tabIdentifier ? `${tabNamespace} - ${tabIdentifier}` : qualifiedTable };
+  const parts = [tabNamespace, field, tabIdentifier].filter(Boolean);
+  return { schema, table, identifiers, label: parts.length ? parts.join(" - ") : qualifiedTable };
 }
 
 function sqlIdentifier(value, label) {

@@ -28,6 +28,12 @@ export const VelocityTemplate = /* html */ `
               </div>
             </details>
             <button
+              id="btnLocalRenderVelocity"
+              class="btn btn-secondary btn-sm"
+              type="button"
+              title="Render the template with the current Context Data"
+            >Local Render</button>
+            <button
               id="btnCreateVelocityQuery"
               class="btn btn-primary btn-sm"
               type="button"
