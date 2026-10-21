@@ -7,6 +7,24 @@ import {
 // Failure modes: source bytes decoded with the wrong charset, preexisting mojibake,
 // replacement characters, conflicting HTML declarations, and export changing the draft.
 describe("HTML editor encoding", () => {
+  // Failure modes: hidden separators disappear on import/export, lack useful labels,
+  // or get rewritten inside executable code by the optional HTML conversion.
+  it("preserves unusual line separators on import and normal export and names them for review", () => {
+    const html = '<p>First\u2028Second\u2029Third</p>';
+    const imported = decodeHtmlBytes(new TextEncoder().encode(html));
+    expect(imported.html).toBe(html);
+    expect(new TextDecoder().decode(prepareUtf8HtmlBytes(imported.html))).toBe(html);
+    expect(listEncodingCharacters(imported.html)).toEqual([
+      expect.objectContaining({ name: "Line separator (LS)", codePoint: "U+2028", count: 1 }),
+      expect.objectContaining({ name: "Paragraph separator (PS)", codePoint: "U+2029", count: 1 }),
+    ]);
+  });
+
+  it("keeps separator conversion opt-in and refuses to rewrite separators in scripts", () => {
+    expect(convertHtmlForToad('<p>First\u2028Second\u2029Third</p>')).toBe('<p>First&#8232;Second&#8233;Third</p>');
+    expect(() => convertHtmlForToad('<script>const value = "a\u2028b\u2029c";</script>')).toThrow(/script/i);
+  });
+
   it("imports UTF-8 with a BOM and preserves Unicode punctuation", () => {
     const bytes = new Uint8Array([0xef, 0xbb, 0xbf, ...new TextEncoder().encode('<meta charset="utf-8"><p>“Hi” — it’s fine</p>')]);
     const result = decodeHtmlBytes(bytes);

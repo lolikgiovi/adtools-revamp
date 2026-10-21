@@ -860,6 +860,8 @@ class HTMLTemplateTool extends BaseTool {
       quickSuggestions: { other: true, comments: false, strings: true },
       suggestOnTriggerCharacters: true,
       wordBasedSuggestions: "off",
+      // Preserve source characters for review in Encoding instead of Monaco's removal prompt.
+      unusualLineTerminators: "off",
     });
 
     this._encodingDecorations = this.editor.createDecorationsCollection();
@@ -1746,6 +1748,7 @@ class HTMLTemplateTool extends BaseTool {
     ];
     this._encodingDiffEditor = monaco.editor.createDiffEditor(host, {
       readOnly: true,
+      unusualLineTerminators: "off",
       originalEditable: false,
       automaticLayout: true,
       minimap: { enabled: false },

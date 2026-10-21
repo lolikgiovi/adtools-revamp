@@ -1,5 +1,35 @@
 # HTML editor encoding phase verification
 
+## Unusual line terminators (2026-10-21)
+
+Create a UTF-8 import fixture with literal U+2028 (LS) and U+2029 (PS):
+
+```bash
+python3 - <<'PY'
+from pathlib import Path
+Path('/tmp/ad-tools-unusual-line-terminators.html').write_text(
+    '<!doctype html><html><head><meta charset="utf-8"></head>'
+    '<body><p>First\u2028Second\u2029Third</p></body></html>', encoding='utf-8')
+PY
+```
+
+1. Run `npm run dev`, open HTML Template, and Import the fixture.
+2. Confirm the new tab opens with First/Second/Third in the preview and no unusual-line-terminator confirmation.
+3. Open Encoding. Confirm two findings: Line separator (LS), U+2028, and Paragraph separator (PS), U+2029.
+4. Open Review fix diff. Confirm the original source and proposed `&#8232;` / `&#8233;` replacements appear without a dialog.
+5. Return to the editor. Confirm both findings remain; reviewing the diff must not apply replacements.
+
+Result: all five steps passed in the local Vite browser. The focused encoding suite passed 17 tests:
+
+```bash
+./node_modules/.bin/vitest run frontend/tools/html-editor/tests/encoding.test.js
+```
+
+The suite covers preservation through byte decoding and normal export, named findings, optional entity conversion,
+and refusal to rewrite separators inside scripts. The installed Tauri app was not rebuilt or launched for this check.
+
+## Earlier encoding phase checks
+
 Verified in a local Vite browser session on 2026-09-30.
 
 ## Repeat

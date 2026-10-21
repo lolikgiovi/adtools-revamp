@@ -110,6 +110,7 @@ function hasNonAscii(text) {
 }
 
 const CHARACTER_NAMES = new Map([
+  ["\u2028", "Line separator (LS)"], ["\u2029", "Paragraph separator (PS)"],
   [" ", "Nonbreaking space"], ["‘", "Left single quote"], ["’", "Right single quote"],
   ["“", "Left double quote"], ["”", "Right double quote"], ["–", "En dash"], ["—", "Em dash"],
 ]);
