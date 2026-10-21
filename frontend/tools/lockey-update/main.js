@@ -59,6 +59,12 @@ function normalizeOracleRow(row) {
   return normalized;
 }
 
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export class LockeyUpdate extends BaseTool {
   constructor(eventBus) {
     super({ id: "lockey-update", eventBus, isHeavyTool: true });
@@ -149,11 +155,17 @@ export class LockeyUpdate extends BaseTool {
       copySql: "lu-copy-sql",
       downloadSql: "lu-download-sql",
       sqlEditor: "lu-sql-editor",
+      sqlMeta: "lu-sql-meta",
+      sqlEmpty: "lu-sql-empty",
+      sqlEmptyTitle: "lu-sql-empty-title",
+      sqlEmptyBody: "lu-sql-empty-body",
       historySummary: "lu-history-summary",
       dataWarnings: "lu-data-warnings",
+      historyToolbar: "lu-history-toolbar",
       search: "lu-search",
       releaseFilter: "lu-release-filter",
       historyCount: "lu-history-count",
+      historyTable: "lu-history-table",
       historyBody: "lu-history-body",
       historyEmpty: "lu-history-empty",
       historyNote: "lu-history-note",
@@ -162,12 +174,26 @@ export class LockeyUpdate extends BaseTool {
     Object.entries(elements).forEach(([key, id]) => {
       this.el[key] = this.container.querySelector(`#${id}`);
     });
-    this.tabButtons = Array.from(this.container.querySelectorAll(".lu-tab"));
+    this.tabButtons = Array.from(this.container.querySelectorAll(".lu-tab-btn"));
   }
 
   bindEvents() {
-    this.tabButtons.forEach((button) => {
+    this.tabButtons.forEach((button, index) => {
       button.addEventListener("click", () => this.setActiveTab(button.dataset.tab));
+      button.addEventListener("keydown", (event) => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+        event.preventDefault();
+        const lastIndex = this.tabButtons.length - 1;
+        const nextIndex =
+          event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? lastIndex
+              : (index + (event.key === "ArrowRight" ? 1 : -1) + this.tabButtons.length) % this.tabButtons.length;
+        const next = this.tabButtons[nextIndex];
+        this.setActiveTab(next.dataset.tab);
+        next.focus();
+      });
     });
 
     this.el.fetchOracle?.addEventListener("click", () => this.loadFromOracle());
@@ -233,11 +259,11 @@ export class LockeyUpdate extends BaseTool {
 
     this.grid = new Handsontable(this.el.grid, {
       data,
-      colHeaders: ["Localization Key", "EN_VALUE", "ID_VALUE"],
+      colHeaders: ["Localization key", "EN value", "ID value"],
       columns: [{ data: 0 }, { data: 1 }, { data: 2 }],
       rowHeaders: true,
       minSpareRows: 1,
-      rowHeights: 20,
+      rowHeights: 26,
       autoRowSize: false,
       contextMenu: true,
       manualColumnResize: true,
@@ -263,15 +289,17 @@ export class LockeyUpdate extends BaseTool {
   initializeEditor() {
     if (!this.el.sqlEditor) return;
     this.sqlEditor = createOracleEditor(this.el.sqlEditor, {
-      value: "Choose a release and add localization keys to generate SQL.",
+      value: "",
       readOnly: true,
       fontSize: 10.5,
+      padding: { top: 10, bottom: 10 },
       wordWrap: "on",
       scrollBeyondLastLine: false,
-      scrollbar: { alwaysConsumeMouseWheel: true },
+      scrollbar: { alwaysConsumeMouseWheel: true, verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
       minimap: { enabled: false },
       renderLineHighlight: "none",
       contextmenu: false,
+      ariaLabel: "Generated Oracle SQL",
     });
   }
 
@@ -284,10 +312,8 @@ export class LockeyUpdate extends BaseTool {
   }
 
   gridHeight() {
-    const container = this.el.grid;
-    if (!container) return 360;
-    const measured = Math.floor(container.getBoundingClientRect().height);
-    return Math.max(280, measured || 360);
+    const rows = this.grid?.countRows?.() || this.draft.rows.length + 1;
+    return Math.max(78, Math.min(rows * 26 + 26, 420));
   }
 
   resizeGrid() {
@@ -307,6 +333,7 @@ export class LockeyUpdate extends BaseTool {
     }));
     this.scheduleDraftSave();
     this.renderPreview();
+    this.resizeGrid();
   }
 
   syncInputs() {
@@ -355,6 +382,7 @@ export class LockeyUpdate extends BaseTool {
       const active = button.dataset.tab === tab;
       button.classList.toggle("active", active);
       button.setAttribute("aria-selected", String(active));
+      button.tabIndex = active ? 0 : -1;
     });
 
     [
@@ -506,8 +534,10 @@ export class LockeyUpdate extends BaseTool {
     if (this.el.fetchOracle) {
       this.el.fetchOracle.disabled = busy || this.connections.length === 0;
       this.el.fetchOracle.textContent = busy ? "Loading…" : "Load from Oracle";
+      this.el.fetchOracle.setAttribute("aria-busy", String(busy));
     }
     if (this.el.connection) this.el.connection.disabled = busy || this.connections.length === 0;
+    if (this.container) this.container.setAttribute("aria-busy", String(busy));
   }
 
   renderAll() {
@@ -534,13 +564,30 @@ export class LockeyUpdate extends BaseTool {
     if (!this.el.historySummary) return;
     if (!this.ledgerLoaded) {
       this.el.historySummary.textContent = "No localization data loaded.";
+      this.el.historySummary.removeAttribute("aria-label");
       return;
     }
     const versions = this.analysis.versions.length;
     const updates = this.analysis.updates.length;
-    this.el.historySummary.textContent =
-      `${versions} version${versions === 1 ? "" : "s"} · ${updates} update row${updates === 1 ? "" : "s"}` +
-      ` · highest v${this.analysis.maxVersion}`;
+    const versionLabel = `${versions} version${versions === 1 ? "" : "s"}`;
+    const updateLabel = `${updates} update row${updates === 1 ? "" : "s"}`;
+    const highestLabel = `highest v${this.analysis.maxVersion}`;
+
+    this.el.historySummary.replaceChildren(
+      this.createSummaryFact(versionLabel),
+      this.createSummaryFact("·", "lu-fact-sep"),
+      this.createSummaryFact(updateLabel),
+      this.createSummaryFact("·", "lu-fact-sep"),
+      this.createSummaryFact(highestLabel),
+    );
+    this.el.historySummary.setAttribute("aria-label", `${versionLabel}, ${updateLabel}, ${highestLabel}`);
+  }
+
+  createSummaryFact(text, className = "") {
+    const fact = document.createElement("span");
+    if (className) fact.className = className;
+    fact.textContent = text;
+    return fact;
   }
 
   renderDataWarnings() {
@@ -613,11 +660,14 @@ export class LockeyUpdate extends BaseTool {
     const body = this.el.historyBody;
     const empty = this.el.historyEmpty;
     body.replaceChildren();
+    if (this.el.historyToolbar) this.el.historyToolbar.hidden = !this.ledgerLoaded;
 
     if (!this.ledgerLoaded) {
       empty.hidden = false;
-      empty.querySelector("strong").textContent = "No localization data";
-      empty.querySelector("span").textContent = "Choose an environment and load from Oracle to inspect the version history.";
+      empty.querySelector("strong").textContent = "No version history yet";
+      empty.querySelector("span").textContent =
+        "Choose an environment, then load from Oracle to inspect versions and their keys.";
+      if (this.el.historyTable) this.el.historyTable.hidden = true;
       this.el.historyCount.textContent = "";
       this.el.historyNote.textContent = "";
       return;
@@ -638,17 +688,20 @@ export class LockeyUpdate extends BaseTool {
 
     const visible = filtered.slice(0, HISTORY_LIMIT);
     this.el.historyCount.textContent = `${filtered.length.toLocaleString()} row${filtered.length === 1 ? "" : "s"}`;
+    this.el.historyNote.textContent = "";
 
     if (filtered.length === 0) {
       empty.hidden = false;
       empty.querySelector("strong").textContent = "No matching rows";
       empty.querySelector("span").textContent =
         this.analysis.history.length === 0 ? "The loaded versions have no update rows." : "Adjust the filter or release selection.";
+      if (this.el.historyTable) this.el.historyTable.hidden = true;
       this.el.historyNote.textContent = "";
       return;
     }
 
     empty.hidden = true;
+    if (this.el.historyTable) this.el.historyTable.hidden = false;
     const fragment = document.createDocumentFragment();
 
     visible.forEach((row) => {
@@ -667,32 +720,33 @@ export class LockeyUpdate extends BaseTool {
       tr.appendChild(releaseCell);
 
       const keyCell = document.createElement("td");
+      keyCell.className = "lu-key-cell";
       const keyCode = document.createElement("code");
       keyCode.textContent = row.key;
       keyCell.appendChild(keyCode);
       const tags = document.createElement("span");
       tags.className = "lu-change-tags";
       if (row.changes.isNewKey) {
-        tags.appendChild(this.createChangeTag("new", "lu-change-new"));
+        tags.appendChild(this.createChangeTag("new key", "lu-change-new"));
       } else {
-        if (row.changes.id) tags.appendChild(this.createChangeTag("ID", "lu-change-id"));
-        if (row.changes.en) tags.appendChild(this.createChangeTag("EN", "lu-change-en"));
+        if (row.changes.id) tags.appendChild(this.createChangeTag("ID changed", "lu-change-id"));
+        if (row.changes.en) tags.appendChild(this.createChangeTag("EN changed", "lu-change-en"));
       }
-      if (row.duplicateKeyInVersion) tags.appendChild(this.createChangeTag("duplicate", "lu-change-dup"));
+      if (row.duplicateKeyInVersion) tags.appendChild(this.createChangeTag("duplicate key", "lu-change-dup"));
       if (tags.childNodes.length > 0) keyCell.appendChild(tags);
       tr.appendChild(keyCell);
-
-      const idCell = document.createElement("td");
-      idCell.className = "lu-value-cell";
-      idCell.textContent = row.idValue;
-      idCell.title = row.idValue;
-      tr.appendChild(idCell);
 
       const enCell = document.createElement("td");
       enCell.className = "lu-value-cell";
       enCell.textContent = row.enValue;
       enCell.title = row.enValue;
       tr.appendChild(enCell);
+
+      const idCell = document.createElement("td");
+      idCell.className = "lu-value-cell";
+      idCell.textContent = row.idValue;
+      idCell.title = row.idValue;
+      tr.appendChild(idCell);
 
       const timeCell = document.createElement("td");
       timeCell.className = "lu-col-time";
@@ -723,10 +777,11 @@ export class LockeyUpdate extends BaseTool {
     if (!hasContent) {
       this.lastSql = "";
       this.lastResult = null;
-      this.el.validation.replaceChildren();
-      this.el.validation.hidden = true;
-      this.setSqlText("Choose a release and add localization keys to generate SQL.");
+      this.renderChecksIdle();
+      this.setSqlText("");
       this.setSqlActionsEnabled(false);
+      this.setSqlMeta(null);
+      this.setSqlEmpty("idle");
       return;
     }
 
@@ -746,34 +801,107 @@ export class LockeyUpdate extends BaseTool {
       });
       this.setSqlText(this.lastSql);
       this.setSqlActionsEnabled(true);
+      this.setSqlMeta(result);
+      this.setSqlEmpty("ready");
     } else {
       this.lastSql = "";
       this.setSqlText("Fix the validation issues to generate SQL.");
       this.setSqlActionsEnabled(false);
+      this.setSqlMeta(null);
+      this.setSqlEmpty("error");
     }
+  }
+
+  renderChecksIdle() {
+    if (this.el.validation) {
+      this.el.validation.hidden = true;
+      this.el.validation.replaceChildren();
+    }
+    this.setFieldInvalid(this.el.releaseId, false);
+    this.setFieldInvalid(this.el.auditUser, false);
   }
 
   renderValidation(result) {
     const container = this.el.validation;
-    container.replaceChildren();
-    if (result.errors.length === 0 && result.warnings.length === 0) {
+    if (!container) return;
+    const errors = result.errors || [];
+    const warnings = result.warnings || [];
+    this.setFieldInvalid(this.el.releaseId, errors.some((message) => message.startsWith("Release ID")));
+    this.setFieldInvalid(this.el.auditUser, errors.some((message) => message.startsWith("Audit trail")));
+
+    if (errors.length === 0 && warnings.length === 0) {
       container.hidden = true;
+      container.replaceChildren();
       return;
     }
 
-    result.errors.forEach((message) => {
-      const line = document.createElement("p");
-      line.className = "lu-validation-error";
-      line.textContent = message;
-      container.appendChild(line);
-    });
-    result.warnings.forEach((message) => {
-      const line = document.createElement("p");
-      line.className = "lu-validation-warning";
-      line.textContent = message;
-      container.appendChild(line);
-    });
     container.hidden = false;
+    container.dataset.state = errors.length > 0 ? "error" : "warning";
+    container.replaceChildren();
+
+    const issueLabel = `${errors.length} issue${errors.length === 1 ? "" : "s"} to fix`;
+    const warningLabel = `${warnings.length} warning${warnings.length === 1 ? "" : "s"}`;
+    const summaryText =
+      errors.length > 0 ? (warnings.length > 0 ? `${issueLabel} · ${warningLabel}` : issueLabel) : warningLabel;
+    container.appendChild(this.createCheckSummary(summaryText));
+    if (errors.length > 0) container.appendChild(this.createCheckList(errors, "error"));
+    if (warnings.length > 0) container.appendChild(this.createCheckList(warnings, "warning"));
+  }
+
+  setFieldInvalid(input, invalid) {
+    if (!input) return;
+    if (invalid) input.setAttribute("aria-invalid", "true");
+    else input.removeAttribute("aria-invalid");
+  }
+
+  createCheckSummary(text) {
+    const line = document.createElement("p");
+    line.className = "lu-check-summary";
+    const dot = document.createElement("span");
+    dot.className = "lu-status-dot";
+    dot.setAttribute("aria-hidden", "true");
+    line.append(dot, document.createTextNode(text));
+    return line;
+  }
+
+  createCheckList(messages, kind) {
+    const list = document.createElement("ul");
+    list.className = `lu-check-list lu-check-list-${kind}`;
+    list.setAttribute("aria-label", kind === "warning" ? "Warnings" : "Issues");
+    messages.forEach((message) => {
+      const item = document.createElement("li");
+      item.textContent = message;
+      list.appendChild(item);
+    });
+    return list;
+  }
+
+  setSqlMeta(result) {
+    if (!this.el.sqlMeta) return;
+    if (!result?.ok || !this.lastSql) {
+      this.el.sqlMeta.textContent = "No script";
+      this.el.sqlMeta.title = "";
+      return;
+    }
+    const rows = result.rows.length;
+    const bytes = new TextEncoder().encode(this.lastSql).length;
+    this.el.sqlMeta.textContent = `${rows} row${rows === 1 ? "" : "s"} · ${formatBytes(bytes)}`;
+    this.el.sqlMeta.title = `${rows} update row${rows === 1 ? "" : "s"} in the generated script`;
+  }
+
+  setSqlEmpty(state) {
+    if (!this.el.sqlEmpty) return;
+    this.el.sqlEmpty.hidden = state === "ready";
+    if (state === "ready") return;
+    const paused = state === "error";
+    if (this.el.sqlEmptyTitle) {
+      this.el.sqlEmptyTitle.textContent = paused ? "Script paused" : "Nothing to generate yet";
+    }
+    if (this.el.sqlEmptyBody) {
+      this.el.sqlEmptyBody.textContent = paused
+        ? "Resolve the issues below the rows to generate the SQL."
+        : "Add a release ID and at least one localization key. The script updates as you type.";
+    }
   }
 
   setSqlActionsEnabled(enabled) {
