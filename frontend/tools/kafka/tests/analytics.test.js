@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { UsageTracker } from "../../../core/UsageTracker.js";
 import { KafkaTool } from "../main.js";
-import { KAFKA_ACTIVE_BROKER_KEY, KAFKA_BROKERS_KEY } from "../service.js";
+import { KAFKA_ACTIVE_BROKER_KEY, KAFKA_BROKERS_KEY, KAFKA_TOPIC_FAVORITES_KEY } from "../service.js";
 
 vi.mock("../../../core/UsageTracker.js", () => ({ UsageTracker: { trackToolUse: vi.fn(), trackEvent: vi.fn() } }));
 
@@ -45,9 +45,13 @@ describe("Kafka analytics", () => {
     const tool = new KafkaTool(null, {});
     mountWithBroker(tool);
     tool.toggleTopicFavorite();
+    expect(UsageTracker.trackEvent).not.toHaveBeenCalled();
     document.querySelector("#kafkaTopic").value = "orders.test";
-    vi.spyOn(localStorage, "setItem").mockImplementation(() => { throw new Error("Quota exceeded"); });
+    // jsdom requires spying on Storage.prototype; the Node storage polyfill owns its methods.
+    const storageMethods = Object.hasOwn(localStorage, "setItem") ? localStorage : Object.getPrototypeOf(localStorage);
+    const setItem = vi.spyOn(storageMethods, "setItem").mockImplementation(() => { throw new Error("Quota exceeded"); });
     tool.toggleTopicFavorite();
+    expect(setItem).toHaveBeenCalledWith(KAFKA_TOPIC_FAVORITES_KEY, JSON.stringify(["orders.test"]));
     expect(UsageTracker.trackEvent).not.toHaveBeenCalled();
     tool.unmount();
   });
