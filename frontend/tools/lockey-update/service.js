@@ -358,12 +358,10 @@ export function generateInsertSql({ releaseTargets = [], auditUser = "SYSTEM", r
     `FETCH FIRST ${fetchRows} ROWS ONLY;`,
     "",
     "------ Recently updated versions (last 2 minutes) --------",
-    `SELECT * FROM ${LANGUAGE_PACK_VERSION_TABLE} WHERE updated_time >= SYSDATE - INTERVAL '2' MINUTE`,
-    "ORDER BY updated_time DESC;",
+    `SELECT * FROM ${LANGUAGE_PACK_VERSION_TABLE} WHERE updated_time >= SYSDATE - INTERVAL '2' MINUTE ORDER BY updated_time DESC;`,
     "",
     "------ Recently updated rows (last 2 minutes) --------",
-    `SELECT * FROM ${LANGUAGE_PACK_UPDATE_TABLE} WHERE updated_time >= SYSDATE - INTERVAL '2' MINUTE`,
-    "ORDER BY updated_time DESC;",
+    `SELECT * FROM ${LANGUAGE_PACK_UPDATE_TABLE} WHERE updated_time >= SYSDATE - INTERVAL '2' MINUTE ORDER BY updated_time DESC;`,
     "",
   );
 

@@ -307,8 +307,14 @@ describe("generateInsertSql", () => {
     expect(sql).toContain("'It''s here'");
     expect(sql).toContain("------ SELECT Statement --------");
     expect(sql).toContain("FETCH FIRST 12 ROWS ONLY;");
-    expect(sql).toContain("SELECT * FROM LOCALIZATION.LANGUAGE_PACK_VERSION WHERE updated_time >= SYSDATE - INTERVAL '2' MINUTE");
-    expect(sql).toContain("SELECT * FROM LOCALIZATION.LANGUAGE_PACK_UPDATE WHERE updated_time >= SYSDATE - INTERVAL '2' MINUTE");
+    expect(sql.split("\n")).toContain(
+      "SELECT * FROM LOCALIZATION.LANGUAGE_PACK_VERSION WHERE updated_time >= SYSDATE - INTERVAL '2' MINUTE " +
+        "ORDER BY updated_time DESC;",
+    );
+    expect(sql.split("\n")).toContain(
+      "SELECT * FROM LOCALIZATION.LANGUAGE_PACK_UPDATE WHERE updated_time >= SYSDATE - INTERVAL '2' MINUTE " +
+        "ORDER BY updated_time DESC;",
+    );
     expect(sql).not.toContain("COMMIT;");
   });
 

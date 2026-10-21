@@ -218,8 +218,14 @@ describe("LockeyUpdate UI", () => {
     expect(sql).toContain("(SELECT NVL(MAX(LANGUAGE_PACK_VERSION)+1, 1) FROM LOCALIZATION.LANGUAGE_PACK_VERSION)");
     expect(sql).toContain("------ SELECT Statement --------");
     expect(sql).toContain("FETCH FIRST 11 ROWS ONLY;");
-    expect(sql).toContain("SELECT * FROM LOCALIZATION.LANGUAGE_PACK_VERSION WHERE updated_time >= SYSDATE - INTERVAL '2' MINUTE");
-    expect(sql).toContain("SELECT * FROM LOCALIZATION.LANGUAGE_PACK_UPDATE WHERE updated_time >= SYSDATE - INTERVAL '2' MINUTE");
+    expect(sql.split("\n")).toContain(
+      "SELECT * FROM LOCALIZATION.LANGUAGE_PACK_VERSION WHERE updated_time >= SYSDATE - INTERVAL '2' MINUTE " +
+        "ORDER BY updated_time DESC;",
+    );
+    expect(sql.split("\n")).toContain(
+      "SELECT * FROM LOCALIZATION.LANGUAGE_PACK_UPDATE WHERE updated_time >= SYSDATE - INTERVAL '2' MINUTE " +
+        "ORDER BY updated_time DESC;",
+    );
 
     const versionId = sql.match(/VALUES \('([0-9a-fA-F-]{36})', '2\.0\.29'/)?.[1];
     expect(versionId).toBeTruthy();
