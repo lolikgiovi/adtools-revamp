@@ -49,6 +49,7 @@ export const LockeyUpdateTemplate = /* html */ `
           <div class="lu-sql-actions">
             <button id="lu-copy-sql" class="lu-sql-action" type="button" disabled>Copy</button>
             <button id="lu-download-sql" class="lu-sql-action lu-sql-primary" type="button" disabled>Download</button>
+            <button id="lu-run-jenkins" class="lu-sql-action" type="button" disabled>Run in Jenkins</button>
           </div>
         </header>
         <div class="lu-sql-body">

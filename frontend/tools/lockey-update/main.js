@@ -158,6 +158,7 @@ export class LockeyUpdate extends BaseTool {
       validation: "lu-validation",
       copySql: "lu-copy-sql",
       downloadSql: "lu-download-sql",
+      runJenkins: "lu-run-jenkins",
       sqlEditor: "lu-sql-editor",
       sqlMeta: "lu-sql-meta",
       sqlEmpty: "lu-sql-empty",
@@ -271,6 +272,7 @@ export class LockeyUpdate extends BaseTool {
 
     this.el.copySql?.addEventListener("click", () => this.copySql());
     this.el.downloadSql?.addEventListener("click", () => this.downloadSql());
+    this.el.runJenkins?.addEventListener("click", () => this.runInJenkins());
     this.el.addRow?.addEventListener("click", () => this.addRow());
     this.el.removeRow?.addEventListener("click", () => this.removeSelectedRows());
 
@@ -463,7 +465,7 @@ export class LockeyUpdate extends BaseTool {
 
   gridHeight() {
     const rows = this.rowCount();
-    return Math.max(78, Math.min(rows * 26 + 26, 420));
+    return Math.max(26, Math.min(rows * 26 + 26, 420));
   }
 
   resizeGrid() {
@@ -1087,6 +1089,23 @@ export class LockeyUpdate extends BaseTool {
   setSqlActionsEnabled(enabled) {
     if (this.el.copySql) this.el.copySql.disabled = !enabled;
     if (this.el.downloadSql) this.el.downloadSql.disabled = !enabled;
+    if (this.el.runJenkins) this.el.runJenkins.disabled = !enabled;
+  }
+
+  runInJenkins() {
+    if (!this.lastSql || !this.lastResult?.ok) return;
+    try {
+      if (window.app?.router) {
+        window.app.router.navigate("run-query", { sql: this.lastSql });
+      } else if (window.app?.navigateToTool) {
+        sessionStorage.setItem("jenkinsRunner.injectSql", this.lastSql);
+        window.app.navigateToTool("run-query");
+      } else {
+        this.showError("Run Query is unavailable. Please reload the application and try again.");
+      }
+    } catch (error) {
+      this.showError(`Failed to open Run Query: ${this.errorMessage(error)}`);
+    }
   }
 
   async copySql() {

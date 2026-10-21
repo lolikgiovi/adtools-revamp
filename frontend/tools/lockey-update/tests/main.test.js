@@ -136,6 +136,37 @@ describe("LockeyUpdate UI", () => {
   afterEach(() => {
     tool.unmount();
     container.remove();
+    delete window.app;
+    sessionStorage.clear();
+  });
+
+  // Handoff failures: missing/stale SQL, altered script, or losing SQL during fallback navigation.
+  it("hands the current validated SQL to Run Query through the Jenkins button", () => {
+    window.app = { router: { navigate: vi.fn() } };
+    const button = container.querySelector("#lu-run-jenkins");
+    expect(button.disabled).toBe(true);
+    typeInto(container.querySelector("#lu-release-id"), "2.0.29");
+    setGridRows(tool, [{ key: "key", enValue: "Safe", idValue: "Aman" }]);
+    expect(button.disabled).toBe(false);
+    const sql = tool.sqlEditor.getValue();
+    button.click();
+    expect(window.app.router.navigate).toHaveBeenCalledWith("run-query", { sql });
+
+    window.app.router.navigate.mockClear();
+    setGridRows(tool, [{ key: "key", enValue: "Unsafe ’", idValue: "Aman" }]);
+    expect(button.disabled).toBe(true);
+    button.click();
+    expect(window.app.router.navigate).not.toHaveBeenCalled();
+  });
+
+  it("stores SQL before navigating when the router is unavailable", () => {
+    window.app = { navigateToTool: vi.fn(() => {
+      expect(sessionStorage.getItem("jenkinsRunner.injectSql")).toBe(tool.lastSql);
+    }) };
+    typeInto(container.querySelector("#lu-release-id"), "2.0.29");
+    setGridRows(tool, [{ key: "key", enValue: "Safe", idValue: "Aman" }]);
+    container.querySelector("#lu-run-jenkins").click();
+    expect(window.app.navigateToTool).toHaveBeenCalledWith("run-query");
   });
 
   it("switches between the create and history tabs", () => {
