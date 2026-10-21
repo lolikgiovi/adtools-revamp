@@ -18,7 +18,7 @@
   gap: 12px;
   width: 100%;
   max-width: none;
-  height: calc(100dvh - 89px);
+  height: calc(100dvh - 89px - var(--window-titlebar-height, 0px));
   min-height: 0;
   margin: 0;
   padding: 0;
@@ -442,6 +442,7 @@
   flex-direction: column;
   min-width: 0;
   min-height: 300px;
+  border: 1px solid hsl(var(--border));
   border-radius: 11px;
   background: var(--lu-ink-body);
   color: var(--lu-ink-fg);

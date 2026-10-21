@@ -1063,11 +1063,10 @@ export class LockeyUpdate extends BaseTool {
     const targets = result.releaseTargets.length;
     const rows = result.rows.length;
     const bytes = new TextEncoder().encode(this.lastSql).length;
-    const rowLabel = `${rows} row${rows === 1 ? "" : "s"}`;
-    const targetLabel = targets > 1 ? `${targets} targets · ` : "";
-    this.el.sqlMeta.textContent = `${targetLabel}${rowLabel}${targets > 1 ? " each" : ""} · ${formatBytes(bytes)}`;
-    this.el.sqlMeta.title =
-      targets > 1 ? `${rowLabel} per release target across ${targets} targets` : `${rowLabel} in the generated script`;
+    const lockeyLabel = `${rows} Lockey${rows === 1 ? "" : "s"}`;
+    const targetLabel = `${targets} Target Release ID`;
+    this.el.sqlMeta.textContent = `${targetLabel} · ${lockeyLabel} · ${formatBytes(bytes)}`;
+    this.el.sqlMeta.title = `${lockeyLabel} per Target Release ID across ${targetLabel}`;
   }
 
   setSqlEmpty(state) {
