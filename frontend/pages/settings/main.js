@@ -4,6 +4,7 @@ import { mountBulkEditor } from "./bulk-editor.js";
 import { buildListPlan, buildKafkaPlan, applyListPlan } from "./bulk-list.js";
 import "./styles.css";
 import { SettingsService } from "./service.js";
+import { SettingsSearch } from "./search.js";
 import { confirmAction } from "../../components/ConfirmationDialog.js";
 import { openOtpOverlay } from "../../components/OtpOverlay.js";
 import { invoke } from "@tauri-apps/api/core";
@@ -21,6 +22,9 @@ class SettingsPage {
     this.container = null;
     this.categoriesRoot = null;
     this.searchInput = null;
+    this.searchStatus = null;
+    this.searchEmpty = null;
+    this.settingsSearch = null;
     this.currentConfig = null;
     this._runtimeRetrySettings = false;
     this.settingDisposers = new Set();
@@ -37,6 +41,16 @@ class SettingsPage {
     this.container = root.querySelector(".settings-page");
     this.categoriesRoot = root.querySelector(".settings-categories");
     this.searchInput = root.querySelector("#settings-search");
+    this.searchStatus = root.querySelector("#settings-search-status");
+    this.searchEmpty = root.querySelector("#settings-search-empty");
+    this.settingsSearch = new SettingsSearch(this.categoriesRoot);
+    this.searchInput?.addEventListener("input", () => this.applySearch());
+    this.searchInput?.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || !this.searchInput.value) return;
+      event.preventDefault();
+      this.searchInput.value = "";
+      this.applySearch();
+    });
 
     // Populate runtime status badge (desktop arch-aware; include version when available)
     try {
@@ -355,26 +369,23 @@ class SettingsPage {
     // Filter categories dynamically based on requiresTauri flag
     const cats = (cfg.categories || []).filter((c) => !(c && c.requiresTauri && rt !== "tauri"));
     this.renderCategories(cats);
+    this.applySearch();
   }
 
-  filterConfig(config, q) {
-    const matchItem = (item) => {
-      const hay = `${item.label} ${item.key} ${item.description || ""}`.toLowerCase();
-      return hay.includes(q);
-    };
-    const recurseCats = (cats) => {
-      const result = [];
-      for (const cat of cats || []) {
-        if (!this.service.shouldShowCategory(cat)) continue;
-        const items = (cat.items || []).filter((i) => this.service.shouldShowItem(i) && matchItem(i));
-        const subcats = recurseCats(cat.categories || []);
-        if (items.length || subcats.length) {
-          result.push({ ...cat, items, categories: subcats });
-        }
-      }
-      return result;
-    };
-    return { ...config, categories: recurseCats(config.categories || []) };
+  applySearch() {
+    const query = this.searchInput?.value || "";
+    const result = this.settingsSearch?.apply(query) || { active: false, matches: 0, total: 0 };
+    const message = result.active
+      ? result.matches
+        ? `${result.matches} of ${result.total} settings`
+        : `No settings match “${query.trim()}”`
+      : "";
+
+    if (this.searchEmpty) {
+      this.searchEmpty.hidden = !(result.active && !result.matches);
+      if (!this.searchEmpty.hidden) this.searchEmpty.textContent = message;
+    }
+    if (this.searchStatus) this.searchStatus.textContent = message;
   }
 
   renderCategories(categories) {
@@ -390,6 +401,7 @@ class SettingsPage {
       frag.appendChild(el);
     }
     this.categoriesRoot.appendChild(frag);
+    this.settingsSearch?.clear();
   }
 
   renderCategory(cat, headingLevel = 3) {
@@ -1537,6 +1549,9 @@ class SettingsPage {
     this.container = null;
     this.categoriesRoot = null;
     this.searchInput = null;
+    this.searchStatus = null;
+    this.searchEmpty = null;
+    this.settingsSearch = null;
     this.currentConfig = null;
     this._runtimeRetrySettings = false;
   }

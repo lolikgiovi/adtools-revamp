@@ -24,6 +24,7 @@
     <script type="module">
       import { SettingsPage } from "../main.js";
       import { SettingsTemplate } from "../template.js";
+      import { SettingsSearch } from "../search.js";
       import config from "../config.json";
       import { OracleConnectionService } from "../../../core/OracleConnectionService.js";
 
@@ -40,10 +41,21 @@
       } else {
         const root = document.querySelector("main");
         root.innerHTML = SettingsTemplate;
-        root.querySelector(".settings-header-tools").remove();
+        if (params.has("chrome")) {
+          const badge = root.querySelector("#runtime-status");
+          badge.textContent = "v.1.3.11 - Desktop - Apple Silicon";
+          badge.dataset.state = "desktop";
+        } else {
+          root.querySelector(".settings-header-tools").remove();
+        }
         const page = new SettingsPage();
         page.container = root.querySelector(".settings-page");
         page.categoriesRoot = root.querySelector(".settings-categories");
+        page.searchInput = root.querySelector("#settings-search");
+        page.searchStatus = root.querySelector("#settings-search-status");
+        page.searchEmpty = root.querySelector("#settings-search-empty");
+        page.settingsSearch = new SettingsSearch(page.categoriesRoot);
+        page.searchInput.addEventListener("input", () => page.applySearch());
         // Browser layout fixture only. No Tauri globals, IPC, secrets, or real connections.
         // Render desktop-only controls without changing production runtime gates.
         if (params.get("runtime") !== "web") {
@@ -85,6 +97,10 @@
           ? allCategories(config.categories).filter((category) => category.id === params.get("category"))
           : config.categories;
         page.renderCategories(categories);
+        if (params.has("q")) {
+          page.searchInput.value = params.get("q");
+          page.applySearch();
+        }
         if (params.has("focus")) {
           root
             .querySelectorAll('.settings-category[aria-expanded="true"] > .settings-category-heading > button')
