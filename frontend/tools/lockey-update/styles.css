@@ -568,7 +568,6 @@
 }
 
 .lu-sql-empty-body {
-  max-width: 34ch;
   margin: 0;
   color: var(--lu-ink-muted);
   font-size: 12.5px;
