@@ -214,7 +214,7 @@ export const initialSchemaTableSpecification = {
 export const initialDataTableSpecification = {
   data: [[], []],
   colHeaders: true,
-  rowHeaders: true,
+  rowHeaders: (row) => (row === 0 ? "" : row),
   fixedRowsTop: 1,
   // Let object-shaped clipboard values reach beforeChange, where text cells serialize them.
   // Without a setter, Handsontable silently drops valid JSON copied from another data-sheet cell.
