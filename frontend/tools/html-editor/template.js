@@ -97,7 +97,7 @@ export const HTMLTemplateToolTemplate = /* html */ `
               <button type="button" data-encoding-preview="compare" aria-pressed="false"
                 title="Compare Windows example and after replacement">Compare</button>
             </div>
-            <div id="envControls" class="env-controls" style="display:inline-flex;align-items:center;margin-right:.5rem;">
+            <div id="envControls" class="env-controls" style="display:inline-flex;align-items:center;">
               <select id="envSelector" class="env-select" aria-label="Select environment" title="Select environment"></select>
             </div>
 
