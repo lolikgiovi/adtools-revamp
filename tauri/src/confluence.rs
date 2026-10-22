@@ -3,6 +3,7 @@
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use std::time::Instant;
 
 /// Page information returned from Confluence search
 #[derive(Debug, Serialize, Deserialize)]
@@ -62,6 +63,42 @@ struct Expandable {
     space: Option<String>,
 }
 
+// Keep query strings, userinfo, credentials, and response bodies out of diagnostics.
+async fn send_request(
+    client: &Client,
+    url: &str,
+    pat: &str,
+    operation: &str,
+) -> Result<reqwest::Response, reqwest::Error> {
+    let endpoint = reqwest::Url::parse(url)
+        .map(|parsed| format!("{}{}", parsed.origin().ascii_serialization(), parsed.path()))
+        .unwrap_or_else(|_| "<invalid URL>".to_string());
+    let started = Instant::now();
+    log::info!(target: "confluence", "{}: GET {}", operation, endpoint);
+
+    let response = client
+        .get(url)
+        .bearer_auth(pat)
+        .header("X-Atlassian-Token", "no-check")
+        .send()
+        .await;
+
+    match response {
+        Ok(response) => {
+            log::info!(target: "confluence", "{}: HTTP {} after {} ms",
+                operation, response.status(), started.elapsed().as_millis());
+            Ok(response)
+        }
+        Err(error) => {
+            let error = error.without_url();
+            log::error!(target: "confluence",
+                "{}: GET {} failed after {} ms (connect={}, timeout={}): {:?}",
+                operation, endpoint, started.elapsed().as_millis(), error.is_connect(), error.is_timeout(), error);
+            Err(error)
+        }
+    }
+}
+
 /// Fetch page content from Confluence
 /// Returns the page ID, title, and HTML body storage content
 pub async fn fetch_page_content(
@@ -77,11 +114,7 @@ pub async fn fetch_page_content(
         page_id
     );
 
-    let response = client
-        .get(&url)
-        .bearer_auth(pat)
-        .header("X-Atlassian-Token", "no-check")
-        .send()
+    let response = send_request(client, &url, pat, "fetch_page_content")
         .await
         .map_err(|e| {
             if e.is_timeout() {
@@ -111,7 +144,11 @@ pub async fn fetch_page_content(
     let content: ContentResponse = response
         .json()
         .await
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
+        .map_err(|e| {
+            let error = e.without_url();
+            log::error!(target: "confluence", "fetch_page_content: failed to decode response: {:?}", error);
+            format!("Failed to parse response: {}", error)
+        })?;
 
     let body_html = content
         .body
@@ -154,13 +191,7 @@ pub async fn fetch_page_by_space_title(
             urlencoding::encode(title)
         );
 
-        let response = match client
-            .get(&url)
-            .bearer_auth(pat)
-            .header("X-Atlassian-Token", "no-check")
-            .send()
-            .await
-        {
+        let response = match send_request(client, &url, pat, "fetch_page_by_space_title").await {
             Ok(r) => r,
             Err(_) => continue, // Try next prefix
         };
@@ -182,7 +213,11 @@ pub async fn fetch_page_by_space_title(
 
         let content_list: ContentListResponse = match response.json().await {
             Ok(c) => c,
-            Err(_) => continue,
+            Err(error) => {
+                log::error!(target: "confluence", "fetch_page_by_space_title: failed to decode response: {:?}",
+                    error.without_url());
+                continue;
+            }
         };
 
         if let Some(page) = content_list.results.into_iter().next() {
@@ -236,11 +271,7 @@ pub async fn search_pages(
         urlencoding::encode(&cql)
     );
 
-    let response = client
-        .get(&url)
-        .bearer_auth(pat)
-        .header("X-Atlassian-Token", "no-check")
-        .send()
+    let response = send_request(client, &url, pat, "search_pages")
         .await
         .map_err(|e| format!("Network error: {}", e))?;
 
@@ -256,7 +287,11 @@ pub async fn search_pages(
     let search_response: SearchResponse = response
         .json()
         .await
-        .map_err(|e| format!("Failed to parse search results: {}", e))?;
+        .map_err(|e| {
+            let error = e.without_url();
+            log::error!(target: "confluence", "search_pages: failed to decode response: {:?}", error);
+            format!("Failed to parse search results: {}", error)
+        })?;
 
     let pages: Vec<PageInfo> = search_response
         .results

@@ -497,6 +497,8 @@ fn jira_http_client(allow_invalid_tls: bool) -> Result<Client, String> {
 fn confluence_http_client() -> Client {
   Client::builder()
     .timeout(Duration::from_secs(30))
+    // Internal Confluence uses a certificate that is not trusted by the native TLS store.
+    .danger_accept_invalid_certs(true)
     .build()
     .expect("failed to build confluence http client")
 }
