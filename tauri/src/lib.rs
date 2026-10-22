@@ -721,6 +721,8 @@ async fn measure_image_size(url: String, timeout_ms: u64) -> Result<u64, String>
 async fn fetch_lockey_json(url: String) -> Result<String, String> {
   let client = Client::builder()
     .timeout(Duration::from_secs(30))
+    // Internal Lockey endpoints can use certificates from an untrusted corporate CA.
+    .danger_accept_invalid_certs(true)
     .build()
     .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
   

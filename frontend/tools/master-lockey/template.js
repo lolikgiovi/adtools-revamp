@@ -9,13 +9,13 @@ export const MasterLockeyTemplate = /* html */ `
     <div class="tabs-container ml-tabs">
         <div class="tabs-left">
             <button class="tab-button active" data-tab="lockey">
-                Lockey
+                Lockey Search
             </button>
             <button class="tab-button" data-tab="bulk-search">
-                Bulk Search
+                Bulk Lockey Search
             </button>
             <button class="tab-button" data-tab="confluence">
-                Confluence Lookup 
+                Extract Lockey from Confluence
             </button>
         </div>
         <!-- Domain Controls (visible only on Lockey tab) -->
