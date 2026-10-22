@@ -3,6 +3,10 @@ const TOOL_MODULES = {
     description: "Compress images losslessly or as smaller WebP files, with linked before and after previews",
     load: () => import("../tools/compress-image/main.js").then((module) => ({ ToolClass: module.CompressImage })),
   },
+  "monitoring-query": {
+    description: "Inspect, edit and safely apply Oracle monitoring configuration",
+    load: () => import("../tools/monitoring-query/main.js").then((module) => ({ ToolClass: module.MonitoringQuery })),
+  },
   "uuid-generator": {
     description: "Generate UUID v4 strings for unique identifiers",
     load: () => import("../tools/uuid-generator/main.js").then((module) => ({ ToolClass: module.UUIDGenerator })),
