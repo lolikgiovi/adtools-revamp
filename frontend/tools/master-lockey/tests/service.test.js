@@ -301,6 +301,49 @@ describe("MasterLockeyService", () => {
       expect(result[0].status).toBe("striked");
     });
 
+    it.each([
+      ["s", "<s>KEY</s><br>KEY"],
+      ["del", "<del>KEY</del><br>KEY"],
+      ["strike", "<strike>KEY</strike><br>KEY"],
+      ["inline style", '<span style="text-decoration: line-through">KEY</span><br>KEY'],
+      ["paragraphs", "<p><s>KEY</s></p><p>KEY</p>"],
+    ])("should keep the active duplicate when separated by %s", (_, content) => {
+      const key = "goldBranchVerificationWeightPluralLabel";
+      const html = `<table><tr><th>Lockey</th></tr><tr><td>${content.replaceAll("KEY", key)}</td></tr></table>`;
+      expect(service.parseConfluenceTableForLockeys(html)).toEqual([{ key, status: "plain" }]);
+    });
+
+    it.each([
+      ["nested table", "<table><tr><th>Lockey</th></tr><tr><td>CONTENT</td></tr></table>"],
+      ["key-value table", "<table><tr><th>Field</th><th>Value</th></tr><tr><td>Lockey</td><td>CONTENT</td></tr></table>"],
+      ["list item", "<ul><li>CONTENT</li></ul>"],
+    ])("should preserve line boundaries and status in a %s", (_, markup) => {
+      const key = "goldBranchVerificationWeightPluralLabel";
+      const content = markup.replace("CONTENT", `<s>${key}</s><br>${key}`);
+      const html = `<table><tr><th>Lockey</th></tr><tr><td>${content}</td></tr></table>`;
+      expect(service.parseConfluenceTableForLockeys(html)).toEqual([{ key, status: "plain" }]);
+    });
+
+    it("should preserve separate removed and replacement keys within one paragraph", () => {
+      const html = `<table><tr><th>Lockey</th></tr><tr><td><p>
+        <s>oldWeightPluralLabel</s><br><span>newWeightPluralLabel</span>
+      </p></td></tr></table>`;
+      expect(service.parseConfluenceTableForLockeys(html)).toEqual([
+        { key: "oldWeightPluralLabel", status: "striked" },
+        { key: "newWeightPluralLabel", status: "plain" },
+      ]);
+    });
+
+    it("should preserve inherited strikethrough and inline key fragments across line breaks", () => {
+      const html = `<table><tr><th>Lockey</th></tr><tr><td style="text-decoration:line-through">
+        <p>old<span>Weight</span>Label<br>otherWeightLabel</p>
+      </td></tr></table>`;
+      expect(service.parseConfluenceTableForLockeys(html)).toEqual([
+        { key: "oldWeightLabel", status: "striked" },
+        { key: "otherWeightLabel", status: "striked" },
+      ]);
+    });
+
     it("should return empty array for empty content", () => {
       expect(service.parseConfluenceTableForLockeys("")).toEqual([]);
       expect(service.parseConfluenceTableForLockeys(null)).toEqual([]);

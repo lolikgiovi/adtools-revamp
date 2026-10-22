@@ -289,7 +289,7 @@ class MasterLockeyService {
     const pageId = this.extractPageId(pageIdOrUrl);
     if (!pageId) {
       throw new Error(
-        "Invalid page URL or ID. Supported formats:\n• Page ID (e.g., 12345)\n• URL with pageId parameter\n• Display URL: /display/SPACE/PageTitle"
+        "Invalid page URL or ID. Supported formats:\n• Page ID (e.g., 12345)\n• URL with pageId parameter\n• Display URL: /display/SPACE/PageTitle",
       );
     }
 
@@ -418,7 +418,7 @@ class MasterLockeyService {
 
       console.log(
         `[Parse] Table ${tableIndex} headers:`,
-        headers.map((h) => h.text)
+        headers.map((h) => h.text),
       );
 
       let lockeyColIndex = -1;
@@ -513,7 +513,7 @@ class MasterLockeyService {
           console.log(
             `[Parse] Row ${rowIndex}: targetLogical=${lockeyColIndex}, targetPhysical=${targetPhysicalCellIndex}, rowspanCols=[${[
               ...rowspanOccupiedCols,
-            ].join(",")}] (cells: ${cells.length})`
+            ].join(",")}] (cells: ${cells.length})`,
           );
         }
 
@@ -556,29 +556,9 @@ class MasterLockeyService {
 
           // If no lists or no keys found from lists, try paragraphs or cell text
           if (!foundInRow) {
-            const paragraphs = cell.querySelectorAll("p");
-            const elements = paragraphs.length > 0 ? Array.from(paragraphs) : [cell];
-
-            elements.forEach((element) => {
-              const text = (element.textContent || "").trim();
-
-              // Check if it's a standalone camelCase value (high confidence)
-              if (this.isStandaloneCamelCase(text)) {
-                const status = this.detectCellStatus(element);
-                lockeys.push({ key: text, status });
-                console.log(`[Parse] Found camelCase key: ${text} (status: ${status})`);
-                foundInRow = true;
-              } else if (text && text.length > 0) {
-                // Try to extract camelCase keys from within inline statements (uncertain)
-                const embeddedKeys = this.extractCamelCaseKeysFromText(text);
-                embeddedKeys.forEach((key) => {
-                  // Mark as 'uncertain' since extracted from inline text
-                  lockeys.push({ key, status: "uncertain" });
-                  console.log(`[Parse] Found embedded key: ${key} (status: uncertain)`);
-                  foundInRow = true;
-                });
-              }
-            });
+            const extracted = this.extractLockeysFromElement(cell);
+            lockeys.push(...extracted);
+            foundInRow = extracted.length > 0;
           }
 
           // Debug: log when row has content but no lockey found
@@ -591,7 +571,7 @@ class MasterLockeyService {
         } else if (!foundNestedTable) {
           // Debug: log when we couldn't access the expected cell
           console.log(
-            `[Parse] Row ${rowIndex} skipped: targetPhysical=${targetPhysicalCellIndex} (lockeyCol=${lockeyColIndex}, cells: ${cells.length})`
+            `[Parse] Row ${rowIndex} skipped: targetPhysical=${targetPhysicalCellIndex} (lockeyCol=${lockeyColIndex}, cells: ${cells.length})`,
           );
         }
       });
@@ -659,7 +639,7 @@ class MasterLockeyService {
     const headerCells = Array.from(headerRow.querySelectorAll("th, td"));
     console.log(
       "[Nested Table] Headers found:",
-      headerCells.map((h) => h.textContent?.trim())
+      headerCells.map((h) => h.textContent?.trim()),
     );
 
     // Build headers with logical index (accounting for colspan)
@@ -690,7 +670,7 @@ class MasterLockeyService {
           if (header.text.includes(pattern)) {
             valueColIndex = header.logicalIndex;
             console.log(
-              `[Nested Table] Found matching column "${header.text}" at logical index ${header.logicalIndex} (partial: "${pattern}")`
+              `[Nested Table] Found matching column "${header.text}" at logical index ${header.logicalIndex} (partial: "${pattern}")`,
             );
             break;
           }
@@ -760,7 +740,7 @@ class MasterLockeyService {
       // Check if we can access the cell
       if (targetPhysicalCellIndex < 0 || targetPhysicalCellIndex >= cells.length) {
         console.log(
-          `[Nested Table] Row ${i} skipped - targetPhysical=${targetPhysicalCellIndex} (valueCol=${valueColIndex}, cells: ${cells.length})`
+          `[Nested Table] Row ${i} skipped - targetPhysical=${targetPhysicalCellIndex} (valueCol=${valueColIndex}, cells: ${cells.length})`,
         );
         continue;
       }
@@ -768,26 +748,10 @@ class MasterLockeyService {
       const cell = cells[targetPhysicalCellIndex];
       const cellText = (cell.textContent || "").trim();
       console.log(
-        `[Nested Table] Row ${i} cell text: "${cellText}" (physicalIndex: ${targetPhysicalCellIndex}, logicalCol: ${valueColIndex})`
+        `[Nested Table] Row ${i} cell text: "${cellText}" (physicalIndex: ${targetPhysicalCellIndex}, logicalCol: ${valueColIndex})`,
       );
 
-      // Check if this is a standalone camelCase value (not prefixed) - high confidence
-      if (this.isStandaloneCamelCase(cellText)) {
-        // Detect status from THIS cell, not the parent
-        const status = this.detectCellStatus(cell);
-        results.push({ key: cellText, status });
-        console.log(`[Nested Table] Added key: ${cellText} (status: ${status})`);
-      } else {
-        // Try to extract camelCase keys from within inline statements (uncertain)
-        const embeddedKeys = this.extractCamelCaseKeysFromText(cellText);
-        embeddedKeys.forEach((key) => {
-          results.push({ key, status: "uncertain" });
-          console.log(`[Nested Table] Added embedded key: ${key} (status: uncertain)`);
-        });
-        if (embeddedKeys.length === 0) {
-          console.log(`[Nested Table] Rejected "${cellText}" - not camelCase and no embedded keys`);
-        }
-      }
+      results.push(...this.extractLockeysFromElement(cell));
     }
 
     console.log(`[Nested Table] Total keys extracted: ${results.length}`);
@@ -816,7 +780,6 @@ class MasterLockeyService {
       const keyCell = cells[0];
       const valueCell = cells[1];
       const keyText = (keyCell.textContent || "").trim().toLowerCase();
-      const valueText = (valueCell.textContent || "").trim();
 
       // Check if the key cell matches our lockey patterns
       let isMatch = false;
@@ -839,24 +802,52 @@ class MasterLockeyService {
       }
 
       if (isMatch) {
-        // Extract the value from the second column
-        if (this.isStandaloneCamelCase(valueText)) {
-          const status = this.detectCellStatus(valueCell);
-          results.push({ key: valueText, status });
-          console.log(`[Key-Value Table] Extracted key: ${valueText} (status: ${status})`);
-        } else if (valueText && valueText.length > 0) {
-          // Try heuristic extraction
-          const embeddedKeys = this.extractCamelCaseKeysFromText(valueText);
-          embeddedKeys.forEach((key) => {
-            results.push({ key, status: "uncertain" });
-            console.log(`[Key-Value Table] Extracted embedded key: ${key} (status: uncertain)`);
-          });
-        }
+        results.push(...this.extractLockeysFromElement(valueCell));
       }
     });
 
     console.log(`[Key-Value Table] Total keys extracted: ${results.length}`);
     return results;
+  }
+
+  /** Extract keys before flattening away HTML line breaks and per-key strikethrough. */
+  extractLockeysFromElement(element) {
+    const segments = [];
+    let text = "";
+    let status = "plain";
+    const flush = () => {
+      if (text.trim()) segments.push({ text: text.trim(), status });
+      text = "";
+    };
+    const isStriked = (node) =>
+      node.matches("s, del, strike") || /line-through/i.test(`${node.style.textDecoration} ${node.style.textDecorationLine}`);
+    const visit = (node, inheritedStrike) => {
+      if (node.nodeType === 3) {
+        const nextStatus = inheritedStrike ? "striked" : "plain";
+        if (status !== nextStatus) flush();
+        status = nextStatus;
+        text += node.textContent;
+        return;
+      }
+      if (node.nodeType !== 1) return;
+      const boundary = node.matches("br, p, div, li");
+      if (boundary) flush();
+      const striked = inheritedStrike || isStriked(node);
+      node.childNodes.forEach((child) => visit(child, striked));
+      if (boundary) flush();
+    };
+
+    let inheritedStrike = false;
+    for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+      inheritedStrike ||= isStriked(parent);
+    }
+    visit(element, inheritedStrike);
+    flush();
+
+    return segments.flatMap(({ text, status }) => {
+      if (this.isStandaloneCamelCase(text)) return [{ key: text, status }];
+      return this.extractCamelCaseKeysFromText(text).map((key) => ({ key, status: "uncertain" }));
+    });
   }
 
   /**
@@ -948,25 +939,6 @@ class MasterLockeyService {
   }
 
   /**
-   * Detect the status of a table cell based on styling
-   * @param {Element} cell - TD element
-   * @returns {string} Status: 'plain' | 'striked'
-   */
-  detectCellStatus(cell) {
-    const html = cell.innerHTML;
-    const style = cell.getAttribute("style") || "";
-
-    // Check for strikethrough
-    const hasStrikethrough =
-      cell.querySelector("del, s, strike") !== null ||
-      style.includes("line-through") ||
-      html.includes("text-decoration: line-through") ||
-      html.includes("text-decoration:line-through");
-
-    return hasStrikethrough ? "striked" : "plain";
-  }
-
-  /**
    * Extract lockey keys from ul/ol list elements
    * Parses the HTML structure to find innermost li elements containing lockey keys
    * @param {Element} cell - Cell element containing lists
@@ -998,44 +970,12 @@ class MasterLockeyService {
           return;
         }
 
-        // This is a "leaf" li - check if it contains a lockey
-        // Get only the direct text content (not from nested elements)
-        const directText = this.getDirectTextContent(li).trim();
-        console.log(`[List Parse] Leaf li text: "${directText}"`);
-
-        if (this.isStandaloneCamelCase(directText)) {
-          // Clean standalone camelCase key - high confidence
-          const status = this.detectCellStatus(li);
-          results.push({ key: directText, status });
-          console.log(`[List Parse] Found key: ${directText} (status: ${status})`);
-        } else if (directText && directText.length > 0) {
-          // Mixed text like "else lockeyKey" - needs heuristic extraction
-          const embeddedKeys = this.extractCamelCaseKeysFromText(directText);
-          embeddedKeys.forEach((key) => {
-            results.push({ key, status: "uncertain" });
-            console.log(`[List Parse] Found embedded key: ${key} (status: uncertain)`);
-          });
-        }
+        results.push(...this.extractLockeysFromElement(li));
       });
     });
 
     console.log(`[List Parse] Total keys extracted: ${results.length}`);
     return results;
-  }
-
-  /**
-   * Get direct text content of an element, excluding nested element text
-   * @param {Element} element - DOM element
-   * @returns {string} Direct text content only
-   */
-  getDirectTextContent(element) {
-    let text = "";
-    element.childNodes.forEach((node) => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        text += node.textContent;
-      }
-    });
-    return text;
   }
 
   /**
