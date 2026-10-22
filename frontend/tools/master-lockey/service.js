@@ -120,40 +120,38 @@ class MasterLockeyService {
   /**
    * Filter data by key search (comma-separated keys)
    * @param {Array} rows - Array of row objects
-   * @param {string} keysString - Comma-separated keys to search for
+   * @param {string} keysString - Comma- or newline-separated keys to search for
    * @param {boolean} wholeWord - Match whole words only
+   * @param {boolean} includeMissing - Append unmatched keys as missing rows
    * @returns {Array} Filtered rows
    */
-  filterByKeys(rows, keysString, wholeWord = false) {
-    if (!keysString || keysString.trim() === "") {
-      return rows;
-    }
+  filterByKeys(rows, keysString, wholeWord = false, includeMissing = false) {
+    const uniqueKeys = new Map();
+    (keysString || "").split(/[,\r\n]+/).forEach((value) => {
+      const key = value.trim();
+      if (key && !uniqueKeys.has(key.toLowerCase())) uniqueKeys.set(key.toLowerCase(), key);
+    });
+    const keys = [...uniqueKeys.values()];
+    if (keys.length === 0) return rows;
 
-    // Split by comma, trim whitespace, and filter out empty strings
-    const searchKeys = keysString
-      .split(",")
-      .map((k) => k.trim().toLowerCase())
-      .filter((k) => k.length > 0);
-
-    if (searchKeys.length === 0) {
-      return rows;
-    }
-
-    return rows.filter((row) => {
+    const queries = keys.map((key) => ({
+      key,
+      value: key.toLowerCase(),
+      pattern: wholeWord ? new RegExp(`\\b${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i") : null,
+      found: false,
+    }));
+    const matches = rows.filter((row) => {
       const rowKey = (row.key || "").toLowerCase();
-
-      // Match if any search key is found in the row key
-      return searchKeys.some((searchKey) => {
-        if (wholeWord) {
-          // Match whole word only using word boundaries
-          const regex = new RegExp(`\\b${searchKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
-          return regex.test(rowKey);
-        } else {
-          // Partial match
-          return rowKey.includes(searchKey);
+      let matched = false;
+      queries.forEach((query) => {
+        if (query.pattern ? query.pattern.test(rowKey) : rowKey.includes(query.value)) {
+          query.found = true;
+          matched = true;
         }
       });
+      return matched;
     });
+    return includeMissing ? [...matches, ...queries.filter((query) => !query.found).map(({ key }) => ({ key, __missing: true }))] : matches;
   }
 
   /**

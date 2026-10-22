@@ -86,22 +86,8 @@ class MasterLockey extends BaseTool {
   setupTabListeners() {
     // Restore last saved tab
     const savedTab = localStorage.getItem("masterLockeyActiveTab") || "lockey";
-    if (savedTab === "bulk-search") {
-      localStorage.setItem("masterLockeySearchMode", "bulk");
-      localStorage.setItem("masterLockeyActiveTab", "lockey");
-    }
-    this.switchSearchMode(localStorage.getItem("masterLockeySearchMode"));
+    if (savedTab === "bulk-search") localStorage.setItem("masterLockeyActiveTab", "lockey");
     this.switchTab(savedTab === "confluence" ? "confluence" : "lockey");
-
-    this.els.searchModeButtons.forEach((button) => {
-      button.addEventListener("click", () => {
-        const mode = button.dataset.searchMode;
-        this.switchSearchMode(mode);
-        localStorage.setItem("masterLockeySearchMode", mode);
-        localStorage.setItem("masterLockeyActiveTab", "lockey");
-        UsageTracker.trackEvent("master-lockey", "search_mode_switch", { mode });
-      });
-    });
 
     this.els.tabButtons.forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -125,18 +111,6 @@ class MasterLockey extends BaseTool {
     this.els.searchPanel.classList.toggle("active", isSearch);
     this.els.confluencePanel.classList.toggle("active", !isSearch);
     if (!isSearch) this.showConfluenceSection();
-  }
-
-  switchSearchMode(mode) {
-    const isBulk = mode === "bulk";
-    this.els.lockeyPanel.classList.toggle("active", !isBulk);
-    this.els.bulkSearchPanel.classList.toggle("active", isBulk);
-    this.els.searchModeButtons.forEach((button) => {
-      const active = button.dataset.searchMode === (isBulk ? "bulk" : "single");
-      button.classList.toggle("active", active);
-      button.setAttribute("aria-pressed", String(active));
-    });
-    this.updateBulkSearchState();
   }
 
   bindElements() {
@@ -193,24 +167,11 @@ class MasterLockey extends BaseTool {
       // Tab elements
       tabButtons: this.container.querySelectorAll(".ml-tabs .tab-button"),
       searchPanel: this.container.querySelector("#search-tab-panel"),
-      searchModeButtons: this.container.querySelectorAll(".lockey-mode-btn"),
-      lockeyPanel: this.container.querySelector("#lockey-tab-panel"),
       confluencePanel: this.container.querySelector("#confluence-tab-panel"),
-      // Bulk search elements
-      bulkSearchPanel: this.container.querySelector("#bulk-search-tab-panel"),
-      bulkSearchInput: this.container.querySelector("#bulk-search-input"),
-      btnBulkSearch: this.container.querySelector("#btn-bulk-search"),
-      btnPasteBulk: this.container.querySelector("#btn-paste-bulk"),
-      btnClearBulk: this.container.querySelector("#btn-clear-bulk"),
-      bulkSearchNoData: this.container.querySelector("#bulk-search-no-data"),
-      bulkSearchResults: this.container.querySelector("#bulk-search-results"),
-      bulkSearchResultsCount: this.container.querySelector("#bulk-search-results-count"),
-      bulkSearchTableBody: this.container.querySelector("#bulk-search-table-body"),
-      btnCopyBulkLockey: this.container.querySelector("#btn-copy-bulk-lockey"),
-      btnCopyBulkResults: this.container.querySelector("#btn-copy-bulk-results"),
-      bulkSearchFilter: this.container.querySelector("#bulk-search-filter"),
-      bulkSearchEnHeader: this.container.querySelector("#bulk-search-en-header"),
-      bulkSearchIdHeader: this.container.querySelector("#bulk-search-id-header"),
+      showMissingKeys: this.container.querySelector("#show-missing-keys"),
+      searchResultFilter: this.container.querySelector("#search-result-filter"),
+      btnCopySearchKeys: this.container.querySelector("#btn-copy-search-keys"),
+      btnCopySearchResults: this.container.querySelector("#btn-copy-search-results"),
       // Confluence mode toggle elements
       confluenceModeButtons: this.container.querySelectorAll(".confluence-mode-btn"),
       confluenceSingleMode: this.container.querySelector("#confluence-single-mode"),
@@ -260,6 +221,7 @@ class MasterLockey extends BaseTool {
   }
 
   setupEventListeners() {
+    this.updateSearchControlHints();
     // Domain selector change
     this.els.domainSelector.addEventListener("change", () => {
       const selected = this.els.domainSelector.value;
@@ -278,6 +240,7 @@ class MasterLockey extends BaseTool {
         this.els.btnFetch.disabled = true;
         this.hideCache();
       }
+      this.updateSearchControlHints();
     });
 
     // Fetch button click
@@ -288,24 +251,29 @@ class MasterLockey extends BaseTool {
     // Search mode change
     this.els.searchMode.addEventListener("change", () => {
       this.updateSearchHint();
+      this.els.showMissingKeys.disabled = this.els.searchMode.value !== "key";
+      this.els.searchResultFilter.value = "all";
       this.applyFilterDebounced();
     });
 
     // Search input with debouncing (300ms delay)
     this.els.searchInput.addEventListener("input", () => {
+      this.resizeSearchInput();
       this.applyFilterDebounced();
     });
 
     // Clear search
     this.els.btnClearSearch.addEventListener("click", () => {
       this.els.searchInput.value = "";
+      this.resizeSearchInput();
       this.applyFilter();
     });
 
     // Whole word toggle
     this.els.btnWholeWord.addEventListener("click", () => {
       this.wholeWord = !this.wholeWord;
-      this.els.btnWholeWord.classList.toggle("active", this.wholeWord);
+      this.els.btnWholeWord.classList.toggle("is-on", this.wholeWord);
+      this.els.btnWholeWord.setAttribute("aria-checked", String(this.wholeWord));
 
       this.applyFilter();
     });
@@ -320,8 +288,19 @@ class MasterLockey extends BaseTool {
       this.handleTableScroll();
     });
 
-    // Bulk search event listeners
-    this.setupBulkSearchListeners();
+    this.els.showMissingKeys.addEventListener("change", () => {
+      this.els.searchResultFilter.value = "all";
+      this.applyFilter();
+    });
+    this.els.searchResultFilter.addEventListener("change", () => this.applyFilter());
+    this.els.btnCopySearchKeys.addEventListener("click", () => this.copySearchResults(true));
+    this.els.btnCopySearchResults.addEventListener("click", () => this.copySearchResults(false));
+    this.els.searchInput.addEventListener("keydown", (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+        event.preventDefault();
+        this.applyFilter();
+      }
+    });
 
     // Confluence event listeners
     this.setupConfluenceListeners();
@@ -648,6 +627,12 @@ class MasterLockey extends BaseTool {
     return div.innerHTML;
   }
 
+  resizeSearchInput() {
+    const input = this.els.searchInput;
+    input.style.height = "0px";
+    input.style.height = `${Math.min(160, Math.max(34, input.scrollHeight))}px`;
+  }
+
   applyFilterDebounced() {
     // Clear existing timer
     if (this.searchDebounceTimer) {
@@ -705,9 +690,11 @@ class MasterLockey extends BaseTool {
   updateSearchHint() {
     const mode = this.els.searchMode.value;
     if (mode === "key") {
-      this.els.searchHint.textContent = "Tip: For key search, use comma-separated values (e.g., key1, key2)";
+      this.els.searchHint.textContent = "Separate keys with commas or new lines.";
+      this.els.searchInput.placeholder = "Enter keys separated by commas or new lines...";
     } else {
       this.els.searchHint.textContent = "Tip: Search will match text in any language column";
+      this.els.searchInput.placeholder = "Enter content to search...";
     }
   }
 
@@ -723,7 +710,6 @@ class MasterLockey extends BaseTool {
         this.parsedData = cached.rawSource ? this.service.parseLockeyData(cached.rawSource) : cached.data;
         this.displayData();
         this.showCache(cached.timestamp);
-        this.updateBulkSearchState();
 
         UsageTracker.trackEvent("master-lockey", "load_from_cache", { domain: this.currentDomain });
 
@@ -765,7 +751,6 @@ class MasterLockey extends BaseTool {
       this.displayData();
       this.showCache(Date.now());
       this.hideLoading();
-      this.updateBulkSearchState();
 
       this.showSuccess("Data fetched successfully!");
     } catch (error) {
@@ -789,7 +774,7 @@ class MasterLockey extends BaseTool {
     this.els.infoVersion.textContent = languagePackId;
     this.els.infoVersion.style.display = "inline";
 
-    this.setSingleSearchEnabled(true);
+    this.setSearchEnabled(true);
 
     // Build table headers
     this.buildTableHeaders(languages);
@@ -829,33 +814,46 @@ class MasterLockey extends BaseTool {
 
     const searchMode = this.els.searchMode.value;
     const searchQuery = this.els.searchInput.value.trim();
+    this.virtualScroll.startIndex = 0;
+    this.virtualScroll.endIndex = this.virtualScroll.coreRows + 2 * this.virtualScroll.overscan;
+    this.els.tableContainer.scrollTop = 0;
+    this.els.searchResultFilter.disabled = searchMode !== "key" || !this.els.showMissingKeys.checked || !searchQuery;
 
     if (!searchQuery) {
       this.filteredRows = this.parsedData.rows;
+      this.els.searchResultFilter.value = "all";
+      this.els.btnCopySearchKeys.disabled = this.filteredRows.length === 0;
+      this.els.btnCopySearchResults.disabled = this.filteredRows.length === 0;
       this.renderTableBody(this.filteredRows, this.parsedData.languages);
       // Show total entry count when no search is active
       this.els.resultsCount.style.display = "block";
       this.els.resultsText.textContent = `Showing ${this.formatNumber(this.parsedData.rows.length)} entries`;
+      this.updateSearchControlHints();
       return;
     }
 
     let filtered;
     if (searchMode === "key") {
-      // Search by key (comma-separated)
-      filtered = this.service.filterByKeys(this.parsedData.rows, searchQuery, this.wholeWord);
+      filtered = this.service.filterByKeys(this.parsedData.rows, searchQuery, this.wholeWord, this.els.showMissingKeys.checked);
     } else {
       // Search by content
       filtered = this.service.filterByContent(this.parsedData.rows, this.parsedData.languages, searchQuery, this.wholeWord);
     }
 
-    this.filteredRows = filtered;
+    const missingCount = filtered.filter((row) => row.__missing).length;
+    const resultFilter = this.els.searchResultFilter.value;
+    this.filteredRows = filtered.filter((row) => resultFilter === "all" || (resultFilter === "not-found" ? row.__missing : !row.__missing));
+    this.els.btnCopySearchKeys.disabled = this.filteredRows.length === 0;
+    this.els.btnCopySearchResults.disabled = this.filteredRows.length === 0;
     this.renderTableBody(this.filteredRows, this.parsedData.languages);
 
-    // Update results count
     this.els.resultsCount.style.display = "block";
-    this.els.resultsText.textContent = `${this.formatNumber(this.filteredRows.length)} of ${this.formatNumber(
-      this.parsedData.rows.length,
-    )} results`;
+    const count = `${this.formatNumber(this.filteredRows.length)} of ${this.formatNumber(this.parsedData.rows.length)} results`;
+    this.els.resultsText.textContent =
+      searchMode === "key" && this.els.showMissingKeys.checked
+        ? `${filtered.length - missingCount} found, ${missingCount} not found · ${this.filteredRows.length} shown`
+        : count;
+    this.updateSearchControlHints();
   }
 
   renderTableBody(rows, languages) {
@@ -894,6 +892,7 @@ class MasterLockey extends BaseTool {
     // Render visible rows with overscan buffer
     visibleRows.forEach((row) => {
       const tr = document.createElement("tr");
+      if (row.__missing) tr.classList.add("row-not-found");
 
       // Key cell
       const keyCell = document.createElement("td");
@@ -904,7 +903,7 @@ class MasterLockey extends BaseTool {
       // Language cells with highlighting
       languages.forEach((lang) => {
         const cell = document.createElement("td");
-        const cellText = row[lang] || "";
+        const cellText = row.__missing ? "Not found" : row[lang] || "";
 
         // Check if this is a placeholder value (already transformed in service)
         const isPlaceholder = cellText.startsWith("json raw value is");
@@ -989,10 +988,59 @@ class MasterLockey extends BaseTool {
     return escapedText.replace(regex, '<mark class="search-highlight">$1</mark>');
   }
 
-  setSingleSearchEnabled(enabled) {
-    [this.els.searchMode, this.els.searchInput, this.els.btnClearSearch, this.els.btnWholeWord].forEach((control) => {
+  updateSearchControlHints() {
+    const needsData = this.els.searchInput.disabled;
+    const loadHint = "Select a domain and click Fetch to load remote data.";
+    const hints = [
+      [this.els.searchMode, loadHint],
+      [this.els.searchInput, loadHint],
+      [this.els.btnClearSearch, loadHint],
+      [this.els.btnWholeWord, loadHint],
+      [this.els.showMissingKeys, needsData ? loadHint : "Choose Search by Key to show missing keys."],
+      [
+        this.els.searchResultFilter,
+        needsData
+          ? loadHint
+          : this.els.searchMode.value !== "key"
+            ? "Choose Search by Key to filter missing keys."
+            : !this.els.showMissingKeys.checked
+              ? "Turn on Show missing keys to filter results."
+              : "Enter keys to filter results.",
+      ],
+      [this.els.btnCopySearchKeys, needsData ? loadHint : "No results to copy. Change the search or result filter."],
+      [this.els.btnCopySearchResults, needsData ? loadHint : "No results to copy. Change the search or result filter."],
+      [this.els.btnFetch, this.currentDomain ? "Wait for remote data to finish loading." : "Select a domain before fetching remote data."],
+    ];
+    hints.forEach(([control, reason]) => {
+      const wrapper = control.closest("[data-search-control]");
+      if (control.disabled) {
+        wrapper.dataset.disabledReason = reason;
+        wrapper.setAttribute("tabindex", "0");
+        wrapper.setAttribute("aria-description", reason);
+        control.setAttribute("aria-description", reason);
+      } else {
+        delete wrapper.dataset.disabledReason;
+        wrapper.removeAttribute("tabindex");
+        wrapper.removeAttribute("aria-description");
+        control.removeAttribute("aria-description");
+      }
+    });
+  }
+
+  setSearchEnabled(enabled) {
+    [
+      this.els.searchMode,
+      this.els.searchInput,
+      this.els.btnClearSearch,
+      this.els.btnWholeWord,
+      this.els.btnCopySearchKeys,
+      this.els.btnCopySearchResults,
+    ].forEach((control) => {
       control.disabled = !enabled;
     });
+    this.els.showMissingKeys.disabled = !enabled || this.els.searchMode.value !== "key";
+    this.els.searchResultFilter.disabled = !enabled || this.els.showMissingKeys.disabled || !this.els.showMissingKeys.checked;
+    this.updateSearchControlHints();
   }
 
   showLoading() {
@@ -1001,11 +1049,12 @@ class MasterLockey extends BaseTool {
     this.els.errorState.style.display = "none";
     this.els.tableContainer.style.display = "none";
     this.els.infoVersion.style.display = "none";
-    this.setSingleSearchEnabled(false);
+    this.setSearchEnabled(false);
 
     this.els.btnFetch.classList.add("loading");
     this.els.btnFetch.querySelector(".btn-spinner").style.display = "inline";
     this.els.btnFetch.disabled = true;
+    this.updateSearchControlHints();
   }
 
   hideLoading() {
@@ -1013,6 +1062,7 @@ class MasterLockey extends BaseTool {
     this.els.btnFetch.classList.remove("loading");
     this.els.btnFetch.querySelector(".btn-spinner").style.display = "none";
     this.els.btnFetch.disabled = false;
+    this.updateSearchControlHints();
   }
 
   showError(title, message) {
@@ -1022,7 +1072,7 @@ class MasterLockey extends BaseTool {
     this.els.emptyState.style.display = "none";
     this.els.tableContainer.style.display = "none";
     this.els.infoVersion.style.display = "none";
-    this.setSingleSearchEnabled(false);
+    this.setSearchEnabled(false);
   }
 
   hideError() {
@@ -1549,265 +1599,25 @@ class MasterLockey extends BaseTool {
       });
   }
 
-  // =====================
-  // Bulk Search Feature
-  // =====================
-
-  setupBulkSearchListeners() {
-    // Input change handler - enable search button when input has content
-    this.els.bulkSearchInput.addEventListener("input", () => {
-      const hasInput = this.els.bulkSearchInput.value.trim().length > 0;
-      const hasData = this.parsedData && this.parsedData.rows && this.parsedData.rows.length > 0;
-      this.els.btnBulkSearch.disabled = !hasInput || !hasData;
-    });
-
-    // Search button click
-    this.els.btnBulkSearch.addEventListener("click", () => {
-      this.performBulkSearch();
-    });
-
-    // Clear button click
-    this.els.btnClearBulk.addEventListener("click", () => {
-      this.els.bulkSearchInput.value = "";
-      this.els.bulkSearchResults.style.display = "none";
-      this.els.bulkSearchResultsCount.textContent = "";
-      this.els.btnBulkSearch.disabled = true;
-    });
-
-    // Paste button click
-    this.els.btnPasteBulk.addEventListener("click", async () => {
-      try {
-        const text = await navigator.clipboard.readText();
-        this.els.bulkSearchInput.value = text;
-        // Update search button state
-        const hasData = this.parsedData && this.parsedData.rows && this.parsedData.rows.length > 0;
-        this.els.btnBulkSearch.disabled = !text.trim() || !hasData;
-      } catch (err) {
-        console.error("Paste failed:", err);
-        this.showError("Paste Failed", "Unable to read from clipboard");
-      }
-    });
-
-    // Copy lockey only button click
-    this.els.btnCopyBulkLockey.addEventListener("click", () => {
-      this.copyBulkLockeyOnly();
-    });
-
-    // Copy results button click
-    this.els.btnCopyBulkResults.addEventListener("click", () => {
-      this.copyBulkResults();
-    });
-
-    // Filter change
-    this.els.bulkSearchFilter.addEventListener("change", () => {
-      if (this.bulkSearchResults) {
-        this.displayBulkSearchResults(this.bulkSearchResults);
-      }
-    });
-
-    // Allow Enter+Ctrl/Cmd to trigger search
-    this.els.bulkSearchInput.addEventListener("keydown", (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && !this.els.btnBulkSearch.disabled) {
-        this.performBulkSearch();
-      }
-    });
-  }
-
-  updateBulkSearchState() {
-    const hasData = this.parsedData && this.parsedData.rows && this.parsedData.rows.length > 0;
-
-    this.els.btnPasteBulk.disabled = !hasData;
-    this.els.btnClearBulk.disabled = !hasData;
-
-    if (hasData) {
-      this.els.bulkSearchNoData.style.display = "none";
-      this.els.bulkSearchInput.disabled = false;
-
-      // Check if input has content and enable search button
-      const hasInput = this.els.bulkSearchInput.value.trim().length > 0;
-      this.els.btnBulkSearch.disabled = !hasInput;
-    } else {
-      this.els.bulkSearchNoData.style.display = "flex";
-      this.els.bulkSearchInput.disabled = true;
-      this.els.bulkSearchResultsCount.textContent = "";
-      this.els.btnBulkSearch.disabled = true;
-      this.els.bulkSearchResults.style.display = "none";
-    }
-  }
-
-  performBulkSearch() {
-    const input = this.els.bulkSearchInput.value.trim();
-    if (!input || !this.parsedData) return;
-
-    // Parse input - split by newlines, trim each line, filter empty lines
-    const keys = input
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
-
-    if (keys.length === 0) return;
-
-    // Build a Map of all remote keys for O(1) lookup with content
-    const remoteKeyMap = new Map();
-    this.parsedData.rows.forEach((row) => {
-      remoteKeyMap.set(row.key, row);
-    });
-
-    // Check each key against remote data and get content
-    const results = keys.map((key) => {
-      const remoteData = remoteKeyMap.get(key);
-      return {
-        key,
-        exists: !!remoteData,
-        en: remoteData?.en || "-",
-        id: remoteData?.id || "-",
-      };
-    });
-
-    // Store results for copy functionality
-    this.bulkSearchResults = results;
-
-    // Track usage
-    UsageTracker.trackEvent("master-lockey", "bulk_search", {
-      inputCount: keys.length,
-      foundCount: results.filter((r) => r.exists).length,
-      domain: this.currentDomain,
-    });
-    UsageTracker.trackToolUse("master-lockey", "bulk_search", {
-      input_count: keys.length,
-      found_count: results.filter((r) => r.exists).length,
-    });
-
-    // Display results
-    this.displayBulkSearchResults(results);
-  }
-
-  displayBulkSearchResults(results) {
-    // Get filter value
-    const filter = this.els.bulkSearchFilter.value;
-
-    // Apply filter
-    let filteredResults = results;
-    if (filter === "found") {
-      filteredResults = results.filter((r) => r.exists);
-    } else if (filter === "not-found") {
-      filteredResults = results.filter((r) => !r.exists);
-    }
-
-    // Update count (show filtered vs total)
-    const foundCount = results.filter((r) => r.exists).length;
-    const notFoundCount = results.length - foundCount;
-    let countText = `${results.length} lockey${results.length !== 1 ? "s" : ""}: ${foundCount} found, ${notFoundCount} not found`;
-    if (filter !== "all") {
-      countText += ` (showing ${filteredResults.length})`;
-    }
-    this.els.bulkSearchResultsCount.textContent = countText;
-
-    // Update EN/ID headers with domain name
-    const domainSuffix = this.currentDomain ? ` - ${this.currentDomain}` : "";
-    this.els.bulkSearchEnHeader.textContent = `EN${domainSuffix}`;
-    this.els.bulkSearchIdHeader.textContent = `ID${domainSuffix}`;
-
-    // Clear and populate table
-    this.els.bulkSearchTableBody.innerHTML = "";
-
-    filteredResults.forEach((item) => {
-      const tr = document.createElement("tr");
-
-      // Add class for not-found rows
-      if (!item.exists) {
-        tr.className = "row-not-found";
-      }
-
-      // Lockey cell
-      const keyCell = document.createElement("td");
-      keyCell.textContent = item.key;
-      tr.appendChild(keyCell);
-
-      // EN cell
-      const enCell = document.createElement("td");
-      enCell.textContent = item.en;
-      enCell.title = item.en;
-      tr.appendChild(enCell);
-
-      // ID cell
-      const idCell = document.createElement("td");
-      idCell.textContent = item.id;
-      idCell.title = item.id;
-      tr.appendChild(idCell);
-
-      this.els.bulkSearchTableBody.appendChild(tr);
-    });
-
-    // Show results
-    this.els.bulkSearchResults.style.display = "block";
-  }
-
-  copyBulkResults() {
-    if (!this.bulkSearchResults || this.bulkSearchResults.length === 0) return;
-
-    // Apply current filter
-    const filter = this.els.bulkSearchFilter.value;
-    let filteredResults = this.bulkSearchResults;
-    if (filter === "found") {
-      filteredResults = this.bulkSearchResults.filter((r) => r.exists);
-    } else if (filter === "not-found") {
-      filteredResults = this.bulkSearchResults.filter((r) => !r.exists);
-    }
-
-    if (filteredResults.length === 0) return;
-
-    // Format as TSV: Lockey\tEN\tID
-    const domainSuffix = this.currentDomain ? ` - ${this.currentDomain}` : "";
-    const header = `Lockey\tEN${domainSuffix}\tID${domainSuffix}`;
-    const rows = filteredResults.map((r) => `${r.key}\t${r.en}\t${r.id}`);
-    const content = [header, ...rows].join("\n");
-
-    navigator.clipboard
-      .writeText(content)
-      .then(() => {
-        this.showSuccess(`Copied ${filteredResults.length} results to clipboard`);
-        UsageTracker.trackEvent("master-lockey", "bulk_search_copy", {
-          rowCount: filteredResults.length,
-        });
-        UsageTracker.trackToolUse("master-lockey", "bulk_search_copy", { row_count: filteredResults.length });
-      })
-      .catch((err) => {
-        console.error("Copy failed:", err);
-        this.showError("Copy Failed", "Unable to copy to clipboard");
+  async copySearchResults(keysOnly) {
+    if (!this.filteredRows?.length) return;
+    const languages = this.parsedData.languages;
+    const rows = this.filteredRows.map((row) =>
+      keysOnly ? row.key : [row.key, ...languages.map((language) => (row.__missing ? "Not found" : row[language] || "-"))].join("\t"),
+    );
+    const content = keysOnly
+      ? rows.join("\n")
+      : [["Lockey", ...languages.map((language) => language.toUpperCase())].join("\t"), ...rows].join("\n");
+    try {
+      await navigator.clipboard.writeText(content);
+      this.showSuccess(`Copied ${this.filteredRows.length} ${keysOnly ? "lockeys" : "results"} to clipboard`);
+      UsageTracker.trackToolUse("master-lockey", keysOnly ? "search_copy_lockey" : "search_copy_results", {
+        row_count: this.filteredRows.length,
       });
-  }
-
-  copyBulkLockeyOnly() {
-    if (!this.bulkSearchResults || this.bulkSearchResults.length === 0) return;
-
-    // Apply current filter
-    const filter = this.els.bulkSearchFilter.value;
-    let filteredResults = this.bulkSearchResults;
-    if (filter === "found") {
-      filteredResults = this.bulkSearchResults.filter((r) => r.exists);
-    } else if (filter === "not-found") {
-      filteredResults = this.bulkSearchResults.filter((r) => !r.exists);
+    } catch (error) {
+      console.error("Copy failed:", error);
+      this.showError("Copy Failed", "Unable to copy to clipboard");
     }
-
-    if (filteredResults.length === 0) return;
-
-    // Just the lockey keys, one per line
-    const content = filteredResults.map((r) => r.key).join("\n");
-
-    navigator.clipboard
-      .writeText(content)
-      .then(() => {
-        this.showSuccess(`Copied ${filteredResults.length} lockeys to clipboard`);
-        UsageTracker.trackEvent("master-lockey", "bulk_search_copy_lockey", {
-          rowCount: filteredResults.length,
-        });
-        UsageTracker.trackToolUse("master-lockey", "bulk_search_copy_lockey", { row_count: filteredResults.length });
-      })
-      .catch((err) => {
-        console.error("Copy failed:", err);
-        this.showError("Copy Failed", "Unable to copy to clipboard");
-      });
   }
 
   // ================================

@@ -24,42 +24,72 @@ export const MasterLockeyTemplate = /* html */ `
             <select id="domain-selector" class="domain-selector-compact">
                 <option value="">Pick Domain</option>
             </select>
+            <span class="lockey-control" data-search-control>
             <button class="btn-fetch-compact" id="btn-fetch-data" disabled>
                 <span class="btn-text">Fetch</span>
                 <span class="btn-spinner" style="display: none;">↻</span>
             </button>
+            </span>
         </div>
     </div>
 
-    <!-- Search Lockey: single and bulk modes share one top-level tab. -->
+    <!-- Search Lockey -->
     <div id="search-tab-panel" class="ml-tab-panel active" data-panel="lockey">
-        <div id="lockey-tab-panel" class="lockey-mode-panel active">
+        <div id="lockey-tab-panel" class="lockey-search-panel">
             <div class="lockey-search-row">
                 <!-- Search -->
                 <div id="search-section" class="master-lockey-search">
                     <div class="search-container">
-                        <div class="search-mode-wrapper">
-                            <span class="dropdown-icon">▼</span>
-                            <select id="search-mode" class="search-mode-selector" disabled>
-                                <option value="key">Search by Key</option>
-                                <option value="content">Search by Content</option>
-                            </select>
+                        <span class="lockey-control lockey-input-control" data-search-control>
+                        <textarea id="search-input" class="search-input" rows="1" disabled
+                            aria-label="Search lockeys" placeholder="Enter keys separated by commas or new lines..."></textarea>
+                        </span>
+                        <span class="lockey-control" data-search-control>
+                            <button id="btn-clear-search" class="btn-clear-search" disabled title="Clear search">×</button>
+                        </span>
+                    </div>
+                    <div class="lockey-search-options">
+                        <div class="lockey-option-controls">
+                            <div class="search-mode-wrapper lockey-control" data-search-control>
+                                <span class="dropdown-icon">▼</span>
+                                <select id="search-mode" class="search-mode-selector" disabled>
+                                    <option value="key">Search by Key</option>
+                                    <option value="content">Search by Content</option>
+                                </select>
+                            </div>
+                            <span class="lockey-control" data-search-control>
+                                <button id="btn-whole-word" class="lockey-toggle" type="button" role="switch"
+                                    aria-checked="false" disabled title="Match whole word only">
+                                    <span>Match Word</span>
+                                    <span class="lockey-toggle-track" aria-hidden="true"><span class="lockey-toggle-thumb"></span></span>
+                                </button>
+                            </span>
+                            <label class="lockey-toggle lockey-control" data-search-control>
+                                <input type="checkbox" id="show-missing-keys" role="switch" disabled>
+                                <span>Show missing keys</span>
+                                <span class="lockey-toggle-track" aria-hidden="true"><span class="lockey-toggle-thumb"></span></span>
+                            </label>
+                            <span class="lockey-control" data-search-control>
+                                <select id="search-result-filter" class="bulk-search-filter" aria-label="Filter results" disabled>
+                                    <option value="all">Show All</option>
+                                    <option value="found">Found Only</option>
+                                    <option value="not-found">Not Found Only</option>
+                                </select>
+                            </span>
                         </div>
-                        <input type="text" id="search-input" class="search-input" disabled placeholder="Enter search term...">
-                        <button id="btn-clear-search" class="btn-clear-search" disabled title="Clear search">×</button>
-                        <button id="btn-whole-word" class="btn-whole-word" disabled title="Match whole word only">
-                            Match Word
-                        </button>
+                        <div class="export-buttons">
+                            <span class="lockey-control" data-search-control>
+                                <button id="btn-copy-search-keys" class="btn-export" disabled>Copy Lockey</button>
+                            </span>
+                            <span class="lockey-control" data-search-control>
+                                <button id="btn-copy-search-results" class="btn-export" disabled>Copy Results</button>
+                            </span>
+                        </div>
                     </div>
                     <div class="search-meta">
-                        <p id="search-hint" class="search-hint">Tip: For key search, use comma-separated values (e.g., key1, key2)</p>
+                        <p id="search-hint" class="search-hint">Separate keys with commas or new lines.</p>
                         <div id="results-count" class="search-results-count" style="display: none;"><span id="results-text"></span></div>
                     </div>
-                </div>
-
-                <div class="lockey-mode-toggle" role="group" aria-label="Lockey search mode">
-                    <button type="button" class="lockey-mode-btn active" data-search-mode="single" aria-pressed="true">Single</button>
-                    <button type="button" class="lockey-mode-btn" data-search-mode="bulk" aria-pressed="false">Bulk</button>
                 </div>
             </div>
 
@@ -95,66 +125,6 @@ export const MasterLockeyTemplate = /* html */ `
             </div>
         </div>
 
-        <!-- Bulk Search Tab Panel -->
-        <div id="bulk-search-tab-panel" class="lockey-mode-panel">
-            <div class="bulk-search-section">
-                <div class="lockey-search-row">
-                    <div class="master-lockey-search">
-                        <div class="search-container bulk-search-container">
-                            <textarea id="bulk-search-input" class="bulk-search-input" rows="1"
-                                aria-label="Keys to check" placeholder="Enter lockey keys, one per line..."></textarea>
-                            <div class="bulk-search-controls">
-                                <button id="btn-bulk-search" class="btn-whole-word" disabled>Search</button>
-                                <button id="btn-paste-bulk" class="btn-whole-word">Paste</button>
-                                <button id="btn-clear-bulk" class="btn-whole-word">Clear</button>
-                            </div>
-                        </div>
-                        <div class="search-meta">
-                            <p class="search-hint">Enter one key per line to check for exact matches.</p>
-                            <span id="bulk-search-results-count" class="search-results-count"></span>
-                        </div>
-                    </div>
-                    <div class="lockey-mode-toggle" role="group" aria-label="Lockey search mode">
-                        <button type="button" class="lockey-mode-btn" data-search-mode="single" aria-pressed="false">Single</button>
-                        <button type="button" class="lockey-mode-btn active" data-search-mode="bulk" aria-pressed="true">Bulk</button>
-                    </div>
-                </div>
-
-                <div id="bulk-search-no-data" class="empty-state" style="display: none;">
-                    <div class="empty-state-icon">🌐</div>
-                    <h3>No Data Loaded</h3>
-                    <p>Select a domain and click "Fetch" to get started.</p>
-                </div>
-
-                <div id="bulk-search-results" class="bulk-search-results" style="display: none;">
-                    <div class="bulk-search-table-container table-container">
-                        <table class="lockey-table">
-                            <thead>
-                                <tr>
-                                    <th>Lockey</th>
-                                    <th id="bulk-search-en-header">EN</th>
-                                    <th id="bulk-search-id-header">ID</th>
-                                </tr>
-                            </thead>
-                            <tbody id="bulk-search-table-body">
-                                <!-- Bulk search results will be inserted here -->
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="results-header">
-                        <div class="export-buttons">
-                            <select id="bulk-search-filter" class="bulk-search-filter">
-                                <option value="all">Show All</option>
-                                <option value="found">Found Only</option>
-                                <option value="not-found">Not Found Only</option>
-                            </select>
-                            <button id="btn-copy-bulk-lockey" class="btn-export" title="Copy lockey keys only">Copy Lockey</button>
-                            <button id="btn-copy-bulk-results" class="btn-export" title="Copy full results to clipboard">Copy Results</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 
     <!-- Confluence Lookup Tab Panel -->

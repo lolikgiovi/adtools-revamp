@@ -31,12 +31,20 @@
       <button id="empty">Empty state</button>
       <button id="narrow">Toggle narrow layout</button>
     </div>
+    <output id="clipboard-output" aria-label="Copied text"></output>
     <main id="fixture"></main>
     <script type="module">
       import { MasterLockey } from "../main.js";
       import { UsageTracker } from "../../../core/UsageTracker.js";
       UsageTracker.trackEvent = () => {};
       UsageTracker.trackToolUse = () => {};
+      Object.defineProperty(navigator, "clipboard", {
+        value: {
+          async writeText(value) {
+            document.querySelector("#clipboard-output").textContent = value;
+          },
+        },
+      });
       const tool = new MasterLockey({ on() {}, emit() {} });
       tool.container = document.querySelector("#fixture");
       tool.container.innerHTML = tool.render();
@@ -54,12 +62,10 @@
         };
         tool.els.errorState.style.display = "none";
         tool.displayData();
-        tool.updateBulkSearchState();
       };
       document.querySelector("#empty").onclick = () => {
         tool.parsedData = null;
-        tool.setSingleSearchEnabled(false);
-        tool.updateBulkSearchState();
+        tool.setSearchEnabled(false);
         tool.els.emptyState.style.display = "flex";
         tool.els.tableContainer.style.display = "none";
         tool.els.resultsCount.style.display = "none";

@@ -714,3 +714,29 @@ describe("MasterLockeyService", () => {
     });
   });
 });
+
+// Failure cases: mixed separators, blank tokens, case differences, partial matches,
+// duplicate missing keys, and accidentally reporting a matched query as missing.
+describe("unified key search", () => {
+  const service = new MasterLockeyService();
+  const rows = [
+    { key: "welcomeTitle", en: "Welcome" },
+    { key: "continueButton", en: "Continue" },
+  ];
+
+  it("accepts mixed commas, LF and CRLF without blank queries matching every row", () => {
+    expect(service.filterByKeys(rows, " WELCOME,\r\n, \nmissing ")).toEqual([rows[0]]);
+  });
+
+  it("includes unmatched keys once while preserving case-insensitive partial matches", () => {
+    expect(service.filterByKeys(rows, "welcome\nMissing,missing", false, true)).toEqual([rows[0], { key: "Missing", __missing: true }]);
+  });
+
+  it("uses the selected whole-word rule when identifying missing keys", () => {
+    expect(service.filterByKeys(rows, "welcome,continueButton", true, true)).toEqual([rows[1], { key: "welcome", __missing: true }]);
+  });
+
+  it("keeps blank input idle even with missing keys enabled", () => {
+    expect(service.filterByKeys(rows, " ,\n ", false, true)).toEqual(rows);
+  });
+});
