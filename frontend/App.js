@@ -334,6 +334,11 @@ class App {
       });
     });
 
+    // Preserve existing TLV bookmarks within the combined tool.
+    this.router.register("tlv-viewer", () => {
+      this.router.navigate("qr-tools", { tab: "tlv" });
+    });
+
     // Settings route
     this.router.register("settings", ({ navigationId } = {}) => {
       this.showSettings(navigationId).catch((error) => {

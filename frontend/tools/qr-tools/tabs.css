@@ -1,0 +1,55 @@
+.qr-tlv {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+  padding-bottom: 1rem;
+}
+
+.qr-tlv > [role="tabpanel"] {
+  min-width: 0;
+}
+
+.qr-tlv .qr-tools,
+.qr-tlv .tlv-viewer.tool-container {
+  width: 100%;
+  max-width: none;
+  padding: 0;
+  margin: 0;
+}
+
+.qr-tlv .qr-tools-layout {
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+}
+
+.qr-tlv .form-actions {
+  flex-wrap: wrap;
+}
+
+.qr-tlv .tlv-viewer {
+  height: calc(100dvh - var(--window-titlebar-height, 0px) - 10rem);
+  max-height: calc(100dvh - var(--window-titlebar-height, 0px) - 10rem);
+}
+
+.qr-tlv [role="tab"]:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: -2px;
+}
+
+@media (max-width: 1100px) {
+  .qr-tlv .tlv-viewer {
+    height: auto;
+    max-height: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .qr-tlv .qr-tools-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.qr-tlv .tlv-view-tabs {
+  flex-direction: row;
+  align-items: center;
+}

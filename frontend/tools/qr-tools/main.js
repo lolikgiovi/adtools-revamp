@@ -1,24 +1,17 @@
-import { QRToolsService } from "./service.js";
-import { QRToolsTemplate } from "./template.js";
 import { BaseTool } from "../../core/BaseTool.js";
+import { QRGenerator } from "./generator.js";
+import { TLVViewer } from "../tlv-viewer/main.js";
 import { getIconSvg } from "./icon.js";
-import { UsageTracker } from "../../core/UsageTracker.js";
-import "./styles.css";
+import "./tabs.css";
 
 class QRTools extends BaseTool {
   constructor(eventBus) {
     super({ id: "qr-tools", eventBus });
-    this.service = new QRToolsService();
-    this.state = {
-      mode: "text",
-      content: "",
-      size: 256,
-      margin: 2,
-      foreground: "#000000",
-      background: "#FFFFFF",
-      isValid: false,
+    this.activeTab = "qr";
+    this.tools = {
+      qr: new QRGenerator(eventBus),
+      tlv: new TLVViewer(eventBus),
     };
-    this._debounceTimer = null;
   }
 
   getIconSvg() {
@@ -26,231 +19,77 @@ class QRTools extends BaseTool {
   }
 
   render() {
-    return QRToolsTemplate;
+    return /* html */ `
+      <div class="qr-tlv">
+        <div class="tabs-container">
+          <div class="tabs-left" role="tablist" aria-label="QR & TLV">
+            <button class="tab-button" id="qr-tlv-qr-tab" type="button" role="tab"
+              data-qr-tlv-tab="qr" aria-controls="qr-tlv-qr-panel">QR Generator</button>
+            <button class="tab-button" id="qr-tlv-tlv-tab" type="button" role="tab"
+              data-qr-tlv-tab="tlv" aria-controls="qr-tlv-tlv-panel">TLV Viewer</button>
+          </div>
+        </div>
+        <div id="qr-tlv-qr-panel" role="tabpanel" aria-labelledby="qr-tlv-qr-tab" hidden></div>
+        <div id="qr-tlv-tlv-panel" role="tabpanel" aria-labelledby="qr-tlv-tlv-tab" hidden></div>
+      </div>
+    `;
   }
 
   onMount() {
-    UsageTracker.trackFeature("qr-tools", "mount", "", 5000);
-    this.bindEvents();
-    this.updatePreview();
+    Object.entries(this.tools).forEach(([tab, tool]) => {
+      tool.mount(this.container.querySelector(`#qr-tlv-${tab}-panel`));
+    });
+    this.container.querySelectorAll("[data-qr-tlv-tab]").forEach((button) => {
+      button.addEventListener("click", () => this.selectTab(button.dataset.qrTlvTab));
+      button.addEventListener("keydown", (event) => {
+        let tab;
+        if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+          tab = this.activeTab === "qr" ? "tlv" : "qr";
+        } else if (event.key === "Home") {
+          tab = "qr";
+        } else if (event.key === "End") {
+          tab = "tlv";
+        } else {
+          return;
+        }
+        event.preventDefault();
+        this.selectTab(tab);
+        this.container.querySelector(`#qr-tlv-${tab}-tab`).focus();
+      });
+    });
+    this.selectTab(this.activeTab);
   }
 
-  bindEvents() {
-    const modeEl = document.getElementById("qrMode");
-    const contentEl = document.getElementById("qrContent");
-    const sizeEl = document.getElementById("qrSize");
-    const marginEl = document.getElementById("qrMargin");
-    const fgEl = document.getElementById("qrColorForeground");
-    const bgEl = document.getElementById("qrColorBackground");
-    const downloadPngEl = document.getElementById("qrDownloadPng");
-    const downloadSvgEl = document.getElementById("qrDownloadSvg");
-    const resetEl = document.getElementById("qrReset");
-
-    if (modeEl)
-      modeEl.addEventListener("change", () => {
-        this.state.mode = modeEl.value;
-        this.scheduleUpdate();
-      });
-    if (contentEl)
-      contentEl.addEventListener("input", () => {
-        this.state.content = contentEl.value;
-        this.scheduleUpdate();
-      });
-    if (sizeEl) sizeEl.value = String(this.state.size);
-    if (marginEl) marginEl.value = String(this.state.margin);
-    if (fgEl)
-      fgEl.addEventListener("input", () => {
-        this.state.foreground = fgEl.value;
-        this.scheduleUpdate();
-      });
-    if (bgEl)
-      bgEl.addEventListener("input", () => {
-        this.state.background = bgEl.value;
-        this.scheduleUpdate();
-      });
-    if (downloadPngEl)
-      downloadPngEl.addEventListener("click", () => {
-        this.downloadPng();
-      });
-    if (downloadSvgEl)
-      downloadSvgEl.addEventListener("click", () => {
-        this.downloadSvg();
-      });
-    if (resetEl)
-      resetEl.addEventListener("click", () => {
-        this.resetForm();
-      });
-  }
-
-  scheduleUpdate() {
-    if (this._debounceTimer) clearTimeout(this._debounceTimer);
-    this._debounceTimer = setTimeout(() => this.updatePreview(), 200);
-  }
-
-  getConfig() {
-    return {
-      size: this.state.size,
-      margin: this.state.margin,
-      foreground: this.state.foreground,
-      background: this.state.background,
-    };
-  }
-
-  updatePreview() {
-    const validationEl = document.getElementById("qrValidation");
-    const contrastEl = document.getElementById("qrContrastWarning");
-    const canvas = document.getElementById("qrCanvas");
-    const pngBtn = document.getElementById("qrDownloadPng");
-    const svgBtn = document.getElementById("qrDownloadSvg");
-
-    const content = (this.state.content || "").trim();
-    let isValid = content.length > 0;
-
-    if (this.state.mode === "url") {
-      const urlValid = this.service.isValidUrl(content);
-      isValid = isValid && urlValid;
-      if (validationEl) {
-        validationEl.textContent = urlValid ? "" : "Warning: This URL may be invalid. Ensure it includes a protocol or a valid domain.";
-      }
-    } else {
-      if (validationEl) validationEl.textContent = "";
-    }
-
-    this.state.isValid = isValid;
-
-    const ratio = this.service.getContrastRatio(this.state.foreground, this.state.background);
-    if (contrastEl) {
-      if (ratio < 3.0) {
-        contrastEl.textContent = `Low contrast detected (~${ratio.toFixed(
-          2,
-        )}:1). Darken foreground or lighten background for better scanability.`;
-        // Track low contrast warning for UX insights
-        UsageTracker.trackEvent(
-          "qr-tools",
-          "low_contrast_warning",
-          {
-            ratio: parseFloat(ratio.toFixed(2)),
-            foreground: this.state.foreground,
-            background: this.state.background,
-          },
-          5000,
-        ); // Debounce 5 seconds
-      } else {
-        contrastEl.textContent = "";
-      }
-    }
-
-    if (pngBtn) pngBtn.disabled = !isValid;
-    if (svgBtn) svgBtn.disabled = !isValid;
-
-    if (!canvas) return;
-    canvas.width = this.state.size;
-    canvas.height = this.state.size;
-
-    if (!isValid) {
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-      }
-      return;
-    }
-
-    // Track QR preview generation for behavior analysis
-    UsageTracker.trackEvent(
-      "qr-tools",
-      "qr_preview",
-      {
-        mode: this.state.mode,
-        content_length: content.length,
-        size: this.state.size,
-      },
-      2000,
-    ); // Debounce 2 seconds
-
-    this.service.renderCanvas(canvas, content, this.getConfig()).catch(() => {
-      this.showError("Failed to render QR code.");
+  selectTab(tab) {
+    if (!this.tools[tab]) return;
+    this.activeTab = tab;
+    Object.entries(this.tools).forEach(([key, tool]) => {
+      const selected = key === tab;
+      const button = this.container.querySelector(`#qr-tlv-${key}-tab`);
+      button.classList.toggle("active", selected);
+      button.setAttribute("aria-selected", String(selected));
+      button.tabIndex = selected ? 0 : -1;
+      this.container.querySelector(`#qr-tlv-${key}-panel`).hidden = !selected;
+      if (this.isActive && selected) tool.activate();
+      else tool.deactivate();
     });
   }
 
-  async downloadPng() {
-    try {
-      UsageTracker.trackEvent("qr-tools", "download_png", { size: this.state.size, margin: this.state.margin, mode: this.state.mode });
-    } catch (_) {}
-    const canvas = document.getElementById("qrCanvas");
-    if (!canvas || !this.state.isValid) return;
-    const link = document.createElement("a");
-    link.download = "qr-code.png";
-    try {
-      if (canvas.toBlob) {
-        canvas.toBlob((blob) => {
-          if (!blob) return;
-          const url = URL.createObjectURL(blob);
-          link.href = url;
-          link.click();
-          URL.revokeObjectURL(url);
-          this.showSuccess("PNG downloaded");
-          UsageTracker.trackToolUse("qr-tools", "download_png", { size: this.state.size, mode: this.state.mode });
-        });
-      } else {
-        link.href = canvas.toDataURL("image/png");
-        link.click();
-        this.showSuccess("PNG downloaded");
-        UsageTracker.trackToolUse("qr-tools", "download_png", { size: this.state.size, mode: this.state.mode });
-      }
-    } catch (e) {
-      this.showError("Failed to download PNG");
-      console.error(e);
-    }
+  onRouteData(data) {
+    if (data?.tab) this.selectTab(data.tab);
   }
 
-  async downloadSvg() {
-    try {
-      UsageTracker.trackEvent("qr-tools", "download_svg", { size: this.state.size, margin: this.state.margin, mode: this.state.mode });
-    } catch (_) {}
-    const content = (this.state.content || "").trim();
-    if (!content || !this.state.isValid) return;
-    try {
-      const svgString = await this.service.generateSvgString(content, this.getConfig());
-      const blob = new Blob([svgString], { type: "image/svg+xml" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "qr-code.svg";
-      link.click();
-      URL.revokeObjectURL(url);
-      this.showSuccess("SVG downloaded");
-      UsageTracker.trackToolUse("qr-tools", "download_svg", { size: this.state.size, mode: this.state.mode });
-    } catch (e) {
-      this.showError("Failed to download SVG");
-      console.error(e);
-    }
+  onActivate() {
+    this.tools[this.activeTab].activate();
   }
 
-  resetForm() {
-    const modeEl = document.getElementById("qrMode");
-    const contentEl = document.getElementById("qrContent");
-    const sizeEl = document.getElementById("qrSize");
-    const marginEl = document.getElementById("qrMargin");
-    const fgEl = document.getElementById("qrColorForeground");
-    const bgEl = document.getElementById("qrColorBackground");
+  onDeactivate() {
+    Object.values(this.tools).forEach((tool) => tool.deactivate());
+  }
 
-    if (modeEl) modeEl.value = "text";
-    if (contentEl) contentEl.value = "";
-    if (sizeEl) sizeEl.value = "256";
-    if (marginEl) marginEl.value = "16";
-    if (fgEl) fgEl.value = "#000000";
-    if (bgEl) bgEl.value = "#FFFFFF";
-
-    this.state = {
-      mode: "text",
-      content: "",
-      size: 256,
-      margin: 16,
-      foreground: "#000000",
-      background: "#FFFFFF",
-      isValid: false,
-    };
-    this.updatePreview();
+  onUnmount() {
+    Object.values(this.tools).forEach((tool) => tool.unmount());
   }
 }
+
 export { QRTools };

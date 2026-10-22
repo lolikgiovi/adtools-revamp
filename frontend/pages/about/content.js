@@ -24,19 +24,14 @@ export const toolGuides = {
     howToUse: ["Open the Encode or Decode tab.", "Enter text or select a file.", "Run the operation, then copy or save the result."],
     notes: "Use the file mode when the payload is not practical to paste into the editor.",
   },
-  "tlv-viewer": {
-    summary: "Parse QRIS and BER-TLV payloads into readable tree and table views.",
-    howToUse: [
-      "Paste a TLV payload into the input.",
-      "Choose the parser mode if prompted.",
-      "Parse the payload and inspect tags, lengths, and values.",
-    ],
-    notes: "Useful for checking payment payloads and nested tag structure.",
-  },
   "qr-tools": {
-    summary: "Generate a static QR code from text or a URL.",
-    howToUse: ["Enter the text or URL to encode.", "Generate the QR code.", "Download the image or copy the encoded value."],
-    notes: "No account or external generator is needed.",
+    summary: "Generate QR codes or inspect QRIS and BER-TLV payloads.",
+    howToUse: [
+      "Use QR Generator to encode text or a URL and download PNG or SVG.",
+      "Use TLV Viewer to paste a payload, choose its format, and parse it.",
+      "Inspect parsed tags in Tree, Table, or JSON view.",
+    ],
+    notes: "Switching tabs preserves each tab's current input and results.",
   },
   "quick-query": {
     summary: "Generate Oracle MERGE, INSERT, or UPDATE SQL from schema-backed spreadsheet data.",

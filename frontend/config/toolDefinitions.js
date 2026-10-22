@@ -23,12 +23,8 @@ const TOOL_MODULES = {
     description: "Count characters, words, lines, and UTF-8 bytes as you type",
     load: () => import("../tools/char-counter/main.js").then((module) => ({ ToolClass: module.CharCounter })),
   },
-  "tlv-viewer": {
-    description: "Parse QRIS & BER-TLV payloads with tree and table views",
-    load: () => import("../tools/tlv-viewer/main.js").then((module) => ({ ToolClass: module.TLVViewer })),
-  },
   "qr-tools": {
-    description: "Generate static QR codes from text or URLs",
+    description: "Generate QR codes and inspect QRIS or BER-TLV payloads",
     load: () => import("../tools/qr-tools/main.js").then((module) => ({ ToolClass: module.QRTools })),
   },
   "quick-query": {

@@ -31,6 +31,14 @@
   overflow: hidden;
 }
 
+.tlv-input-header,
+.tlv-output-header {
+  box-sizing: border-box;
+  min-height: 4rem;
+  flex-shrink: 0;
+  padding: 0.75rem 1rem;
+}
+
 /* ── Input panel ───────────────────────────────────────────────────────── */
 
 .tlv-input-header {
@@ -38,7 +46,6 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--tlv-border);
   flex-wrap: wrap;
 }
@@ -128,7 +135,6 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.55rem 0.75rem;
   border-bottom: 1px solid var(--tlv-border);
   flex-wrap: wrap;
 }

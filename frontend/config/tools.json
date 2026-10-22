@@ -57,15 +57,8 @@
       "order": 32
     },
     {
-      "id": "tlv-viewer",
-      "name": "TLV Viewer",
-      "category": "general",
-      "icon": "tlv",
-      "order": 35
-    },
-    {
       "id": "qr-tools",
-      "name": "QR Tools",
+      "name": "QR & TLV",
       "category": "general",
       "icon": "qr",
       "order": 40
