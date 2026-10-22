@@ -86,10 +86,22 @@ class MasterLockey extends BaseTool {
   setupTabListeners() {
     // Restore last saved tab
     const savedTab = localStorage.getItem("masterLockeyActiveTab") || "lockey";
-    const savedButton = Array.from(this.els.tabButtons).find((b) => b.dataset.tab === savedTab);
-    if (savedButton) {
-      this.switchTab(savedTab);
+    if (savedTab === "bulk-search") {
+      localStorage.setItem("masterLockeySearchMode", "bulk");
+      localStorage.setItem("masterLockeyActiveTab", "lockey");
     }
+    this.switchSearchMode(localStorage.getItem("masterLockeySearchMode"));
+    this.switchTab(savedTab === "confluence" ? "confluence" : "lockey");
+
+    this.els.searchModeButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const mode = button.dataset.searchMode;
+        this.switchSearchMode(mode);
+        localStorage.setItem("masterLockeySearchMode", mode);
+        localStorage.setItem("masterLockeyActiveTab", "lockey");
+        UsageTracker.trackEvent("master-lockey", "search_mode_switch", { mode });
+      });
+    });
 
     this.els.tabButtons.forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -109,24 +121,22 @@ class MasterLockey extends BaseTool {
     const targetButton = Array.from(this.els.tabButtons).find((b) => b.dataset.tab === targetTab);
     if (targetButton) targetButton.classList.add("active");
 
-    // Toggle panels
-    if (targetTab === "lockey") {
-      this.els.lockeyPanel.classList.add("active");
-      this.els.confluencePanel.classList.remove("active");
-      this.els.bulkSearchPanel.classList.remove("active");
-    } else if (targetTab === "confluence") {
-      this.els.lockeyPanel.classList.remove("active");
-      this.els.confluencePanel.classList.add("active");
-      this.els.bulkSearchPanel.classList.remove("active");
-      // Initialize Confluence section when switching to tab
-      this.showConfluenceSection();
-    } else if (targetTab === "bulk-search") {
-      this.els.lockeyPanel.classList.remove("active");
-      this.els.confluencePanel.classList.remove("active");
-      this.els.bulkSearchPanel.classList.add("active");
-      // Check if data is loaded and update UI
-      this.updateBulkSearchState();
-    }
+    const isSearch = targetTab === "lockey";
+    this.els.searchPanel.classList.toggle("active", isSearch);
+    this.els.confluencePanel.classList.toggle("active", !isSearch);
+    if (!isSearch) this.showConfluenceSection();
+  }
+
+  switchSearchMode(mode) {
+    const isBulk = mode === "bulk";
+    this.els.lockeyPanel.classList.toggle("active", !isBulk);
+    this.els.bulkSearchPanel.classList.toggle("active", isBulk);
+    this.els.searchModeButtons.forEach((button) => {
+      const active = button.dataset.searchMode === (isBulk ? "bulk" : "single");
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+    this.updateBulkSearchState();
   }
 
   bindElements() {
@@ -182,6 +192,8 @@ class MasterLockey extends BaseTool {
       btnClearConfluenceSearch: this.container.querySelector("#btn-clear-confluence-search"),
       // Tab elements
       tabButtons: this.container.querySelectorAll(".ml-tabs .tab-button"),
+      searchPanel: this.container.querySelector("#search-tab-panel"),
+      searchModeButtons: this.container.querySelectorAll(".lockey-mode-btn"),
       lockeyPanel: this.container.querySelector("#lockey-tab-panel"),
       confluencePanel: this.container.querySelector("#confluence-tab-panel"),
       // Bulk search elements
@@ -777,8 +789,7 @@ class MasterLockey extends BaseTool {
     this.els.infoVersion.textContent = languagePackId;
     this.els.infoVersion.style.display = "inline";
 
-    // Show search section
-    this.els.searchSection.style.display = "flex";
+    this.setSingleSearchEnabled(true);
 
     // Build table headers
     this.buildTableHeaders(languages);
@@ -978,13 +989,19 @@ class MasterLockey extends BaseTool {
     return escapedText.replace(regex, '<mark class="search-highlight">$1</mark>');
   }
 
+  setSingleSearchEnabled(enabled) {
+    [this.els.searchMode, this.els.searchInput, this.els.btnClearSearch, this.els.btnWholeWord].forEach((control) => {
+      control.disabled = !enabled;
+    });
+  }
+
   showLoading() {
     this.els.loadingState.style.display = "flex";
     this.els.emptyState.style.display = "none";
     this.els.errorState.style.display = "none";
     this.els.tableContainer.style.display = "none";
     this.els.infoVersion.style.display = "none";
-    this.els.searchSection.style.display = "none";
+    this.setSingleSearchEnabled(false);
 
     this.els.btnFetch.classList.add("loading");
     this.els.btnFetch.querySelector(".btn-spinner").style.display = "inline";
@@ -1005,7 +1022,7 @@ class MasterLockey extends BaseTool {
     this.els.emptyState.style.display = "none";
     this.els.tableContainer.style.display = "none";
     this.els.infoVersion.style.display = "none";
-    this.els.searchSection.style.display = "none";
+    this.setSingleSearchEnabled(false);
   }
 
   hideError() {
@@ -1553,6 +1570,7 @@ class MasterLockey extends BaseTool {
     this.els.btnClearBulk.addEventListener("click", () => {
       this.els.bulkSearchInput.value = "";
       this.els.bulkSearchResults.style.display = "none";
+      this.els.bulkSearchResultsCount.textContent = "";
       this.els.btnBulkSearch.disabled = true;
     });
 
@@ -1598,6 +1616,9 @@ class MasterLockey extends BaseTool {
   updateBulkSearchState() {
     const hasData = this.parsedData && this.parsedData.rows && this.parsedData.rows.length > 0;
 
+    this.els.btnPasteBulk.disabled = !hasData;
+    this.els.btnClearBulk.disabled = !hasData;
+
     if (hasData) {
       this.els.bulkSearchNoData.style.display = "none";
       this.els.bulkSearchInput.disabled = false;
@@ -1606,8 +1627,9 @@ class MasterLockey extends BaseTool {
       const hasInput = this.els.bulkSearchInput.value.trim().length > 0;
       this.els.btnBulkSearch.disabled = !hasInput;
     } else {
-      this.els.bulkSearchNoData.style.display = "block";
+      this.els.bulkSearchNoData.style.display = "flex";
       this.els.bulkSearchInput.disabled = true;
+      this.els.bulkSearchResultsCount.textContent = "";
       this.els.btnBulkSearch.disabled = true;
       this.els.bulkSearchResults.style.display = "none";
     }

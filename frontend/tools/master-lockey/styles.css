@@ -1057,48 +1057,7 @@
 .bulk-search-section {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 4px 0;
-}
-
-.bulk-search-intro {
-  margin-bottom: 0;
-}
-
-.bulk-search-hint {
-  font-size: 0.75rem;
-  color: hsl(var(--muted-foreground));
-  margin: 0;
-}
-
-.bulk-search-input-section {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.bulk-search-input {
-  width: 100%;
-  min-height: 100px;
-  padding: 12px;
-  border: 1px solid hsl(var(--border));
-  border-radius: calc(var(--radius) - 2px);
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
-  font-family: monospace;
-  font-size: 0.75rem;
-  line-height: 1.5;
-  resize: vertical;
-}
-
-.bulk-search-input:focus {
-  outline: none;
-  border-color: hsl(var(--ring));
-}
-
-.bulk-search-input::placeholder {
-  color: hsl(var(--muted-foreground));
-  opacity: 0.6;
+  gap: 0;
 }
 
 .bulk-search-controls {
@@ -1114,15 +1073,6 @@
   color: hsl(var(--foreground));
   font-size: 0.7rem;
   cursor: pointer;
-}
-
-.bulk-search-warning {
-  padding: 12px;
-  background: hsl(45 93% 47% / 0.1);
-  border: 1px solid hsl(45 93% 47%);
-  border-radius: calc(var(--radius) - 2px);
-  color: hsl(45 93% 30%);
-  font-size: 0.75rem;
 }
 
 .bulk-search-results {
@@ -1143,41 +1093,6 @@
   border-radius: calc(var(--radius) - 2px);
 }
 
-.bulk-search-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.7rem;
-}
-
-.bulk-search-table thead {
-  position: sticky;
-  top: 0;
-  background: hsl(var(--muted));
-  z-index: 10;
-}
-
-.bulk-search-table th {
-  padding: 8px 12px;
-  text-align: left;
-  font-weight: 600;
-  border-bottom: 2px solid hsl(var(--border));
-}
-
-.bulk-search-table td {
-  padding: 8px 12px;
-  border-bottom: 1px solid hsl(var(--border));
-}
-
-.bulk-search-table td:first-child {
-  font-family: monospace;
-  color: hsl(var(--primary));
-  font-weight: 500;
-}
-
-.bulk-search-table tbody tr:hover {
-  background: hsl(var(--muted));
-}
-
 /* Bulk Search Status Indicators */
 .status-found {
   color: #22c55e;
@@ -1190,7 +1105,7 @@
 }
 
 /* Row styling for not-found entries */
-.bulk-search-table .row-not-found td {
+.bulk-search-table-container .row-not-found td {
   color: hsl(var(--destructive));
 }
 
@@ -1395,4 +1310,136 @@
 #bulk-confluence-en-header,
 #bulk-confluence-id-header {
   min-width: 100px;
+}
+
+/* Single and bulk search share the Search Lockey tab. */
+.lockey-mode-panel {
+  display: none;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.lockey-mode-panel.active {
+  display: flex;
+}
+
+.lockey-search-row {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.lockey-search-row .master-lockey-search {
+  flex: 1;
+  min-width: 0;
+}
+
+.lockey-mode-toggle {
+  display: flex;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+}
+
+.lockey-mode-btn {
+  padding: 9px 12px;
+  border: 0;
+  background: hsl(var(--background));
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.lockey-mode-btn + .lockey-mode-btn {
+  border-left: 1px solid hsl(var(--border));
+}
+
+.lockey-mode-btn:hover:not(.active) {
+  background: hsl(var(--muted));
+}
+
+.lockey-mode-btn.active {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+.lockey-mode-btn:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: -3px;
+}
+
+#search-tab-panel .bulk-search-input {
+  flex: 1;
+  min-width: 120px;
+  height: 32px;
+  min-height: 32px;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--foreground));
+  font: inherit;
+  font-size: 0.75rem;
+  line-height: 16px;
+  resize: vertical;
+}
+
+#search-tab-panel .bulk-search-input:focus {
+  outline: none;
+}
+
+#search-tab-panel .search-container:focus-within {
+  border-color: hsl(var(--ring));
+}
+
+#search-tab-panel .bulk-search-controls {
+  align-self: stretch;
+  flex-shrink: 0;
+  gap: 0;
+}
+
+#search-tab-panel .search-meta {
+  flex-wrap: wrap;
+  min-height: 28px;
+}
+
+#search-tab-panel .bulk-search-results {
+  margin-top: 0;
+}
+
+#search-tab-panel .bulk-search-table-container {
+  max-height: none;
+}
+
+#search-tab-panel .bulk-search-results .results-header {
+  justify-content: flex-end;
+  margin: 8px 0 0;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .lockey-search-row .master-lockey-search {
+    flex-basis: 100%;
+  }
+
+  #search-tab-panel .search-container {
+    flex-wrap: wrap;
+  }
+
+  #search-tab-panel .search-input {
+    min-width: 120px;
+  }
+}
+
+#search-tab-panel .search-container:has(:disabled) {
+  opacity: 0.6;
+}
+
+#search-tab-panel .search-container :disabled {
+  cursor: not-allowed;
 }
