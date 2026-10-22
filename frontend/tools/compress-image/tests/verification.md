@@ -179,3 +179,25 @@ the four dependencies. Before publishing binaries/WASM, prepare corresponding
 source and build materials for the exact shipped versions alongside the release;
 upstream links alone are not the release source artifact. This task does not
 publish a release, sign/notarize an app, or change deployed services.
+
+## UI refinement verification — 2026-10-22
+
+Observed PASS: 44 browser checks at desktop, 768px and 390px in dark mode.
+The five new checks cover accessible file-input naming, results/ZIP grouping,
+selected-image state, invalid height focus/association and ZIP busy labeling.
+All 31 focused Vitest tests, ESLint, formatting and Vite production build pass.
+Existing mixed-import and chunk-size build warnings remain.
+
+Reproduce using the existing dev server and these routes:
+
+- `/tools/compress-image/tests/browser.html?theme=dark`
+- `/tools/compress-image/tests/review.html?theme=dark`
+- `/tools/compress-image/tests/review.html?width=768&theme=dark`
+
+The default routes exercise the light theme. Screenshots from this UI pass:
+[dark diagnostics](./ui-refinement-dark.png) and
+[390px comparison](./ui-refinement-mobile.png).
+Visual inspection included setup, results, comparison and expanded diagnostics.
+The detector reported only the same three dynamic-image false positives:
+preview sources and dimensions are assigned synchronously after template creation.
+This pass establishes browser evidence, not packaged native behavior.

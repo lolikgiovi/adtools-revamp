@@ -32,17 +32,16 @@ export class CompressImage extends BaseTool {
     return `<section class="tool-container compress-image" aria-label="Compress Image">
       <header class="ci-toolbar"><div><h2>Compress Image</h2>
         <p>Smaller files. A clear view of what changed. Images stay on your device.</p></div>
-        <div class="ci-actions"><button class="btn btn-ghost btn-sm" data-ci="clear" disabled>Clear all</button>
-        <button class="btn btn-secondary btn-sm" data-ci="zip" disabled>Download ZIP</button></div></header>
+        </header>
       <div class="ci-setup"><div class="ci-drop">
-        <input type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" multiple id="ci-files" class="sr-only">
+        <input type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" multiple id="ci-files" data-ci="files" aria-label="Add images" tabindex="-1" class="sr-only">
         <button class="btn btn-secondary" data-ci="choose">Add images</button>
         <p>or drop your files here</p><small>PNG, JPEG, WebP · 20 files · 32 MB each</small>
       </div><fieldset class="ci-settings"><legend class="sr-only">Compression settings</legend>
         <div class="ci-settings-line"><label>Preset<select data-ci="preset" name="preset" data-searchable-dropdown-ignore>
           <option value="high">High Quality</option><option value="balanced" selected>Balanced</option>
           <option value="small">Smaller File</option></select></label>
-          <label>JPEG / WebP quality <output data-ci="quality-value">85</output>
+          <label class="ci-quality"><span>JPEG / WebP quality <output data-ci="quality-value">85</output></span>
           <input data-ci="quality" name="quality" aria-label="JPEG and WebP quality" type="range" min="1" max="100" value="85"></label></div>
         <label class="ci-toggle"><input data-ci="lossy-png" type="checkbox"> Allow lossy PNG</label>
         <div class="ci-bounds" data-ci="png-quality" hidden>
@@ -58,8 +57,11 @@ export class CompressImage extends BaseTool {
         <div class="ci-run"><button class="btn btn-primary" data-ci="compress" disabled>Compress images</button>
         <span data-ci="settings-note">Original dimensions kept</span></div>
       </fieldset></div>
-      <p class="ci-error-message" data-ci="error" role="alert" hidden></p>
-      <div class="ci-batch"><p class="ci-summary" role="status" aria-live="polite">Add images, choose compression, then compare the results.</p>
+      <p id="ci-error" class="ci-error-message" data-ci="error" role="alert" hidden></p>
+      <div class="ci-batch"><div class="ci-batch-header"><div><h3>Images <span data-ci="ready-count"></span></h3>
+        <p class="ci-summary" role="status" aria-live="polite">Add images, choose compression, then compare the results.</p></div>
+        <div class="ci-actions"><button class="btn btn-ghost btn-sm" data-ci="clear" disabled>Clear all</button>
+        <button class="btn btn-primary btn-sm" data-ci="zip" disabled>Download ZIP</button></div></div>
         <p class="ci-settings-hint" data-ci="changed" hidden>Settings changed. Compress again to update your results.</p>
         <div class="ci-list" role="region" aria-label="Image results" tabindex="0" hidden>
           <table><thead><tr><th scope="col">Image</th><th scope="col">Before</th><th scope="col">After</th><th scope="col">Saved</th><th scope="col"><span class="sr-only">Download</span></th></tr></thead>
@@ -111,8 +113,19 @@ export class CompressImage extends BaseTool {
     this.$("settings-note").textContent = resize ? "Resize first, then compress" : "Original dimensions kept";
     this.$("changed").hidden = !this.items.some((item) => item.result);
     this.$("quality-value").textContent = this.$("quality").value;
+    this.$("compress").classList.add("btn-primary");
+    this.$("compress").classList.remove("btn-secondary");
   }
-  error(message) {
+  error(message, field) {
+    this.container.querySelectorAll('[aria-invalid="true"]').forEach((input) => {
+      input.removeAttribute("aria-invalid");
+      input.removeAttribute("aria-describedby");
+    });
+    if (field) {
+      this.$(field).setAttribute("aria-invalid", "true");
+      this.$(field).setAttribute("aria-describedby", "ci-error");
+      this.$(field).focus();
+    }
     this.$("error").hidden = !message;
     this.$("error").textContent = message;
   }
@@ -134,7 +147,7 @@ export class CompressImage extends BaseTool {
   createRow(item) {
     const row = document.createElement("tr");
     row.className = "ci-file-row";
-    row.innerHTML = `<th scope="row"><button class="ci-select" disabled><span class="ci-filename"></span><span class="ci-file-state">Queued</span></button></th>
+    row.innerHTML = `<th scope="row"><button class="ci-select" aria-pressed="false" disabled><span class="ci-filename"></span><span class="ci-file-state">Queued</span></button></th>
       <td class="ci-before"></td><td class="ci-after">—</td><td class="ci-saved">—</td>
       <td><button class="btn btn-ghost btn-sm ci-download" disabled>Download</button></td>`;
     row.querySelector(".ci-filename").textContent = item.file.name;
@@ -168,15 +181,21 @@ export class CompressImage extends BaseTool {
           settings.pngQuality.target > 100 ||
           settings.pngQuality.min > settings.pngQuality.target))
     ) {
-      this.error("Choose quality values between 0 and 100, with PNG minimum no higher than its target.");
+      const invalid = !PRESETS[settings.preset]
+        ? "preset"
+        : !this.$("quality").validity.valid
+          ? "quality"
+          : !this.$("png-min").validity.valid
+            ? "png-min"
+            : "png-target";
+      this.error("Choose quality values between 0 and 100, with PNG minimum no higher than its target.", invalid);
       return;
     }
     if (settings.resize) {
       try {
         fitDimensions(1, 1, settings.width, settings.height);
       } catch (error) {
-        this.error(error.message);
-        this.$("width").focus();
+        this.error(error.message, this.$("width").validity.valid ? "height" : "width");
         return;
       }
     }
@@ -373,16 +392,19 @@ export class CompressImage extends BaseTool {
   }
   selectItem(item) {
     this.selected = item;
-    this.items.forEach((entry) => entry.row.classList.toggle("is-selected", entry === item));
+    this.items.forEach((entry) => {
+      entry.row.classList.toggle("is-selected", entry === item);
+      entry.row.querySelector(".ci-select").setAttribute("aria-pressed", String(entry === item));
+    });
     const inspector = this.container.querySelector(".ci-inspector");
     inspector.hidden = false;
     inspector.innerHTML = `<header class="ci-inspector-header"><div><h3></h3><p class="ci-detail"></p></div>
-      <div class="ci-view-controls" role="group" aria-label="Comparison view"><button class="btn btn-sm btn-secondary" data-ci="pair">Side by side</button>
-      <button class="btn btn-sm btn-secondary" data-ci="overlay">Slider</button></div></header>
+      </header><div class="ci-comparison-toolbar"><div class="ci-view-controls" role="group" aria-label="Comparison view"><button class="btn btn-sm btn-secondary" data-ci="pair">Side by side</button>
+      <button class="btn btn-sm btn-secondary" data-ci="overlay">Slider</button></div><div data-ci="preview-controls"></div></div>
       <div class="ci-preview"></div><details class="ci-diagnostics"><summary>Processing details</summary>
       <p>PNG uses Oxipng; optional color reduction uses libimagequant first. JPEG uses MozJPEG; WebP uses libwebp. Quality values across codecs are not equivalent. JPEG/WebP and lossy PNG are rendered in sRGB; orientation is applied before encoding. Other metadata is not copied on these paths.</p>
-      <a href="./licenses/image-optimizer/NOTICE.txt" target="_blank" rel="noopener">Image library licenses</a>
-      <button class="btn btn-secondary btn-sm" data-ci="copy-log">Copy log</button><pre></pre></details>`;
+      <div class="ci-log-actions"><a href="./licenses/image-optimizer/NOTICE.txt" target="_blank" rel="noopener">Image library licenses</a>
+      <button class="btn btn-secondary btn-sm" data-ci="copy-log">Copy log</button></div><pre tabindex="0" aria-label="Processing log"></pre></details>`;
     inspector.querySelector("h3").textContent = item.file.name;
     const result = item.result;
     inspector.querySelector(".ci-detail").textContent =
@@ -414,9 +436,14 @@ export class CompressImage extends BaseTool {
       preview.replaceChildren();
       return;
     }
-    preview.innerHTML = `<div class="ci-zoom-controls"><label>Zoom <input data-ci="zoom" type="range" min="1" max="8" step="0.25" value="1"><output data-ci="zoom-value">Fit</output></label>
+    this.$("preview-controls").innerHTML =
+      `<div class="ci-zoom-controls"><label>Zoom <input data-ci="zoom" type="range" min="1" max="8" step="0.25" value="1"><output data-ci="zoom-value">Fit</output></label>
       <button class="btn btn-ghost btn-sm" data-ci="fit">Reset view</button>
-      <button class="btn btn-secondary btn-sm" data-ci="original">Download original</button><span>Zoom is linked. Drag to pan, or use arrow keys.</span></div>
+      </div><div class="ci-preview-downloads"><button class="btn btn-ghost btn-sm" data-ci="original">Download original</button>
+      <button class="btn btn-secondary btn-sm" data-ci="result">Download result</button></div>`;
+    this.$("result").disabled = this.running || this.zipping;
+    this.$("result").addEventListener("click", () => this.download(item.blob, this.outputName(item)));
+    preview.innerHTML = `<p class="ci-pan-hint">Zoom is linked. Drag to pan, or use arrow keys.</p>
       <div class="ci-pair" ${this.view === "pair" ? "" : "hidden"}>
       <figure><figcaption>Original <span>${size(item.file.size)}</span></figcaption><div class="ci-viewport ci-checker" tabindex="0" role="group" aria-label="Original image. Arrow keys pan; plus and minus zoom."><img alt="Original image"><span class="ci-cursor" hidden></span></div></figure>
       <figure><figcaption>Result <span>${size(item.blob.size)}</span></figcaption><div class="ci-viewport ci-checker" tabindex="0" role="group" aria-label="Result image. Arrow keys pan; plus and minus zoom."><img alt="Compressed result"><span class="ci-cursor" hidden></span></div></figure></div>
@@ -568,11 +595,18 @@ export class CompressImage extends BaseTool {
     const before = ready.reduce((sum, item) => sum + item.file.size, 0),
       after = ready.reduce((sum, item) => sum + item.blob.size, 0);
     const errors = this.items.filter((item) => item.status === "Error").length;
-    this.container.querySelector(".ci-summary").textContent = this.items.length
-      ? `${this.items.length} ${this.items.length === 1 ? "file" : "files"} · ${ready.length} ready${errors ? ` · ${errors} failed` : ""}${ready.length ? ` · ${size(before)} before / ${size(after)} after · ${after <= before ? `${size(before - after)} saved` : `${size(after - before)} larger`} (${savings(before, after)})` : ""}${this.running ? " · Compressing…" : ""}`
-      : "Add images, choose compression, then compare the results.";
+    this.$("ready-count").textContent = this.items.length ? `${ready.length} of ${this.items.length} ready` : "";
+    this.container.querySelector(".ci-summary").textContent = this.zipping
+      ? "Creating ZIP…"
+      : this.items.length
+        ? `${ready.length ? `${size(before)} → ${size(after)} · ${after <= before ? `${size(before - after)} saved` : `${size(after - before)} larger`} (${savings(before, after)})` : "Images are queued. Choose settings, then compress."}${errors ? ` · ${errors} failed` : ""}${this.running ? " · Compressing…" : ""}`
+        : "Add images, choose compression, then compare the results.";
     this.container.querySelector(".ci-list").hidden = !this.items.length;
     this.$("clear").disabled = !this.items.length;
+    this.$("zip").textContent = this.zipping ? "Creating ZIP…" : "Download ZIP";
+    this.$("compress").classList.toggle("btn-primary", !ready.length || !this.$("changed").hidden);
+    this.$("compress").classList.toggle("btn-secondary", ready.length > 0 && this.$("changed").hidden);
+    if (this.$("result")) this.$("result").disabled = this.running || this.zipping;
     this.$("zip").disabled = !ready.length || this.running || this.zipping;
     this.$("compress").disabled = !this.items.length || this.running || this.zipping;
     this.$("compress").textContent = this.running

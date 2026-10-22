@@ -7,6 +7,8 @@ UsageTracker.trackToolUse = () => {};
 import { CompressImage } from "../main.js";
 import { makeChunk } from "../service.js";
 
+document.documentElement.classList.toggle("dark", new URLSearchParams(location.search).get("theme") === "dark");
+
 const checks = [];
 function check(condition, message) {
   if (!condition) throw new Error(message);
@@ -384,6 +386,25 @@ try {
   );
   tool.view = "pair";
   tool.selectItem(tool.items[0]);
+  check(control("files").getAttribute("aria-label") === "Add images", "File input has an accessible name.");
+  check(control("zip").closest(".ci-batch-header"), "Batch download is grouped with results.");
+  check(
+    tool.items[0].row.querySelector(".ci-select").getAttribute("aria-pressed") === "true",
+    "Selected image is exposed to assistive technology.",
+  );
+  change("resize", true);
+  change("height", "0");
+  await compress();
+  check(
+    document.activeElement === control("height") && control("height").getAttribute("aria-invalid") === "true",
+    "Invalid height is identified and focused.",
+  );
+  change("resize", false);
+  change("height", "1920");
+  tool.error("");
+  const zipTask = tool.downloadZip();
+  check(control("zip").textContent === "Creating ZIP…", "ZIP generation exposes a busy label.");
+  await zipTask;
   document.querySelector("#verification").textContent = `PASS: ${checks.length} browser checks. Open details for the repeatable evidence.`;
   document.querySelector("#evidence").textContent = checks.join("\n");
 } catch (error) {

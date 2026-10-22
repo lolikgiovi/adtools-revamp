@@ -31,7 +31,7 @@ Desktop setup places upload beside settings. Results precede the inspector.
 Side by side is the confirmed default (`this.view = "pair"`), with equal
 Original and Result panes; Slider is an explicit alternate view.
 At 680px and below, setup becomes one column, preview height changes from
-340px to 240px, captions stack, and action rows wrap. Results become compact
+380px to 240px, captions stack, and action rows wrap. Results become compact
 three-column row grids: filename and download above Before, After, and Saved.
 The pair stays side by side at this breakpoint for direct visual comparison.
 These are source-defined responsive results, not browser-verification claims.
@@ -71,3 +71,18 @@ Processing details stay in a collapsed native disclosure with Copy log.
 Evidence: `main.js`, `styles.css` in this tool; `frontend/styles/themes.css`,
 `reset.css`, `buttons.css`; Impeccable `reference/document.md` (canonical
 section ordering adapted to this scoped handoff). Runtime evidence is separate.
+
+## 2026-10-22 refinement
+
+Upload has a deliberate height and a capped desktop column. Quality label/value
+share a line. Batch ready count, savings, Clear all and ZIP download sit together.
+Completed compression uses a secondary action until settings change. Comparison
+modes form a neutral segmented control; zoom/reset and original/result downloads
+are grouped. Transparency uses a low contrast checker. Diagnostics keep themed
+links, a separate action row and a bounded keyboard-focusable log surface.
+File input naming, selected-image state, invalid field focus and ZIP progress
+are exposed to assistive technology.
+
+Reproduce dark viewport checks at `/tools/compress-image/tests/browser.html?theme=dark`
+and `/tools/compress-image/tests/review.html?theme=dark` (390px), or append
+`&width=768` for the intermediate viewport. The light theme remains the default.

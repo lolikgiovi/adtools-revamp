@@ -20,5 +20,13 @@
   </head>
   <body>
     <iframe src="./browser.html" title="390 pixel mobile viewport"></iframe>
+    <script>
+      const params = new URLSearchParams(location.search);
+      const frame = document.querySelector("iframe");
+      const width = params.get("width") === "768" ? 768 : 390;
+      frame.style.width = `${width}px`;
+      frame.title = `${width} pixel viewport`;
+      frame.src = `./browser.html?theme=${params.get("theme") === "dark" ? "dark" : "light"}`;
+    </script>
   </body>
 </html>
