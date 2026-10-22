@@ -33,6 +33,47 @@ describe("GlobalSearch scopes", () => {
     expect(search.filtered[0]).toMatchObject({ id: "compare-config", name: "Compare Config" });
   });
 
+  it("ranks feature name matches above description-only matches", () => {
+    const search = Object.create(GlobalSearch.prototype);
+    search.index = [
+      {
+        id: "redis-cache",
+        name: "Redis Cache",
+        description: "Inspect cache configuration",
+        route: "redis-cache",
+        type: "tool",
+      },
+      {
+        id: "compare-config",
+        name: "Compare Config",
+        description: "Find cache keys in Redis",
+        route: "compare-config",
+        type: "tool",
+      },
+    ];
+    search.recentInteractionStore = {
+      getRecencyMap: () => new Map([["tool:compare-config", { lastInteractedAt: 300, order: 0 }]]),
+    };
+    search._renderResults = vi.fn();
+
+    search._filter("cache");
+
+    expect(search.filtered.map((item) => item.id)).toEqual(["redis-cache", "compare-config"]);
+  });
+
+  it("uses description matches to break ties between equal name matches", () => {
+    const search = Object.create(GlobalSearch.prototype);
+    search.index = [
+      { id: "alpha", name: "Alpha Tool", description: "Unrelated text", route: "alpha", type: "tool" },
+      { id: "alpha-helper", name: "Alpha Helper", description: "Alpha support", route: "alpha-helper", type: "tool" },
+    ];
+    search._renderResults = vi.fn();
+
+    search._filter("alpha");
+
+    expect(search.filtered.map((item) => item.id)).toEqual(["alpha-helper", "alpha"]);
+  });
+
   it("orders the default result list by latest interaction", () => {
     const search = Object.create(GlobalSearch.prototype);
     search.index = [

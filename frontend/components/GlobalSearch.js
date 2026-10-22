@@ -223,30 +223,62 @@ class GlobalSearch {
     if (!q) {
       this.filtered = this._sortByRecent(candidates).slice(0, 8);
     } else {
-      // Quick Query-style scoring: abbreviations/subsequences supplement exact and name matches.
-      const scored = candidates
-        .map((item) => {
-          const name = String(item.name || "").toLowerCase();
-          const desc = (item.description || "").toLowerCase();
-          const id = String(item.id || "").toLowerCase();
-          let score = scoreFuzzyTerm(q, {
-            name,
-            abbrs: getSearchAbbreviations(name),
-            collapsed: collapseSearchName(name),
-          });
-          if (id.includes(q)) score += 1;
-          if (desc.includes(q)) score += 1;
-          return { item, score };
-        })
-        .filter((x) => x.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .map((x) => x.item);
-
-      this.filtered = this._sortByRecent(scored).slice(0, 8);
+      this.filtered = this._rankCandidates(candidates, q).slice(0, 8);
     }
     this.activeIndex = this.filtered.length ? 0 : -1;
     this._renderResults(this.filtered);
     if (!q && !scope) void this._loadRecentQuickQueryResults(requestId);
+  }
+
+  /**
+   * Rank query matches by feature name first, then description.
+   * Recency only breaks ties so a description-only match can never outrank a name match.
+   */
+  _rankCandidates(candidates, q) {
+    const recencyMap = this.recentInteractionStore?.getRecencyMap?.() || new Map();
+
+    return candidates
+      .map((item, sourceIndex) => {
+        const name = String(item.name || "").toLowerCase();
+        const description = String(item.description || "").toLowerCase();
+        const id = String(item.id || "").toLowerCase();
+
+        const nameScore =
+          scoreFuzzyTerm(q, {
+            name,
+            abbrs: getSearchAbbreviations(name),
+            collapsed: collapseSearchName(name),
+          }) + (id.includes(q) ? 1 : 0);
+        const descriptionScore = description
+          ? scoreFuzzyTerm(q, { name: description, collapsed: collapseSearchName(description) })
+          : 0;
+
+        return {
+          item,
+          sourceIndex,
+          nameScore,
+          descriptionScore,
+          interaction: recencyMap.get(getSearchInteractionKey(item)),
+        };
+      })
+      .filter((candidate) => candidate.nameScore > 0 || candidate.descriptionScore > 0)
+      .sort((a, b) => {
+        const aNameMatch = a.nameScore > 0;
+        const bNameMatch = b.nameScore > 0;
+        if (aNameMatch !== bNameMatch) return aNameMatch ? -1 : 1;
+        if (b.nameScore !== a.nameScore) return b.nameScore - a.nameScore;
+        if (b.descriptionScore !== a.descriptionScore) return b.descriptionScore - a.descriptionScore;
+
+        const aTimestamp = a.interaction?.lastInteractedAt ?? Number.NEGATIVE_INFINITY;
+        const bTimestamp = b.interaction?.lastInteractedAt ?? Number.NEGATIVE_INFINITY;
+        if (bTimestamp !== aTimestamp) return bTimestamp - aTimestamp;
+
+        const aOrder = a.interaction?.order ?? Number.POSITIVE_INFINITY;
+        const bOrder = b.interaction?.order ?? Number.POSITIVE_INFINITY;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return a.sourceIndex - b.sourceIndex;
+      })
+      .map(({ item }) => item);
   }
 
   /** Search the persisted Quick Query table catalog for a qq: or quick: query. */
