@@ -267,3 +267,28 @@ describe("MasterLockey - escapeSpecialChars", () => {
     });
   });
 });
+
+// Highlight each line without interpreting regex punctuation or matching inside words when enabled.
+describe("multiline content highlighting", () => {
+  it("highlights each phrase independently", () => {
+    const tool = new MasterLockey({ on: vi.fn(), emit: vi.fn() });
+    expect(tool.highlightText("Deposito and Kredit", "Deposito\nKredit")).toBe(
+      '<mark class="search-highlight">Deposito</mark> and <mark class="search-highlight">Kredit</mark>',
+    );
+  });
+
+  it("escapes regex symbols and ignores blank lines", () => {
+    const tool = new MasterLockey({ on: vi.fn(), emit: vi.fn() });
+    expect(tool.highlightText("(A+) and [b]", "(A+)\r\n\n[b]")).toBe(
+      '<mark class="search-highlight">(A+)</mark> and <mark class="search-highlight">[b]</mark>',
+    );
+  });
+
+  it("applies whole-word boundaries to every phrase", () => {
+    const tool = new MasterLockey({ on: vi.fn(), emit: vi.fn() });
+    tool.wholeWord = true;
+    expect(tool.highlightText("testing test credit", "test\ncredit")).toBe(
+      'testing <mark class="search-highlight">test</mark> <mark class="search-highlight">credit</mark>',
+    );
+  });
+});

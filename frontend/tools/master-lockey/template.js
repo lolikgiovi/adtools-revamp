@@ -112,7 +112,7 @@ export const MasterLockeyTemplate = /* html */ `
                     <button class="btn-retry" id="btn-retry">Retry</button>
                 </div>
 
-                <div class="table-container" id="table-container" style="display: none;">
+                <div class="table-container" id="table-container" tabindex="0" role="region" aria-label="Lockey results" style="display: none;">
                     <table class="lockey-table" id="lockey-table">
                         <thead id="table-head">
                             <!-- Dynamic headers will be inserted here -->

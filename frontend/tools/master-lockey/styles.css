@@ -5,7 +5,8 @@
 .master-lockey-container {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: calc(100dvh - 89px - var(--window-titlebar-height, 0px));
+  min-height: 0;
   gap: 16px;
   /* padding: 20px; */
   background: hsl(var(--background));
@@ -431,6 +432,7 @@
 /* Table */
 .table-container {
   flex: 1;
+  min-height: 0;
   overflow: auto;
   border: 1px solid hsl(var(--border));
   border-radius: calc(var(--radius) - 2px);
@@ -1292,6 +1294,7 @@
 }
 
 .lockey-search-row {
+  flex-shrink: 0;
   margin-bottom: 16px;
 }
 
@@ -1521,4 +1524,12 @@
 
 .lockey-option-controls .bulk-search-filter {
   border-radius: 8px;
+}
+
+.master-lockey-container > .ml-tabs {
+  flex-shrink: 0;
+}
+
+.master-lockey-container .table-container {
+  isolation: isolate;
 }

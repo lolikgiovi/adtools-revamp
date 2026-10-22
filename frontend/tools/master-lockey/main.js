@@ -693,8 +693,8 @@ class MasterLockey extends BaseTool {
       this.els.searchHint.textContent = "Separate keys with commas or new lines.";
       this.els.searchInput.placeholder = "Enter keys separated by commas or new lines...";
     } else {
-      this.els.searchHint.textContent = "Tip: Search will match text in any language column";
-      this.els.searchInput.placeholder = "Enter content to search...";
+      this.els.searchHint.textContent = "Enter one phrase per line. Matches any phrase in any language.";
+      this.els.searchInput.placeholder = "Enter content phrases, one per line...";
     }
   }
 
@@ -977,11 +977,13 @@ class MasterLockey extends BaseTool {
 
     const escapedText = escapeHtml(escapedSpecialChars);
 
-    // Escape special regex characters in query
-    const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-    // Create regex based on whole word setting
-    const pattern = this.wholeWord ? `\\b(${escapedQuery})\\b` : `(${escapedQuery})`;
+    const terms = this.service.getContentSearchTerms(query);
+    if (terms.length === 0) return escapedText;
+    const alternatives = terms
+      .map((term) => escapeHtml(this.escapeSpecialChars(term)).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+      .sort((a, b) => b.length - a.length)
+      .join("|");
+    const pattern = this.wholeWord ? `\\b(${alternatives})\\b` : `(${alternatives})`;
     const regex = new RegExp(pattern, "gi");
 
     // Replace matches with highlighted version

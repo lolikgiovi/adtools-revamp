@@ -28,6 +28,7 @@
   <body>
     <div id="fixture-controls">
       <button id="load">Load sample data</button>
+      <button id="large">Load 5,000 rows</button>
       <button id="empty">Empty state</button>
       <button id="narrow">Toggle narrow layout</button>
     </div>
@@ -35,6 +36,7 @@
     <main id="fixture"></main>
     <script type="module">
       import { MasterLockey } from "../main.js";
+      import { enhanceSearchableDropdowns } from "../../../components/SearchableDropdown.js";
       import { UsageTracker } from "../../../core/UsageTracker.js";
       UsageTracker.trackEvent = () => {};
       UsageTracker.trackToolUse = () => {};
@@ -46,8 +48,15 @@
         },
       });
       const tool = new MasterLockey({ on() {}, emit() {} });
-      tool.container = document.querySelector("#fixture");
+      tool.container = document.createElement("div");
+      tool.container.className = "tool-root";
+      document.querySelector("#fixture").appendChild(tool.container);
       tool.container.innerHTML = tool.render();
+      const domains = tool.container.querySelector("#domain-selector");
+      ["uat1", "uat2", "uat3"].forEach((domain) => {
+        domains.add(new Option(domain, JSON.stringify({ key: domain, value: "https://example.invalid" })));
+      });
+      enhanceSearchableDropdowns(tool.container);
       tool.bindElements();
       tool.setupEventListeners();
       tool.setupTabListeners();
@@ -63,6 +72,18 @@
         tool.els.errorState.style.display = "none";
         tool.displayData();
       };
+      document.querySelector("#large").onclick = () => {
+        tool.parsedData = {
+          languagePackId: "large-sample",
+          languages: ["en", "id"],
+          rows: Array.from({ length: 5000 }, (_, index) => ({
+            key: `key${String(index).padStart(5, "0")}`,
+            en: index % 5 === 0 ? "Long content ".repeat(40) : `Content ${index}`,
+            id: `Konten ${index}`,
+          })),
+        };
+        tool.displayData();
+      };
       document.querySelector("#empty").onclick = () => {
         tool.parsedData = null;
         tool.setSearchEnabled(false);
@@ -71,7 +92,7 @@
         tool.els.resultsCount.style.display = "none";
         tool.els.infoVersion.style.display = "none";
       };
-      document.querySelector("#narrow").onclick = () => tool.container.classList.toggle("narrow");
+      document.querySelector("#narrow").onclick = () => document.querySelector("#fixture").classList.toggle("narrow");
     </script>
   </body>
 </html>

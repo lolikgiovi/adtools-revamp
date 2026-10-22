@@ -168,25 +168,29 @@ class MasterLockeyService {
       return rows;
     }
 
-    const searchQuery = query.trim();
+    const terms = this.getContentSearchTerms(query);
+    const patterns = wholeWord ? terms.map((term) => new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i")) : null;
     const langsToSearch = specificLang ? [specificLang] : languages;
 
-    return rows.filter((row) => {
-      // Search across specified languages
-      return langsToSearch.some((lang) => {
+    return rows.filter((row) =>
+      langsToSearch.some((lang) => {
         const content = row[lang] || "";
+        return patterns
+          ? patterns.some((pattern) => pattern.test(content))
+          : terms.some((term) => content.toLowerCase().includes(term.toLowerCase()));
+      }),
+    );
+  }
 
-        if (wholeWord) {
-          // Match whole word only using word boundaries
-          const escapedQuery = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-          const regex = new RegExp(`\\b${escapedQuery}\\b`, "i");
-          return regex.test(content);
-        } else {
-          // Partial match (case-insensitive)
-          return content.toLowerCase().includes(searchQuery.toLowerCase());
-        }
-      });
-    });
+  getContentSearchTerms(query) {
+    return [
+      ...new Set(
+        query
+          .split(/[\r\n]+/)
+          .map((term) => term.trim())
+          .filter(Boolean),
+      ),
+    ];
   }
 
   /**

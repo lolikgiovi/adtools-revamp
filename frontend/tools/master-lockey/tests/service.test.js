@@ -740,3 +740,39 @@ describe("unified key search", () => {
     expect(service.filterByKeys(rows, " ,\n ", false, true)).toEqual(rows);
   });
 });
+
+// Multiline failure cases: searching the entire block, blank lines matching everything,
+// losing language restrictions or whole-word semantics, and splitting punctuation inside phrases.
+describe("multiline content search", () => {
+  const service = new MasterLockeyService();
+  const rows = [
+    { key: "deposit", id: "Deposito", en: "Deposit" },
+    { key: "credit", id: "Kredit", en: "Credit card" },
+    { key: "other", id: "Lainnya", en: "Other" },
+  ];
+
+  it("matches any nonblank line across languages, ignoring case and CRLF", () => {
+    expect(service.filterByContent(rows, ["id", "en"], " deposito \r\n\nCREDIT\n")).toEqual(rows.slice(0, 2));
+  });
+
+  it("keeps whole-word matching for every line", () => {
+    expect(service.filterByContent(rows, ["id", "en"], "dep\ncredit", true)).toEqual([rows[1]]);
+  });
+
+  it("respects an explicitly selected language", () => {
+    expect(service.filterByContent(rows, ["id", "en"], "Deposit\nCredit", false, "id")).toEqual([rows[0]]);
+  });
+
+  it("preserves commas within a phrase", () => {
+    expect(
+      service.filterByContent(
+        [
+          { key: "greeting", en: "Hello, world" },
+          { key: "short", en: "Hello" },
+        ],
+        ["en"],
+        "Hello, world\nmissing",
+      ),
+    ).toEqual([{ key: "greeting", en: "Hello, world" }]);
+  });
+});

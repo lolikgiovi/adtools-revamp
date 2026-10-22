@@ -58,3 +58,43 @@ Screenshots: `/tmp/master-lockey-search-toggles.png` and `/tmp/master-lockey-dis
 - Verified at standard width and a 620px tool container. Copy actions wrap beneath when needed;
   the four search options stay together at 620px.
 - Screenshot: `/tmp/master-lockey-two-row-search.png`.
+
+## Multiline content search follow-up
+
+- Content search accepts one phrase per line (LF or CRLF), skips blank lines, and matches any phrase
+  across the language columns. Commas remain literal content.
+- Match Word applies to every phrase. Highlights identify every matching phrase independently.
+- Added seven tests before implementation covering multiline filtering, whole-word rules, language
+  restrictions, punctuation, and highlighting. All 109 focused Master Lockey tests now pass.
+- Browser fixture: select Search by Content and enter `Welcome` and `Lanjut` on separate lines.
+  Verified both sample rows appear, with `Welcome` highlighted in EN and `Lanjut` highlighted in ID.
+  Verified enabling Match Word keeps both exact-word matches.
+- Screenshot: `/tmp/master-lockey-multiline-content.png`.
+
+## Viewport and virtualization follow-up
+
+- The fixture now includes the real `.tool-root` wrapper and a Load 5,000 rows action, with long wrapped
+  content in every fifth row. The wrapper reproduces the app's otherwise indefinite percentage height.
+- Before the fix, the large fixture's table was 211,519px tall, exceeded the 720px viewport, and had
+  no internal overflow despite rendering only 160 data rows plus a spacer.
+- The tool now uses the same viewport/native-titlebar height convention as Lockey Update; the table
+  and nested flex panels can shrink, while tabs and search controls retain their height.
+- After the fix, the table bottom measured 690.5px in a 720px viewport. The table scrolled internally;
+  End reached key04999 with only 40 rows in the DOM at the bottom. Initial rendering remained bounded
+  to 160 data rows and a spacer.
+- Verified multiline search at 620px width: table height shrank to 347px, bottom stayed at 690.5px,
+  and document scrollHeight stayed at 720px. The search controls remained above the scrolling table.
+- Reproduce: open the fixture, click Load 5,000 rows, focus the Lockey results region, and press End.
+  Inspect the final key and compare the region's clientHeight/scrollHeight and rendered row count.
+- No virtualization matching or row-sizing algorithm was changed; this fix bounds its scroll viewport.
+
+## Searchable dropdown layering follow-up
+
+- The fixture now enhances its native selects with the same SearchableDropdown component used by BaseTool.mount,
+  and supplies three sample domains. This reproduces the actual combobox overlay rather than a native select popup.
+- Reproduced: the lower domain option was covered by the table header. DOM hit-testing at that option returned `<th>ID</th>`.
+- Scoped `isolation: isolate` on the table scroll container keeps sticky table headers/cells in their own stacking context.
+- Verified: the same hit-test now reaches the uat3 option. All options are visible above the header at standard and
+  620px widths; the menu stays within the viewport, and the table remains viewport-bounded.
+- Reproduce: load sample data in the fixture and open Pick Domain. The menu must remain above the table header.
+- Screenshot: `/tmp/master-lockey-dropdown-layering.png`.
