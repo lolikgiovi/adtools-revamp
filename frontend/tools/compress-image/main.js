@@ -43,19 +43,19 @@ export class CompressImage extends BaseTool {
           <option value="small">Smaller File</option></select></label>
           <label class="ci-quality"><span>JPEG / WebP quality <output data-ci="quality-value">85</output></span>
           <input data-ci="quality" name="quality" aria-label="JPEG and WebP quality" type="range" min="1" max="100" value="85"></label></div>
-        <label class="ci-toggle"><input data-ci="lossy-png" type="checkbox"> Allow lossy PNG</label>
+        <div class="ci-options"><div class="ci-option"><label class="ci-toggle"><input data-ci="lossy-png" type="checkbox"> Allow lossy PNG</label>
         <div class="ci-bounds" data-ci="png-quality" hidden>
           <label>PNG minimum quality<input data-ci="png-min" type="number" min="0" max="100" step="1" value="80"></label>
           <label>PNG target quality<input data-ci="png-target" type="number" min="0" max="100" step="1" value="95"></label>
           <small>Reduces colors. Compare the result visually. 16-bit PNG stays on the lossless path.</small>
         </div>
         <p data-ci="mode-note">PNG stays lossless by default. JPEG and WebP use lossy compression. Original format kept.</p>
-        <label class="ci-toggle"><input data-ci="resize" type="checkbox" name="resize"> Reduce dimensions</label>
+        </div><div class="ci-option"><label class="ci-toggle"><input data-ci="resize" type="checkbox" name="resize"> Reduce dimensions</label>
+        <p data-ci="settings-note">Original dimensions kept</p>
         <div class="ci-bounds" data-ci="bounds" hidden><label>Max width (px)<input data-ci="width" name="max-width" type="number" min="1" max="16384" step="1" value="1920"></label>
           <label>Max height (px)<input data-ci="height" name="max-height" type="number" min="1" max="16384" step="1" value="1920"></label>
           <small>Fits within these bounds. No cropping or upscaling. Resizing changes pixels and converts colors to sRGB.</small></div>
-        <div class="ci-run"><button class="btn btn-primary" data-ci="compress" disabled>Compress images</button>
-        <span data-ci="settings-note">Original dimensions kept</span></div>
+        </div></div><div class="ci-run"><button class="btn btn-primary" data-ci="compress" disabled>Compress images</button></div>
       </fieldset></div>
       <p id="ci-error" class="ci-error-message" data-ci="error" role="alert" hidden></p>
       <div class="ci-batch"><div class="ci-batch-header"><div><h3>Images <span data-ci="ready-count"></span></h3>

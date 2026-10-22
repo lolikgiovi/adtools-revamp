@@ -201,3 +201,14 @@ Visual inspection included setup, results, comparison and expanded diagnostics.
 The detector reported only the same three dynamic-image false positives:
 preview sources and dimensions are assigned synchronously after template creation.
 This pass establishes browser evidence, not packaged native behavior.
+
+### Setup structure follow-up
+
+After the setup regrouping, desktop and 390px browser harnesses again passed
+all 44 checks. ESLint, Prettier, diff whitespace and production Vite build pass.
+The layout detector reports zero findings. The empty setup was inspected at
+2394px (scaled iframe), native 1280px and 390px. Both optional groups were
+expanded at desktop and phone widths. Reproduce the empty state using
+`/tools/compress-image/tests/layout.html` and
+`/tools/compress-image/tests/review.html?layout&width=2394`.
+Screenshot: [corrected setup](./setup-layout-dark.png).

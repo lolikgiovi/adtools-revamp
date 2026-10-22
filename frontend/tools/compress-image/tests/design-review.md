@@ -86,3 +86,16 @@ are exposed to assistive technology.
 Reproduce dark viewport checks at `/tools/compress-image/tests/browser.html?theme=dark`
 and `/tools/compress-image/tests/review.html?theme=dark` (390px), or append
 `&width=768` for the intermediate viewport. The light theme remains the default.
+
+## Setup structure correction
+
+The setup now uses one full-width panel with a 1:2.5 upload/settings split.
+Settings fields fill two equal columns; PNG and resize each own their controls
+and supporting notes. The run action sits in a right-aligned footer. Below
+900px options stack, and below 680px the entire panel stacks with a full-width
+run action. This supersedes the capped upload column described above.
+
+Visual review uses the actual empty state, not just the populated functional
+harness. Open `tests/layout.html`, or `tests/review.html?layout&width=2394`
+for the wide viewport scaled to fit the review window; `?layout` uses 390px.
+Both optional groups were expanded and inspected at desktop and phone widths.

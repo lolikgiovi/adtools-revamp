@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Compress Image layout review</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body style="padding: 24px">
+    <div id="tool"></div>
+    <script type="module">
+      import { CompressImage } from "../main.js";
+      document.documentElement.classList.add("dark-grey");
+      const tool = new CompressImage();
+      tool.mount(document.querySelector("#tool"));
+    </script>
+  </body>
+</html>

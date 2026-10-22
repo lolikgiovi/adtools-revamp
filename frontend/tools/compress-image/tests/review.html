@@ -23,10 +23,15 @@
     <script>
       const params = new URLSearchParams(location.search);
       const frame = document.querySelector("iframe");
-      const width = params.get("width") === "768" ? 768 : 390;
+      const width = ["768", "1536", "2394"].includes(params.get("width")) ? Number(params.get("width")) : 390;
       frame.style.width = `${width}px`;
       frame.title = `${width} pixel viewport`;
-      frame.src = `./browser.html?theme=${params.get("theme") === "dark" ? "dark" : "light"}`;
+      frame.src = params.has("layout") ? "./layout.html" : `./browser.html?theme=${params.get("theme") === "dark" ? "dark" : "light"}`;
+      if (params.has("layout")) {
+        frame.style.transformOrigin = "top left";
+        frame.style.transform = `scale(${Math.min(1, window.innerWidth / width)})`;
+        document.body.style.overflow = "hidden";
+      }
     </script>
   </body>
 </html>
