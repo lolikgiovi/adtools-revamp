@@ -20,6 +20,7 @@ import { isTauri } from "./core/Runtime.js";
 import WebUpdateChecker from "./core/WebUpdateChecker.js";
 import { ReleaseTips, ReleaseTour, takePendingRelease } from "./core/ReleaseTour.js";
 import { installSearchableDropdowns } from "./components/SearchableDropdown.js";
+import { installTextInputTraits } from "./core/TextInputTraits.js";
 import { initializeLocalRegistrationDefaults, isUserRegistered } from "./core/RegistrationState.js";
 import releaseContent from "./config/release-content.json";
 import { ConnectionIndicators } from "./core/ConnectionIndicators.js";
@@ -91,6 +92,7 @@ class App {
    */
   init() {
     this.setupDOM();
+    installTextInputTraits(document);
     installSearchableDropdowns(document);
     this.buildToolsConfigMap();
     this.buildCategoriesConfigMap();
