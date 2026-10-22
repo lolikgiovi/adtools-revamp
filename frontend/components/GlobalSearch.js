@@ -231,7 +231,7 @@ class GlobalSearch {
   }
 
   /**
-   * Rank query matches by feature name first, then description.
+   * Rank query matches by feature name first, then description, then settings.
    * Recency only breaks ties so a description-only match can never outrank a name match.
    */
   _rankCandidates(candidates, q) {
@@ -249,20 +249,26 @@ class GlobalSearch {
             abbrs: getSearchAbbreviations(name),
             collapsed: collapseSearchName(name),
           }) + (id.includes(q) ? 1 : 0);
-        const descriptionScore = description
-          ? scoreFuzzyTerm(q, { name: description, collapsed: collapseSearchName(description) })
-          : 0;
+        const compactQ = q.replace(/[\s-]+/g, "");
+        const descriptionScore = description.includes(q)
+          ? 75
+          : compactQ && compactQ !== q && collapseSearchName(description).includes(compactQ)
+            ? 70
+            : 0;
 
         return {
           item,
           sourceIndex,
           nameScore,
           descriptionScore,
+          isSetting: item.type === "setting",
           interaction: recencyMap.get(getSearchInteractionKey(item)),
         };
       })
       .filter((candidate) => candidate.nameScore > 0 || candidate.descriptionScore > 0)
       .sort((a, b) => {
+        if (a.isSetting !== b.isSetting) return a.isSetting ? 1 : -1;
+
         const aNameMatch = a.nameScore > 0;
         const bNameMatch = b.nameScore > 0;
         if (aNameMatch !== bNameMatch) return aNameMatch ? -1 : 1;

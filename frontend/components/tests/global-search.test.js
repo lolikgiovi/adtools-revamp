@@ -61,6 +61,56 @@ describe("GlobalSearch scopes", () => {
     expect(search.filtered.map((item) => item.id)).toEqual(["redis-cache", "compare-config"]);
   });
 
+  it("ranks feature matches above settings results", () => {
+    const search = Object.create(GlobalSearch.prototype);
+    search.index = [
+      {
+        id: "setting-theme",
+        name: "Settings: Theme",
+        description: "Appearance · Choose the color theme for the app.",
+        route: "settings",
+        type: "setting",
+      },
+      {
+        id: "compare-config",
+        name: "Compare Config",
+        description: "Theme comparison for configurations",
+        route: "compare-config",
+        type: "tool",
+      },
+    ];
+    search._renderResults = vi.fn();
+
+    search._filter("theme");
+
+    expect(search.filtered.map((item) => item.id)).toEqual(["compare-config", "setting-theme"]);
+  });
+
+  it("does not treat description subsequences as matches", () => {
+    const search = Object.create(GlobalSearch.prototype);
+    search.index = [
+      {
+        id: "setting-theme",
+        name: "Settings: Theme",
+        description: "Appearance · Choose the color theme for the app.",
+        route: "settings",
+        type: "setting",
+      },
+      {
+        id: "quick-query",
+        name: "Quick Query",
+        description: "Generate Oracle SQL from schema/data with attachments and previews",
+        route: "quick-query",
+        type: "tool",
+      },
+    ];
+    search._renderResults = vi.fn();
+
+    search._filter("theme");
+
+    expect(search.filtered.map((item) => item.id)).toEqual(["setting-theme"]);
+  });
+
   it("uses description matches to break ties between equal name matches", () => {
     const search = Object.create(GlobalSearch.prototype);
     search.index = [

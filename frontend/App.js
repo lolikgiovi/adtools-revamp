@@ -23,6 +23,8 @@ import { installSearchableDropdowns } from "./components/SearchableDropdown.js";
 import { installTextInputTraits } from "./core/TextInputTraits.js";
 import { initializeLocalRegistrationDefaults, isUserRegistered } from "./core/RegistrationState.js";
 import releaseContent from "./config/release-content.json";
+import settingsConfig from "./pages/settings/config.json";
+import { buildSettingsSearchEntries } from "./pages/settings/search-entries.js";
 import { ConnectionIndicators } from "./core/ConnectionIndicators.js";
 
 const ASSET_LOAD_RETRY_DELAY_MS = 3000;
@@ -343,10 +345,12 @@ class App {
 
     // Settings route
     this.router.register("settings", ({ navigationId } = {}) => {
-      this.showSettings(navigationId).catch((error) => {
+      const data = this._routeData?.settings || null;
+      this.showSettings(navigationId, data).catch((error) => {
         if (!this.isNavigationCurrent(navigationId, "settings")) return;
         console.error("Failed to show settings page:", error);
       });
+      if (data) this._routeData.settings = null;
     });
 
     // About route
@@ -525,12 +529,13 @@ class App {
     }
   }
 
-  showSettings(navigationId = null) {
+  showSettings(navigationId = null, data = null) {
     return this.showShellPage({
       pageId: "settings",
       title: "Settings",
       eventName: "settings",
       navigationId,
+      data,
       loader: () => import("./pages/settings/main.js").then((module) => module.SettingsPage),
       createOptions: () => ({ eventBus: this.eventBus, themeManager: this.themeManager }),
     });
@@ -580,7 +585,7 @@ class App {
     });
   }
 
-  async showShellPage({ pageId, title, eventName, loader, createOptions, navigationId = null }) {
+  async showShellPage({ pageId, title, eventName, loader, createOptions, navigationId = null, data = null }) {
     if (!this.isNavigationCurrent(navigationId, pageId)) return;
     // Update breadcrumb for settings
     this.updateBreadcrumb(title);
@@ -602,7 +607,7 @@ class App {
     if (this.mainContent) {
       const page = new PageClass(createOptions?.() || {});
       try {
-        await page.mount(this.mainContent);
+        await page.mount(this.mainContent, data);
       } catch (error) {
         this.disposeShellPage(page);
         throw error;
@@ -1619,6 +1624,13 @@ class App {
         icon: definition.icon || null,
       });
     });
+
+    // Settings
+    let userRole = "user";
+    try {
+      userRole = localStorage.getItem("user.role") || "user";
+    } catch (_) {}
+    items.push(...buildSettingsSearchEntries(settingsConfig, { runtime: isTauri() ? "tauri" : "web", userRole }));
 
     this.globalSearch.setIndex(items);
   }

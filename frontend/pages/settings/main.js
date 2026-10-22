@@ -30,7 +30,7 @@ class SettingsPage {
     this.settingDisposers = new Set();
   }
 
-  async mount(root) {
+  async mount(root, routeData = null) {
     if (!root) {
       console.error("SettingsPage: root container not provided");
       return;
@@ -122,15 +122,17 @@ class SettingsPage {
     await ensureUnifiedKeychain();
 
     await this.reloadConfig();
-    this.focusRequestedSetting();
+    this.focusRequestedSetting(routeData?.setting);
   }
 
-  focusRequestedSetting() {
-    let settingKey = null;
-    try {
-      settingKey = localStorage.getItem(SETTINGS_FOCUS_STORAGE_KEY);
-      if (settingKey) localStorage.removeItem(SETTINGS_FOCUS_STORAGE_KEY);
-    } catch (_) {}
+  focusRequestedSetting(requestedKey = null) {
+    let settingKey = requestedKey;
+    if (!settingKey) {
+      try {
+        settingKey = localStorage.getItem(SETTINGS_FOCUS_STORAGE_KEY);
+        if (settingKey) localStorage.removeItem(SETTINGS_FOCUS_STORAGE_KEY);
+      } catch (_) {}
+    }
     if (!settingKey || !this.categoriesRoot) return;
 
     const setting = Array.from(this.categoriesRoot.querySelectorAll(".setting-item")).find((item) => item.dataset.setting === settingKey);
