@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Settings UI verification</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        background: hsl(var(--background));
+        color: hsl(var(--foreground));
+      }
+      iframe {
+        width: 390px;
+        height: 844px;
+        border: 1px solid hsl(var(--border));
+      }
+    </style>
+  </head>
+  <body>
+    <main></main>
+    <script type="module">
+      import { SettingsPage } from "../main.js";
+      import { SettingsTemplate } from "../template.js";
+      import config from "../config.json";
+      import { OracleConnectionService } from "../../../core/OracleConnectionService.js";
+
+      const params = new URLSearchParams(location.search);
+      document.documentElement.setAttribute("data-theme", params.get("theme") || "dark");
+      document.documentElement.classList.toggle("dark", params.get("theme") !== "light");
+      if (params.has("narrow")) {
+        const frame = document.createElement("iframe");
+        const url = new URL(location.href);
+        url.searchParams.delete("narrow");
+        frame.src = url.href;
+        frame.title = "Settings at 390 pixels";
+        document.querySelector("main").appendChild(frame);
+      } else {
+        const root = document.querySelector("main");
+        root.innerHTML = SettingsTemplate;
+        root.querySelector(".settings-header-tools").remove();
+        const page = new SettingsPage();
+        page.container = root.querySelector(".settings-page");
+        page.categoriesRoot = root.querySelector(".settings-categories");
+        // Browser layout fixture only. No Tauri globals, IPC, secrets, or real connections.
+        // Render desktop-only controls without changing production runtime gates.
+        if (params.get("runtime") !== "web") {
+          page.service.shouldShowCategory = () => true;
+          page.service.shouldShowItem = () => true;
+        }
+        const values = new Map();
+        if (params.has("populated")) {
+          values.set("config.baseUrls", [
+            { key: "uat1", value: "https://example.com/uat1/customer/" },
+            { key: "uat2", value: "https://example.com/uat2/customer/" },
+          ]);
+          values.set("config.lockeyDomains", [
+            { key: "uat1", value: "https://example.com/uat1/customer/localization/v1/language-pack?languagePackVersionUuid=1" },
+          ]);
+        }
+        if (params.has("json")) {
+          values.set("config.oracle.connections", [
+            { name: "DEV", connect_string: "db.example.com:1521/DEV" },
+            { name: "KEEP", connect_string: "db.example.com:1521/KEEP" },
+          ]);
+          // Isolated fake credential adapter: no native IPC or real Keychain access.
+          const users = new Map([
+            ["DEV", "app"],
+            ["KEEP", "reader"],
+          ]);
+          OracleConnectionService.getOracleUsername = async (name) => users.get(name) || "";
+          OracleConnectionService.setOracleCredentials = async (name, username) => {
+            users.set(name, username);
+          };
+        }
+        page.service.getValue = (key, type, fallback) => (values.has(key) ? values.get(key) : fallback);
+        page.service.setValue = (key, type, value) => {
+          values.set(key, value);
+          return value;
+        };
+        const allCategories = (categories) => categories.flatMap((category) => [category, ...allCategories(category.categories || [])]);
+        const categories = params.has("category")
+          ? allCategories(config.categories).filter((category) => category.id === params.get("category"))
+          : config.categories;
+        page.renderCategories(categories);
+        if (params.has("focus")) {
+          root
+            .querySelectorAll('.settings-category[aria-expanded="true"] > .settings-category-heading > button')
+            .forEach((button) => button.click());
+          const previousFocus = localStorage.getItem("settings.focus");
+          localStorage.setItem("settings.focus", params.get("focus"));
+          page.focusRequestedSetting();
+          if (previousFocus !== null) localStorage.setItem("settings.focus", previousFocus);
+        } else {
+          root
+            .querySelectorAll('.settings-category[aria-expanded="false"] > .settings-category-heading > button')
+            .forEach((button) => button.click());
+        }
+      }
+    </script>
+  </body>
+</html>

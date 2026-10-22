@@ -96,38 +96,10 @@
       ]
     },
     {
-      "id": "config",
-      "label": "Configuration Settings",
+      "id": "jenkins",
+      "label": "Jenkins",
       "initiallyExpanded": true,
       "items": [
-        {
-          "key": "config.baseUrls",
-          "storageKey": "config.baseUrls",
-          "label": "CDN Base URLs",
-          "type": "kvlist",
-          "default": [],
-          "keyPlaceholder": "Environment",
-          "valuePlaceholder": "Base URL",
-          "description": "Add environment ➝ base URL pairs."
-        },
-        {
-          "key": "config.lockeyDomains",
-          "storageKey": "config.lockeyDomains",
-          "label": "Lockey Domain URLs",
-          "type": "kvlist",
-          "default": [],
-          "keyPlaceholder": "Environment",
-          "valuePlaceholder": "Lockey JSON URL",
-          "description": "Add environment ➝ lockey domain URL pairs for Master Lockey tool."
-        },
-        {
-          "key": "config.mergeSql.squadNames",
-          "storageKey": "config.mergeSql.squadNames",
-          "label": "Merge SQL Squad Names",
-          "type": "string-list",
-          "default": ["capella", "betelgeuse", "sirius", "bellatrix", "phoebe", "regulus", "canopus", "antares"],
-          "description": "Known squad tokens used by Merge SQL relaxed filename parsing. Enter one squad name per line."
-        },
         {
           "key": "config.jenkins.url",
           "storageKey": "config.jenkins.url",
@@ -141,6 +113,35 @@
           }
         },
         {
+          "key": "config.jenkins.username",
+          "storageKey": "config.jenkins.username",
+          "label": "Jenkins Username",
+          "type": "string",
+          "default": "",
+          "description": "Username paired with Jenkins API token.",
+          "requiresTauri": true
+        },
+        {
+          "key": "secure.jenkins.token",
+          "storageKey": "secure.jenkins.token",
+          "label": "Jenkins Token",
+          "type": "secret",
+          "default": "",
+          "description": "Generate an API token from Jenkins (User \u279d Configure \u279d API Token). Token is stored securely in macOS Keychain, shown masked, and can only be replaced.",
+          "validation": {
+            "required": true,
+            "minLength": 8
+          },
+          "requiresTauri": true
+        }
+      ]
+    },
+    {
+      "id": "confluence",
+      "label": "Confluence",
+      "initiallyExpanded": true,
+      "items": [
+        {
           "key": "config.confluence.domain",
           "storageKey": "config.confluence.domain",
           "label": "Confluence Domain",
@@ -151,6 +152,35 @@
             "pattern": "^https?://"
           }
         },
+        {
+          "key": "config.confluence.username",
+          "storageKey": "config.confluence.username",
+          "label": "Confluence Username",
+          "type": "string",
+          "default": "",
+          "description": "Username for Confluence authentication",
+          "requiresTauri": true
+        },
+        {
+          "key": "secure.confluence.pat",
+          "storageKey": "secure.confluence.pat",
+          "label": "Confluence PAT",
+          "type": "secret",
+          "default": "",
+          "description": "Personal Access Token. Generate in Confluence: Profile \u2192 Personal Access Tokens \u2192 Create token. Stored in macOS Keychain.",
+          "validation": {
+            "required": true,
+            "minLength": 8
+          },
+          "requiresTauri": true
+        }
+      ]
+    },
+    {
+      "id": "jira",
+      "label": "Jira",
+      "initiallyExpanded": true,
+      "items": [
         {
           "key": "config.jira.url",
           "storageKey": "config.jira.url",
@@ -182,40 +212,226 @@
           "type": "boolean",
           "default": false,
           "description": "Jira-only fallback for a corporate self-signed certificate. This disables certificate verification and can expose the PAT to interception; prefer installing the corporate CA in macOS Keychain."
+        },
+        {
+          "key": "secure.jira.pat",
+          "storageKey": "secure.jira.pat",
+          "label": "Jira PAT",
+          "type": "secret",
+          "default": "",
+          "description": "Personal Access Token for Jira 9.17.3. Stored in macOS Keychain and sent only by the Tauri backend.",
+          "validation": {
+            "required": true,
+            "minLength": 8
+          },
+          "requiresTauri": true
         }
       ]
     },
     {
-      "id": "velocity-validator",
-      "label": "Velocity API Validator",
+      "id": "database",
+      "label": "Database",
       "initiallyExpanded": true,
-      "items": [
+      "requiresTauri": true,
+      "categories": [
         {
-          "key": "config.velocityValidator.url",
-          "storageKey": "config.velocityValidator.url",
-          "label": "Validator API URL",
-          "type": "string",
-          "default": "",
-          "description": "Full endpoint URL, e.g. http://sandbox.everest.supporting.devmandiri.co.id/api-migration/v1/velocity/template. Called only when you choose Validate. Desktop uses your machine's network and hosts mapping; web requires browser-compatible CORS and HTTP/HTTPS access.",
-          "validation": { "pattern": "^(https?://[^\\s]+)?$" }
+          "id": "oracle",
+          "label": "Oracle",
+          "requiresTauri": true,
+          "initiallyExpanded": true,
+          "items": [
+            {
+              "key": "config.oracle.connections",
+              "storageKey": "config.oracle.connections",
+              "label": "Database Connections",
+              "type": "oracle-connections",
+              "default": [],
+              "description": "Manage Oracle database connections for Compare Config tool. Credentials are stored securely in macOS Keychain."
+            }
+          ]
         },
         {
-          "key": "config.velocityValidator.format",
-          "storageKey": "config.velocityValidator.format",
-          "label": "Request format",
-          "type": "enum",
-          "default": "json",
-          "options": [
-            { "value": "json", "label": "JSON" },
-            { "value": "form", "label": "Form URL encoded" }
-          ],
-          "description": "JSON sends an object with context and template. Form sends context as JSON text and template as raw Velocity in separate encoded fields."
+          "id": "redis",
+          "label": "Redis",
+          "requiresTauri": true,
+          "initiallyExpanded": true,
+          "items": [
+            {
+              "key": "config.redis.host",
+              "storageKey": "config.redis.host",
+              "label": "Redis Host",
+              "type": "string",
+              "default": "",
+              "description": "Hostname or IP address for the Redis cache.",
+              "validation": {
+                "required": true,
+                "maxLength": 255,
+                "pattern": "^[^\\s/@]+$"
+              }
+            },
+            {
+              "key": "config.redis.port",
+              "storageKey": "config.redis.port",
+              "label": "Redis Port",
+              "type": "number",
+              "default": 6379,
+              "description": "Redis TCP port.",
+              "validation": {
+                "required": true,
+                "min": 1,
+                "max": 65535
+              }
+            },
+            {
+              "key": "config.redis.database",
+              "storageKey": "config.redis.database",
+              "label": "Redis Database",
+              "type": "number",
+              "default": 0,
+              "description": "Logical Redis database number.",
+              "validation": {
+                "required": true,
+                "min": 0,
+                "max": 1024
+              }
+            },
+            {
+              "key": "config.redis.username",
+              "storageKey": "config.redis.username",
+              "label": "Redis Username",
+              "type": "string",
+              "default": "",
+              "description": "Optional ACL username. Leave blank for password-only or unauthenticated Redis."
+            },
+            {
+              "key": "config.redis.tls",
+              "storageKey": "config.redis.tls",
+              "label": "Use TLS",
+              "type": "boolean",
+              "default": false,
+              "description": "Connect with rediss:// and verify the server certificate."
+            },
+            {
+              "key": "secure.redis.password",
+              "storageKey": "secure.redis.password",
+              "label": "Redis Password",
+              "type": "secret",
+              "default": "",
+              "description": "Optional Redis password. Stored securely in macOS Keychain and never exposed to the frontend. Save an empty value to clear it."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "kafka",
+      "label": "Kafka Connections",
+      "initiallyExpanded": false,
+      "items": [
+        {
+          "key": "kafka.brokers",
+          "storageKey": "tool:kafka:brokers",
+          "label": "Plaintext Brokers",
+          "type": "kafka-brokers",
+          "description": "Save named broker connections for the Kafka tool. Connections use PLAINTEXT."
+        }
+      ]
+    },
+    {
+      "id": "tool-settings",
+      "label": "Tool Settings",
+      "initiallyExpanded": true,
+      "categories": [
+        {
+          "id": "cdn",
+          "label": "CDN",
+          "initiallyExpanded": true,
+          "items": [
+            {
+              "key": "config.baseUrls",
+              "storageKey": "config.baseUrls",
+              "label": "CDN Base URLs",
+              "type": "kvlist",
+              "default": [],
+              "keyPlaceholder": "Environment",
+              "valuePlaceholder": "Base URL",
+              "description": "Add environment \u279d base URL pairs."
+            }
+          ]
+        },
+        {
+          "id": "lockey",
+          "label": "Lockey",
+          "initiallyExpanded": true,
+          "items": [
+            {
+              "key": "config.lockeyDomains",
+              "storageKey": "config.lockeyDomains",
+              "label": "Lockey Domain URLs",
+              "type": "kvlist",
+              "default": [],
+              "keyPlaceholder": "Environment",
+              "valuePlaceholder": "Lockey JSON URL",
+              "description": "Add environment \u279d lockey domain URL pairs for Master Lockey tool."
+            }
+          ]
+        },
+        {
+          "id": "merge-sql",
+          "label": "Merge SQL",
+          "initiallyExpanded": true,
+          "items": [
+            {
+              "key": "config.mergeSql.squadNames",
+              "storageKey": "config.mergeSql.squadNames",
+              "label": "Merge SQL Squad Names",
+              "type": "string-list",
+              "default": ["capella", "betelgeuse", "sirius", "bellatrix", "phoebe", "regulus", "canopus", "antares"],
+              "description": "Known squad tokens used by Merge SQL relaxed filename parsing. Enter one squad name per line."
+            }
+          ]
+        },
+        {
+          "id": "velocity-validator",
+          "label": "Velocity API Validator",
+          "initiallyExpanded": true,
+          "items": [
+            {
+              "key": "config.velocityValidator.url",
+              "storageKey": "config.velocityValidator.url",
+              "label": "Validator API URL",
+              "type": "string",
+              "default": "",
+              "description": "Full endpoint URL, e.g. http://sandbox.everest.supporting.devmandiri.co.id/api-migration/v1/velocity/template. Called only when you choose Validate. Desktop uses your machine's network and hosts mapping; web requires browser-compatible CORS and HTTP/HTTPS access.",
+              "validation": {
+                "pattern": "^(https?://[^\\s]+)?$"
+              }
+            },
+            {
+              "key": "config.velocityValidator.format",
+              "storageKey": "config.velocityValidator.format",
+              "label": "Request format",
+              "type": "enum",
+              "default": "json",
+              "options": [
+                {
+                  "value": "json",
+                  "label": "JSON"
+                },
+                {
+                  "value": "form",
+                  "label": "Form URL encoded"
+                }
+              ],
+              "description": "JSON sends an object with context and template. Form sends context as JSON text and template as raw Velocity in separate encoded fields."
+            }
+          ]
         }
       ]
     },
     {
       "id": "updates",
-      "label": "Check for Update",
+      "label": "Updates",
       "requiresTauri": true,
       "initiallyExpanded": true,
       "items": [
@@ -242,155 +458,6 @@
           "type": "action",
           "buttonLabel": "Check Now",
           "description": "Manually check for updates and show banner if available."
-        }
-      ]
-    },
-    {
-      "id": "redis",
-      "label": "Redis Connection",
-      "requiresTauri": true,
-      "initiallyExpanded": true,
-      "items": [
-        {
-          "key": "config.redis.host",
-          "storageKey": "config.redis.host",
-          "label": "Redis Host",
-          "type": "string",
-          "default": "",
-          "description": "Hostname or IP address for the Redis cache.",
-          "validation": { "required": true, "maxLength": 255, "pattern": "^[^\\s/@]+$" }
-        },
-        {
-          "key": "config.redis.port",
-          "storageKey": "config.redis.port",
-          "label": "Redis Port",
-          "type": "number",
-          "default": 6379,
-          "description": "Redis TCP port.",
-          "validation": { "required": true, "min": 1, "max": 65535 }
-        },
-        {
-          "key": "config.redis.database",
-          "storageKey": "config.redis.database",
-          "label": "Redis Database",
-          "type": "number",
-          "default": 0,
-          "description": "Logical Redis database number.",
-          "validation": { "required": true, "min": 0, "max": 1024 }
-        },
-        {
-          "key": "config.redis.username",
-          "storageKey": "config.redis.username",
-          "label": "Redis Username",
-          "type": "string",
-          "default": "",
-          "description": "Optional ACL username. Leave blank for password-only or unauthenticated Redis."
-        },
-        {
-          "key": "config.redis.tls",
-          "storageKey": "config.redis.tls",
-          "label": "Use TLS",
-          "type": "boolean",
-          "default": false,
-          "description": "Connect with rediss:// and verify the server certificate."
-        },
-        {
-          "key": "secure.redis.password",
-          "storageKey": "secure.redis.password",
-          "label": "Redis Password",
-          "type": "secret",
-          "default": "",
-          "description": "Optional Redis password. Stored securely in macOS Keychain and never exposed to the frontend. Save an empty value to clear it."
-        }
-      ]
-    },
-    {
-      "id": "oracle",
-      "label": "Oracle Connections",
-      "requiresTauri": true,
-      "initiallyExpanded": true,
-      "items": [
-        {
-          "key": "config.oracle.connections",
-          "storageKey": "config.oracle.connections",
-          "label": "Database Connections",
-          "type": "oracle-connections",
-          "default": [],
-          "description": "Manage Oracle database connections for Compare Config tool. Credentials are stored securely in macOS Keychain."
-        }
-      ]
-    },
-    {
-      "id": "kafka",
-      "label": "Kafka Connections",
-      "initiallyExpanded": false,
-      "items": [
-        {
-          "key": "kafka.brokers",
-          "storageKey": "tool:kafka:brokers",
-          "label": "Plaintext Brokers",
-          "type": "kafka-brokers",
-          "description": "Save named broker connections for the Kafka tool. Connections use PLAINTEXT."
-        }
-      ]
-    },
-    {
-      "id": "credentials",
-      "requiresTauri": true,
-      "label": "Credential Management",
-      "initiallyExpanded": true,
-      "items": [
-        {
-          "key": "config.jenkins.username",
-          "storageKey": "config.jenkins.username",
-          "label": "Jenkins Username",
-          "type": "string",
-          "default": "",
-          "description": "Username paired with Jenkins API token."
-        },
-        {
-          "key": "secure.jenkins.token",
-          "storageKey": "secure.jenkins.token",
-          "label": "Jenkins Token",
-          "type": "secret",
-          "default": "",
-          "description": "Generate an API token from Jenkins (User ➝ Configure ➝ API Token). Token is stored securely in macOS Keychain, shown masked, and can only be replaced.",
-          "validation": {
-            "required": true,
-            "minLength": 8
-          }
-        },
-        {
-          "key": "config.confluence.username",
-          "storageKey": "config.confluence.username",
-          "label": "Confluence Username",
-          "type": "string",
-          "default": "",
-          "description": "Username for Confluence authentication"
-        },
-        {
-          "key": "secure.confluence.pat",
-          "storageKey": "secure.confluence.pat",
-          "label": "Confluence PAT",
-          "type": "secret",
-          "default": "",
-          "description": "Personal Access Token. Generate in Confluence: Profile → Personal Access Tokens → Create token. Stored in macOS Keychain.",
-          "validation": {
-            "required": true,
-            "minLength": 8
-          }
-        },
-        {
-          "key": "secure.jira.pat",
-          "storageKey": "secure.jira.pat",
-          "label": "Jira PAT",
-          "type": "secret",
-          "default": "",
-          "description": "Personal Access Token for Jira 9.17.3. Stored in macOS Keychain and sent only by the Tauri backend.",
-          "validation": {
-            "required": true,
-            "minLength": 8
-          }
         }
       ]
     }
