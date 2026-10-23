@@ -23,6 +23,7 @@ import { handleManifestRequest, handleArtifactRequest, handleDevSeedUpdate } fro
 import { handleWhitelist } from './src/routes/whitelist.js';
 import { handleDeviceVersionUpdate } from './src/routes/device.js';
 import { handleManualApprovalRequest, handleManualApprovalStatus, handleApprovalList, handleApprovalApprove } from './src/routes/approval.js';
+import { handleSettings } from './src/routes/settings.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -80,6 +81,7 @@ export default {
     }
 
     // API routes
+    if (url.pathname.startsWith("/api/settings/")) return handleSettings(request, env);
     if (url.pathname === "/whitelist.json") {
       return handleWhitelist(env);
     }

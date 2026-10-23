@@ -1,0 +1,22 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--host", "127.0.0.1"],
+      "port": 1234,
+      "url": "http://127.0.0.1:1234"
+    },
+    {
+      "name": "bench",
+      "runtimeExecutable": "./node_modules/.bin/vite",
+      "runtimeArgs": [
+        "--config",
+        "/private/tmp/claude-501/-Users-ddl-projects-ad-tools-revamp/585c705c-62d7-44d1-8146-d4b1e5db6241/scratchpad/vite.bench.mjs"
+      ],
+      "port": 1240,
+      "url": "http://127.0.0.1:1240"
+    }
+  ]
+}

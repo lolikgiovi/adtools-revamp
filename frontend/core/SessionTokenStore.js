@@ -29,6 +29,7 @@ export const SessionTokenStore = {
     try {
       localStorage.setItem(TOKEN_KEY, String(token));
       localStorage.setItem(TOKEN_TS_KEY, String(Date.now()));
+      setTimeout(() => globalThis.dispatchEvent?.(new Event("adtools:session-token")), 0);
     } catch (_) {}
   },
 

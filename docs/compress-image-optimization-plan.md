@@ -492,6 +492,7 @@ against an ideal downscale).
   re-encoding. Needs a jpegtran WebAssembly build, which is a new dependency for the user to install.
 - **Choosing quality per image** (binary search on JPEG/WebP quality against an SSIM or butteraugli target).
   Possible with the existing codecs plus a small JS SSIM, but it multiplies encode time; do it only once the pool
-  is in place.
+  is in place. `docs/image-to-base64-compression-report.md` documents a shipped byte-budget search (with its
+  missing quality floor) and proposes the target-size mode for this tool.
 - **Running the lossy PNG pass first** and skipping the lossless pass when it can't win. Needs a change to the
   acceptance policy.
