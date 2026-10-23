@@ -148,16 +148,22 @@ by one step, and an embedded ICC profile is converted to sRGB. The output is "lo
 VP8L out; identical decoded pixels; libwebp lossless in the log; detail text says lossless; the quality slider
 doesn't change the output; never larger than the original; resize switches to lossy at the target size.
 
-### 1.4 No main-thread decode for lossless PNG
+### 1.4 No main-thread decode for lossless PNG: done
 
-**Problem.** `compressItem` always runs `new Image()` and `image.decode()` (`main.js:260-262`) just to read width
-and height. `inspectImage` already returned them. For lossless PNG without resize, the pixels are never used.
+**Problem.** `compressItem` always ran `new Image()` and `image.decode()` just to read width and height, which
+`inspectImage` already returned. For lossless PNG without resize, the pixels were never used.
 
-**Change.** When `info.type === "image/png"`, resize is off and lossy PNG is off, take `width` and `height` from
-`info` and skip the `<img>` decode. Phase 2 replaces this path entirely, but this fix is small and lands first.
+**Change (implemented 2026-10-23).** PNG dimensions come from the header. The `<img>` decode runs only when pixels
+are needed: JPEG and WebP (orientation can change their displayed size), a PNG that is actually resized, and lossy
+PNG. Phase 2 replaces this path entirely.
 
-**Tests first.** Browser check: wrap `HTMLImageElement.prototype.decode` and count calls during a lossless PNG
-batch. Expected: zero calls before the result preview is shown.
+**Result.** Balanced lossless on the benchmark set: main-thread decoding 2.27 s → 0, wall time 34.7 s → 31.0 s,
+identical output bytes. The longest main-thread stall is still about 200 ms; it comes from verification (1.5).
+Evidence: `docs/evidence/compress-image-benchmark-phase1-no-png-decode.json`.
+
+**Browser checks added (written first; the harness failed at the no-decode check):** a wrapped
+`HTMLImageElement.prototype.decode` sees no decode of the source for lossless PNG; dimensions stay correct, Adam7
+included; resized and lossy PNG still decode their pixels.
 
 ### 1.5 Validate each PNG once
 

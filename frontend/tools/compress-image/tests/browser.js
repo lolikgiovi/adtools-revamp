@@ -505,6 +505,49 @@ try {
     "Resized lossless WebP uses lossy encoding at the target size.",
   );
   change("resize", false);
+  // Main-thread decode failures: lossless PNG still decoded only to read its size,
+  // wrong dimensions once the decode is skipped (including Adam7), and the resize
+  // or lossy PNG paths losing the decode they need for pixels.
+  const decodedSources = [];
+  const nativeDecode = HTMLImageElement.prototype.decode;
+  HTMLImageElement.prototype.decode = function () {
+    decodedSources.push(this.src);
+    return nativeDecode.call(this);
+  };
+  const sourceDecoded = async (file, { lossy = false, resize = false } = {}) => {
+    tool.clear();
+    change("lossy-png", lossy);
+    change("resize", resize);
+    if (resize) {
+      change("width", "100");
+      change("height", "100");
+    }
+    decodedSources.length = 0;
+    select([file]);
+    await compress();
+    return { item: tool.items[0], decoded: decodedSources.includes(tool.items[0].before) };
+  };
+  try {
+    const lossless = await sourceDecoded(new File([fixture(320, 200)], "lossless.png", { type: "image/png" }));
+    check(
+      lossless.item.status === "Ready" && lossless.item.result.width === 320 && lossless.item.result.height === 200,
+      "Lossless PNG keeps its dimensions without a main-thread decode.",
+    );
+    check(!lossless.decoded, "Lossless PNG is not decoded on the main thread just to read its size.");
+    const adam7 = await sourceDecoded(new File([interlacedFixture()], "adam7.png", { type: "image/png" }));
+    check(
+      adam7.item.status === "Ready" && !adam7.decoded && adam7.item.result.width === 17,
+      "Adam7 PNG keeps its size without the decode.",
+    );
+    const resized = await sourceDecoded(new File([fixture(320, 200)], "resize.png", { type: "image/png" }), { resize: true });
+    check(resized.decoded && resized.item.result.width === 100, "Resized PNG still decodes its pixels.");
+    const quantized = await sourceDecoded(new File([fixture(320, 200, "gentle")], "lossy.png", { type: "image/png" }), { lossy: true });
+    check(quantized.decoded && quantized.item.status === "Ready", "Lossy PNG still decodes its pixels.");
+  } finally {
+    HTMLImageElement.prototype.decode = nativeDecode;
+    change("lossy-png", false);
+    change("resize", false);
+  }
   document.querySelector("#verification").textContent = `PASS: ${checks.length} browser checks. Open details for the repeatable evidence.`;
   document.querySelector("#evidence").textContent = checks.join("\n");
 } catch (error) {

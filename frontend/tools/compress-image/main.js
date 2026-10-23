@@ -256,13 +256,19 @@ export class CompressImage extends BaseTool {
     const canvas = document.createElement("canvas");
     const temporaryUrls = new Set([before]);
     try {
-      this.log(item, "Decoding", { decoder: "browser", colorSpace: "sRGB", orientation: "from image" });
-      const image = new Image();
-      image.src = before;
-      await image.decode();
+      // PNG dimensions come from its header. JPEG and WebP are decoded first because
+      // orientation can change their displayed size.
+      let image;
+      const decode = async () => {
+        this.log(item, "Decoding", { decoder: "browser", colorSpace: "sRGB", orientation: "from image" });
+        image = new Image();
+        image.src = before;
+        await image.decode();
+      };
+      if (info.type !== "image/png") await decode();
       if (generation !== this.generation) return;
-      const width = image.naturalWidth,
-        height = image.naturalHeight;
+      const width = image ? image.naturalWidth : info.width,
+        height = image ? image.naturalHeight : info.height;
       if (!width || !height || width > 16384 || height > 16384 || width * height > 16000000) {
         throw new Error("Choose an image under 16 megapixels and 16,384 pixels per side.");
       }
@@ -270,6 +276,8 @@ export class CompressImage extends BaseTool {
       const resized = target.width !== width || target.height !== height;
       let pixels;
       if (info.type !== "image/png" || resized || (settings.lossyPng && info.depth !== 16)) {
+        if (!image) await decode();
+        if (generation !== this.generation) return;
         if (resized) this.log(item, "Resizing", { ...target });
         canvas.width = target.width;
         canvas.height = target.height;
