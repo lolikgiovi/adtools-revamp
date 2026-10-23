@@ -69,21 +69,30 @@ function inspectWebp(bytes, view) {
   return { type: "image/webp", ...(extended || frame), lossless };
 }
 
-// This is an allocation preflight, not proof that the image decodes successfully.
-export function inspectImage(bytes) {
-  if (!bytes.length || bytes.length > MAX_FILE_SIZE) throw new Error("Choose an image between 1 byte and 32 MB.");
-  if (bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71) {
-    const png = parsePng(bytes);
-    return { type: "image/png", width: png.width, height: png.height, depth: png.chunks[0].data[8] };
-  }
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (bytes[0] === 255 && bytes[1] === 216) return inspectJpeg(bytes, view);
+// Format from the first 12 bytes, or null.
+export function imageType(bytes) {
+  if (bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71) return "image/png";
+  if (bytes[0] === 255 && bytes[1] === 216) return "image/jpeg";
   if (
     bytes.length >= 12 &&
     String.fromCharCode(...bytes.subarray(0, 4)) === "RIFF" &&
     String.fromCharCode(...bytes.subarray(8, 12)) === "WEBP"
   ) {
-    return inspectWebp(bytes, view);
+    return "image/webp";
   }
+  return null;
+}
+
+// This is an allocation preflight, not proof that the image decodes successfully.
+export function inspectImage(bytes) {
+  if (!bytes.length || bytes.length > MAX_FILE_SIZE) throw new Error("Choose an image between 1 byte and 32 MB.");
+  const type = imageType(bytes);
+  if (type === "image/png") {
+    const png = parsePng(bytes);
+    return { type, width: png.width, height: png.height, depth: png.chunks[0].data[8] };
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (type === "image/jpeg") return inspectJpeg(bytes, view);
+  if (type === "image/webp") return inspectWebp(bytes, view);
   throw new Error("Choose a valid PNG, JPEG or still WebP image.");
 }

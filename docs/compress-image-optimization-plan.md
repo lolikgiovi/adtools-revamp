@@ -223,6 +223,28 @@ running both candidates at once possible.
 
 ## Phase 2: Decoding and resizing in the worker
 
+### Status: done (2026-10-23)
+
+Implemented as designed below, with these differences, each found by a failing check:
+
+- **`premultiplyAlpha: "default"`, not `"none"`.** `"none"` rounds semi-transparent colors differently from the
+  canvas path (up to 2 per channel). `"default"` matches it byte for byte.
+- **Shrunk JPEGs differ by about 2 per channel.** Chrome's `<img>` path lets the JPEG decoder scale down while
+  decoding; a worker has no `<img>` and decodes at full size, then resamples. Full-size JPEG, and all PNG and WebP
+  results (resized included), are byte-identical between the two decoders.
+- **The fallback is the whole earlier path.** The worker replies `needsPixels`, and the main thread runs the old
+  `<img>`-plus-canvas preparation (`preparePixels`) and sends a `bytes` + `image` job. `tool.decoder = "main"`
+  forces it; the harness uses that for the comparison checks.
+- **Stall check uses Long Tasks where available.** A hidden or unpainted pane stops animation frames without
+  blocking anything (2 frames in 1.5 s, zero long tasks), so frame gaps are only the WebKit fallback. The old path
+  produces a 73–75 ms task on the 12 MP JPEG; the worker path produces none.
+- **Two 1.4 checks changed meaning.** "Resized/Lossy PNG still decodes its pixels" now accepts the worker's
+  `Decoding` stage; "Lossless PNG is not decoded at all" requires no decode on either thread.
+
+Results: 12 MP JPEG, longest main-thread frame 117 ms → 17 ms (headless), no long tasks. Benchmark set, Balanced
+with lossy PNG: longest stall 50 ms → 17 ms; lossless stays at 17 ms; outputs byte-identical per image; wall time
+unchanged (29.8 s and 44.6 s). Evidence: `docs/evidence/compress-image-benchmark-phase2-worker-decode.json`.
+
 ### Target flow
 
 1. **Main thread:** `worker.postMessage({ file, settings })`. A `File` is structured-cloned by reference, so the

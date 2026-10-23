@@ -529,7 +529,9 @@ try {
     decodedSources.length = 0;
     select([file]);
     await compress();
-    return { item: tool.items[0], decoded: decodedSources.includes(tool.items[0].before) };
+    // Since phase 2 the decode usually runs in the worker, so count its Decoding stage too.
+    const item = tool.items[0];
+    return { item, decoded: decodedSources.includes(item.before) || item.logs.some((entry) => entry.stage === "Decoding") };
   };
   try {
     const lossless = await sourceDecoded(new File([fixture(320, 200)], "lossless.png", { type: "image/png" }));
@@ -537,7 +539,7 @@ try {
       lossless.item.status === "Ready" && lossless.item.result.width === 320 && lossless.item.result.height === 200,
       "Lossless PNG keeps its dimensions without a main-thread decode.",
     );
-    check(!lossless.decoded, "Lossless PNG is not decoded on the main thread just to read its size.");
+    check(!lossless.decoded, "Lossless PNG is not decoded at all just to read its size.");
     const adam7 = await sourceDecoded(new File([interlacedFixture()], "adam7.png", { type: "image/png" }));
     check(
       adam7.item.status === "Ready" && !adam7.decoded && adam7.item.result.width === 17,
@@ -611,6 +613,190 @@ try {
   check(tool.items[0].result?.lossy && tool.items[0].blob.type === "image/png", "Smaller File compresses PNG with color reduction.");
   change("preset", "balanced");
   change("lossy-png", false);
+
+  // Worker decoding failures: a large decode freezing the main thread; any decode or
+  // getImageData left on the main thread; EXIF orientation, P3 color conversion or
+  // semi-transparent pixels differing from the <img> path; the fallback not producing
+  // the same bytes or not saying it ran; a corrupt image stalling the batch or worker.
+  const large = document.createElement("canvas");
+  large.width = 4000;
+  large.height = 3000;
+  const largeContext = large.getContext("2d");
+  const largeGradient = largeContext.createLinearGradient(0, 0, 4000, 3000);
+  largeGradient.addColorStop(0, "#0a6847");
+  largeGradient.addColorStop(1, "#f4ce14");
+  largeContext.fillStyle = largeGradient;
+  largeContext.fillRect(0, 0, 4000, 3000);
+  const largeJpeg = new File([await new Promise((resolve) => large.toBlob(resolve, "image/jpeg", 0.95))], "large.jpg", {
+    type: "image/jpeg",
+  });
+  large.width = large.height = 1;
+  tool.clear();
+  change("resize", false);
+  select([largeJpeg]);
+  // Chromium reports blocking directly as long tasks. A hidden or unpainted pane stops
+  // animation frames without blocking anything, so frame gaps are only the fallback (WebKit).
+  const blocking = async (run) => {
+    if (PerformanceObserver.supportedEntryTypes?.includes("longtask")) {
+      let longest = 0;
+      const observer = new PerformanceObserver((list) =>
+        list.getEntries().forEach((entry) => (longest = Math.max(longest, entry.duration))),
+      );
+      observer.observe({ type: "longtask" });
+      await run();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      observer.disconnect();
+      return { ms: Math.round(longest), measure: "longest task", limit: 50 };
+    }
+    let longest = 0;
+    let watching = true;
+    let last = performance.now();
+    const watch = (now) => {
+      longest = Math.max(longest, now - last);
+      last = now;
+      if (watching) requestAnimationFrame(watch);
+    };
+    requestAnimationFrame(watch);
+    await run();
+    watching = false;
+    return { ms: Math.round(longest), measure: "longest frame", limit: 100 };
+  };
+  const largeRun = await blocking(compress);
+  check(tool.items[0].status === "Ready", "A 12 MP JPEG compresses.");
+  // A long task is anything over 50 ms; the old main-thread path produced a 73 ms one here.
+  check(
+    largeRun.ms < largeRun.limit,
+    `Compressing a 12 MP JPEG never blocks the main thread for ${largeRun.limit} ms (${largeRun.measure} ${largeRun.ms} ms).`,
+  );
+
+  const p3 = document.createElement("canvas");
+  p3.width = p3.height = 64;
+  const p3Context = p3.getContext("2d", { colorSpace: "display-p3" });
+  p3Context.fillStyle = "color(display-p3 0.5 0.4 0.3)";
+  p3Context.fillRect(0, 0, 64, 64);
+  const p3Bytes = new Uint8Array(await (await new Promise((resolve) => p3.toBlob(resolve, "image/png"))).arrayBuffer());
+  check(
+    String.fromCharCode(...p3Bytes.subarray(37, 41)) === "iCCP",
+    "The P3 fixture carries an ICC profile, so color conversion is exercised.",
+  );
+  const p3Image = new Image();
+  p3Image.src = URL.createObjectURL(new Blob([p3Bytes], { type: "image/png" }));
+  await p3Image.decode();
+  const expectedP3 = pixels(p3Image).slice(0, 4);
+  const rotatedJpeg = new File([join([jpegBytes.slice(0, 2), exif, jpegBytes.slice(2)])], "rotated.jpg", { type: "image/jpeg" });
+  const decoderFiles = () => [
+    rotatedJpeg,
+    new File([webp], "translucent.webp", { type: "image/webp" }),
+    quickWebp,
+    new File([p3Bytes], "p3.png", { type: "image/png" }),
+    new File([fixture(320, 200, "gentle")], "decoder-lossy.png", { type: "image/png" }),
+  ];
+  const nativeImageDecode = HTMLImageElement.prototype.decode;
+  const nativeGetImageData = CanvasRenderingContext2D.prototype.getImageData;
+  let mainDecodes = 0;
+  let mainPixelReads = 0;
+  const runDecoderBatch = async (decoder) => {
+    tool.clear();
+    tool.decoder = decoder;
+    change("lossy-png", true);
+    change("resize", true);
+    change("width", "48");
+    change("height", "48");
+    select(decoderFiles());
+    mainDecodes = mainPixelReads = 0;
+    HTMLImageElement.prototype.decode = function () {
+      mainDecodes++;
+      return nativeImageDecode.call(this);
+    };
+    CanvasRenderingContext2D.prototype.getImageData = function (...args) {
+      mainPixelReads++;
+      return nativeGetImageData.apply(this, args);
+    };
+    try {
+      await compress();
+    } finally {
+      HTMLImageElement.prototype.decode = nativeImageDecode;
+      CanvasRenderingContext2D.prototype.getImageData = nativeGetImageData;
+    }
+    const items = [...tool.items];
+    return {
+      items,
+      bytes: await Promise.all(items.map(async (item) => new Uint8Array(await item.blob.arrayBuffer()))),
+      decodes: mainDecodes,
+      pixelReads: mainPixelReads,
+    };
+  };
+  const inWorker = await runDecoderBatch("auto");
+  check(
+    inWorker.items.every((item) => item.status === "Ready"),
+    "JPEG, WebP and PNG all compress with decoding in the worker.",
+  );
+  check(
+    inWorker.decodes === 0 && inWorker.pixelReads === 0,
+    `Compression makes no image decode or getImageData call on the main thread (${inWorker.decodes} decodes, ${inWorker.pixelReads} reads).`,
+  );
+  check(
+    inWorker.items.every((item) => item.logs.some((entry) => entry.stage === "Decoding" && entry.details.decoder === "worker")),
+    "Each image reports that the worker decoded it.",
+  );
+  const workerRotated = inWorker.items[0].result;
+  check(workerRotated.originalWidth === 400 && workerRotated.originalHeight === 640, "The worker applies EXIF orientation.");
+  const p3Result = new Image();
+  p3Result.src = inWorker.items[3].after;
+  await p3Result.decode();
+  const actualP3 = pixels(p3Result).slice(0, 4);
+  check(
+    actualP3.every((value, i) => Math.abs(value - expectedP3[i]) <= 1),
+    `The worker converts P3 to sRGB like the <img> path (${[...actualP3]} vs ${[...expectedP3]}).`,
+  );
+  const onMain = await runDecoderBatch("main");
+  check(
+    onMain.items.every((item) => item.logs.some((entry) => entry.stage === "Decoding" && entry.details.decoder === "main-thread fallback")),
+    "The forced fallback decodes on the main thread and says so.",
+  );
+  const sameBytes = (a, b) => a.length === b.length && a.every((value, i) => value === b[i]);
+  check(
+    onMain.bytes.every((bytes, i) => i === 0 || sameBytes(bytes, inWorker.bytes[i])),
+    "Worker and main-thread decoding give byte-identical WebP and PNG results, resized included.",
+  );
+  // Chrome's <img> path lets the JPEG decoder scale down while decoding; the worker decodes at
+  // full size and then resamples. Measured at ±2 per channel before re-encoding.
+  const decodedPixels = async (bytes) => {
+    const image = new Image();
+    image.src = URL.createObjectURL(new Blob([bytes], { type: "image/jpeg" }));
+    await image.decode();
+    return pixels(image);
+  };
+  const [mainJpeg, workerJpeg] = await Promise.all([decodedPixels(onMain.bytes[0]), decodedPixels(inWorker.bytes[0])]);
+  const jpegDrift = mainJpeg.reduce((max, value, i) => Math.max(max, Math.abs(value - workerJpeg[i])), 0);
+  check(jpegDrift <= 8, `A shrunk JPEG stays within 8 per channel of the main-thread result after re-encoding (${jpegDrift}).`);
+  const fullSizeJpeg = async (decoder) => {
+    tool.clear();
+    tool.decoder = decoder;
+    change("lossy-png", false);
+    change("resize", false);
+    select([rotatedJpeg]);
+    await compress();
+    return new Uint8Array(await tool.items[0].blob.arrayBuffer());
+  };
+  check(
+    sameBytes(await fullSizeJpeg("auto"), await fullSizeJpeg("main")),
+    "An EXIF-rotated JPEG at full size gives byte-identical results on both decoders.",
+  );
+  tool.decoder = "auto";
+  // Headers and frame intact (so the header preflight passes), scan data removed.
+  let scanStart = 2;
+  while (!(jpegBytes[scanStart] === 255 && jpegBytes[scanStart + 1] === 218)) scanStart++;
+  const brokenJpeg = new File([join([jpegBytes.slice(0, scanStart), new Uint8Array([255, 217])])], "broken.jpg", { type: "image/jpeg" });
+  tool.clear();
+  change("lossy-png", false);
+  change("resize", false);
+  select([brokenJpeg, new File([jpeg], "after-broken.jpg", { type: "image/jpeg" })]);
+  await compress();
+  check(
+    tool.items[0].status === "Error" && tool.items[1].status === "Ready",
+    "An image the worker cannot decode fails on its own; the next one still compresses.",
+  );
   document.querySelector("#verification").textContent = `PASS: ${checks.length} browser checks. Open details for the repeatable evidence.`;
   document.querySelector("#evidence").textContent = checks.join("\n");
 } catch (error) {

@@ -1,6 +1,8 @@
 import { optimizePng, encodePng } from "./png-codec.js";
 import { PRESETS, WEBP_LOSSLESS } from "./config.js";
-import { validatePng, parsePng, makeChunk } from "./service.js";
+import { validatePng, parsePng, makeChunk, fitDimensions } from "./service.js";
+import { inspectImage } from "./image-info.js";
+import { canDecodeInWorker, decodeBitmap, readPixels, checkDisplayable } from "./decode.js";
 import jpegWasm from "@jsquash/jpeg/codec/enc/mozjpeg_enc.wasm?url";
 import webpWasm from "@jsquash/webp/codec/enc/webp_enc.wasm?url";
 import webpSimdWasm from "@jsquash/webp/codec/enc/webp_enc_simd.wasm?url";
@@ -81,12 +83,65 @@ async function quantize(image, options) {
   }
 }
 
+// A job with `file` is read, inspected, decoded and resized here. Without decoding support,
+// or when the main-thread decoder is forced, the worker asks for pixels instead and the main
+// thread sends a job with `bytes` and `image`, as before.
+async function prepare(data) {
+  if (!data.file) {
+    return { ...data, source: new Uint8Array(data.bytes), decodedInWorker: false };
+  }
+  if (data.decoder === "main" || !canDecodeInWorker()) return { needsPixels: true };
+  const source = new Uint8Array(await data.file.arrayBuffer());
+  report("Validating", {});
+  const info = inspectImage(source);
+  const decode = async () => {
+    report("Decoding", { decoder: "worker", colorSpace: "sRGB", orientation: "from image" });
+    return decodeBitmap(data.file);
+  };
+  let bitmap;
+  try {
+    // PNG dimensions come from its header. JPEG and WebP are decoded first because
+    // orientation can change their displayed size.
+    if (info.type !== "image/png") bitmap = await decode();
+    const width = bitmap ? bitmap.width : info.width,
+      height = bitmap ? bitmap.height : info.height;
+    if (!width || !height || width > 16384 || height > 16384 || width * height > 16000000) {
+      throw new Error("Choose an image under 16 megapixels and 16,384 pixels per side.");
+    }
+    const target = data.resize ? fitDimensions(width, height, data.width, data.height) : { width, height };
+    const resized = target.width !== width || target.height !== height;
+    let image;
+    if (info.type !== "image/png" || resized || (data.lossyPng && info.depth !== 16)) {
+      bitmap ||= await decode();
+      if (resized) report("Resizing", { ...target });
+      image = readPixels(bitmap, target);
+    }
+    return {
+      ...data,
+      type: info.type,
+      source,
+      image,
+      resized,
+      losslessWebp: info.type === "image/webp" && info.lossless,
+      originalWidth: width,
+      originalHeight: height,
+      decodedInWorker: true,
+    };
+  } finally {
+    bitmap?.close();
+  }
+}
+
 self.onmessage = async ({ data }) => {
   try {
-    const { type, image, resized, lossyPng, losslessWebp, preset, quality, pngQuality } = data;
+    const job = await prepare(data);
+    if (job.needsPixels) {
+      self.postMessage({ needsPixels: true });
+      return;
+    }
+    const { type, image, resized, lossyPng, losslessWebp, preset, quality, pngQuality, source } = job;
     const options = PRESETS[preset];
     if (!options) throw new Error("Unknown compression preset.");
-    const source = new Uint8Array(data.bytes);
     let result;
     if (type === "image/png") {
       const input = validatePng(source, report, "source");
@@ -124,6 +179,12 @@ self.onmessage = async ({ data }) => {
       result = { bytes, width: image.width, height: image.height, codec, lossy: !lossless, metadataRemovedBytes: 0 };
     }
     result.type = type;
+    if (job.decodedInWorker) {
+      const target = { width: result.width, height: result.height };
+      await checkDisplayable(result.bytes, type, target);
+      if (result.baseline) await checkDisplayable(result.baseline, type, target);
+      Object.assign(result, { resized, originalWidth: job.originalWidth, originalHeight: job.originalHeight, displayChecked: true });
+    }
     const transfers = [...new Set([result.bytes.buffer, ...(result.baseline ? [result.baseline.buffer] : [])])];
     self.postMessage({ result }, transfers);
   } catch (error) {

@@ -2,7 +2,7 @@ import { BaseTool } from "../../core/BaseTool.js";
 import JSZip from "jszip";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { MAX_FILE_SIZE, fitDimensions } from "./service.js";
-import { inspectImage } from "./image-info.js";
+import { inspectImage, imageType } from "./image-info.js";
 import { PRESETS, selectCandidate } from "./config.js";
 import { getIconSvg } from "./icon.js";
 import "./styles.css";
@@ -21,6 +21,8 @@ export class CompressImage extends BaseTool {
     this.generation = 0;
     this.running = false;
     this.view = "pair";
+    // "auto" decodes in the worker when it can; "main" forces the main-thread fallback.
+    this.decoder = "auto";
   }
   getIconSvg() {
     return getIconSvg();
@@ -249,75 +251,56 @@ export class CompressImage extends BaseTool {
     item.startedAt = performance.now();
     this.log(item, "Reading", { inputBytes: item.file.size });
     if (!item.file.size || item.file.size > MAX_FILE_SIZE) throw new Error("Choose an image between 1 byte and 32 MB.");
-    const bytes = new Uint8Array(await item.file.arrayBuffer());
+    const type = imageType(new Uint8Array(await item.file.slice(0, 12).arrayBuffer()));
+    if (!type) throw new Error("Choose a valid PNG, JPEG or still WebP image.");
     if (generation !== this.generation) return;
-    this.log(item, "Validating", {});
-    const info = inspectImage(bytes);
-    const before = URL.createObjectURL(new Blob([bytes], { type: info.type }));
-    const canvas = document.createElement("canvas");
+    const before = URL.createObjectURL(new Blob([item.file], { type }));
     const temporaryUrls = new Set([before]);
+    const report = (stage, details) => this.log(item, stage, details);
     try {
-      // PNG dimensions come from its header. JPEG and WebP are decoded first because
-      // orientation can change their displayed size.
-      let image;
-      const decode = async () => {
-        this.log(item, "Decoding", { decoder: "browser", colorSpace: "sRGB", orientation: "from image" });
-        image = new Image();
-        image.src = before;
-        await image.decode();
-      };
-      if (info.type !== "image/png") await decode();
+      // The worker reads, decodes and resizes the file. It asks for pixels instead when it
+      // cannot decode there, and the main thread then prepares them the way it used to.
+      let result = await this.runWorker({ file: item.file, decoder: this.decoder, ...settings }, report);
       if (generation !== this.generation) return;
-      const width = image ? image.naturalWidth : info.width,
-        height = image ? image.naturalHeight : info.height;
-      if (!width || !height || width > 16384 || height > 16384 || width * height > 16000000) {
-        throw new Error("Choose an image under 16 megapixels and 16,384 pixels per side.");
+      let expected;
+      if (result.needsPixels) {
+        const prepared = await this.preparePixels(item, settings, generation, before);
+        if (!prepared) return;
+        result = await this.runWorker(prepared.payload, report);
+        expected = prepared.expected;
+      } else {
+        const width = result.originalWidth,
+          height = result.originalHeight;
+        const target = settings.resize ? fitDimensions(width, height, settings.width, settings.height) : { width, height };
+        expected = { type, width, height, target, resized: target.width !== width || target.height !== height };
       }
-      const target = settings.resize ? fitDimensions(width, height, settings.width, settings.height) : { width, height };
-      const resized = target.width !== width || target.height !== height;
-      let pixels;
-      if (info.type !== "image/png" || resized || (settings.lossyPng && info.depth !== 16)) {
-        if (!image) await decode();
-        if (generation !== this.generation) return;
-        if (resized) this.log(item, "Resizing", { ...target });
-        canvas.width = target.width;
-        canvas.height = target.height;
-        const context = canvas.getContext("2d", { colorSpace: "srgb" });
-        if (!context) throw new Error("Image decoding is unavailable in this browser.");
-        context.imageSmoothingEnabled = true;
-        context.imageSmoothingQuality = "high";
-        context.drawImage(image, 0, 0, target.width, target.height);
-        pixels = context.getImageData(0, 0, target.width, target.height);
-      }
-      const result = await this.runWorker(
-        {
-          bytes: bytes.buffer,
-          image: pixels,
-          type: info.type,
-          resized,
-          losslessWebp: info.type === "image/webp" && info.lossless,
-          ...settings,
-        },
-        (stage, details) => this.log(item, stage, details),
-      );
       if (generation !== this.generation) return;
-      if (result.type !== info.type || result.width !== target.width || result.height !== target.height) {
+      const { target, resized, width, height } = expected;
+      if (
+        result.type !== expected.type ||
+        result.width !== target.width ||
+        result.height !== target.height ||
+        (result.displayChecked && result.resized !== resized)
+      ) {
         throw new Error("Output format or dimensions failed verification.");
       }
       this.log(item, "Verifying", { codec: result.codec });
       const verify = async (candidate) => {
         const header = inspectImage(candidate);
-        if (header.type !== info.type || header.width !== target.width || header.height !== target.height) {
+        if (header.type !== expected.type || header.width !== target.width || header.height !== target.height) {
           throw new Error("Candidate format or dimensions failed verification.");
         }
-        const blob = new Blob([candidate], { type: info.type });
+        const blob = new Blob([candidate], { type: expected.type });
         const url = URL.createObjectURL(blob);
         temporaryUrls.add(url);
-        const decoded = new Image();
-        decoded.src = url;
-        await decoded.decode();
-        if (decoded.naturalWidth !== target.width || decoded.naturalHeight !== target.height) {
-          throw new Error("Candidate preview failed dimension verification.");
+        // The worker has already decoded worker-prepared results at the target size.
+        if (!result.displayChecked) {
+          const decoded = new Image();
+          decoded.src = url;
+          await decoded.decode();
+          if (decoded.naturalWidth !== target.width || decoded.naturalHeight !== target.height) {
+            throw new Error("Candidate preview failed dimension verification.");
+          }
         }
         return { blob, url };
       };
@@ -332,7 +315,7 @@ export class CompressImage extends BaseTool {
       });
       const originalKept = selection === "original";
       const selected = originalKept
-        ? { blob: new Blob([item.file], { type: info.type }), url: before }
+        ? { blob: new Blob([item.file], { type: expected.type }), url: before }
         : selection === "baseline" && baseline
           ? baseline
           : candidate;
@@ -340,10 +323,10 @@ export class CompressImage extends BaseTool {
       const outcome = originalKept
         ? "Original kept"
         : lossy
-          ? info.type === "image/png"
+          ? expected.type === "image/png"
             ? "Lossy PNG accepted"
             : "Optimized"
-          : settings.lossyPng && info.type === "image/png"
+          : settings.lossyPng && expected.type === "image/png"
             ? "Lossless result used"
             : "Optimized";
       item.urls.forEach((url) => URL.revokeObjectURL(url));
@@ -361,7 +344,7 @@ export class CompressImage extends BaseTool {
         lossy,
         originalKept,
         outcome,
-        codec: lossy ? result.codec : info.type === "image/png" ? "Oxipng" : result.codec,
+        codec: lossy ? result.codec : expected.type === "image/png" ? "Oxipng" : result.codec,
         quality: settings.quality,
         quantizationQuality: lossy ? result.quantizationQuality : undefined,
         fallbackReason: result.fallbackReason,
@@ -378,8 +361,62 @@ export class CompressImage extends BaseTool {
         lossy,
       });
     } finally {
-      canvas.width = canvas.height = 1;
       temporaryUrls.forEach((url) => URL.revokeObjectURL(url));
+    }
+  }
+  // Main-thread fallback: decode with <img>, resize on a canvas, and send the pixels.
+  async preparePixels(item, settings, generation, before) {
+    const bytes = new Uint8Array(await item.file.arrayBuffer());
+    if (generation !== this.generation) return null;
+    this.log(item, "Validating", {});
+    const info = inspectImage(bytes);
+    const canvas = document.createElement("canvas");
+    try {
+      // PNG dimensions come from its header. JPEG and WebP are decoded first because
+      // orientation can change their displayed size.
+      let image;
+      const decode = async () => {
+        this.log(item, "Decoding", { decoder: "main-thread fallback", colorSpace: "sRGB", orientation: "from image" });
+        image = new Image();
+        image.src = before;
+        await image.decode();
+      };
+      if (info.type !== "image/png") await decode();
+      if (generation !== this.generation) return null;
+      const width = image ? image.naturalWidth : info.width,
+        height = image ? image.naturalHeight : info.height;
+      if (!width || !height || width > 16384 || height > 16384 || width * height > 16000000) {
+        throw new Error("Choose an image under 16 megapixels and 16,384 pixels per side.");
+      }
+      const target = settings.resize ? fitDimensions(width, height, settings.width, settings.height) : { width, height };
+      const resized = target.width !== width || target.height !== height;
+      let pixels;
+      if (info.type !== "image/png" || resized || (settings.lossyPng && info.depth !== 16)) {
+        if (!image) await decode();
+        if (generation !== this.generation) return null;
+        if (resized) this.log(item, "Resizing", { ...target });
+        canvas.width = target.width;
+        canvas.height = target.height;
+        const context = canvas.getContext("2d", { colorSpace: "srgb" });
+        if (!context) throw new Error("Image decoding is unavailable in this browser.");
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = "high";
+        context.drawImage(image, 0, 0, target.width, target.height);
+        pixels = context.getImageData(0, 0, target.width, target.height);
+      }
+      return {
+        payload: {
+          bytes: bytes.buffer,
+          image: pixels,
+          type: info.type,
+          resized,
+          losslessWebp: info.type === "image/webp" && info.lossless,
+          ...settings,
+        },
+        expected: { type: info.type, width, height, target, resized },
+      };
+    } finally {
+      canvas.width = canvas.height = 1;
     }
   }
   updateRow(item) {
@@ -590,11 +627,11 @@ export class CompressImage extends BaseTool {
       this.cancelWorker = () => finish(new Error("Cancelled"));
       worker.onmessage = ({ data }) => {
         if (data.log) report(data.log.stage, data.log.details);
-        else finish(data.error ? new Error(data.error) : null, data.result);
+        else finish(data.error ? new Error(data.error) : null, data.needsPixels ? { needsPixels: true } : data.result);
       };
       worker.onerror = (event) => finish(new Error(event.message || "Compression worker failed."));
       worker.onmessageerror = () => finish(new Error("Unable to read the compression worker response."));
-      worker.postMessage(payload, [payload.bytes, ...(payload.image ? [payload.image.data.buffer] : [])]);
+      worker.postMessage(payload, [...(payload.bytes ? [payload.bytes] : []), ...(payload.image ? [payload.image.data.buffer] : [])]);
     });
   }
 

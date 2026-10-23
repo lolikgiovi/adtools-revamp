@@ -59,6 +59,18 @@ thread checks structure, CRC, format and dimensions without decompressing.
 Browser checks count the `png.validated` log stages (2 lossless, 3 lossy,
 2 resized) and confirm zero `pako.Inflate` calls on the main thread.
 
+Since 2026-10-23 (phase 2) the worker receives the `File`, reads and inspects
+it, and decodes and resizes with `createImageBitmap` (orientation from image,
+default premultiplication, default color conversion) and an `OffscreenCanvas`
+with high-quality smoothing. It also decodes each output to confirm it displays
+at the target size. Without `createImageBitmap` or a 2D `OffscreenCanvas`, or
+with `decoder = "main"`, the worker replies `needsPixels` and the main thread
+uses the earlier `<img>` and canvas path, logged as `main-thread fallback`.
+Both decoders give byte-identical PNG and WebP results, resized included, and
+byte-identical JPEG at full size. A shrunk JPEG can differ by about 2 per
+channel before re-encoding: Chrome's `<img>` path lets the JPEG decoder scale
+down while decoding, while the worker decodes at full size and then resamples.
+
 Acceptance:
 
 - Lossless PNG must be strictly smaller than the original; otherwise original
