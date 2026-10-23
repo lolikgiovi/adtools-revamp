@@ -1,5 +1,5 @@
 import { optimizePng, encodePng } from "./png-codec.js";
-import { PRESETS } from "./config.js";
+import { PRESETS, WEBP_LOSSLESS } from "./config.js";
 import { validatePng, makeChunk } from "./service.js";
 import jpegWasm from "@jsquash/jpeg/codec/enc/mozjpeg_enc.wasm?url";
 import webpWasm from "@jsquash/webp/codec/enc/webp_enc.wasm?url";
@@ -82,7 +82,7 @@ async function quantize(image, options) {
 
 self.onmessage = async ({ data }) => {
   try {
-    const { type, image, resized, lossyPng, preset, quality, pngQuality } = data;
+    const { type, image, resized, lossyPng, losslessWebp, preset, quality, pngQuality } = data;
     const options = PRESETS[preset];
     if (!options) throw new Error("Unknown compression preset.");
     const source = new Uint8Array(data.bytes);
@@ -114,10 +114,13 @@ self.onmessage = async ({ data }) => {
     } else {
       const codec = type === "image/jpeg" ? "MozJPEG" : "libwebp";
       const encode = type === "image/jpeg" ? await jpegEncoder() : await webpEncoder();
-      const settings = { ...(type === "image/jpeg" ? options.jpeg : options.webp), quality };
+      const lossless = type === "image/webp" && losslessWebp && !resized;
+      const settings = lossless
+        ? { ...options.webp, ...WEBP_LOSSLESS }
+        : { ...(type === "image/jpeg" ? options.jpeg : options.webp), quality };
       report("Encoding", { codec, ...settings, width: image.width, height: image.height });
       const bytes = new Uint8Array(await encode(image, settings));
-      result = { bytes, width: image.width, height: image.height, codec, lossy: true, metadataRemovedBytes: 0 };
+      result = { bytes, width: image.width, height: image.height, codec, lossy: !lossless, metadataRemovedBytes: 0 };
     }
     result.type = type;
     const transfers = [...new Set([result.bytes.buffer, ...(result.baseline ? [result.baseline.buffer] : [])])];

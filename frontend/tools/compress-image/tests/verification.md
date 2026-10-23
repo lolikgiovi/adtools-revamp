@@ -32,8 +32,10 @@ and full 16-bit precision; identical compressed scanlines are not required.
 
 JPEG/WebP, lossy PNG, and resized images use browser-managed orientation and
 sRGB rendering before encoding. These paths do not copy original metadata.
-Quantized/resized PNG is explicitly tagged sRGB. WebP uses lossy encoding even
-when its input was lossless, with alpha quality 100. Animated PNG/WebP is
+Quantized/resized PNG is explicitly tagged sRGB. Lossy WebP is re-encoded lossy
+with alpha quality 100. Lossless (VP8L) WebP stays lossless unless resized
+(libwebp lossless, exact, quality 90, method 5), is lossless relative to the
+browser-decoded pixels, and is kept only when smaller. Animated PNG/WebP is
 rejected. Before/after views and direct original downloads remain available.
 
 Resize is independent and happens before quantization/encoding. It preserves

@@ -6,6 +6,10 @@ import { UsageTracker } from "../../../core/UsageTracker.js";
 UsageTracker.trackToolUse = () => {};
 import { CompressImage } from "../main.js";
 import { makeChunk } from "../service.js";
+import { inspectImage } from "../image-info.js";
+import encodeWebp, { init as initWebp } from "@jsquash/webp/encode.js";
+import webpWasm from "@jsquash/webp/codec/enc/webp_enc.wasm?url";
+import webpSimdWasm from "@jsquash/webp/codec/enc/webp_enc_simd.wasm?url";
 
 document.documentElement.classList.toggle("dark", new URLSearchParams(location.search).get("theme") === "dark");
 
@@ -434,6 +438,73 @@ try {
     highBytes.length === smallBytes.length && highBytes.every((value, i) => value === smallBytes[i]),
     "Lossless PNG output is identical across presets.",
   );
+  // Lossless WebP failures: re-encoded as lossy VP8, pixels changed, the JPEG/WebP
+  // quality slider leaking into lossless output, output larger than the original,
+  // resize not switching to lossy, and the detail text describing it as lossy or PNG.
+  await initWebp({ locateFile: (path) => (path.includes("simd") ? webpSimdWasm : webpWasm) });
+  const art = document.createElement("canvas");
+  art.width = 320;
+  art.height = 200;
+  const artContext = art.getContext("2d");
+  for (let y = 0; y < 200; y += 20)
+    for (let x = 0; x < 320; x += 20) {
+      artContext.fillStyle = `rgb(${x % 256}, ${(y * 3) % 256}, ${(x + y) % 2 ? 200 : 40})`;
+      artContext.fillRect(x, y, 20, 20);
+    }
+  const artPixels = artContext.getImageData(0, 0, 320, 200);
+  const losslessWebp = async (quality, method) =>
+    new File([await encodeWebp(artPixels, { lossless: 1, exact: 1, quality, method })], "lossless.webp", { type: "image/webp" });
+  const webpRun = async (file, quality) => {
+    tool.clear();
+    change("resize", false);
+    change("quality", String(quality));
+    select([file]);
+    await compress();
+    return tool.items[0];
+  };
+  const quickWebp = await losslessWebp(0, 0);
+  check(inspectImage(new Uint8Array(await quickWebp.arrayBuffer())).lossless, "The lossless WebP fixture is VP8L.");
+  const kept = await webpRun(quickWebp, 30);
+  const keptBytes = new Uint8Array(await kept.blob.arrayBuffer());
+  check(kept.blob.type === "image/webp" && inspectImage(keptBytes).lossless, "Lossless WebP input stays lossless WebP.");
+  check(
+    kept.logs.some((entry) => entry.stage === "Encoding" && entry.details.codec === "libwebp" && entry.details.lossless === 1),
+    "Lossless WebP reports libwebp lossless encoding.",
+  );
+  const webpBefore = new Image(),
+    webpAfter = new Image();
+  webpBefore.src = kept.before;
+  webpAfter.src = kept.after;
+  await Promise.all([webpBefore.decode(), webpAfter.decode()]);
+  const beforeWebpPixels = pixels(webpBefore),
+    afterWebpPixels = pixels(webpAfter);
+  check(
+    beforeWebpPixels.length === afterWebpPixels.length && beforeWebpPixels.every((v, i) => v === afterWebpPixels[i]),
+    "Lossless WebP output decodes to identical pixels.",
+  );
+  tool.selectItem(kept);
+  const keptDetail = root.querySelector(".ci-detail").textContent;
+  check(/lossless/i.test(keptDetail) && !/Quality \d|PNG/.test(keptDetail), "Lossless WebP detail text says lossless, not quality or PNG.");
+  const highQualityBytes = new Uint8Array(await (await webpRun(quickWebp, 90)).blob.arrayBuffer());
+  check(
+    highQualityBytes.length === keptBytes.length && highQualityBytes.every((v, i) => v === keptBytes[i]),
+    "The JPEG/WebP quality slider does not change lossless WebP output.",
+  );
+  const tightWebp = await losslessWebp(100, 6);
+  const tight = await webpRun(tightWebp, 85);
+  check(tight.status === "Ready" && tight.blob.size <= tightWebp.size, "Lossless WebP never comes back larger than the original.");
+  tool.clear();
+  change("resize", true);
+  change("width", "160");
+  change("height", "160");
+  select([quickWebp]);
+  await compress();
+  const resizedWebp = new Uint8Array(await tool.items[0].blob.arrayBuffer());
+  check(
+    tool.items[0].result.resized && !inspectImage(resizedWebp).lossless && inspectImage(resizedWebp).width === 160,
+    "Resized lossless WebP uses lossy encoding at the target size.",
+  );
+  change("resize", false);
   document.querySelector("#verification").textContent = `PASS: ${checks.length} browser checks. Open details for the repeatable evidence.`;
   document.querySelector("#evidence").textContent = checks.join("\n");
 } catch (error) {

@@ -122,27 +122,31 @@ must keep transparent RGB unchanged anyway. `optimiseAlpha` stays `false` everyw
 Evidence: `docs/evidence/compress-image-alpha-optimization-probe.txt`. Reproduce with
 `node frontend/tools/compress-image/tests/alpha-optimization-probe.mjs`.
 
-### 1.3 Lossless WebP stays lossless
+### 1.3 Lossless WebP stays lossless: done
 
-**Problem.** `inspectWebp` returns `lossless: true` for VP8L input (`image-info.js:61`), but nothing uses it. Every
-WebP is re-encoded with `lossless: 0`.
+**Problem.** `inspectWebp` returned `lossless: true` for VP8L input (`image-info.js:61`), but nothing used it. Every
+WebP was re-encoded with `lossless: 0`.
 
-**Change.**
+**Change (implemented 2026-10-23).**
 
-- If the source is lossless and not resized, encode with libwebp's lossless mode: `lossless: 1`, `exact: 1` to keep
-  transparent RGB, and `quality` as effort (use 100 with method 6, then tune from phase 0).
-- The JPEG/WebP quality slider does not apply to this case. The detail text says "Lossless WebP kept lossless."
+- If the source is lossless and not resized, the worker uses `WEBP_LOSSLESS` from `config.js`: `lossless: 1`,
+  `exact: 1`, `quality: 90`, `method: 5`. The result counts as lossless, so it is kept only if it is smaller than
+  the original.
+- The JPEG/WebP quality slider does not apply. The detail text says "Lossless WebP kept lossless, relative to the
+  browser-decoded pixels."
 - Resizing still uses the lossy path, because the pixels change anyway.
 
-**Caveat to state in the UI and in `verification.md`.** Pixels come from the browser decoder, which uses
-premultiplied alpha. Semi-transparent pixels can shift by one step. The output is "lossless relative to decoded
-pixels", the same wording the resize path already uses.
+**Effort setting.** No WebP files are in the benchmark set, so the 16 benchmark PNGs were encoded as lossless WebP
+from their decoded pixels. q90/m5 was 1.8% smaller than libwebp's default q75/m4 at 1.8× the time (26.9 s against
+14.9 s for the set). q100/m6 saved another 1.3% but took 11× longer (294 s), with one image at 30 s. Evidence:
+`docs/evidence/compress-image-webp-lossless-effort.txt`.
 
-**Tests first.**
+**Caveat.** Pixels come from the browser decoder, which uses premultiplied alpha. Semi-transparent pixels can shift
+by one step, and an embedded ICC profile is converted to sRGB. The output is "lossless relative to decoded pixels".
 
-- Browser check: an opaque lossless WebP fixture gives a VP8L output whose decoded pixels match the source exactly.
-- Browser check: a lossless WebP with resize on gives VP8 (lossy) output.
-- Browser check: the existing semi-transparent lossy WebP check is unchanged.
+**Browser checks added (written first; the harness failed at "Lossless WebP input stays lossless WebP"):** VP8L in,
+VP8L out; identical decoded pixels; libwebp lossless in the log; detail text says lossless; the quality slider
+doesn't change the output; never larger than the original; resize switches to lossy at the target size.
 
 ### 1.4 No main-thread decode for lossless PNG
 
@@ -349,7 +353,7 @@ Failure modes, as browser checks:
 | Fixed Oxipng level (1.1)      | Level 2. The baseline showed level 4 gains 0.17 points at 3× the time |
 | Alpha optimization (1.2)      | Dropped: it saved 0 bytes on the lossy path                           |
 | Lossy PNG visibility (1.6)    | Smaller File turns it on; defaults otherwise unchanged                |
-| Lossless WebP semantics (1.3) | Keep lossless; label it "lossless relative to decoded pixels"         |
+| Lossless WebP semantics (1.3) | Done: kept lossless at q90/m5, labeled relative to decoded pixels     |
 
 ## Later, not in this plan
 

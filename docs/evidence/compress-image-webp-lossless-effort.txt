@@ -1,0 +1,20 @@
+# libwebp lossless effort probe, 2026-10-23
+# The 16 benchmark PNGs, decoded with pngjs, fully transparent pixels zeroed as a canvas does, encoded with @jsquash/webp lossless: 1, exact: 1 (SIMD build, Node v26.10.0).
+# Columns: quality/method, output bytes, encode time.
+alumni-platinum-chip.png        | q75m4 3096400 2561ms | q90m5 3024208 3892ms | q100m6 3014402 15785ms
+alumni-prioritas-chip.png       | q75m4 4541454 2981ms | q90m5 4445456 4905ms | q100m6 4437694 20967ms
+alumni-private-chip.png         | q75m4 4362802 3321ms | q90m5 4299024 5158ms | q100m6 4253536 22971ms
+gold-gpn-chip.png               | q75m4 960798 581ms | q90m5 950310 1514ms | q100m6 937630 23463ms
+gold-wayang-chip.png            | q75m4 1238598 573ms | q90m5 1233402 1937ms | q100m6 1221390 30299ms
+platinum-gebogan-chip.png       | q75m4 984228 347ms | q90m5 982352 926ms | q100m6 953592 18818ms
+platinum-pacu-chip.png          | q75m4 837108 493ms | q90m5 801750 940ms | q100m6 801106 25785ms
+platinum-tari-saman-chip.png    | q75m4 707738 573ms | q90m5 702044 871ms | q100m6 700992 22255ms
+prio-sidomukti-chip.png         | q75m4 584704 437ms | q90m5 584774 533ms | q100m6 519608 22903ms
+private-songket-chip.png        | q75m4 753510 675ms | q90m5 743576 717ms | q100m6 742422 24358ms
+signature-paper-chip.png        | q75m4 131060 175ms | q90m5 131220 226ms | q100m6 126868 2784ms
+signature-paper.png             | q75m4 130950 170ms | q90m5 130746 224ms | q100m6 126736 2291ms
+silver-jaipong-chip.png         | q75m4 734096 361ms | q90m5 733548 403ms | q100m6 651730 17716ms
+virtual-serentaun.png           | q75m4 1795024 639ms | q90m5 1720672 2899ms | q100m6 1720800 14075ms
+world-elite-executive-chip.png  | q75m4 523286 486ms | q90m5 516212 873ms | q100m6 516048 15466ms
+world-elite-executive.png       | q75m4 538698 490ms | q90m5 531868 884ms | q100m6 530360 13887ms
+TOTAL q75m4: 21920454 B, 14.9 s, slowest 3.3 s | q90m5: 21531162 B, 26.9 s, slowest 5.2 s | q100m6: 21254914 B, 293.8 s, slowest 30.3 s

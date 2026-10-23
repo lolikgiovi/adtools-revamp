@@ -286,6 +286,7 @@ export class CompressImage extends BaseTool {
           image: pixels,
           type: info.type,
           resized,
+          losslessWebp: info.type === "image/webp" && info.lossless,
           ...settings,
         },
         (stage, details) => this.log(item, stage, details),
@@ -334,7 +335,7 @@ export class CompressImage extends BaseTool {
           ? info.type === "image/png"
             ? "Lossy PNG accepted"
             : "Optimized"
-          : settings.lossyPng
+          : settings.lossyPng && info.type === "image/png"
             ? "Lossless result used"
             : "Optimized";
       item.urls.forEach((url) => URL.revokeObjectURL(url));
@@ -412,7 +413,7 @@ export class CompressImage extends BaseTool {
       (result
         ? result.originalKept
           ? "No worthwhile reduction found. Original kept."
-          : `${result.resized ? `Resized from ${result.originalWidth} × ${result.originalHeight} to ${result.width} × ${result.height} px. Pixels changed; rendered in sRGB. ` : "Dimensions unchanged. "}${result.lossy ? `${result.codec}. ${item.blob.type === "image/png" ? "PNG colors reduced." : `Quality ${result.quality}.`} Compare detail, colors and transparency before downloading.` : result.resized ? "PNG encoding is lossless relative to the resized pixels." : "PNG pixels and rendering metadata preserved."}${result.fallbackReason ? ` ${result.fallbackReason}` : ""}${result.metadataRemovedBytes ? ` Removed ${size(result.metadataRemovedBytes)} of text comments.` : ""}`
+          : `${result.resized ? `Resized from ${result.originalWidth} × ${result.originalHeight} to ${result.width} × ${result.height} px. Pixels changed; rendered in sRGB. ` : "Dimensions unchanged. "}${result.lossy ? `${result.codec}. ${item.blob.type === "image/png" ? "PNG colors reduced." : `Quality ${result.quality}.`} Compare detail, colors and transparency before downloading.` : item.blob.type === "image/webp" ? "Lossless WebP kept lossless, relative to the browser-decoded pixels." : result.resized ? "PNG encoding is lossless relative to the resized pixels." : "PNG pixels and rendering metadata preserved."}${result.fallbackReason ? ` ${result.fallbackReason}` : ""}${result.metadataRemovedBytes ? ` Removed ${size(result.metadataRemovedBytes)} of text comments.` : ""}`
         : "Choose another file or correct the input and compress again.");
     inspector.querySelector("pre").textContent = item.logs.map((entry) => `${entry.stage} ${JSON.stringify(entry.details)}`).join("\n");
     this.$("copy-log").addEventListener("click", () =>

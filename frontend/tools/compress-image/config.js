@@ -2,6 +2,11 @@
 // 0.17 points more than level 2 at three times the time, so every preset uses 2.
 const PNG_LEVEL = 2;
 
+// Lossless WebP input stays lossless. Here quality is effort, so it ignores the slider:
+// on the benchmark pixels, q90/m5 was 1.8% smaller than libwebp's default q75/m4 at 1.8× the
+// time; q100/m6 saved another 1.3% but took 11× longer, up to 30 s for one image.
+export const WEBP_LOSSLESS = Object.freeze({ lossless: 1, exact: 1, quality: 90, method: 5 });
+
 function preset(quality, method, min, target) {
   return Object.freeze({
     png: Object.freeze({ level: PNG_LEVEL, interlace: false, optimiseAlpha: false }),
