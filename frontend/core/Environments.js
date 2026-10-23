@@ -27,6 +27,36 @@ function parseArray(raw) {
   }
 }
 
+/**
+ * Base URLs are stored without a trailing slash. They may include a path
+ * prefix (for example `/uat1/customer`), so join paths by concatenation.
+ */
+export function normalizeBaseUrl(value) {
+  return String(value ?? "")
+    .trim()
+    .replace(/\/+$/, "");
+}
+
+/**
+ * Lockey-style paths always start with exactly one slash and carry no
+ * trailing slash. A query string is preserved as typed.
+ */
+export function normalizePath(value) {
+  const trimmed = String(value ?? "").trim();
+  if (!trimmed) return "";
+  const [pathPart, ...queryParts] = trimmed.split("?");
+  const query = queryParts.length ? `?${queryParts.join("?")}` : "";
+  const path = pathPart.replace(/^\/+/, "").replace(/\/+$/, "");
+  return path ? `/${path}${query}` : "";
+}
+
+export function joinUrl(baseUrl, path) {
+  const base = normalizeBaseUrl(baseUrl);
+  const suffix = normalizePath(path);
+  if (!base) return "";
+  return suffix ? `${base}${suffix}` : base;
+}
+
 function slugify(value) {
   return (
     String(value ?? "")
@@ -59,8 +89,8 @@ function normalizeEnvironment(raw, takenIds) {
     name,
     criticalConnection: String(raw.criticalConnection ?? "").trim(),
     complementaryConnection: String(raw.complementaryConnection ?? "").trim(),
-    cdnPublicUrl: String(raw.cdnPublicUrl ?? "").trim(),
-    cdnDirectUrl: String(raw.cdnDirectUrl ?? "").trim(),
+    cdnPublicUrl: normalizeBaseUrl(raw.cdnPublicUrl),
+    cdnDirectUrl: normalizeBaseUrl(raw.cdnDirectUrl),
   };
 }
 

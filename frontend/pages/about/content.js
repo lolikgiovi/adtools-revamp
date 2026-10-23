@@ -144,11 +144,11 @@ export const toolGuides = {
       "The script allocates the next global version with MAX + 1 inside the INSERT, so it is safe to run without loading the ledger. Loading an environment only adds release suggestions and the version-history view. Uses the same audit trail preference as Quick Query.",
   },
   "master-lockey": {
-    summary: "View, search, and inspect localization keys from configured language-pack domains.",
+    summary: "View, search, and inspect localization keys from a configured language-pack endpoint.",
     howToUse: [
-      "Configure language-pack URLs in Settings.",
-      "Load a domain and language pack.",
-      "Search or filter the full identifier, then inspect the matching values.",
+      "Configure the Lockey path in Settings.",
+      "Choose an environment and its Public or Direct CDN base.",
+      "Load the language pack and search or filter the full identifier.",
     ],
     notes: "Desktop-only. Confluence links can be opened when the integration is configured.",
   },

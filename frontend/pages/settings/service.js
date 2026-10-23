@@ -1,5 +1,5 @@
 import { getRuntime } from "../../core/Runtime.js";
-import { readEnvironments, writeEnvironments } from "../../core/Environments.js";
+import { normalizePath, readEnvironments, writeEnvironments } from "../../core/Environments.js";
 
 class SettingsService {
   constructor({ eventBus, themeManager } = {}) {
@@ -44,6 +44,7 @@ class SettingsService {
 
   getValue(key, type, defaultValue) {
     if (type === "environments") return readEnvironments();
+    if (key === "config.lockeyPath") return normalizePath(localStorage.getItem(key) ?? "");
     const raw = localStorage.getItem(key);
     if (raw === null || raw === "null") {
       if (type === "boolean" && defaultValue === "system") {
@@ -120,6 +121,7 @@ class SettingsService {
       this.eventBus?.emit?.("notification:success", { message: "Setting saved", duration: 1000 });
       return environments;
     }
+    if (key === "config.lockeyPath") value = normalizePath(value);
 
     let storeVal = value;
     switch (type) {
@@ -198,7 +200,9 @@ class SettingsService {
             if (!url) continue;
             try {
               const parsed = new URL(url);
-              if (!parsed.protocol.startsWith("http")) return { valid: false, message: "URLs must be http(s)" };
+              if (!parsed.protocol.startsWith("http") || !parsed.host || parsed.search || parsed.hash) {
+                return { valid: false, message: "URLs must be http(s) without a query or fragment" };
+              }
             } catch (_) {
               return { valid: false, message: `Invalid URL format: ${url}` };
             }

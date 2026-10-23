@@ -44,6 +44,14 @@
   height: 28px;
 }
 
+.lockey-base-selector {
+  width: 84px;
+}
+
+.lockey-base-selector[hidden] {
+  display: none;
+}
+
 .btn-fetch-compact {
   display: flex;
   align-items: center;

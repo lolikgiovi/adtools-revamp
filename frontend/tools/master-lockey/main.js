@@ -6,6 +6,14 @@
 import { BaseTool } from "../../core/BaseTool.js";
 import { MasterLockeyTemplate } from "./template.js";
 import { MasterLockeyService } from "./service.js";
+import {
+  listLockeyEnvironments,
+  migrateLegacyLockeyPath,
+  readBasePreference,
+  readLockeyPath,
+  resolveLockeyUrl,
+  writeBasePreference,
+} from "./config.js";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { ensureUnifiedKeychain } from "../../core/KeychainMigration.js";
@@ -16,6 +24,7 @@ class MasterLockey extends BaseTool {
     super({ id: "master-lockey", eventBus });
 
     this.service = new MasterLockeyService();
+    this.currentEnvironment = null;
     this.currentDomain = null;
     this.currentDomainUrl = null;
     this.rawLockeySource = null;
@@ -116,6 +125,7 @@ class MasterLockey extends BaseTool {
   bindElements() {
     this.els = {
       domainSelector: this.container.querySelector("#domain-selector"),
+      baseSelector: this.container.querySelector("#lockey-base-selector"),
       btnFetch: this.container.querySelector("#btn-fetch-data"),
       cacheInfo: this.container.querySelector("#cache-info"),
       cacheTimestamp: this.container.querySelector("#cache-timestamp"),
@@ -194,52 +204,124 @@ class MasterLockey extends BaseTool {
 
   loadDomainConfig() {
     try {
-      const configJson = localStorage.getItem("config.lockeyDomains");
-      const domains = configJson ? JSON.parse(configJson) : [];
+      migrateLegacyLockeyPath();
+      const environments = listLockeyEnvironments();
+      const selector = this.els.domainSelector;
+      selector.innerHTML = '<option value="">Pick Environment</option>';
 
-      // Clear existing options (except the first placeholder)
-      this.els.domainSelector.innerHTML = '<option value="">Pick Domain</option>';
-
-      if (domains.length === 0) {
+      if (environments.length === 0) {
         const option = document.createElement("option");
         option.value = "";
-        option.textContent = "No domains configured (go to Settings)";
+        option.textContent = "No environments configured (go to Settings)";
         option.disabled = true;
-        this.els.domainSelector.appendChild(option);
+        selector.appendChild(option);
+        this.updateBaseSelector(null);
         return;
       }
 
-      domains.forEach(({ key, value }) => {
+      const saved = localStorage.getItem("masterLockeyEnvironment") || "";
+      for (const environment of environments) {
         const option = document.createElement("option");
-        option.value = JSON.stringify({ key, value });
-        option.textContent = key;
-        this.els.domainSelector.appendChild(option);
-      });
+        option.value = environment.name;
+        option.textContent = environment.name;
+        selector.appendChild(option);
+      }
+
+      const selected = environments.some((environment) => environment.name === saved) ? saved : environments[0].name;
+      selector.value = selected;
+      this.applyEnvironmentSelection(selected);
     } catch (error) {
-      console.error("Failed to load domain config:", error);
+      console.error("Failed to load environment config:", error);
     }
+  }
+
+  applyEnvironmentSelection(name) {
+    const environment = listLockeyEnvironments().find((candidate) => candidate.name === name) || null;
+    this.currentEnvironment = environment;
+    this.currentDomain = environment?.name || null;
+    this.currentDomainUrl = "";
+    this.updateBaseSelector(environment);
+
+    if (!environment) {
+      this.els.btnFetch.disabled = true;
+      this.els.btnFetch.removeAttribute("title");
+      return;
+    }
+
+    const path = readLockeyPath();
+    if (!path) {
+      this.els.btnFetch.disabled = true;
+      this.els.btnFetch.title = "Set the Lockey path in Settings.";
+      return;
+    }
+
+    const resolved = resolveLockeyUrl(environment, {
+      path,
+      base: this.els.baseSelector?.value || readBasePreference(),
+    });
+    this.currentDomainUrl = resolved.url || "";
+    this.els.btnFetch.disabled = !this.currentDomainUrl;
+    if (this.currentDomainUrl) this.els.btnFetch.title = this.currentDomainUrl;
+    else this.els.btnFetch.removeAttribute("title");
+  }
+
+  updateBaseSelector(environment) {
+    const selector = this.els.baseSelector;
+    if (!selector) return;
+
+    const options = [];
+    if (environment?.cdnPublicUrl) options.push(["public", "Public"]);
+    if (environment?.cdnDirectUrl) options.push(["direct", "Direct"]);
+    selector.replaceChildren(...options.map(([value, label]) => new Option(label, value)));
+
+    if (!options.length) {
+      selector.hidden = true;
+      selector.disabled = true;
+      return;
+    }
+
+    const preference = readBasePreference();
+    selector.value = options.some(([value]) => value === preference) ? preference : options[0][0];
+    selector.hidden = options.length < 2;
+    selector.disabled = options.length < 2;
+  }
+
+  clearEnvironmentSelection() {
+    this.currentEnvironment = null;
+    this.currentDomain = null;
+    this.currentDomainUrl = null;
+    this.rawLockeySource = null;
+    this.parsedData = null;
+    this.els.btnFetch.disabled = true;
+    this.els.btnFetch.removeAttribute("title");
+    this.updateBaseSelector(null);
+    this.hideCache();
   }
 
   setupEventListeners() {
     this.updateSearchControlHints();
-    // Domain selector change
+    // Environment selector change
     this.els.domainSelector.addEventListener("change", () => {
-      const selected = this.els.domainSelector.value;
-      if (selected) {
-        const { key, value } = JSON.parse(selected);
-        this.currentDomain = key;
-        this.currentDomainUrl = value;
-        this.els.btnFetch.disabled = false;
-
-        // Try to load cached data for this domain (will refresh bulk confluence results after loading)
-        this.tryLoadCache();
-      } else {
-        this.currentDomain = null;
-        this.currentDomainUrl = null;
-        this.rawLockeySource = null;
-        this.els.btnFetch.disabled = true;
-        this.hideCache();
+      const name = this.els.domainSelector.value;
+      if (!name) {
+        this.clearEnvironmentSelection();
+        this.updateSearchControlHints();
+        return;
       }
+      localStorage.setItem("masterLockeyEnvironment", name);
+      this.rawLockeySource = null;
+      this.hideCache();
+      this.applyEnvironmentSelection(name);
+      this.updateSearchControlHints();
+
+      // Try to load cached data for this environment
+      this.tryLoadCache();
+    });
+
+    // Public/Direct CDN base toggle
+    this.els.baseSelector.addEventListener("change", () => {
+      writeBasePreference(this.els.baseSelector.value);
+      if (this.currentDomain) this.applyEnvironmentSelection(this.currentDomain);
       this.updateSearchControlHints();
     });
 
@@ -1011,7 +1093,7 @@ class MasterLockey extends BaseTool {
       ],
       [this.els.btnCopySearchKeys, needsData ? loadHint : "No results to copy. Change the search or result filter."],
       [this.els.btnCopySearchResults, needsData ? loadHint : "No results to copy. Change the search or result filter."],
-      [this.els.btnFetch, this.currentDomain ? "Wait for remote data to finish loading." : "Select a domain before fetching remote data."],
+      [this.els.btnFetch, this.currentDomainUrl ? "Wait for remote data to finish loading." : this.currentDomain ? "Set the Lockey path in Settings." : "Select an environment before fetching remote data."],
     ];
     hints.forEach(([control, reason]) => {
       const wrapper = control.closest("[data-search-control]");

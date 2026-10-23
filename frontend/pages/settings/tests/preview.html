@@ -83,9 +83,7 @@
               cdnDirectUrl: "",
             },
           ]);
-          values.set("config.lockeyDomains", [
-            { key: "uat1", value: "https://example.com/uat1/customer/localization/v1/language-pack?languagePackVersionUuid=1" },
-          ]);
+          values.set("config.lockeyPath", "/localization/v1/language-pack?languagePackVersionUuid=1");
         }
         if (params.has("json")) {
           values.set("config.oracle.connections", [

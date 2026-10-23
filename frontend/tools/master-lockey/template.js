@@ -22,7 +22,11 @@ export const MasterLockeyTemplate = /* html */ `
             </div>
             <span id="info-version" class="version-hash" style="display: none;"></span>
             <select id="domain-selector" class="domain-selector-compact">
-                <option value="">Pick Domain</option>
+                <option value="">Pick Environment</option>
+            </select>
+            <select id="lockey-base-selector" class="domain-selector-compact lockey-base-selector" aria-label="Lockey base URL" hidden>
+                <option value="public">Public</option>
+                <option value="direct">Direct</option>
             </select>
             <span class="lockey-control" data-search-control>
             <button class="btn-fetch-compact" id="btn-fetch-data" disabled>

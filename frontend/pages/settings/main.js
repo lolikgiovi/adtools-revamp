@@ -299,6 +299,20 @@ class SettingsPage {
           mergeLegacyBaseUrls(Array.isArray(value) ? value : []);
           continue;
         }
+        if (key === "config.lockeyDomains") {
+          let domains = value;
+          if (typeof domains === "string") {
+            try {
+              domains = JSON.parse(domains);
+            } catch (_) {
+              domains = [];
+            }
+          }
+          try {
+            localStorage.setItem(key, JSON.stringify(Array.isArray(domains) ? domains : []));
+          } catch (_) {}
+          continue;
+        }
         const type = getType(key);
         if (type === "secret") continue;
         try {
@@ -831,9 +845,9 @@ class SettingsPage {
         if (!value) continue;
         try {
           const url = new URL(value);
-          if (!url.protocol.startsWith("http")) throw new Error("protocol");
+          if (!url.protocol.startsWith("http") || !url.host || url.search || url.hash) throw new Error("invalid");
         } catch (_) {
-          status.textContent = `${label} must be an http(s) URL.`;
+          status.textContent = `${label} must be an http(s) URL without a query or fragment.`;
           status.dataset.state = "error";
           input.focus();
           return;

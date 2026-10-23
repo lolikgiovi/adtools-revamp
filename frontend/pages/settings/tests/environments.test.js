@@ -36,8 +36,8 @@ describe("Testing Environments editor", () => {
     submit(item);
 
     expect(readEnvironments().map(({ name, cdnPublicUrl, cdnDirectUrl }) => [name, cdnPublicUrl, cdnDirectUrl])).toEqual([
-      ["UAT1", "https://public.uat1.example/", ""],
-      ["UAT2", "https://public.uat2.example/", "https://10.0.0.2:5501/"],
+      ["UAT1", "https://public.uat1.example", ""],
+      ["UAT2", "https://public.uat2.example", "https://10.0.0.2:5501"],
     ]);
     expect(item.querySelectorAll(".environment-row")).toHaveLength(2);
   });
@@ -68,7 +68,7 @@ describe("Testing Environments editor", () => {
     expect(readEnvironments()[0]).toMatchObject({
       criticalConnection: "CORE",
       complementaryConnection: "EXTRA",
-      cdnPublicUrl: "https://public.uat1b.example/",
+      cdnPublicUrl: "https://public.uat1b.example",
     });
   });
 

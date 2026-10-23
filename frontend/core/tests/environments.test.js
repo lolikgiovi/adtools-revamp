@@ -2,8 +2,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   clearConnectionReference,
+  joinUrl,
   listBaseUrls,
   mergeLegacyBaseUrls,
+  normalizeBaseUrl,
+  normalizePath,
   readEnvironments,
   resolveConnection,
   updateConnectionReference,
@@ -38,10 +41,10 @@ describe("environment migration", () => {
     expect(environments[0]).toMatchObject({
       name: "uat1",
       criticalConnection: "UAT1",
-      cdnPublicUrl: "https://public.uat1.example/",
+      cdnPublicUrl: "https://public.uat1.example",
       cdnDirectUrl: "",
     });
-    expect(environments[1]).toMatchObject({ name: "SIT", criticalConnection: "", cdnPublicUrl: "https://public.sit.example/" });
+    expect(environments[1]).toMatchObject({ name: "SIT", criticalConnection: "", cdnPublicUrl: "https://public.sit.example" });
   });
 
   it("keeps an existing environment model instead of re-running migration", () => {
@@ -57,7 +60,7 @@ describe("environment migration", () => {
         name: "PROD",
         criticalConnection: "PROD",
         complementaryConnection: "",
-        cdnPublicUrl: "https://prod.example/",
+        cdnPublicUrl: "https://prod.example",
         cdnDirectUrl: "",
       },
     ]);
@@ -69,7 +72,7 @@ describe("environment migration", () => {
       { name: "UAT2", cdnDirectUrl: "https://10.0.0.2:5501/" },
     ]);
 
-    expect(JSON.parse(localStorage.getItem(BASE_URLS_KEY))).toEqual([{ key: "UAT1", value: "https://public.uat1.example/" }]);
+    expect(JSON.parse(localStorage.getItem(BASE_URLS_KEY))).toEqual([{ key: "UAT1", value: "https://public.uat1.example" }]);
   });
 });
 
@@ -122,12 +125,43 @@ describe("environment resolution", () => {
 
     const environments = readEnvironments();
     expect(environments.map(({ name, criticalConnection, cdnPublicUrl }) => [name, criticalConnection, cdnPublicUrl])).toEqual([
-      ["UAT1", "CORE", "https://public.uat1.example/"],
-      ["UAT2", "", "https://public.uat2.example/"],
+      ["UAT1", "CORE", "https://public.uat1.example"],
+      ["UAT2", "", "https://public.uat2.example"],
     ]);
     expect(listBaseUrls()).toEqual([
-      { name: "UAT1", url: "https://public.uat1.example/", directUrl: "" },
-      { name: "UAT2", url: "https://public.uat2.example/", directUrl: "" },
+      { name: "UAT1", url: "https://public.uat1.example", directUrl: "" },
+      { name: "UAT2", url: "https://public.uat2.example", directUrl: "" },
     ]);
+  });
+});
+
+describe("URL normalization", () => {
+  it("strips trailing slashes from base URLs and keeps path prefixes", () => {
+    expect(normalizeBaseUrl("  https://host.example/uat1/  ")).toBe("https://host.example/uat1");
+    expect(normalizeBaseUrl("https://10.0.0.2:5501/")).toBe("https://10.0.0.2:5501");
+    expect(normalizeBaseUrl("")).toBe("");
+  });
+
+  it("normalizes Lockey paths to one leading slash and no trailing slash", () => {
+    expect(normalizePath("localization/v1/lockey/")).toBe("/localization/v1/lockey");
+    expect(normalizePath("//localization/v1/lockey")).toBe("/localization/v1/lockey");
+    expect(normalizePath("/localization/v1/language-pack?uuid=1")).toBe("/localization/v1/language-pack?uuid=1");
+    expect(normalizePath("")).toBe("");
+  });
+
+  it("concatenates instead of resolving against the origin so prefixes survive", () => {
+    expect(joinUrl("https://host.example/uat1/", "localization/v1/lockey")).toBe("https://host.example/uat1/localization/v1/lockey");
+    expect(joinUrl("https://host.example", "/localization/v1/lockey?uuid=1")).toBe("https://host.example/localization/v1/lockey?uuid=1");
+    expect(joinUrl("", "/localization/v1/lockey")).toBe("");
+  });
+
+  it("normalizes environment URLs when writing", () => {
+    const [environment] = writeEnvironments([
+      { name: "UAT1", cdnPublicUrl: "https://host.example/uat1/", cdnDirectUrl: "https://10.0.0.2:5501/" },
+    ]);
+    expect(environment).toMatchObject({
+      cdnPublicUrl: "https://host.example/uat1",
+      cdnDirectUrl: "https://10.0.0.2:5501",
+    });
   });
 });

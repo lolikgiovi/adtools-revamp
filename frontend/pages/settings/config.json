@@ -363,14 +363,15 @@
           "initiallyExpanded": true,
           "items": [
             {
-              "key": "config.lockeyDomains",
-              "storageKey": "config.lockeyDomains",
-              "label": "Lockey Domain URLs",
-              "type": "kvlist",
-              "default": [],
-              "keyPlaceholder": "Environment",
-              "valuePlaceholder": "Lockey JSON URL",
-              "description": "Add environment \u279d lockey domain URL pairs for Master Lockey tool."
+              "key": "config.lockeyPath",
+              "storageKey": "config.lockeyPath",
+              "label": "Lockey Path",
+              "type": "string",
+              "default": "",
+              "description": "Path appended to the selected environment's CDN base URL, e.g. /localization/v1/language-pack?languagePackVersionUuid=\u2026",
+              "validation": {
+                "pattern": "^(?!.*(?:://|#))\\S*$"
+              }
             }
           ]
         },
