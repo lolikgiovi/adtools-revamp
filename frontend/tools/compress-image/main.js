@@ -98,6 +98,7 @@ export class CompressImage extends BaseTool {
       this.$("quality").value = preset.jpeg.quality;
       this.$("png-min").value = preset.quantize.quality.min;
       this.$("png-target").value = preset.quantize.quality.target;
+      if (preset.enablesLossyPng) this.$("lossy-png").checked = true;
       this.updateSettings();
     });
     this.$("quality").addEventListener("input", () => this.updateSettings());

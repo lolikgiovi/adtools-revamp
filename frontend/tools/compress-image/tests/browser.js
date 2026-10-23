@@ -432,6 +432,7 @@ try {
   select([new File([fixture(320, 320)], "levels.png", { type: "image/png" })]);
   const presetOutput = async (preset) => {
     change("preset", preset);
+    change("lossy-png", false);
     await compress();
     return new Uint8Array(await tool.items[0].blob.arrayBuffer());
   };
@@ -588,6 +589,28 @@ try {
     change("lossy-png", false);
     change("resize", false);
   }
+  // Preset failures: Smaller File leaving PNG lossless, the PNG quality fields staying
+  // hidden, another preset silently undoing the user's choice, High Quality or Balanced
+  // turning color reduction on, and the setting not reaching the compressed result.
+  tool.clear();
+  change("preset", "balanced");
+  change("lossy-png", false);
+  change("preset", "high");
+  check(!control("lossy-png").checked, "High Quality leaves PNG lossless.");
+  change("preset", "small");
+  check(control("lossy-png").checked, "Smaller File turns on lossy PNG.");
+  check(
+    !control("png-quality").hidden && /color reduction/i.test(control("mode-note").textContent),
+    "Smaller File shows the PNG quality fields.",
+  );
+  change("preset", "balanced");
+  check(control("lossy-png").checked, "Switching away from Smaller File keeps lossy PNG on.");
+  change("preset", "small");
+  select([new File([fixture(320, 200, "gentle")], "smaller.png", { type: "image/png" })]);
+  await compress();
+  check(tool.items[0].result?.lossy && tool.items[0].blob.type === "image/png", "Smaller File compresses PNG with color reduction.");
+  change("preset", "balanced");
+  change("lossy-png", false);
   document.querySelector("#verification").textContent = `PASS: ${checks.length} browser checks. Open details for the repeatable evidence.`;
   document.querySelector("#evidence").textContent = checks.join("\n");
 } catch (error) {

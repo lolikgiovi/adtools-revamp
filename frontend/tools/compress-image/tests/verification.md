@@ -23,7 +23,9 @@ off. Quantization uses up to 256 colors at speed 4. JPEG/WebP quality and PNG
 minimum/target quality can be adjusted separately from the preset. These scores
 are codec-specific starting values; compare the actual result visually.
 
-PNG remains lossless unless explicitly enabled. Sixteen-bit PNG stays on the
+PNG remains lossless unless lossy PNG is enabled, either by its toggle or by
+choosing Smaller File (which checks the toggle; leaving the preset keeps the
+user's setting). Sixteen-bit PNG stays on the
 lossless path. Lossless PNG consumes original bytes directly, removes only
 `tEXt` comments, validates PNG structure/CRC/zlib/filter data, and checks that
 non-image metadata survives. Oxipng may refilter, change palettes/bit depth, or

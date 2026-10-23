@@ -200,15 +200,20 @@ a result with corrupt zlib data, which only the main-thread decompression caught
 CRC, which the main-thread structure check catches. Corrupt zlib from a codec is caught in the worker, as the
 `png.validated` counts show for every output.
 
-### 1.6 Make lossy PNG easier to find (decision needed)
+### 1.6 Make lossy PNG easier to find: done
 
-Most of the savings people expect from PNG come from color reduction, and it's currently behind an unchecked box.
-**Recommended:** the Smaller File preset turns on "Allow lossy PNG" when selected. The other presets leave it as
-the user set it. The safety net stays: quality floor, comparison against the lossless result, and the visual
-comparison. Other options are to turn it on by default, or to only make the toggle more visible.
+Most of the savings people expect from PNG come from color reduction: 63–76% against 9–10% lossless on the benchmark
+set. It was behind an unchecked box.
 
-**Tests first.** Browser check: choosing Smaller File checks the lossy PNG toggle and shows the PNG quality fields.
-Choosing Balanced afterwards does not uncheck it.
+**Change (implemented 2026-10-23).** Presets carry an `enablesLossyPng` flag; only Smaller File sets it. Choosing
+Smaller File checks "Allow lossy PNG" and shows the PNG quality fields. Choosing another preset afterwards keeps
+the toggle as it is, and High Quality and Balanced never turn it on. The safety net is unchanged: quality floor,
+comparison against the lossless result, and the visual comparison. The default (Balanced, lossless) is unchanged.
+
+**Browser checks added (written first; the harness failed at "Smaller File turns on lossy PNG"):** High Quality
+leaves PNG lossless; Smaller File turns lossy PNG on and shows its fields; switching to Balanced keeps it on; a PNG
+compressed under Smaller File comes back color-reduced. The 1.1 preset check now switches lossy PNG off explicitly,
+since Smaller File would otherwise turn it on.
 
 ### Not changing in phase 1: lossless-before-lossy order
 
@@ -362,7 +367,7 @@ Failure modes, as browser checks:
 | Benchmark images (phase 0)    | The user supplies 10–20 real ad images; the agent can't download them |
 | Fixed Oxipng level (1.1)      | Level 2. The baseline showed level 4 gains 0.17 points at 3× the time |
 | Alpha optimization (1.2)      | Dropped: it saved 0 bytes on the lossy path                           |
-| Lossy PNG visibility (1.6)    | Smaller File turns it on; defaults otherwise unchanged                |
+| Lossy PNG visibility (1.6)    | Done: Smaller File turns it on; defaults otherwise unchanged          |
 | Lossless WebP semantics (1.3) | Done: kept lossless at q90/m5, labeled relative to decoded pixels     |
 
 ## Later, not in this plan

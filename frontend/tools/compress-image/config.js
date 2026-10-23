@@ -7,8 +7,11 @@ const PNG_LEVEL = 2;
 // time; q100/m6 saved another 1.3% but took 11× longer, up to 30 s for one image.
 export const WEBP_LOSSLESS = Object.freeze({ lossless: 1, exact: 1, quality: 90, method: 5 });
 
-function preset(quality, method, min, target) {
+// enablesLossyPng: choosing the preset turns on color reduction. Leaving the preset keeps the
+// user's toggle, and lossy PNG still has to beat the lossless result to be used.
+function preset(quality, method, min, target, enablesLossyPng = false) {
   return Object.freeze({
+    enablesLossyPng,
     png: Object.freeze({ level: PNG_LEVEL, interlace: false, optimiseAlpha: false }),
     jpeg: Object.freeze({ quality, progressive: true, optimize_coding: true }),
     webp: Object.freeze({ quality, method, lossless: 0, alpha_quality: 100 }),
@@ -23,7 +26,7 @@ function preset(quality, method, min, target) {
 export const PRESETS = Object.freeze({
   high: preset(92, 4, 90, 100),
   balanced: preset(85, 4, 80, 95),
-  small: preset(75, 5, 65, 85),
+  small: preset(75, 5, 65, 85, true),
 });
 
 export function minimumSavings(bytes) {
