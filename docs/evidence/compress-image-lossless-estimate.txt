@@ -1,0 +1,43 @@
+# Lossless-size estimate for skipping the lossless pass, 2026-10-23
+# 16 benchmark PNGs. l0/l1/l2 = Oxipng level on the source bytes; lossy = Balanced lossy candidate from compress-image-benchmark-phase2-worker-decode.json.
+## Oxipng levels
+{"name":"alumni-platinum-chip.png","input":5440558,"lossy":1286821,"l0":5374488,"ms0":873,"l1":4908160,"ms1":3096,"l2":4891542,"ms2":5861}
+{"name":"alumni-prioritas-chip.png","input":6697576,"lossy":2252104,"l0":6697504,"ms0":553,"l1":6428342,"ms1":2251,"l2":6400412,"ms2":4991}
+{"name":"alumni-private-chip.png","input":6548685,"lossy":2002126,"l0":6548613,"ms0":553,"l1":6275441,"ms1":2466,"l2":6245911,"ms2":5403}
+{"name":"gold-gpn-chip.png","input":1377755,"lossy":463287,"l0":1375751,"ms0":103,"l1":1330743,"ms1":287,"l2":1327444,"ms2":664}
+{"name":"gold-wayang-chip.png","input":1719263,"lossy":523634,"l0":1716755,"ms0":105,"l1":1691429,"ms1":229,"l2":1633981,"ms2":510}
+{"name":"platinum-gebogan-chip.png","input":1851569,"lossy":507508,"l0":1499193,"ms0":107,"l1":1445618,"ms1":201,"l2":1444701,"ms2":486}
+{"name":"platinum-pacu-chip.png","input":1419689,"lossy":473750,"l0":1303268,"ms0":106,"l1":1231068,"ms1":267,"l2":1230118,"ms2":659}
+{"name":"platinum-tari-saman-chip.png","input":1090303,"lossy":303350,"l0":1051993,"ms0":101,"l1":981521,"ms1":392,"l2":979522,"ms2":914}
+{"name":"prio-sidomukti-chip.png","input":1063241,"lossy":268946,"l0":965177,"ms0":97,"l1":906670,"ms1":319,"l2":734354,"ms2":630}
+{"name":"private-songket-chip.png","input":1098191,"lossy":315441,"l0":1098179,"ms0":103,"l1":1039132,"ms1":378,"l2":1032702,"ms2":866}
+{"name":"signature-paper-chip.png","input":184615,"lossy":42173,"l0":184615,"ms0":38,"l1":172681,"ms1":260,"l2":172686,"ms2":467}
+{"name":"signature-paper.png","input":186644,"lossy":36970,"l0":186644,"ms0":37,"l1":175119,"ms1":261,"l2":173938,"ms2":473}
+{"name":"silver-jaipong-chip.png","input":1399775,"lossy":365168,"l0":1165893,"ms0":102,"l1":1090539,"ms1":278,"l2":919527,"ms2":585}
+{"name":"virtual-serentaun.png","input":2748598,"lossy":1004093,"l0":2748554,"ms0":227,"l1":2546662,"ms1":663,"l2":2544212,"ms2":1643}
+{"name":"world-elite-executive-chip.png","input":828242,"lossy":265689,"l0":827042,"ms0":92,"l1":782628,"ms1":323,"l2":778604,"ms2":730}
+{"name":"world-elite-executive.png","input":854984,"lossy":272446,"l0":853736,"ms0":90,"l1":808609,"ms1":321,"l2":804711,"ms2":730}
+## Adaptive filter + zlib (node:zlib, same library as the browser's CompressionStream)
+alumni-platinum-chip.png        l2 4891542 | est z1 5814784 l2/est 0.841 196+109ms | est z6 5147684 l2/est 0.950 605ms | lossy/est1 0.221 | l2 ms 5861
+alumni-prioritas-chip.png       l2 6400412 | est z1 7360252 l2/est 0.870 233+143ms | est z6 6681791 l2/est 0.958 727ms | lossy/est1 0.306 | l2 ms 4991
+alumni-private-chip.png         l2 6245911 | est z1 7263045 l2/est 0.860 234+141ms | est z6 6536604 l2/est 0.956 804ms | lossy/est1 0.276 | l2 ms 5403
+gold-gpn-chip.png               l2 1327444 | est z1 1428127 l2/est 0.929 58+30ms | est z6 1364917 l2/est 0.973 76ms | lossy/est1 0.324 | l2 ms 664
+gold-wayang-chip.png            l2 1633981 | est z1 1748447 l2/est 0.935 45+39ms | est z6 1708573 l2/est 0.956 67ms | lossy/est1 0.299 | l2 ms 510
+platinum-gebogan-chip.png       l2 1444701 | est z1 1554041 l2/est 0.930 45+30ms | est z6 1517758 l2/est 0.952 56ms | lossy/est1 0.327 | l2 ms 486
+platinum-pacu-chip.png          l2 1230118 | est z1 1343642 l2/est 0.916 38+25ms | est z6 1298478 l2/est 0.947 77ms | lossy/est1 0.353 | l2 ms 659
+platinum-tari-saman-chip.png    l2 979522 | est z1 1132750 l2/est 0.865 40+22ms | est z6 1034361 l2/est 0.947 108ms | lossy/est1 0.268 | l2 ms 914
+prio-sidomukti-chip.png         l2 734354 | est z1 1028389 l2/est 0.714 35+20ms | est z6 960165 l2/est 0.765 64ms | lossy/est1 0.262 | l2 ms 630
+private-songket-chip.png        l2 1032702 | est z1 1187652 l2/est 0.870 39+24ms | est z6 1081489 l2/est 0.955 122ms | lossy/est1 0.266 | l2 ms 866
+signature-paper-chip.png        l2 172686 | est z1 248193 l2/est 0.696 13+6ms | est z6 194833 l2/est 0.886 56ms | lossy/est1 0.170 | l2 ms 467
+signature-paper.png             l2 173938 | est z1 249836 l2/est 0.696 13+6ms | est z6 197157 l2/est 0.882 56ms | lossy/est1 0.148 | l2 ms 473
+silver-jaipong-chip.png         l2 919527 | est z1 1216076 l2/est 0.756 37+21ms | est z6 1175269 l2/est 0.782 71ms | lossy/est1 0.300 | l2 ms 585
+virtual-serentaun.png           l2 2544212 | est z1 2865837 l2/est 0.888 88+50ms | est z6 2744950 l2/est 0.927 183ms | lossy/est1 0.350 | l2 ms 1643
+world-elite-executive-chip.png  l2 778604 | est z1 890957 l2/est 0.874 33+17ms | est z6 816272 l2/est 0.954 52ms | lossy/est1 0.298 | l2 ms 730
+world-elite-executive.png       l2 804711 | est z1 913994 l2/est 0.880 33+18ms | est z6 842480 l2/est 0.955 53ms | lossy/est1 0.298 | l2 ms 730
+worst l2/est(z1) 0.696 | estimate total ms 1878
+## Harness fixtures (CompressionStream deflate)
+fixture 320x320 default  est 1276 | lossless l2 1348 l2/est 1.056 | lossy 24225 q92 lossy/est 18.985 full pass | lossy wins? false
+gentle 320x320           est 222541 | lossless l2 209838 l2/est 0.943 | lossy 39729 q91 lossy/est 0.179 SKIP | lossy wins? true
+gentle 320x200           est 139164 | lossless l2 131355 l2/est 0.944 | lossy 25779 q91 lossy/est 0.185 SKIP | lossy wins? true
+default 320x200          est 843 | lossless l2 870 l2/est 1.032 | lossy 15984 q92 lossy/est 18.961 full pass | lossy wins? false
+noise 320x320            est 410051 | lossless l2 409586 l2/est 0.999 | lossy 102435 q2 lossy/est 0.250 SKIP | lossy wins? true

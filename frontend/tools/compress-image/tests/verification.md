@@ -71,6 +71,14 @@ byte-identical JPEG at full size. A shrunk JPEG can differ by about 2 per
 channel before re-encoding: Chrome's `<img>` path lets the JPEG decoder scale
 down while decoding, while the worker decodes at full size and then resamples.
 
+Since 2026-10-23 lossy PNG runs first. The worker skips the lossless Oxipng
+pass when the lossy result is at most half of an estimate of the lossless size
+(adaptive PNG filtering plus native deflate on the same pixels); the lossy
+result is then compared with the original, with the usual 1% / 1 KB minimum.
+The estimate declines, and the full pass runs, for images with at most 256
+colors, gray images, or without `CompressionStream`. Logs record
+`png.lossless-skipped` with both sizes, or `png.candidates` when both run.
+
 Acceptance:
 
 - Lossless PNG must be strictly smaller than the original; otherwise original

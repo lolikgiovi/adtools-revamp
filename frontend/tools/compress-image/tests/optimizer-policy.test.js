@@ -1,6 +1,6 @@
 // Failure cases: mutable presets, wrong lossy threshold, accepting bigger output,
 // ignoring explicit resizing, and lossy PNG beating the original but not lossless.
-import { PRESETS, selectCandidate, minimumSavings } from "../config.js";
+import { PRESETS, selectCandidate, minimumSavings, skipsLosslessPass } from "../config.js";
 
 describe("image optimizer policy", () => {
   it("freezes every preset and uses the agreed codec options", () => {
@@ -41,5 +41,18 @@ describe("image optimizer policy", () => {
     expect(selectCandidate({ original: 500, candidate: 700, resized: true })).toBe("candidate");
     expect(selectCandidate({ original: 500, baseline: 800, candidate: 700, resized: true })).toBe("baseline");
     expect(selectCandidate({ original: 500, baseline: 3000, candidate: 1900, resized: true })).toBe("candidate");
+  });
+});
+
+// Skip failures: skipping when lossy is not clearly smaller, missing the boundary, and
+// skipping without a usable estimate.
+describe("lossless pass skip", () => {
+  it("skips only when the lossy result is at most half the lossless estimate", () => {
+    expect(skipsLosslessPass(500, 1000)).toBe(true);
+    expect(skipsLosslessPass(501, 1000)).toBe(false);
+    expect(skipsLosslessPass(1, 1000)).toBe(true);
+  });
+  it("never skips without a usable estimate", () => {
+    for (const estimate of [undefined, null, 0, NaN, -5]) expect(skipsLosslessPass(1, estimate)).toBe(false);
   });
 });

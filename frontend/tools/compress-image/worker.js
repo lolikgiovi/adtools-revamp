@@ -1,5 +1,5 @@
-import { optimizePng, encodePng } from "./png-codec.js";
-import { PRESETS, WEBP_LOSSLESS } from "./config.js";
+import { optimizePng, encodePng, estimateLosslessBytes } from "./png-codec.js";
+import { PRESETS, WEBP_LOSSLESS, skipsLosslessPass } from "./config.js";
 import { validatePng, parsePng, makeChunk, fitDimensions } from "./service.js";
 import { inspectImage } from "./image-info.js";
 import { canDecodeInWorker, decodeBitmap, readPixels, checkDisplayable } from "./decode.js";
@@ -145,27 +145,39 @@ self.onmessage = async ({ data }) => {
     let result;
     if (type === "image/png") {
       const input = validatePng(source, report, "source");
-      result = resized ? await encodePng(image, options.png, report) : await optimizePng(source, options.png, report, input);
-      if (resized) result.bytes = srgbPng(result.bytes);
-      result.lossy = false;
-      result.codec = "Oxipng";
-      if (lossyPng && input.chunks[0].data[8] !== 16) {
-        const quantized = await quantize(image, { ...options.quantize, quality: pngQuality });
-        if (quantized) {
-          const lossy = await optimizePng(quantized.bytes, options.png, report, parsePng(quantized.bytes));
-          report("png.candidates", { losslessBytes: result.bytes.length, lossyBytes: lossy.bytes.length, quality: quantized.quality });
+      const lossless = async () => {
+        const encoded = resized ? await encodePng(image, options.png, report) : await optimizePng(source, options.png, report, input);
+        if (resized) encoded.bytes = srgbPng(encoded.bytes);
+        return { ...encoded, lossy: false, codec: "Oxipng" };
+      };
+      // Lossy first: when it is clearly smaller than the lossless size could be, the slow
+      // lossless pass is skipped and the lossy result is compared with the original instead.
+      const deep = input.chunks[0].data[8] === 16;
+      const quantized = lossyPng && !deep ? await quantize(image, { ...options.quantize, quality: pngQuality }) : null;
+      if (quantized) {
+        const lossy = await optimizePng(quantized.bytes, options.png, report, parsePng(quantized.bytes));
+        const estimate = await estimateLosslessBytes(image);
+        const candidate = { ...lossy, lossy: true, codec: "libimagequant → Oxipng", quantizationQuality: quantized.quality };
+        if (skipsLosslessPass(lossy.bytes.length, estimate)) {
+          report("png.lossless-skipped", { lossyBytes: lossy.bytes.length, estimateBytes: estimate });
+          result = { ...candidate, metadataRemovedBytes: 0 };
+        } else {
+          const baseline = await lossless();
+          report("png.candidates", { losslessBytes: baseline.bytes.length, lossyBytes: lossy.bytes.length, estimateBytes: estimate });
           result = {
-            ...result,
+            ...baseline,
+            ...candidate,
             bytes: lossy.bytes,
-            baseline: result.bytes,
-            lossy: true,
-            codec: "libimagequant → Oxipng",
-            quantizationQuality: quantized.quality,
+            baseline: baseline.bytes,
+            metadataRemovedBytes: baseline.metadataRemovedBytes,
           };
-        } else result.fallbackReason = "PNG quality floor could not be met; lossless result used.";
-      } else if (lossyPng) {
-        result.fallbackReason = "16-bit PNG kept on the lossless path.";
-        report("png.lossless-fallback", { reason: result.fallbackReason });
+        }
+      } else {
+        result = await lossless();
+        if (lossyPng && deep) {
+          result.fallbackReason = "16-bit PNG kept on the lossless path.";
+          report("png.lossless-fallback", { reason: result.fallbackReason });
+        } else if (lossyPng) result.fallbackReason = "PNG quality floor could not be met; lossless result used.";
       }
     } else {
       const codec = type === "image/jpeg" ? "MozJPEG" : "libwebp";

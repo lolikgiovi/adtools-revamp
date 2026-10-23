@@ -310,6 +310,60 @@ Failure modes to cover with browser checks before changing code:
 5. Main-thread stall: a `requestAnimationFrame` gap check during a 12 MP JPEG compress stays under 100 ms (at a
    size the harness can generate).
 
+## Phase 2b: Skip the lossless pass when lossy clearly wins
+
+Status: done, 2026-10-23.
+
+**Problem.** With lossy PNG on, the worker always runs a full lossless Oxipng pass first, because the acceptance rule
+compares the lossy result against it. On the benchmark set that pass never wins and takes 25.6 s of Balanced's
+44.6 s; on `alumni-prioritas-chip.png` it is 5.3 s of 8.4 s.
+
+**Measurements** (`docs/evidence/compress-image-lossless-estimate.txt`):
+
+| Lossless-size estimate                                   | Time, whole set | Oxipng level 2 relative to the estimate (worst) |
+| -------------------------------------------------------- | --------------- | ----------------------------------------------- |
+| Oxipng level 0                                           | 3.3 s           | 0.761, but level 0 barely recompresses          |
+| Oxipng level 1                                           | 12.0 s          | 0.810                                           |
+| Adaptive PNG filter + zlib level 1                       | 1.8 s           | 0.696                                           |
+| Adaptive PNG filter + zlib level 6 (`CompressionStream`) | ~3 s            | 0.765                                           |
+
+Level 0 is unsafe: a PNG saved with weak compression stays huge at level 0 and shrinks a lot at level 2. The filter +
+zlib estimate starts from pixels, so the source's own compression does not matter. Lossy results were at most 35%
+of the estimate on the benchmark set.
+
+**Rule.** Quantize first. If the quality floor fails, run the lossless pass as before. Otherwise compress the lossy
+candidate, estimate the lossless size from the same pixels, and skip the lossless pass when
+`lossyBytes <= 0.5 × estimate`. Lossless would have to come in more than 50% under the estimate to have won; the
+worst seen is 30% under. The lossy result is then compared with the original, with the usual 1% / 1 KB minimum. If
+`CompressionStream` is unavailable, the lossless pass always runs.
+
+**Failure modes, each with a test before the code:**
+
+1. The lossless pass still runs when lossy is clearly smaller (the waste this removes).
+2. The pass is skipped where lossless would win, e.g. a smooth gradient (lossy 18× larger than lossless).
+3. The quality floor fails and no lossless result is produced.
+4. A skipped run returns something larger than the original, or ignores the 1% / 1 KB minimum.
+5. The estimate depends on how the source was compressed instead of on its pixels.
+6. The estimate is not deterministic, so the same file gives different outputs.
+7. Resized lossy PNG keeps the old order.
+8. Found by test 1's margin check: images Oxipng stores as a palette (at most 256 colors) or as grayscale come out
+   far below an RGBA estimate (a flat image: 102 bytes against an estimate of 684). The estimate now declines for
+   them, so the full lossless pass runs.
+
+**Result.** Balanced with lossy PNG on the benchmark set: 44.6 s → 20.6 s, every output byte-identical, all 16
+images skipped the pass. `alumni-prioritas-chip.png`: 8.4 s → 4.0 s, of which the estimate takes about 1 s.
+Smaller File with lossy PNG: 20.7 s. Lossless-only runs are unchanged. Evidence:
+`docs/evidence/compress-image-benchmark-skip-lossless.json`.
+
+**Tests (written first, each seen failing).** Vitest: the 0.5 boundary and declining without a usable estimate;
+the estimate stays within the margin of real Oxipng output for gradient, noisy, noise and opaque images, declines
+for flat, four-color and gray images, is deterministic, and declines without `CompressionStream`. Browser: a clearly
+smaller lossy PNG is accepted without the pass and still beats the original by the usual minimum; a smooth gradient
+keeps the pass and lossless wins; resized lossy PNG skips; a failed quality floor still produces the lossless
+result; validation counts are `source, output` when skipped and `source, output, output` otherwise. Two earlier
+checks changed meaning: the first lossy batch now expects the skip instead of `png.candidates`, and the validate-once
+lossy check expects `source, output`.
+
 ## Phase 3: Worker pool
 
 ### Design

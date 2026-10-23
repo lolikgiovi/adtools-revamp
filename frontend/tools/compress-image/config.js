@@ -29,6 +29,16 @@ export const PRESETS = Object.freeze({
   small: preset(75, 5, 65, 85, true),
 });
 
+// With lossy PNG on, the lossless Oxipng pass is skipped when the lossy result is at most
+// this fraction of an estimate of the lossless size (adaptive PNG filter + zlib on the same
+// pixels). On the benchmark set Oxipng level 2 never came in more than 30% under the estimate,
+// and lossy results were at most 35% of it.
+export const LOSSLESS_SKIP_RATIO = 0.5;
+
+export function skipsLosslessPass(lossyBytes, estimateBytes) {
+  return Number.isFinite(estimateBytes) && estimateBytes > 0 && lossyBytes <= estimateBytes * LOSSLESS_SKIP_RATIO;
+}
+
 export function minimumSavings(bytes) {
   return Math.max(Math.ceil(bytes * 0.01), 1024);
 }

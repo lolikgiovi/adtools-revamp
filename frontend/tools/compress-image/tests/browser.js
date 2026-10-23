@@ -240,8 +240,8 @@ try {
     "Quantization reports a named stage.",
   );
   check(
-    first.logs.some((entry) => entry.stage === "png.candidates"),
-    "Lossy PNG compares both candidates.",
+    first.logs.some((entry) => entry.stage === "png.lossless-skipped"),
+    "Lossy PNG that is clearly smaller skips the lossless pass.",
   );
   check(tool.worker === reusableWorker, "A warm worker is reused across files and runs.");
   const previousLossy = first.blob;
@@ -584,7 +584,7 @@ try {
     const resizedRoles = await validatedRoles(new File([fixture(320, 200)], "once-resized.png", { type: "image/png" }), { resize: true });
     check(mainThreadInflates === 0, "PNG data is never decompressed on the main thread.");
     check(roles(lossless) === "source, output", "Lossless PNG validates the source and the output once each.");
-    check(roles(quantized) === "source, output, output", "Lossy PNG validates the source once and each output once.");
+    check(roles(quantized) === "source, output", "Lossy PNG that skips the lossless pass validates the source and its one output.");
     check(roles(resizedRoles) === "source, output", "Resized PNG validates the source and the output once each.");
   } finally {
     pako.Inflate = NativeInflate;
@@ -797,6 +797,56 @@ try {
     tool.items[0].status === "Error" && tool.items[1].status === "Ready",
     "An image the worker cannot decode fails on its own; the next one still compresses.",
   );
+  // Skip failures: the lossless pass still running when lossy clearly wins, skipping where
+  // lossless wins (smooth gradient), the quality-floor fallback losing its lossless result,
+  // a skipped result not beating the original by the usual minimum, resized PNG not skipping,
+  // and the validation count when both passes run.
+  const lossyRun = async (file, { resize = false, minimum = "80", target = "95" } = {}) => {
+    tool.clear();
+    change("preset", "balanced");
+    change("lossy-png", true);
+    change("png-min", minimum);
+    change("png-target", target);
+    change("resize", resize);
+    if (resize) {
+      change("width", "160");
+      change("height", "160");
+    }
+    select([file]);
+    await compress();
+    const item = tool.items[0];
+    const stages = item.logs.map((entry) => entry.stage);
+    return { item, skipped: stages.includes("png.lossless-skipped"), compared: stages.includes("png.candidates") };
+  };
+  const clearWin = await lossyRun(new File([fixture(320, 200, "gentle")], "clear-win.png", { type: "image/png" }));
+  check(
+    clearWin.skipped && !clearWin.compared && clearWin.item.result.outcome === "Lossy PNG accepted",
+    "A clearly smaller lossy PNG is accepted without the lossless pass.",
+  );
+  check(
+    clearWin.item.file.size - clearWin.item.blob.size >= Math.max(Math.ceil(clearWin.item.file.size * 0.01), 1024),
+    "A skipped lossless pass still requires the usual saving over the original.",
+  );
+  const smoothGradient = await lossyRun(new File([fixture(320, 200)], "gradient.png", { type: "image/png" }));
+  const gradientRoles = smoothGradient.item.logs.filter((entry) => entry.stage === "png.validated").map((entry) => entry.details.role);
+  check(
+    !smoothGradient.skipped && smoothGradient.compared && smoothGradient.item.result.outcome === "Lossless result used",
+    "A smooth gradient keeps the lossless pass, and lossless wins.",
+  );
+  check(gradientRoles.join(", ") === "source, output, output", "When both passes run, each output is validated once.");
+  const resizedWin = await lossyRun(new File([fixture(320, 320, "gentle")], "resized-win.png", { type: "image/png" }), { resize: true });
+  check(resizedWin.skipped && resizedWin.item.result.resized, "Resized lossy PNG skips the lossless pass too.");
+  const floorMissed = await lossyRun(new File([fixture(320, 200, "gentle")], "floor.png", { type: "image/png" }), {
+    minimum: "100",
+    target: "100",
+  });
+  check(
+    !floorMissed.skipped && !floorMissed.item.result.lossy && floorMissed.item.status === "Ready",
+    "When the quality floor fails, the lossless pass runs and its result is used.",
+  );
+  change("png-min", "80");
+  change("png-target", "95");
+  change("lossy-png", false);
   document.querySelector("#verification").textContent = `PASS: ${checks.length} browser checks. Open details for the repeatable evidence.`;
   document.querySelector("#evidence").textContent = checks.join("\n");
 } catch (error) {

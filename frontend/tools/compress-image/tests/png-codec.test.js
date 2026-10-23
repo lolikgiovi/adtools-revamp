@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { deflateSync } from "node:zlib";
 import { PNG } from "pngjs";
 import { initSync } from "@jsquash/oxipng/codec/pkg/squoosh_oxipng.js";
-import { optimizePng, encodePng } from "../png-codec.js";
+import { optimizePng, encodePng, estimateLosslessBytes } from "../png-codec.js";
 import { parsePng, makeChunk, verifyPngMetadata } from "../service.js";
 import { PRESETS } from "../config.js";
 
@@ -128,5 +128,66 @@ describe("Oxipng lossless encoding", () => {
       ]),
     );
     await expect(optimizePng(broken)).rejects.toThrow();
+  });
+});
+
+// Estimate failures: lossless coming in far below the estimate (a skip would then be
+// wrong), non-deterministic results, and failing instead of declining without
+// CompressionStream.
+describe("lossless size estimate", () => {
+  const image = (width, height, pixel) => {
+    const data = new Uint8ClampedArray(width * height * 4);
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) data.set(pixel(x, y), (y * width + x) * 4);
+    return { data, width, height };
+  };
+  let seed = 7;
+  const random = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) >>> 24;
+  const images = {
+    gradient: image(320, 200, (x, y) => [x % 256, y % 256, 120, 255]),
+    noisyGradient: image(320, 200, (x, y) => [(x + (random() >> 4)) % 256, (y + (random() >> 4)) % 256, 90, 200]),
+    noise: image(160, 160, () => [random(), random(), random(), 255]),
+    flat: image(320, 200, () => [30, 60, 90, 255]),
+    fourColors: image(
+      320,
+      200,
+      (x, y) =>
+        [
+          [255, 0, 0, 255],
+          [0, 255, 0, 255],
+          [0, 0, 255, 255],
+          [0, 0, 0, 0],
+        ][((x >> 4) + (y >> 4)) % 4],
+    ),
+    grayNoise: image(160, 160, () => {
+      const value = random();
+      return [value, value, value, 128 + (random() >> 1)];
+    }),
+    opaqueNoise: image(160, 160, () => [random(), random(), random(), 255]),
+    opaqueGradient: image(320, 200, (x, y) => [x % 256, y % 256, (x + y) % 256, 255]),
+  };
+  // Oxipng stores these as a palette or grayscale, far below an RGBA estimate, so the estimate
+  // must decline rather than allow a skip.
+  it.each(["flat", "fourColors", "grayNoise"])("declines for images Oxipng can store as palette or grayscale: %s", async (name) => {
+    expect(await estimateLosslessBytes(images[name])).toBeNull();
+  });
+  it.each(["gradient", "noisyGradient", "noise", "opaqueNoise", "opaqueGradient"])(
+    "stays within the skip margin of real Oxipng output: %s",
+    async (name) => {
+      const estimate = await estimateLosslessBytes(images[name]);
+      const lossless = (await encodePng(images[name], PRESETS.balanced.png, () => {})).bytes.length;
+      expect(lossless).toBeGreaterThan(0.6 * estimate);
+    },
+  );
+  it("is deterministic", async () => {
+    expect(await estimateLosslessBytes(images.noisyGradient)).toBe(await estimateLosslessBytes(images.noisyGradient));
+  });
+  it("declines without CompressionStream", async () => {
+    const native = globalThis.CompressionStream;
+    globalThis.CompressionStream = undefined;
+    try {
+      expect(await estimateLosslessBytes(images.flat)).toBeNull();
+    } finally {
+      globalThis.CompressionStream = native;
+    }
   });
 });
