@@ -39,6 +39,17 @@ export function skipsLosslessPass(lossyBytes, estimateBytes) {
   return Number.isFinite(estimateBytes) && estimateBytes > 0 && lossyBytes <= estimateBytes * LOSSLESS_SKIP_RATIO;
 }
 
+// Size advice targets the widest common phone layout: 440 x 956 CSS px at 3x (iPhone 16/17 Pro
+// Max, 1320 x 2868 device pixels; checked 2026-10-23). Most phones are 360-430 CSS px wide.
+export const PHONE_SIZES = Object.freeze({
+  full: Object.freeze({ width: 1320, height: 2868 }),
+  half: Object.freeze({ width: 660, height: 1434 }),
+});
+
+export function largerThan(dimensions, bounds) {
+  return !!dimensions && (dimensions.width > bounds.width || dimensions.height > bounds.height);
+}
+
 // Worker pool: cores minus one (the main thread keeps one), at most three, and one on narrow
 // screens. Each job's peak memory is estimated as 16 bytes per pixel (bitmap, canvas, ImageData
 // and codec buffers) plus the file; unknown dimensions count as the 16 MP maximum.

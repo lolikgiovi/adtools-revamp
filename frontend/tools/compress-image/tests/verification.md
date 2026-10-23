@@ -247,3 +247,40 @@ expanded at desktop and phone widths. Reproduce the empty state using
 `/tools/compress-image/tests/layout.html` and
 `/tools/compress-image/tests/review.html?layout&width=2394`.
 Screenshot: [corrected setup](./setup-layout-dark.png).
+
+## Flow redesign — 2026-10-23
+
+The tool now follows one path: drop or add images, review, compress, then
+accept or skip offers. Nothing compresses until Compress is pressed.
+
+- Empty state: the tool area is one drop target with Add images; the title,
+  tagline and limits line are gone (limits appear only as errors). The whole
+  tool accepts drops once images are loaded.
+- Bar: count and size on the left; Settings, Add, Clear, then one primary
+  action (Compress N images, or Download ZIP when results are current).
+  Results are stale when the settings differ from the ones used for them.
+- Size card: images larger than phone full width (1320 × 2868, the 440 CSS px
+  iPhone 16/17 Pro Max layout at 3x) get one card with Phone full width
+  1320 px, Phone half width 660 px and Keep original. Choices write the
+  existing resize controls; custom sizes stay in Settings.
+- Offer card: after a lossless run, idle workers build reduced-color versions
+  of the lossless PNG results (`tool.offers` resolves when done). The card shows
+  real sizes; Use smaller swaps them in and Undo restores the lossless files.
+  Offers need the usual 1% / 1 KB saving. Clear and a new run cancel the pass;
+  cancelling replaces any worker busy with an offer job, by design.
+- Settings: every earlier control, with its `data-ci` hook, behind Settings;
+  a field error opens it and focuses the field.
+
+Browser harness: PASS 127 checks at desktop, 768 px and 390 px. Screenshots:
+`.impeccable/review/compress-image/` (desktop dark and light, 390 px; empty,
+review and results states). Two existing checks changed meaning with the
+redesign: the PNG quality fields check no longer reads the removed mode note,
+and the two warm-worker checks wait for `tool.offers` first. The harness's
+`visible()` helper counts `visibility: hidden` as not visible, because results
+columns keep their space (hidden) before any result so Before does not move.
+
+A fresh finish review (impeccable finish reviewer) returned fix with eight
+material items; the verdict pass scored seven resolved and one partial, plus
+two regressions (mobile drop height, the stacked view's label, the moving
+Before column). All three were fixed and checked in the captures; no third
+review round ran.

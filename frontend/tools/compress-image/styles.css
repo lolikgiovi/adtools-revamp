@@ -24,10 +24,7 @@
   outline: 2px solid hsl(var(--ring));
   outline-offset: 3px;
 }
-.ci-toolbar,
 .ci-actions,
-.ci-settings-line,
-.ci-run,
 .ci-inspector-header,
 .ci-zoom-controls,
 .ci-view-controls {
@@ -36,17 +33,6 @@
   justify-content: space-between;
   gap: 1rem;
 }
-.ci-toolbar {
-  margin-bottom: 1.5rem;
-  flex-wrap: wrap;
-}
-.ci-toolbar h2 {
-  margin: 0;
-  font-size: 1.25rem;
-  letter-spacing: -0.02em;
-}
-.ci-toolbar p,
-.ci-settings p,
 .ci-detail {
   margin: 0.375rem 0 0;
   line-height: 1.6;
@@ -58,54 +44,87 @@
   gap: 0.5rem;
   flex-wrap: wrap;
 }
-.ci-setup {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(0, 2.5fr);
-  align-items: stretch;
-  gap: 0;
-  background: hsl(var(--ci-subtle) / 0.3);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
+
+/* Empty state: the whole tool area is one drop target, drawn to the pane's full height. */
 .ci-drop {
-  min-height: 200px;
+  min-height: max(260px, calc(100dvh - 5.75rem));
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
+  gap: 1rem;
+  padding: 2rem;
   text-align: center;
-  padding: 1.5rem;
-  background: hsl(var(--ci-subtle) / 0.55);
-  border-radius: 0;
+  border: 1.5px dashed hsl(var(--border));
+  border-radius: calc(var(--radius) * 1.5);
+  background: hsl(var(--ci-subtle) / 0.25);
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
 }
-.ci-drop p {
-  margin: 0.75rem 0 0.375rem;
-}
-.ci-drop small {
+.ci-drop-mark {
+  width: 2.5rem;
+  height: 2.5rem;
   color: hsl(var(--muted-foreground));
-  font-size: 0.75rem;
 }
-.ci-drop.is-dragging,
-.ci-drop:focus-within {
-  outline: 2px solid hsl(var(--ring));
-  outline-offset: -3px;
-}
-.ci-settings {
-  border: 0;
+.ci-drop-title {
   margin: 0;
-  padding: 1.25rem 1.5rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+.compress-image.is-dragging .ci-drop,
+.ci-drop:focus-within {
+  border-color: hsl(var(--ring));
+  background: hsl(var(--ci-subtle) / 0.5);
+}
+.compress-image.is-dragging .ci-batch {
+  outline: 2px dashed hsl(var(--ring));
+  outline-offset: 6px;
+  border-radius: var(--radius);
+}
+
+/* Bar: what is loaded on the left, the one next action on the right. */
+.ci-batch-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 0;
+  background: hsl(var(--background));
+  border-bottom: 1px solid hsl(var(--border));
+}
+.ci-status {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+.ci-count {
+  font-weight: 600;
+}
+.ci-summary {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.8125rem;
+}
+
+/* Settings: every control, closed until asked for. */
+.ci-settings {
+  margin: 0.75rem 0 0;
+  padding: 1rem 1.25rem;
+  border: 0;
   min-width: 0;
   display: grid;
-  gap: 1.25rem;
-  align-content: start;
-}
-.ci-settings-line {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: end;
-}
-.ci-settings-line label {
-  min-width: 0;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  align-items: start;
+  gap: 1rem 1.5rem;
+  background: hsl(var(--ci-subtle) / 0.35);
+  border-radius: var(--radius);
 }
 .ci-settings label:not(.ci-toggle) {
   display: grid;
@@ -139,29 +158,20 @@
   min-height: 36px;
   margin: 0;
 }
-.ci-settings p {
-  font-size: 0.8125rem;
-}
-.ci-options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-}
 .ci-option {
   min-width: 0;
-}
-.ci-option p {
-  margin: 0.375rem 0 0;
-  font-size: 0.75rem;
-}
-.ci-option .ci-bounds {
-  margin: 0.875rem 0 0;
+  display: grid;
+  gap: 0.75rem;
+  align-content: start;
+  min-height: 36px;
 }
 .ci-toggle {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-height: 36px;
   margin: 0;
+  font-size: 0.8125rem;
   cursor: pointer;
 }
 .ci-toggle input {
@@ -174,49 +184,83 @@
   flex-wrap: wrap;
   align-items: end;
   gap: 0.75rem;
-  margin-bottom: 1rem;
 }
 .ci-bounds input {
-  width: 130px;
+  width: 110px;
 }
-.ci-bounds small {
-  flex-basis: 100%;
-  color: hsl(var(--muted-foreground));
-  line-height: 1.6;
-}
-.ci-run {
-  justify-content: flex-end;
-}
-.ci-batch {
-  margin-top: 2rem;
-}
-.ci-batch-header {
+
+/* Decision cards: one finding, one sentence, its choices beside it. */
+.ci-card {
+  margin-top: 0.75rem;
+  padding: 0.75rem 0.75rem 0.75rem 1rem;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 1rem;
+  justify-content: space-between;
   flex-wrap: wrap;
-  margin-bottom: 0.875rem;
+  gap: 0.75rem 1.5rem;
+  background: hsl(var(--ci-subtle) / 0.45);
+  border-radius: var(--radius);
 }
-.ci-batch-header h3 {
+.ci-card-title {
   margin: 0;
-  font-size: 1rem;
-}
-.ci-batch-header h3 span {
-  font-size: 0.8125rem;
-  font-weight: 400;
-  margin-left: 0.625rem;
-  color: hsl(var(--muted-foreground));
-}
-.ci-summary {
-  margin: 0.375rem 0 0;
-}
-.ci-summary {
-  line-height: 1.6;
-  font-size: 0.8125rem;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
+.ci-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+/* Segmented control: a muted track with the chosen segment raised. Shared by the size card and
+   the comparison view switch. */
+.ci-segmented,
+.ci-view-controls {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 0.125rem;
+  padding: 0.1875rem;
+  background: hsl(var(--ci-subtle));
+  border-radius: var(--radius);
+}
+.ci-choice {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.375rem;
+  min-height: 30px;
+  padding: 0.3125rem 0.75rem;
+  color: hsl(var(--muted-foreground));
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--radius) - 2px);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease;
+}
+.ci-choice span {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+.ci-choice:hover:not(:disabled) {
+  color: hsl(var(--foreground));
+}
+.ci-choice[aria-pressed="true"],
+.ci-view-controls button[aria-pressed="true"] {
+  color: hsl(var(--foreground));
+  background: hsl(var(--background));
+  box-shadow: 0 1px 3px hsl(var(--shadow));
+  font-weight: 500;
+}
+.ci-choice:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .ci-list {
+  margin-top: 1rem;
   overflow-x: auto;
   border-radius: var(--radius);
   background: hsl(var(--ci-surface));
@@ -246,6 +290,20 @@
 }
 .ci-list thead th {
   font-weight: 500;
+}
+/* Before any result there is nothing to compare or download: hide those cells but keep their
+   space, so Before does not move when results arrive. */
+.ci-list.is-pending thead th:nth-child(n + 3) {
+  color: transparent;
+}
+.ci-list.is-pending .ci-after,
+.ci-list.is-pending .ci-saved,
+.ci-list.is-pending .ci-file-row td:last-child {
+  visibility: hidden;
+}
+/* The pair view stacks on narrow screens, so its label follows the layout. */
+.ci-label-narrow {
+  display: none;
 }
 .ci-file-row {
   border-bottom: 1px solid hsl(var(--border) / 0.6);
@@ -297,11 +355,8 @@
   color: hsl(var(--destructive));
 }
 .ci-error-message {
+  margin: 0.75rem 0 0;
   line-height: 1.6;
-}
-.ci-settings-hint {
-  color: hsl(var(--muted-foreground));
-  font-size: 0.8125rem;
 }
 .ci-inspector {
   margin-top: 1.75rem;
@@ -330,10 +385,6 @@
   border-color: transparent;
   background: transparent;
 }
-.ci-view-controls button[aria-pressed="true"] {
-  background: hsl(var(--foreground));
-  color: hsl(var(--background));
-}
 .ci-comparison-toolbar,
 [data-ci="preview-controls"],
 .ci-preview-downloads {
@@ -349,11 +400,6 @@
   flex: 1;
   justify-content: space-between;
   min-width: 0;
-}
-.ci-pan-hint {
-  margin: 0.5rem 0 0.875rem;
-  color: hsl(var(--muted-foreground));
-  font-size: 0.75rem;
 }
 .ci-zoom-controls {
   justify-content: flex-start;
@@ -501,13 +547,24 @@
   color: hsl(var(--muted-foreground));
 }
 .ci-diagnostics summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
   cursor: pointer;
   width: fit-content;
   padding: 0.5rem 0;
+  list-style: none;
 }
-.ci-diagnostics p {
-  max-width: 75ch;
-  line-height: 1.6;
+.ci-diagnostics summary::-webkit-details-marker {
+  display: none;
+}
+.ci-chevron {
+  width: 0.875rem;
+  height: 0.875rem;
+  transition: transform 150ms ease;
+}
+.ci-diagnostics[open] .ci-chevron {
+  transform: rotate(90deg);
 }
 .ci-diagnostics a {
   color: hsl(var(--foreground));
@@ -541,9 +598,6 @@
   line-height: 1.6;
 }
 @media (max-width: 900px) {
-  .ci-options {
-    grid-template-columns: 1fr;
-  }
   .ci-comparison-toolbar {
     align-items: flex-start;
   }
@@ -552,33 +606,48 @@
   }
 }
 @media (max-width: 680px) {
-  .ci-settings {
-    padding: 1.25rem;
-  }
-  .ci-settings-line {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0.875rem;
-  }
-  .ci-drop {
-    min-height: 130px;
-  }
-  .ci-setup {
-    grid-template-columns: 1fr;
-  }
   .ci-drop {
     padding: 1.25rem;
   }
-  .ci-toolbar {
+  .ci-batch-header {
     align-items: flex-start;
   }
-  .ci-toolbar p {
-    font-size: 0.8125rem;
+  .ci-actions {
+    width: 100%;
+  }
+  .ci-actions [data-ci="compress"],
+  .ci-actions [data-ci="zip"] {
+    margin-left: auto;
+  }
+  .ci-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .ci-segmented {
+    display: flex;
+  }
+  .ci-segmented .ci-choice {
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
   }
   .ci-viewport {
     height: 240px;
   }
   .ci-pair {
-    gap: 0.25rem;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+  }
+  .ci-pair .ci-viewport {
+    height: auto;
+    aspect-ratio: var(--ci-aspect, 4 / 3);
+  }
+  .ci-label-wide {
+    display: none;
+  }
+  .ci-label-narrow {
+    display: inline;
   }
   .ci-pair figcaption {
     flex-direction: column;
@@ -587,10 +656,6 @@
   .ci-list th,
   .ci-list td {
     padding: 0.625rem;
-  }
-  .ci-run .btn {
-    width: 100%;
-    justify-content: center;
   }
 }
 @media (max-width: 680px) {

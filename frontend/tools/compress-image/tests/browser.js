@@ -4,7 +4,7 @@ import { UsageTracker } from "../../../core/UsageTracker.js";
 
 // Fixture processing must not change real usage counts.
 UsageTracker.trackToolUse = () => {};
-import { CompressImage } from "../main.js";
+import { CompressImage, formatSize } from "../main.js";
 import { makeChunk } from "../service.js";
 import { inspectImage } from "../image-info.js";
 import encodeWebp, { init as initWebp } from "@jsquash/webp/encode.js";
@@ -168,6 +168,17 @@ try {
     control("preset").value === "balanced" && !control("lossy-png").checked && !control("resize").checked,
     "Lossless with original dimensions is the default.",
   );
+  // Flow failures (empty state): more than the drop target competing for attention.
+  // Rendered and not visibility-hidden: hidden placeholder cells keep their space but are not shown.
+  const visible = (element) =>
+    !!element &&
+    element.getClientRects().length > 0 &&
+    (element.checkVisibility ? element.checkVisibility({ visibilityProperty: true }) : getComputedStyle(element).visibility !== "hidden");
+  const visibleButtons = () => [...root.querySelectorAll("button")].filter(visible);
+  check(
+    visibleButtons().length === 1 && visibleButtons()[0] === control("choose") && visible(root.querySelector(".ci-drop")),
+    "With no images, the only control is Add images on the drop target.",
+  );
   select([
     new File([fixture(320, 320, "gentle")], "transparent.png", { type: "image/png" }),
     new File([fixture(320, 320, true)], "noise.png", { type: "image/png" }),
@@ -231,6 +242,8 @@ try {
     Object.keys(zip.files).length === 3 && downloaded.name.endsWith(".zip"),
     "ZIP includes every successful image and excludes failures.",
   );
+  // Settle the background offer pass first: cancelling it mid-job replaces that worker by design.
+  await tool.offers;
   const workersBeforeRerun = tool.pool.stats.created;
   change("lossy-png", true);
   await compress();
@@ -601,10 +614,7 @@ try {
   check(!control("lossy-png").checked, "High Quality leaves PNG lossless.");
   change("preset", "small");
   check(control("lossy-png").checked, "Smaller File turns on lossy PNG.");
-  check(
-    !control("png-quality").hidden && /color reduction/i.test(control("mode-note").textContent),
-    "Smaller File shows the PNG quality fields.",
-  );
+  check(!control("png-quality").hidden, "Smaller File shows the PNG quality fields.");
   change("preset", "balanced");
   check(control("lossy-png").checked, "Switching away from Smaller File keeps lossy PNG on.");
   change("preset", "small");
@@ -902,6 +912,7 @@ try {
   await tool.downloadZip();
   const poolZip = await JSZip.loadAsync(await downloaded.blob.arrayBuffer());
   check(Object.keys(poolZip.files).length === 6, "The ZIP holds every image after out-of-order finishes.");
+  await tool.offers;
   const createdWarm = tool.pool.stats.created;
   select(poolFiles(2, "warm"));
   await compress();
@@ -976,6 +987,139 @@ try {
     afterCancel.items.every((item) => item.status === "Ready"),
     "A new batch works after cancelling.",
   );
+  // Flow failures: the size card shown for images that already fit or missing for ones that do
+  // not; a size choice not reaching the resize settings; the offer shown without a real saving,
+  // applied wrongly, or not undone; the background offer pass touching item logs or status;
+  // Clear leaving it running; the primary action not following the state; and a field error
+  // hidden in closed settings.
+  tool.clear();
+  change("preset", "balanced");
+  change("lossy-png", false);
+  change("resize", false);
+  select([new File([fixture(320, 200, "gentle")], "small.png", { type: "image/png" })]);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  check(!visible(control("advice-size")), "Images that fit a phone get no size card.");
+  check(tool.items[0].row.textContent.includes("320 × 200"), "Rows show each image's dimensions before compressing.");
+  check(
+    control("compress").classList.contains("btn-primary") && !visible(control("zip")),
+    "Before compressing, Compress is the primary action and there is nothing to download.",
+  );
+  check(!visible(control("settings-panel")), "Settings stay closed until asked for.");
+  check(
+    !visible(tool.items[0].row.querySelector(".ci-download")) && !visible(tool.items[0].row.querySelector(".ci-after")),
+    "Before any result, rows show no download button or empty result columns.",
+  );
+  tool.clear();
+  select([
+    new File([fixture(1600, 120, "gentle")], "wide.png", { type: "image/png" }),
+    new File([fixture(320, 200, "gentle")], "fits.png", { type: "image/png" }),
+  ]);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const sizeCard = control("advice-size");
+  check(
+    visible(sizeCard) && /1 image/.test(sizeCard.textContent) && /1320/.test(sizeCard.textContent),
+    "One oversized image gets one size card.",
+  );
+  const choice = (name) => sizeCard.querySelector(`[data-size="${name}"]`);
+  check(choice("original").getAttribute("aria-pressed") === "true", "The size card starts on Keep original.");
+  choice("full").click();
+  check(
+    control("resize").checked &&
+      control("width").value === "1320" &&
+      control("height").value === "2868" &&
+      choice("full").getAttribute("aria-pressed") === "true",
+    "Choosing phone full width sets the resize bounds to 1320 × 2868.",
+  );
+  check(
+    tool.items.every((item) => item.status === "Queued" && !item.result),
+    "Choosing a size does not start compressing.",
+  );
+  await compress();
+  const wide = tool.items.find((item) => item.file.name === "wide.png");
+  const fits = tool.items.find((item) => item.file.name === "fits.png");
+  check(wide.result.width === 1320 && fits.result.width === 320, "The chosen size shrinks only images larger than it.");
+  check(
+    !/Optimized|Lossless result used|Lossy PNG accepted|px/.test(fits.row.querySelector(".ci-file-state").textContent) &&
+      wide.row.querySelector(".ci-file-state").textContent === "1320 × 99 · Resized",
+    "Row notes give dimensions in one format and only news, never engine terms.",
+  );
+  tool.selectItem(wide);
+  const panes = [...root.querySelectorAll(".ci-pair .ci-viewport")].map((pane) => pane.getBoundingClientRect());
+  check(
+    innerWidth >= 680 || (panes[1].top >= panes[0].bottom && Math.abs(panes[0].width / panes[0].height - 1320 / 99) < 0.5),
+    "On narrow screens the comparison stacks Original above Result at the image's shape.",
+  );
+  check(
+    control("zip").classList.contains("btn-primary") && !control("compress").classList.contains("btn-primary"),
+    "After compressing, Download ZIP becomes the primary action.",
+  );
+  choice("original").click();
+  check(
+    control("compress").classList.contains("btn-primary") && !control("resize").checked,
+    "Changing a choice after compressing makes Compress primary again.",
+  );
+
+  tool.clear();
+  change("resize", false);
+  select([new File([fixture(320, 320, "gentle")], "offer.png", { type: "image/png" })]);
+  await compress();
+  const offered = tool.items[0];
+  const logsBeforeOffer = offered.logs.length;
+  const losslessBlob = offered.blob;
+  await tool.offers;
+  const offerCard = control("advice-lossy");
+  check(
+    !!offered.alternative && offered.alternative.blob.size < losslessBlob.size,
+    "Idle workers precompute a smaller reduced-color version.",
+  );
+  check(
+    visible(offerCard) && offerCard.textContent.includes(`${formatSize(losslessBlob.size)} → ${formatSize(offered.alternative.blob.size)}`),
+    "The offer shows the real sizes before and after.",
+  );
+  check(offered.logs.length === logsBeforeOffer && offered.status === "Ready", "The offer pass leaves the item's log and status alone.");
+  offerCard.querySelector('[data-ci="use-smaller"]').click();
+  check(
+    offered.blob.size < losslessBlob.size &&
+      offered.result.lossy &&
+      control("lossy-png").checked &&
+      offered.row.textContent.includes("Colors reduced"),
+    "Use smaller swaps in the reduced-color result and turns on lossy PNG.",
+  );
+  check(control("zip").classList.contains("btn-primary"), "Using the offer keeps results current.");
+  offerCard.querySelector('[data-ci="undo-smaller"]').click();
+  check(offered.blob === losslessBlob && !offered.result.lossy && !control("lossy-png").checked, "Undo restores the lossless result.");
+
+  change("lossy-png", true);
+  await compress();
+  await tool.offers;
+  check(!visible(control("advice-lossy")), "No offer when lossy PNG is already on.");
+  change("lossy-png", false);
+
+  tool.clear();
+  select([new File([fixture(320, 200)], "gradient-offer.png", { type: "image/png" })]);
+  await compress();
+  await tool.offers;
+  check(!visible(control("advice-lossy")) && !tool.items[0].alternative, "No offer when color reduction would not save enough.");
+
+  select([new File([fixture(640, 400, "gentle")], "cancel-offer.png", { type: "image/png" })]);
+  await compress();
+  const pendingOffer = tool.offers;
+  tool.clear();
+  await pendingOffer;
+  check(tool.pool.stats.alive === 0 && !visible(control("advice-lossy")), "Clear cancels the background offer pass.");
+
+  tool.clear();
+  select([new File([fixture(320, 200, "gentle")], "settings.png", { type: "image/png" })]);
+  change("resize", true);
+  change("height", "0");
+  await compress();
+  check(
+    visible(control("settings-panel")) && document.activeElement === control("height"),
+    "A settings error opens the settings and focuses the field.",
+  );
+  change("height", "1920");
+  change("resize", false);
+  tool.error("");
   document.querySelector("#verification").textContent = `PASS: ${checks.length} browser checks. Open details for the repeatable evidence.`;
   document.querySelector("#evidence").textContent = checks.join("\n");
 } catch (error) {

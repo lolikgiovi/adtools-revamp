@@ -1,6 +1,6 @@
 // Failure cases: mutable presets, wrong lossy threshold, accepting bigger output,
 // ignoring explicit resizing, and lossy PNG beating the original but not lossless.
-import { PRESETS, selectCandidate, minimumSavings, skipsLosslessPass } from "../config.js";
+import { PRESETS, selectCandidate, minimumSavings, skipsLosslessPass, PHONE_SIZES, largerThan } from "../config.js";
 
 describe("image optimizer policy", () => {
   it("freezes every preset and uses the agreed codec options", () => {
@@ -54,5 +54,22 @@ describe("lossless pass skip", () => {
   });
   it("never skips without a usable estimate", () => {
     for (const estimate of [undefined, null, 0, NaN, -5]) expect(skipsLosslessPass(1, estimate)).toBe(false);
+  });
+});
+
+// Size-advice failures: advising images that already fit, missing tall (portrait) images, wrong
+// phone targets, and treating unknown dimensions as oversized.
+describe("phone size advice", () => {
+  it("targets the widest common phone layout at 3x: 440 x 956 CSS px", () => {
+    expect(PHONE_SIZES.full).toEqual({ width: 1320, height: 2868 });
+    expect(PHONE_SIZES.half).toEqual({ width: 660, height: 1434 });
+    expect(Object.isFrozen(PHONE_SIZES)).toBe(true);
+  });
+  it("flags only images a full-width phone target would shrink", () => {
+    expect(largerThan({ width: 2440, height: 1530 }, PHONE_SIZES.full)).toBe(true);
+    expect(largerThan({ width: 1000, height: 3000 }, PHONE_SIZES.full)).toBe(true);
+    expect(largerThan({ width: 1320, height: 828 }, PHONE_SIZES.full)).toBe(false);
+    expect(largerThan({ width: 600, height: 388 }, PHONE_SIZES.full)).toBe(false);
+    expect(largerThan(undefined, PHONE_SIZES.full)).toBe(false);
   });
 });
