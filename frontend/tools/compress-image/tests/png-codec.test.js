@@ -90,7 +90,7 @@ describe("Oxipng lossless encoding", () => {
   it("reports the actual encoder, options and verification without image data", async () => {
     const logs = [];
     await optimizePng(fixture(), PRESETS.small.png, (stage, details) => logs.push({ stage, details }));
-    expect(logs.find((entry) => entry.stage === "Optimizing").details).toMatchObject({ codec: "Oxipng", level: 4 });
+    expect(logs.find((entry) => entry.stage === "Optimizing").details).toMatchObject({ codec: "Oxipng", level: 2 });
     expect(logs.some((entry) => entry.stage === "Verifying")).toBe(true);
     expect(JSON.stringify(logs)).not.toContain("data:image");
   });

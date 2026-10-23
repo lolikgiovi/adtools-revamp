@@ -6,7 +6,7 @@ describe("image optimizer policy", () => {
   it("freezes every preset and uses the agreed codec options", () => {
     expect(Object.keys(PRESETS)).toEqual(["high", "balanced", "small"]);
     expect(PRESETS.balanced).toMatchObject({
-      png: { level: 3, interlace: false, optimiseAlpha: false },
+      png: { level: 2, interlace: false, optimiseAlpha: false },
       jpeg: { quality: 85, progressive: true, optimize_coding: true },
       webp: { quality: 85, method: 4, lossless: 0, alpha_quality: 100 },
       quantize: { quality: { min: 80, target: 95 }, speed: 4, maxColors: 256 },
@@ -15,6 +15,8 @@ describe("image optimizer policy", () => {
       expect(Object.isFrozen(preset)).toBe(true);
       expect(Object.values(preset).every(Object.isFrozen)).toBe(true);
       expect(Object.isFrozen(preset.quantize.quality)).toBe(true);
+      // Oxipng level is effort, not quality. Level 4 saved 0.17 points over 2 at 3x the time.
+      expect(preset.png).toEqual(PRESETS.balanced.png);
     }
   });
   it("requires one percent or 1024 bytes, rounded up", () => {
