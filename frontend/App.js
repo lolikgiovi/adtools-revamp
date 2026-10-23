@@ -20,6 +20,7 @@ import { getUsageAccessState, normalizeUsageScope } from "./core/UsageOverviewMo
 import { ErrorMonitor } from "./core/ErrorMonitor.js";
 import { isTauri } from "./core/Runtime.js";
 import WebUpdateChecker from "./core/WebUpdateChecker.js";
+import { publishedSettingsSync } from "./core/PublishedSettings.js";
 import { ReleaseTips, ReleaseTour, takePendingRelease } from "./core/ReleaseTour.js";
 import { installSearchableDropdowns } from "./components/SearchableDropdown.js";
 import { installTextInputTraits } from "./core/TextInputTraits.js";
@@ -160,6 +161,7 @@ class App {
     this.bindGlobalEvents();
     void this.setupDesktopTabShortcuts();
     manualApprovalMonitor.start({ eventBus: this.eventBus });
+    publishedSettingsSync.start({ eventBus: this.eventBus });
     this.setupDevReleaseTourPreview();
     this._releaseTips = new ReleaseTips({
       release: { ...releaseContent, surface: isTauri() ? "desktop" : "web" },
@@ -1561,6 +1563,7 @@ class App {
     this._unlistenNewTab?.();
     this._unlistenNewTab = null;
     manualApprovalMonitor.stop();
+    publishedSettingsSync.stop();
     // Cleanup event listeners
     this.eventBus.clear();
 

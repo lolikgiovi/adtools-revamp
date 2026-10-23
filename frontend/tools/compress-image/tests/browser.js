@@ -419,6 +419,21 @@ try {
     profiled.status === "Ready" && profiled.blob.size < profiled.file.size && profiled.result.outcome === "Optimized",
     "PNG with an embedded ICC profile compresses losslessly instead of failing.",
   );
+  // Oxipng level is effort, not quality: presets must not trade size for nothing.
+  // This fixture compresses differently at levels 2 and 4 (1,361 vs 1,114 bytes).
+  tool.clear();
+  select([new File([fixture(320, 320)], "levels.png", { type: "image/png" })]);
+  const presetOutput = async (preset) => {
+    change("preset", preset);
+    await compress();
+    return new Uint8Array(await tool.items[0].blob.arrayBuffer());
+  };
+  const highBytes = await presetOutput("high");
+  const smallBytes = await presetOutput("small");
+  check(
+    highBytes.length === smallBytes.length && highBytes.every((value, i) => value === smallBytes[i]),
+    "Lossless PNG output is identical across presets.",
+  );
   document.querySelector("#verification").textContent = `PASS: ${checks.length} browser checks. Open details for the repeatable evidence.`;
   document.querySelector("#evidence").textContent = checks.join("\n");
 } catch (error) {

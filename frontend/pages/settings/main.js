@@ -12,6 +12,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { ensureUnifiedKeychain } from "../../core/KeychainMigration.js";
 import { OracleConnectionService } from "../../core/OracleConnectionService.js";
 import { readKafkaBrokerProfiles, saveKafkaBrokerProfiles } from "../../tools/kafka/service.js";
+import { SettingsPublisher } from "./publishing.js";
+import { publishedSettingsSync } from "../../core/PublishedSettings.js";
 
 const SETTINGS_FOCUS_STORAGE_KEY = "settings.focus";
 
@@ -115,6 +117,45 @@ class SettingsPage {
     // Bind toolbar actions
     root.querySelector(".settings-load-defaults")?.addEventListener("click", () => this.openOtpModal());
     root.querySelector(".settings-check-update")?.addEventListener("click", () => this.handleManualCheckUpdate());
+    const publisherRoot = root.querySelector("#settings-publishing");
+    root.querySelector(".settings-publish")?.addEventListener("click", (event) => {
+      publisherRoot.hidden = !publisherRoot.hidden;
+      event.currentTarget.setAttribute("aria-expanded", String(!publisherRoot.hidden));
+      if (!this.publisher) {
+        this.publisher = new SettingsPublisher();
+        this.publisher.mount(publisherRoot);
+      }
+    });
+    const showSyncStatus = () => {
+      const status = root.querySelector(".settings-sync-status");
+      status.textContent = ["auth", "error"].includes(publishedSettingsSync.status) ? publishedSettingsSync.message : "";
+      root.querySelector(".settings-sync-verify").hidden = publishedSettingsSync.status !== "auth";
+    };
+    const showPublished = () => {
+      root.querySelector(".settings-sync-status").textContent = "Published settings applied.";
+      root.querySelector(".settings-sync-refresh").hidden = false;
+    };
+    window.addEventListener("adtools:settings-sync-status", showSyncStatus);
+    window.addEventListener("adtools:settings-published", showPublished);
+    this.syncDisposers = [
+      () => window.removeEventListener("adtools:settings-sync-status", showSyncStatus),
+      () => window.removeEventListener("adtools:settings-published", showPublished),
+    ];
+    root.querySelector(".settings-sync-refresh").addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      await this.reloadConfig();
+      button.hidden = true;
+      showSyncStatus();
+    });
+    root.querySelector(".settings-sync-verify").addEventListener("click", async () => {
+      try {
+        await openOtpOverlay({ email: localStorage.getItem("user.email") || "", preferCachedToken: false });
+        await publishedSettingsSync.check();
+      } catch (error) {
+        if (error.message !== "Closed") this.eventBus?.emit?.("notification:error", { message: "Could not verify account." });
+      }
+    });
+    showSyncStatus();
 
     // Migrate Jenkins username from keychain to localStorage (one-time)
     await this.#migrateJenkinsUsername();
@@ -1825,6 +1866,10 @@ class SettingsPage {
   }
 
   deactivate() {
+    for (const dispose of this.syncDisposers || []) dispose();
+    this.syncDisposers = [];
+    this.publisher?.destroy();
+    this.publisher = null;
     for (const dispose of this.settingDisposers) dispose();
     this.settingDisposers.clear();
     this.container = null;

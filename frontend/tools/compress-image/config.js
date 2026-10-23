@@ -1,6 +1,10 @@
-function preset(level, quality, method, min, target) {
+// Oxipng level is compression effort, not quality. On the benchmark set, level 4 saved
+// 0.17 points more than level 2 at three times the time, so every preset uses 2.
+const PNG_LEVEL = 2;
+
+function preset(quality, method, min, target) {
   return Object.freeze({
-    png: Object.freeze({ level, interlace: false, optimiseAlpha: false }),
+    png: Object.freeze({ level: PNG_LEVEL, interlace: false, optimiseAlpha: false }),
     jpeg: Object.freeze({ quality, progressive: true, optimize_coding: true }),
     webp: Object.freeze({ quality, method, lossless: 0, alpha_quality: 100 }),
     quantize: Object.freeze({
@@ -12,9 +16,9 @@ function preset(level, quality, method, min, target) {
 }
 
 export const PRESETS = Object.freeze({
-  high: preset(2, 92, 4, 90, 100),
-  balanced: preset(3, 85, 4, 80, 95),
-  small: preset(4, 75, 5, 65, 85),
+  high: preset(92, 4, 90, 100),
+  balanced: preset(85, 4, 80, 95),
+  small: preset(75, 5, 65, 85),
 });
 
 export function minimumSavings(bytes) {
