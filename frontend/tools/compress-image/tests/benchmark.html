@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Compress Image benchmark</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body style="padding: 24px">
+    <h1>Compress Image benchmark</h1>
+    <p>
+      Runs every image in <code>tests/bench-images/</code> through each preset, with lossy PNG off and on. Keep this tab visible while it
+      runs: hidden tabs throttle animation frames and invalidate the stall measurement.
+    </p>
+    <p id="benchmark" role="status">Loading…</p>
+    <p><button class="btn btn-secondary btn-sm" id="copy" disabled>Copy results JSON</button></p>
+    <details open>
+      <summary>Summary</summary>
+      <pre id="summary"></pre>
+    </details>
+    <details>
+      <summary>Results JSON</summary>
+      <pre id="results"></pre>
+    </details>
+    <div id="tool"></div>
+    <script type="module" src="./benchmark.js"></script>
+  </body>
+</html>

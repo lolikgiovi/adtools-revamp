@@ -80,3 +80,7 @@ venv-x64/
 venv/
 tauri/gen/schemas/capabilities.json
 .DS_Store
+
+# Compress Image benchmark inputs (user-supplied, not committed)
+frontend/tools/compress-image/tests/bench-images/*
+!frontend/tools/compress-image/tests/bench-images/.gitkeep
