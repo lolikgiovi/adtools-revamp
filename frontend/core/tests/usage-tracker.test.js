@@ -150,25 +150,31 @@ describe("UsageTracker analytics reliability", () => {
     expect(UsageTracker._state.counts.json_tools).toBeUndefined();
   });
 
-  it("ignores obsolete velocity-template tracking", () => {
-    UsageTracker._state.counts["velocity-template"] = { open: 9 };
-    UsageTracker._state.daily = { "2026-09-04": { "velocity-template.open": 9 } };
-    UsageTracker._state.events = [{ featureId: "velocity-template", action: "open", ts: new Date().toISOString() }];
-    UsageTracker._state.usageLogs = [{ tool_id: "velocity-template" }];
-    UsageTracker._state.errorEvents = [{ tool_id: "velocity-template" }];
+  it("recognizes the Tauri v2 runtime for capability availability reporting", () => {
+    vi.stubGlobal("window", { __TAURI_INTERNALS__: {} });
+    try {
+      expect(UsageTracker._getRuntime()).toBe("tauri");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 
-    UsageTracker.track("velocity-template", "open");
-    UsageTracker.trackFeature("velocity-template", "open");
-    UsageTracker.trackEvent("velocity-template", "open");
-    UsageTracker.queueErrorEvent({ tool_id: "velocity-template" });
+  it("preserves requested filename identifiers while removing filesystem paths", () => {
+    expect(UsageTracker._sanitizeMeta({ file_name: "/Users/me/imports/config-202610.xlsx", sql: "SELECT private" })).toEqual({
+      file_name: "config-202610.xlsx",
+    });
+  });
+
+  it("retains Velocity events and successful uses through sanitization and batching", () => {
+    UsageTracker._state.events = [];
+    UsageTracker._state.usageLogs = [];
+    UsageTracker._state.errorEvents = [];
+    UsageTracker.trackEvent("velocity-template", "render_result", { outcome: "success" });
+    UsageTracker.trackToolUse("velocity-template", "render", { input_size: 20 });
     UsageTracker.sanitizeCounts();
-
-    expect(UsageTracker.getAggregatedStats().totalsByFeature["velocity-template"]).toBeUndefined();
-    expect(UsageTracker._state.counts["velocity-template"]).toBeUndefined();
-    expect(UsageTracker._state.daily["2026-09-04"]).toEqual({});
-    expect(UsageTracker._state.events).toEqual([]);
-    expect(UsageTracker._state.usageLogs).toEqual([]);
-    expect(UsageTracker._state.errorEvents).toEqual([]);
+    const payload = UsageTracker._toBatchPayload();
+    expect(payload.events).toContainEqual(expect.objectContaining({ type: "velocity-template", action: "render_result" }));
+    expect(payload.tool_usage).toContainEqual(expect.objectContaining({ tool_id: "velocity-template", action: "render" }));
   });
 
   it("allows longer sanitized error stacks without retaining sensitive fields", () => {

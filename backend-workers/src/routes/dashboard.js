@@ -1,3 +1,4 @@
+import { buildCapabilityAdoptionQuery, buildImportSourcesQuery } from "../utils/capabilityAdoption.js";
 /**
  * Dashboard route handlers for analytics dashboard
  * Password-protected endpoints for viewing usage statistics
@@ -37,6 +38,9 @@ const DEFAULT_TABS = [
     query:
       "SELECT 'Opportunities are computed by the dashboard API' AS signal, '-' AS tool_id, 'Use the dashboard API time range filter' AS next_step",
   },
+  { id: "capability-adoption", name: "Capability Adoption", query: buildCapabilityAdoptionQuery() },
+  { id: "capability-people", name: "Capability by User", query: buildCapabilityAdoptionQuery(null, true) },
+  { id: "import-sources", name: "Query Import Sources", query: buildImportSourcesQuery() },
   {
     id: "who",
     name: "Who",
@@ -57,7 +61,6 @@ const DEFAULT_TABS = [
     u.action,
     u.created_time
   FROM usage_log u
-  WHERE LOWER(TRIM(u.tool_id)) != 'velocity-template'
 ),
 recent_usage AS (
   SELECT u.user_email,
@@ -125,7 +128,6 @@ LIMIT 200`,
     SUM(count) AS action_count
   FROM device_usage
   WHERE ${includedAnalyticsEmailSql("user_email")}
-    AND LOWER(TRIM(tool_id)) != 'velocity-template'
   GROUP BY 1,2
 ),
 t AS (
@@ -156,7 +158,6 @@ ORDER BY tool_total DESC, tool_id, row_type, total_count DESC`,
     updated_time
   FROM device_usage
   WHERE ${includedAnalyticsEmailSql("user_email")}
-    AND LOWER(TRIM(tool_id)) != 'velocity-template'
 ),
 totals AS (
   SELECT tool_id,
@@ -219,7 +220,6 @@ LIMIT 100`,
       FROM activity u
       LEFT JOIN device d ON u.device_id = d.device_id
       WHERE u.user_email != 'fashalli.bilhaq@bankmandiri.co.id'
-        AND LOWER(TRIM(u.tool_id)) != 'velocity-template'
       ORDER BY u.created_time DESC`,
   },
   {
@@ -246,7 +246,6 @@ LIMIT 100`,
       JOIN device d ON e.device_id = d.device_id
       JOIN users u ON d.user_id = u.id
       WHERE u.email != 'fashalli.bilhaq@bankmandiri.co.id'
-        AND LOWER(TRIM(e.feature_id)) != 'velocity-template'
       ORDER BY e.created_time DESC`,
   },
   {
@@ -1357,7 +1356,9 @@ function mergeStoredTabsWithDefaults(storedTabs) {
     const storedTab = storedById.get(defaultTab.id);
     if (!storedTab) return defaultTab;
     // Keep endpoint-owned built-in SQL current when stored copies outlive code changes.
-    return ["daily", "events", "qq-table-usage"].includes(defaultTab.id) ? { ...storedTab, query: defaultTab.query } : storedTab;
+    return ["daily", "events", "qq-table-usage", "capability-adoption", "capability-people", "import-sources"].includes(defaultTab.id)
+      ? { ...storedTab, query: defaultTab.query }
+      : storedTab;
   });
   const defaultIds = new Set(DEFAULT_TABS.map((tab) => tab.id));
   const customTabs = storedTabs.filter((tab) => tab?.id && !defaultIds.has(tab.id));
@@ -1539,6 +1540,15 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
         status: 404,
         headers: { "Content-Type": "application/json", ...corsHeaders() },
       });
+    }
+
+    if (["capability-adoption", "capability-people", "import-sources"].includes(tab.id)) {
+      const rangeConfig = getDashboardRangeConfig(range);
+      const query =
+        tab.id === "import-sources"
+          ? buildImportSourcesQuery(rangeConfig)
+          : buildCapabilityAdoptionQuery(rangeConfig, tab.id === "capability-people");
+      return executeQuery(env, `tab:${tab.id}:${rangeConfig.id}:v1`, query);
     }
 
     if (tab.id === "overview") {
@@ -2426,7 +2436,6 @@ function getWhoActivityBranches(tables, rangeConfig) {
   JOIN device d ON d.device_id = e.device_id
   JOIN users u ON u.id = d.user_id
   WHERE LOWER(u.email) != '${EXCLUDED_ANALYTICS_EMAIL}'
-    AND LOWER(TRIM(e.feature_id)) != 'velocity-template'
     ${rangeConfig.where("e.created_time")}`);
   }
   return branches;
@@ -2541,7 +2550,6 @@ function buildPaginatedDashboardQuery(tabId, pagination, rangeConfig) {
       FROM activity u
       LEFT JOIN device d ON u.device_id = d.device_id
       WHERE u.user_email != '${EXCLUDED_ANALYTICS_EMAIL}'
-        AND LOWER(TRIM(u.tool_id)) != 'velocity-template'
         ${rangeConfig.where("u.created_time")}
         AND (
           ? = ''
@@ -2566,7 +2574,6 @@ function buildPaginatedDashboardQuery(tabId, pagination, rangeConfig) {
       JOIN device d ON e.device_id = d.device_id
       JOIN users u ON d.user_id = u.id
       WHERE u.email != '${EXCLUDED_ANALYTICS_EMAIL}'
-        AND LOWER(TRIM(e.feature_id)) != 'velocity-template'
         AND (
           ? = ''
           OR LOWER(STRFTIME('%m-%d / %H:%M', e.created_time)) LIKE ?

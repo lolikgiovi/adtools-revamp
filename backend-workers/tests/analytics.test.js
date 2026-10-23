@@ -285,6 +285,28 @@ describe("Analytics endpoints", () => {
     expect(response.status).toBe(400);
   });
 
+  it("attributes capability and import source events to the authenticated actor", async () => {
+    const response = await worker.fetch(
+      new Request("http://localhost/analytics/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer test-token" },
+        body: JSON.stringify({
+          events: [
+            {
+              type: "quick-query",
+              action: "excel_import_result",
+              properties: { actor_email: "spoof@example.com", file_name: "/Users/me/rates-202610.xlsx", outcome: "success" },
+            },
+          ],
+        }),
+      }),
+      env,
+    );
+    expect(response.status).toBe(200);
+    const insert = env.DB.executed.find((item) => item.sql.includes("INSERT INTO events"));
+    expect(JSON.parse(insert.args[3])).toMatchObject({ actor_email: "analytics-test@bankmandiri.co.id", file_name: "rates-202610.xlsx" });
+  });
+
   it("accepts POST /analytics/batch", async () => {
     const response = await worker.fetch(
       new Request("http://localhost/analytics/batch", {

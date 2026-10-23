@@ -69,6 +69,8 @@ describe("Sidebar pinning", () => {
     expect(UsageTracker.trackEvent).toHaveBeenCalledWith("uuid-generator", "sidebar_pin", {
       tool_id: "uuid-generator",
       source: "sidebar_context_menu",
+      pinned_count: 1,
+      persisted: true,
     });
 
     const pinnedButton = document.querySelector('[data-category="pinned"] [data-tool="uuid-generator"] .sidebar-menu-button');
@@ -82,6 +84,8 @@ describe("Sidebar pinning", () => {
     expect(UsageTracker.trackEvent).toHaveBeenLastCalledWith("uuid-generator", "sidebar_unpin", {
       tool_id: "uuid-generator",
       source: "sidebar_context_menu",
+      pinned_count: 0,
+      persisted: true,
     });
   });
 

@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>Capability adoption verification</title>
+  <style>
+    body {
+      font: 14px system-ui;
+      margin: 24px;
+      background: #f7f7f7;
+      color: #222;
+    }
+    button {
+      padding: 10px 18px;
+    }
+    iframe {
+      width: 100%;
+      height: 640px;
+      border: 1px solid #ccc;
+    }
+    pre {
+      white-space: pre-wrap;
+      line-height: 1.6;
+    }
+  </style>
+  <h1>Capability adoption verification</h1>
+  <button id="run">Run capability checks</button>
+  <pre id="results">Ready. Uses the real Quick Query UI and Excel worker with a generated workbook. No Oracle connection is made.</pre>
+  <iframe id="app" src="/"></iframe>
+  <script type="module">
+    import * as XLSX from "xlsx";
+    import { capabilities } from "../../config/capabilities.js";
+    const frame = document.querySelector("#app");
+    const results = document.querySelector("#results");
+    const button = document.querySelector("#run");
+    const waitFor = async (check) => {
+      const until = Date.now() + 20000;
+      while (!check()) {
+        if (Date.now() > until) throw new Error("Timed out waiting for app state");
+        await new Promise((r) => setTimeout(r, 100));
+      }
+    };
+    button.onclick = async () => {
+      button.disabled = true;
+      const lines = [];
+      const check = (label, value) => {
+        lines.push(`${value ? "PASS" : "FAIL"} ${label}`);
+        results.textContent = lines.join("\n");
+        if (!value) throw new Error(label);
+      };
+      let tracker, savedState, enabled, tool, savedExcel;
+      try {
+        await waitFor(() => frame.contentWindow.app?.capabilityTracker);
+        const win = frame.contentWindow;
+        const app = win.app;
+        tracker = (await win.eval('import("/core/tests/tracking-probe.js")')).UsageTracker;
+        savedState = structuredClone(tracker._state);
+        enabled = tracker._enabled;
+        tracker._enabled = true;
+        tracker._state.events = [];
+        const events = () => tracker._state.events;
+        app.router.navigate("quick-query");
+        await waitFor(() => app.currentTool?.id === "quick-query" && app.currentTool.ui?.dataTable && app.currentTool.ui?.editor);
+        tool = app.currentTool.ui;
+        await tool.ready;
+        savedExcel = {
+          importedData: tool.excelImportService.importedData,
+          header: tool.excelImportService.header,
+          rowCount: tool.excelImportService.rowCount,
+        };
+        check(
+          "Instrumented visit establishes a Quick Query audience",
+          events().some((e) => e.action === "capability_visit" && e.featureId === "quick-query"),
+        );
+        const importButton = win.document.querySelector("#importExcel");
+        frame.scrollIntoView({ block: "start" });
+        importButton.scrollIntoView({ block: "center" });
+        await waitFor(() =>
+          events().some((e) => e.action === "capability_exposed" && e.meta.capability === "import_excel" && e.meta.available),
+        );
+        check("Excel import exposure is measured after sustained viewport visibility", true);
+        importButton.click();
+        check(
+          "Opening instructions records exploration, not successful import",
+          events().some((e) => e.action === "capability_opened" && e.meta.capability === "import_excel") &&
+            !events().some((e) => e.action === "capability_succeeded" && e.meta.capability === "import_excel"),
+        );
+        tool._closeExcelImportModal();
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(
+          workbook,
+          XLSX.utils.aoa_to_sheet([
+            ["ID", "NAME"],
+            ["1", "ROW_VALUE_SENTINEL"],
+            ["2", "Example"],
+          ]),
+          "Data",
+        );
+        const bytes = XLSX.write(workbook, { type: "array", bookType: "xlsx" });
+        const file = new win.File([bytes], "rates-202610.xlsx", {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+        const transfer = new win.DataTransfer();
+        transfer.items.add(file);
+        const fileInput = win.document.querySelector("#excelFileInput");
+        fileInput.files = transfer.files;
+        fileInput.dispatchEvent(new win.Event("change", { bubbles: true }));
+        await waitFor(() => events().some((e) => e.action === "capability_succeeded" && e.meta.capability === "import_excel"));
+        const imported = events().find((e) => e.action === "capability_succeeded" && e.meta.capability === "import_excel");
+        check("Real Excel worker import records successful capability adoption", tool.excelImportService.rowCount === 2);
+        check("Requested filename survives telemetry without path or date redaction", imported.meta.file_name === "rates-202610.xlsx");
+        check("Imported row and column counts are captured", imported.meta.row_count === 2 && imported.meta.column_count === 2);
+        check("Workbook row contents are excluded from analytics", !JSON.stringify(events()).includes("ROW_VALUE_SENTINEL"));
+        const before = events().filter((e) => e.action === "capability_succeeded").length;
+        const emptyWorkbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(emptyWorkbook, XLSX.utils.aoa_to_sheet([]), "Empty");
+        const invalid = new win.File([XLSX.write(emptyWorkbook, { type: "array", bookType: "xlsx" })], "empty.xlsx");
+        await tool.handleExcelFileInput({ target: { files: [invalid], value: "" } });
+        check(
+          "Empty workbook records failure without adoption",
+          events().some((e) => e.action === "capability_failed" && e.meta.capability === "import_excel") &&
+            events().filter((e) => e.action === "capability_succeeded").length === before,
+        );
+        check(
+          "Catalogue includes nested capabilities across every tool",
+          new Set(capabilities.map((c) => c.tool)).size === 22 && capabilities.length > 50,
+        );
+        lines.push(`COMPLETE ${lines.length} checks passed. Catalogue: ${capabilities.length} capabilities. ${new Date().toISOString()}`);
+      } catch (error) {
+        lines.push(`ERROR ${error.message}`);
+      } finally {
+        if (savedExcel) {
+          Object.assign(tool.excelImportService, savedExcel);
+          if (savedExcel.rowCount) tool._updateExcelImportUI(savedExcel.rowCount);
+          else {
+            tool.elements.excelImportInfo.classList.add("hidden");
+            tool.elements.excelImportRowCount.textContent = "0 rows imported from Excel";
+          }
+          tool._closeExcelImportModal();
+        }
+        if (savedState) {
+          for (const timer of tracker._debounceTimers.values()) clearTimeout(timer);
+          tracker._debounceTimers.clear();
+          tracker._state = savedState;
+          tracker._enabled = enabled;
+          tracker.flushSync();
+        }
+        results.textContent = lines.join("\n");
+        button.disabled = false;
+      }
+    };
+  </script>
+</html>

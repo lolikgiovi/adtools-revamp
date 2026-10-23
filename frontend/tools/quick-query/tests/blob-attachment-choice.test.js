@@ -21,6 +21,8 @@ function createChoiceUi() {
       <button id="filename"><span class="qq-blob-attachment-option-title"></span><span class="qq-blob-attachment-option-detail"></span></button>
     </div>`;
   const ui = Object.create(QuickQueryUI.prototype);
+  ui.tabs = [{ id: "manual", dataSource: "manual" }];
+  ui.activeTabId = "manual";
   ui.elements = {
     blobAttachmentTitle: document.getElementById("blobAttachmentTitle"),
     blobAttachmentOverlay: document.getElementById("backdrop"),
@@ -82,8 +84,18 @@ describe("Quick Query BLOB attachment choice", () => {
     ui.elements.defaultSysdateToggle = { checked: true };
     ui.getQueryTypeValue = () => "merge";
     ui.flushPendingDataAutosave = vi.fn();
-    ui.schemaTable = { getData: () => [["id", "NUMBER", "No", "", "", "Yes"], ["document", "BLOB", "Yes"]] };
-    ui.dataTable = { getData: () => [["id", "document"], ["1", "file.pdf"]] };
+    ui.schemaTable = {
+      getData: () => [
+        ["id", "NUMBER", "No", "", "", "Yes"],
+        ["document", "BLOB", "Yes"],
+      ],
+    };
+    ui.dataTable = {
+      getData: () => [
+        ["id", "document"],
+        ["1", "file.pdf"],
+      ],
+    };
     ui.excelImportService = { hasData: () => false };
     ui.storageService = { saveSchema: vi.fn() };
     ui._detectHtmlInData = () => ({ hasHtml: false });
@@ -93,40 +105,52 @@ describe("Quick Query BLOB attachment choice", () => {
 
     await ui.handleGenerateQuery();
     expect(ui._showBlobAttachmentChoice).toHaveBeenCalledWith(1, 0);
-    expect(ui._generateQuery).toHaveBeenCalledWith(
-      "TEST.DOCUMENTS", "merge", expect.any(Array), expect.any(Array), "manual",
-      { defaultSysdate: true, auditUserMode: "off", blobAttachmentMode: "filename" },
-    );
+    expect(ui._generateQuery).toHaveBeenCalledWith("TEST.DOCUMENTS", "merge", expect.any(Array), expect.any(Array), "manual", {
+      defaultSysdate: true,
+      auditUserMode: "off",
+      blobAttachmentMode: "filename",
+    });
 
-    ui.dataTable.getData = () => [["id", "document"], ["1", "missing.pdf"]];
+    ui.dataTable.getData = () => [
+      ["id", "document"],
+      ["1", "missing.pdf"],
+    ];
     await ui.handleGenerateQuery();
     expect(ui._showBlobAttachmentChoice).toHaveBeenCalledTimes(1);
-    expect(ui._generateQuery).toHaveBeenLastCalledWith(
-      "TEST.DOCUMENTS", "merge", expect.any(Array), expect.any(Array), "manual",
-      { defaultSysdate: true, auditUserMode: "off" },
-    );
+    expect(ui._generateQuery).toHaveBeenLastCalledWith("TEST.DOCUMENTS", "merge", expect.any(Array), expect.any(Array), "manual", {
+      defaultSysdate: true,
+      auditUserMode: "off",
+    });
 
     ui.processedFiles = [];
-    ui.dataTable.getData = () => [["id", "document"], ["1", "data:application/octet-stream;base64,AA=="]];
+    ui.dataTable.getData = () => [
+      ["id", "document"],
+      ["1", "data:application/octet-stream;base64,AA=="],
+    ];
     await ui.handleGenerateQuery();
     expect(ui._showBlobAttachmentChoice).toHaveBeenLastCalledWith(0, 1);
-    expect(ui._generateQuery).toHaveBeenLastCalledWith(
-      "TEST.DOCUMENTS", "merge", expect.any(Array), expect.any(Array), "manual",
-      { defaultSysdate: true, auditUserMode: "off", blobAttachmentMode: "filename" },
-    );
+    expect(ui._generateQuery).toHaveBeenLastCalledWith("TEST.DOCUMENTS", "merge", expect.any(Array), expect.any(Array), "manual", {
+      defaultSysdate: true,
+      auditUserMode: "off",
+      blobAttachmentMode: "filename",
+    });
     ui._showBlobAttachmentChoice.mockResolvedValueOnce(null);
     const generations = ui._generateQuery.mock.calls.length;
     await ui.handleGenerateQuery();
     expect(ui._generateQuery).toHaveBeenCalledTimes(generations);
-    ui.dataTable.getData = () => [["id", "document"], ["1", "missing.pdf"]];
+    ui.dataTable.getData = () => [
+      ["id", "document"],
+      ["1", "missing.pdf"],
+    ];
 
     ui.elements.auditUserMode = { value: "custom" };
     ui.elements.customAuditUser = { value: "R27_ANTARES" };
     ui.customAuditUserValue = "R27_ANTARES";
     await ui.handleGenerateQuery();
-    expect(ui._generateQuery).toHaveBeenLastCalledWith(
-      "TEST.DOCUMENTS", "merge", expect.any(Array), expect.any(Array), "manual",
-      { defaultSysdate: true, auditUserMode: "custom", customAuditUser: "R27_ANTARES" },
-    );
+    expect(ui._generateQuery).toHaveBeenLastCalledWith("TEST.DOCUMENTS", "merge", expect.any(Array), expect.any(Array), "manual", {
+      defaultSysdate: true,
+      auditUserMode: "custom",
+      customAuditUser: "R27_ANTARES",
+    });
   });
 });

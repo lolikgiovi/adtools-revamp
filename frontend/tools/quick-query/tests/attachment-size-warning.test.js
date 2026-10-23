@@ -15,6 +15,8 @@ import { QuickQueryUI } from "../main.js";
 function createUi(sizes) {
   document.body.innerHTML = '<div id="files"></div><div id="warnings"></div>';
   const ui = Object.create(QuickQueryUI.prototype);
+  ui.tabs = [{ id: "manual", dataSource: "manual" }];
+  ui.activeTabId = "manual";
   ui.elements = {
     fileItemsContainer: document.getElementById("files"),
     warningMessages: document.getElementById("warnings"),

@@ -9,7 +9,6 @@ export function getUsageAccessState({ registered = false, hasIdentity = false } 
   };
 }
 
-const IGNORED_TOOL_IDS = new Set(["velocity-template"]);
 const TOOL_ALIASES = Object.freeze({
   "jenkins-runner": "run-query",
   master_lockey: "master-lockey",
@@ -34,18 +33,11 @@ export function normalizeUsageScope(scope = {}, resolveToolName = (id) => id) {
     };
   });
   const rawToolIds = new Set(parsedRows.map((row) => row.normalizedId));
-  const ignoredToolIds = new Set();
   const suppressedAliasIds = new Set();
   let excludedToolTotal = 0;
   const countsByTool = new Map();
 
   parsedRows.forEach((row) => {
-    if (IGNORED_TOOL_IDS.has(row.normalizedId)) {
-      ignoredToolIds.add(row.normalizedId);
-      excludedToolTotal += row.count;
-      return;
-    }
-
     const canonicalId = TOOL_ALIASES[row.normalizedId] || row.id;
     if (TOOL_ALIASES[row.normalizedId] && rawToolIds.has(canonicalId)) {
       suppressedAliasIds.add(row.normalizedId);
@@ -83,10 +75,7 @@ export function normalizeUsageScope(scope = {}, resolveToolName = (id) => id) {
 
   return {
     totalActivities: Number.isFinite(total) && total >= 0 ? Math.max(0, Math.round(total) - excludedToolTotal) : toolTotal,
-    toolsUsed:
-      Number.isFinite(toolsUsed) && toolsUsed >= 0
-        ? Math.max(0, Math.round(toolsUsed) - ignoredToolIds.size - suppressedAliasIds.size)
-        : tools.length,
+    toolsUsed: Number.isFinite(toolsUsed) && toolsUsed >= 0 ? Math.max(0, Math.round(toolsUsed) - suppressedAliasIds.size) : tools.length,
     activeUsers: Number.isFinite(activeUsers) && activeUsers > 0 ? Math.round(activeUsers) : 0,
     lastUpdated: scope.lastUpdated ? String(scope.lastUpdated) : null,
     tools,

@@ -9,8 +9,6 @@ import { buildCanonicalToolUsageQuery, buildLifetimeUsageRollupQuery } from "../
 import { consumeRateLimit } from "../utils/rateLimit.js";
 import { tsGmt7, tsGmt7Plain, tsToGmt7Plain } from "../utils/timestamps.js";
 
-const IGNORED_ANALYTICS_TOOL_ID = "velocity-template";
-
 /**
  * Handle GET /analytics/overview - authenticated personal and aggregate usage overview.
  * Cumulative totals and the seven-day pulse use the canonical, success-only Tool Use ledger.
@@ -180,7 +178,6 @@ async function loadOverviewData(env, userEmail, source) {
                  FROM tool_usage
                  WHERE LOWER(TRIM(user_email)) = 'dev@localhost'
                    AND source = 'client'
-                   AND LOWER(TRIM(tool_id)) != 'velocity-template'
                ))
                ELSE 0
              END AS active_users,
@@ -309,7 +306,6 @@ export async function handleAnalyticsBatchPost(request, env, session) {
       for (const ev of events) {
         const createdTime = String(ev.created_time || tsGmt7Plain());
         const featureId = normalizeFeatureId(ev.feature_id || ev.type || "unknown");
-        if (isIgnoredAnalyticsTool(featureId)) continue;
         const action = String(ev.action || ev.event || "unknown");
         const properties =
           ev.properties && typeof ev.properties === "object"
@@ -319,8 +315,27 @@ export async function handleAnalyticsBatchPost(request, env, session) {
                 app_version: safeString(ev.app_version || data.app_version, 60),
               }
             : ev.properties;
-        const props =
-          typeof properties === "string" ? safeString(properties, 4000) : JSON.stringify(sanitizeObject(properties || {}, 4000));
+        let props = typeof properties === "string" ? safeString(properties, 4000) : JSON.stringify(sanitizeObject(properties || {}, 4000));
+        if (
+          action.startsWith("capability_") ||
+          [
+            "excel_import_result",
+            "oracle_import_result",
+            "oracle_schema_import_result",
+            "schema_file_import_result",
+            "import_sql_result",
+          ].includes(action)
+        ) {
+          let details = properties;
+          if (typeof details === "string") {
+            try {
+              details = JSON.parse(details);
+            } catch (_) {
+              details = {};
+            }
+          }
+          props = JSON.stringify({ ...sanitizeObject(details || {}, 4000), actor_email: userEmail });
+        }
         const dev = deviceId;
 
         eventStatements.push(
@@ -345,7 +360,6 @@ export async function handleAnalyticsBatchPost(request, env, session) {
         const appVersion = safeString(err.app_version || data.app_version || "", 60) || null;
         const route = safeString(err.route || "", 160) || null;
         const toolId = normalizeFeatureId(err.tool_id || "");
-        if (isIgnoredAnalyticsTool(toolId)) continue;
         const processArea = safeString(err.process_area || "shell", 80);
         const errorKind = safeString(err.error_kind || "uncaught_error", 80);
         const errorName = safeString(err.error_name || "Error", 120);
@@ -392,7 +406,6 @@ export async function handleAnalyticsBatchPost(request, env, session) {
         const email = userEmail;
         const dev = deviceId;
         const toolId = normalizeFeatureId(log.tool_id || "unknown");
-        if (isIgnoredAnalyticsTool(toolId)) continue;
         const action = String(log.action || "unknown");
         const createdTime = String(log.created_time || tsGmt7Plain());
 
@@ -411,7 +424,6 @@ export async function handleAnalyticsBatchPost(request, env, session) {
         const toolId = normalizeFeatureId(item.tool_id || item.toolId || "");
         const action = safeString(item.action || "", 80).trim();
         if (!eventId || !toolId || toolId === "unknown" || !action) continue;
-        if (isIgnoredAnalyticsTool(toolId)) continue;
         const properties = JSON.stringify(sanitizeObject(item.properties || item.meta || {}, 4000));
         const createdTime = tsToGmt7Plain(item.created_time || item.ts) || tsGmt7Plain();
         toolUsageStatements.push(
@@ -430,7 +442,6 @@ export async function handleAnalyticsBatchPost(request, env, session) {
         const devId = deviceId;
         const email = userEmail;
         const toolId = normalizeFeatureId(du.tool_id || "unknown");
-        if (isIgnoredAnalyticsTool(toolId)) continue;
         const action = String(du.action || "unknown");
         const count = Number(du.count || 0) || 0;
         const updatedTime = String(du.updated_time || tsGmt7Plain());
@@ -538,11 +549,6 @@ export async function handleAnalyticsLogPost(request, env, session) {
     const userEmail = String(session.email).trim().toLowerCase();
     const deviceId = String(session.deviceId);
     const toolId = normalizeFeatureId(data.tool_id || "unknown");
-    if (isIgnoredAnalyticsTool(toolId)) {
-      return new Response(JSON.stringify({ ok: true, inserted: 0, ignored: true }), {
-        headers: { "Content-Type": "application/json", ...corsHeaders() },
-      });
-    }
     const action = String(data.action || "unknown");
     const createdTime = String(data.created_time || tsGmt7Plain());
 
@@ -594,11 +600,6 @@ export async function handleAnalyticsErrorPost(request, env, session) {
     const appVersion = safeString(data.app_version || "", 60) || null;
     const route = safeString(data.route || "", 160) || null;
     const toolId = normalizeFeatureId(data.tool_id || "");
-    if (isIgnoredAnalyticsTool(toolId)) {
-      return new Response(JSON.stringify({ ok: true, inserted: 0, ignored: true }), {
-        headers: { "Content-Type": "application/json", ...corsHeaders() },
-      });
-    }
     const processArea = safeString(data.process_area || "shell", 80);
     const errorKind = safeString(data.error_kind || "uncaught_error", 80);
     const errorName = safeString(data.error_name || "Error", 120);
@@ -667,14 +668,6 @@ function normalizeFeatureId(value) {
   return id || "unknown";
 }
 
-function isIgnoredAnalyticsTool(toolId) {
-  return (
-    String(toolId || "")
-      .trim()
-      .toLowerCase() === IGNORED_ANALYTICS_TOOL_ID
-  );
-}
-
 function safeString(value, limit = 120) {
   const max = Number.isFinite(Number(limit)) && Number(limit) > 0 ? Number(limit) : 120;
   return String(value ?? "")
@@ -715,7 +708,15 @@ function sanitizeObject(value, stringLimit = 120) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return result;
   for (const [key, item] of Object.entries(value)) {
     if (!isAllowedMetaKey(key)) continue;
-    if (typeof item === "string") result[key] = safeString(item, stringLimit);
+    if (typeof item === "string")
+      result[key] =
+        key === "file_name"
+          ? item
+              .split(/[\\/]/)
+              .pop()
+              .replace(/\p{Cc}/gu, "")
+              .slice(0, 255)
+          : safeString(item, stringLimit);
     else if (typeof item === "number" && Number.isFinite(item)) result[key] = item;
     else if (typeof item === "boolean") result[key] = item;
   }

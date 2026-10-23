@@ -13,8 +13,7 @@ export function buildDeduplicatedUsageLogQuery(rangeConfig = null) {
     u.action,
     u.created_time
   FROM usage_log u
-  WHERE ${includedAnalyticsEmailSql("u.user_email")}
-    AND LOWER(TRIM(u.tool_id)) != 'velocity-template'${rangeClause}`;
+  WHERE ${includedAnalyticsEmailSql("u.user_email")}${rangeClause}`;
 }
 
 export function buildNormalizedUsageLogQuery(rangeConfig = null) {
@@ -50,8 +49,7 @@ export function buildCanonicalToolUsageQuery(rangeConfig = null) {
     u.action,
     u.created_time
   FROM tool_usage u
-  WHERE ${includedAnalyticsEmailSql("u.user_email")}
-    AND LOWER(TRIM(u.tool_id)) != 'velocity-template'${rangeClause}`;
+  WHERE ${includedAnalyticsEmailSql("u.user_email")}${rangeClause}`;
 }
 
 /**
@@ -67,7 +65,6 @@ export function buildLifetimeUsageRollupQuery() {
     b.last_updated
   FROM lifetime_usage_baseline b
   WHERE ${includedAnalyticsEmailSql("b.user_email")}
-    AND LOWER(TRIM(b.tool_id)) != 'velocity-template'
 
   UNION ALL
 
@@ -79,6 +76,5 @@ export function buildLifetimeUsageRollupQuery() {
   FROM tool_usage u
   WHERE u.source = 'client'
     AND ${includedAnalyticsEmailSql("u.user_email")}
-    AND LOWER(TRIM(u.tool_id)) != 'velocity-template'
   GROUP BY LOWER(u.user_email), u.tool_id, u.action`;
 }

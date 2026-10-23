@@ -439,7 +439,7 @@
   --checker-text: hsl(var(--foreground));
   --checker-muted: hsl(var(--muted-foreground));
   --checker-success: hsl(var(--success));
-  --checker-warning: hsl(var(--warning));
+  --checker-warning: color-mix(in srgb, hsl(var(--warning)) 65%, hsl(var(--foreground)));
   width: min(100%, 1440px);
   margin: 0 auto;
   padding: 0;
@@ -474,9 +474,7 @@
   color: hsl(var(--warning));
 }
 
-.check-image-workspace,
-.reference-library,
-.reference-editor {
+.check-image-workspace {
   border: 1px solid hsl(var(--border));
   border-radius: 0.875rem;
   background: var(--checker-surface);
@@ -486,9 +484,7 @@
   padding: clamp(1rem, 2vw, 1.5rem);
 }
 
-.check-image-input-header,
-.reference-library-header,
-.reference-editor-header {
+.check-image-input-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -509,8 +505,6 @@
 }
 
 .check-image-field-help code,
-.reference-editor-identifier code,
-.reference-list-item-identifier,
 .image-id-value {
   font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
 }
@@ -518,24 +512,6 @@
 .check-image-field-help code {
   color: var(--checker-text);
   font-size: 0.76rem;
-}
-
-.saved-references-button {
-  flex: 0 0 auto;
-}
-
-.saved-references-count,
-.reference-list-count {
-  display: inline-grid;
-  min-width: 1.25rem;
-  height: 1.25rem;
-  place-items: center;
-  padding: 0 0.25rem;
-  border-radius: 999px;
-  background: hsl(var(--muted));
-  color: var(--checker-muted);
-  font-size: 0.7rem;
-  font-variant-numeric: tabular-nums;
 }
 
 .check-image-input-shell {
@@ -556,7 +532,7 @@
 
 .check-image-textarea {
   display: block;
-  min-height: 8.75rem;
+  min-height: 5.5rem;
   padding: 1rem;
   border: 0;
   border-radius: 0;
@@ -821,207 +797,8 @@
   padding-inline: 1.1rem;
 }
 
-.reference-library,
-.reference-editor {
-  margin-top: 1rem;
-  padding: 1.1rem 1.25rem;
-}
-
-.reference-library-header h2,
-.reference-editor-header h2 {
-  margin: 0;
-  color: var(--checker-text);
-  font-size: 1rem;
-  font-weight: 650;
-}
-
-.reference-library-header p,
-.reference-editor-header p {
-  margin: 0.3rem 0 0;
-  color: var(--checker-muted);
-  font-size: 0.8rem;
-}
-
-.reference-library-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-  margin-top: 1.1rem;
-}
-
-.reference-list-section {
-  min-width: 0;
-}
-
-.reference-list-heading {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.55rem;
-}
-
-.reference-list-heading h3 {
-  margin: 0;
-  color: var(--checker-text);
-  font-size: 0.78rem;
-  font-weight: 650;
-}
-
-.reference-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-}
-
-.reference-list-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.65rem 0.7rem;
-  border: 1px solid hsl(var(--border));
-  border-radius: 0.55rem;
-  background: hsl(var(--muted) / 0.24);
-}
-
-.reference-list-item-content {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 0.12rem;
-}
-
-.reference-list-item-label {
-  overflow: hidden;
-  color: var(--checker-text);
-  font-size: 0.78rem;
-  font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.reference-list-item-identifier {
-  overflow: hidden;
-  color: var(--checker-muted);
-  font-size: 0.68rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.reference-list-item-note {
-  overflow: hidden;
-  color: var(--checker-muted);
-  font-size: 0.7rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.reference-list-item-actions {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 0.25rem;
-}
-
-.reference-list-action,
-.reference-action-button {
-  padding: 0.25rem 0.4rem;
-  border: 1px solid transparent;
-  border-radius: 0.3rem;
-  background: transparent;
-  color: var(--checker-muted);
-  cursor: pointer;
-  font-size: 0.68rem;
-  font-weight: 600;
-  transition:
-    background-color 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease;
-}
-
-.reference-list-action:hover,
-.reference-action-button:hover {
-  border-color: hsl(var(--border));
-  background: hsl(var(--muted));
-  color: var(--checker-text);
-}
-
-.reference-list-action-danger:hover {
-  border-color: hsl(var(--destructive) / 0.5);
-  color: hsl(var(--destructive));
-}
-
-.reference-list-empty {
-  margin: 0;
-  padding: 0.7rem;
-  border: 1px dashed hsl(var(--border));
-  border-radius: 0.55rem;
-  color: var(--checker-muted);
-  font-size: 0.75rem;
-}
-
-.reference-editor-form {
-  display: grid;
-  grid-template-columns: minmax(12rem, 1fr) minmax(12rem, 1.2fr) auto;
-  align-items: end;
-  gap: 0.75rem;
-  margin-top: 1rem;
-}
-
-.reference-editor-identifier,
-.reference-form-field {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.reference-form-label,
-.reference-form-field > span {
-  color: var(--checker-muted);
-  font-size: 0.72rem;
-  font-weight: 650;
-}
-
-.reference-editor-identifier code {
-  overflow: hidden;
-  min-height: 2.35rem;
-  padding: 0.62rem 0.7rem;
-  border: 1px solid hsl(var(--border));
-  border-radius: 0.45rem;
-  background: hsl(var(--muted) / 0.3);
-  color: var(--checker-text);
-  font-size: 0.7rem;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.reference-form-field input {
+.run-summary-loading {
   width: 100%;
-  min-height: 2.35rem;
-  padding: 0.55rem 0.7rem;
-  border: 1px solid hsl(var(--border));
-  border-radius: 0.45rem;
-  background: var(--checker-control);
-  color: var(--checker-text);
-  font-size: 0.8rem;
-}
-
-.reference-form-field input:focus {
-  border-color: hsl(var(--ring));
-  box-shadow: 0 0 0 3px hsl(var(--ring) / 0.15);
-}
-
-.reference-form-optional {
-  font-weight: 400;
-}
-
-.check-progress {
-  margin-top: 1rem;
-  padding: 0.75rem 0.9rem;
-  border: 1px solid hsl(var(--border));
-  border-radius: 0.65rem;
-  background: var(--checker-surface);
 }
 
 .check-progress-header,
@@ -1294,16 +1071,6 @@
   gap: 0.18rem;
 }
 
-.image-reference-label {
-  max-width: 15rem;
-  overflow: hidden;
-  color: var(--checker-text);
-  font-size: 0.76rem;
-  font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .image-id-value {
   display: block;
   max-width: 16rem;
@@ -1314,18 +1081,8 @@
   white-space: nowrap;
 }
 
-.reference-action-button {
-  margin-top: 0.15rem;
-  padding-inline: 0;
-  color: hsl(var(--primary));
-}
-
-.reference-action-button:hover {
-  padding-inline: 0.35rem;
-}
-
 .status-cell.success {
-  background: hsl(var(--success) / 0.08);
+  background: var(--checker-surface);
 }
 
 .status-cell.error {
@@ -1574,15 +1331,6 @@
     flex: 1;
   }
 
-  .reference-library-grid,
-  .reference-editor-form {
-    grid-template-columns: 1fr;
-  }
-
-  .reference-editor-form .btn-primary {
-    width: 100%;
-  }
-
   .run-summary-actions {
     align-items: flex-start;
     flex-direction: column;
@@ -1624,18 +1372,95 @@
   min-width: 9.5rem;
 }
 
-.check-image-tool .image-oracle-cell {
-  overflow-wrap: anywhere;
-}
-
-.check-image-tool .image-oracle-cell div + div {
-  margin-top: 0.25rem;
-  color: var(--checker-muted);
-}
-
 .check-image-tool .image-width-warning {
   margin-left: 0.35em;
   color: var(--error-color, hsl(var(--destructive)));
   cursor: help;
   font-weight: 700;
+}
+
+/* Results lead with payload size; Oracle metadata stays with its image. */
+.check-image-tool .image-size-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+}
+.image-cdn-size {
+  color: var(--checker-text);
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+.image-size-warning,
+.check-image-tool .image-width-warning {
+  color: var(--checker-warning);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+.has-warning .image-cdn-size {
+  color: var(--checker-warning);
+}
+.batch-results-table .image-metadata-row > td {
+  position: static;
+  height: auto;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+  background: var(--checker-surface-raised);
+}
+.image-oracle-details {
+  position: sticky;
+  left: 0;
+  width: min(100%, 100cqw);
+  box-sizing: border-box;
+  padding: 0.65rem 1rem;
+  white-space: normal;
+}
+.image-oracle-details summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--checker-muted);
+  font-size: 0.8rem;
+}
+.image-oracle-details summary:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 3px;
+}
+.image-oracle-record {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) minmax(0, 2fr) minmax(8rem, 1fr);
+  gap: 1rem;
+  padding: 0.85rem 0;
+  overflow-wrap: anywhere;
+  color: var(--checker-text);
+  font-size: 0.8rem;
+}
+.oracle-field-label {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--checker-muted);
+  font-size: 0.72rem;
+}
+.check-image-tool .image-id-value {
+  max-width: 17rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  color: var(--checker-text);
+  font-size: 0.75rem;
+}
+@media (max-width: 600px) {
+  .batch-results-table th:first-child,
+  .batch-results-table td.image-path-cell {
+    min-width: 9rem;
+    max-width: 9rem;
+  }
+  .image-oracle-record {
+    grid-template-columns: 1fr;
+    gap: 0.6rem;
+  }
+}
+
+.batch-results-table-container {
+  container-type: inline-size;
 }

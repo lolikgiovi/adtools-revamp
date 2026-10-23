@@ -14,10 +14,14 @@ const PRIMARY_VIEWS = [
   { id: "who", label: "People" },
   { id: "daily", label: "Activity" },
 ];
+const RANGED_REPORTS = new Set(["overview", "opportunities", "who", "daily", "capability-adoption", "capability-people", "import-sources"]);
 const REPORT_GROUPS = [
-  ["Usage & Adoption", ["overview", "opportunities", "who", "active-users", "tools", "tool-adoption", "daily"]],
+  [
+    "Usage & Adoption",
+    ["overview", "opportunities", "who", "capability-adoption", "capability-people", "active-users", "tools", "tool-adoption", "daily"],
+  ],
   ["Reliability & Diagnostics", ["friction", "improvement-notes", "errors", "error-summary", "versions", "devices", "events"]],
-  ["Quick Query", ["quick-query", "qq-table-usage", "quick-query-errors", "qq-insights", "qq-splits", "qq-outcomes"]],
+  ["Quick Query", ["quick-query", "import-sources", "qq-table-usage", "quick-query-errors", "qq-insights", "qq-splits", "qq-outcomes"]],
   ["Compare Config", ["compare-config", "cc-table-pairs"]],
   ["Run Query", ["run-query", "run-query-summary"]],
   ["Run Batch", ["run-batch", "run-batch-summary"]],
@@ -308,7 +312,7 @@ class AnalyticsDashboardPage {
       title.textContent = library
         ? "Report Library"
         : primary?.label || this.tabs.find((tab) => tab.id === this.currentTab)?.name || "Overview";
-    const ranged = ["overview", "opportunities", "who", "daily"].includes(this.currentTab);
+    const ranged = RANGED_REPORTS.has(this.currentTab);
     const scope = this.container.querySelector("#dashboard-scope");
     if (scope)
       scope.textContent = library
@@ -1196,12 +1200,12 @@ class AnalyticsDashboardPage {
       const requestedPage = page || state?.page || 1;
       return `${tabId}:${tabId === "daily" ? this.selectedRange : "all"}:${requestedPage}:${state?.pageSize || 100}:${state?.search || ""}`;
     }
-    return ["who", "opportunities", "overview"].includes(tabId) ? `${tabId}:${this.selectedRange}` : tabId;
+    return RANGED_REPORTS.has(tabId) ? `${tabId}:${this.selectedRange}` : tabId;
   }
 
   updateRangeVisibility() {
     const rangeControl = this.container.querySelector(".dashboard-range");
-    if (rangeControl) rangeControl.hidden = !["who", "opportunities", "daily", "overview"].includes(this.currentTab);
+    if (rangeControl) rangeControl.hidden = !RANGED_REPORTS.has(this.currentTab);
   }
 
   getRangeLabel(range) {

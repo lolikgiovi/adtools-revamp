@@ -82,6 +82,8 @@ describe.each(["merge", "update"])("config %s choice flow", (queryType) => {
   beforeEach(() => {
     vi.clearAllMocks();
     ui = Object.create(QuickQueryUI.prototype);
+    ui.tabs = [{ id: "manual", dataSource: "manual" }];
+    ui.activeTabId = "manual";
     ui.elements = {
       tableNameInput: { value: "APP.APP_CONFIG" },
       defaultSysdateToggle: { checked: false },

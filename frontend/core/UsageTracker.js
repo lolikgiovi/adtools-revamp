@@ -1,3 +1,4 @@
+import { getRuntime } from "./Runtime.js";
 import { AnalyticsSender } from "./AnalyticsSender.js";
 /**
  * UsageTracker - Centralized usage analytics with localStorage persistence
@@ -22,7 +23,7 @@ class UsageTracker {
   static ERROR_MESSAGE_LIMIT = 300;
   static ERROR_STACK_LIMIT = 1500;
   static BACKUP_ENABLED_KEY = "usage.analytics.backup.enabled";
-  static IGNORED_FEATURE_IDS = new Set(["velocity-template"]);
+  static IGNORED_FEATURE_IDS = new Set();
   static _backupEnabled = true;
   static ENABLED_KEY = "usage.analytics.enabled";
   static _enabled = true;
@@ -260,6 +261,9 @@ class UsageTracker {
     // Persist the durable queue immediately; a crash before the remote flush must not erase a completed use.
     this.flush().catch(() => {});
     this._scheduleRemoteFlush();
+    try {
+      this._eventBus?.emit?.("usage:toolUse", item);
+    } catch (_) {}
     return eventId;
   }
 
@@ -364,9 +368,11 @@ class UsageTracker {
     this._state.revision = (this._state.revision || 0) + 1;
 
     this._scheduleFlush();
+    if (actionKey.startsWith("capability_")) this._scheduleRemoteFlush();
 
     try {
       this._eventBus?.emit?.("usage:updated", ev);
+      this._eventBus?.emit?.("usage:event", ev);
     } catch (_) {}
   }
 
@@ -465,13 +471,20 @@ class UsageTracker {
     try {
       const sanitized = {};
       const defaultStringLimit = Number(options.defaultStringLimit || this.META_STRING_LIMIT);
-      const stringLimits = options.stringLimits || {};
+      const stringLimits = { file_name: 255, source_tables: 1000, ...options.stringLimits };
       Object.entries(meta || {}).forEach(([k, v]) => {
         if (!this._isAllowedMetaKey(k)) return;
         // Only allow safe primitives, with length limits for strings
         if (typeof v === "string") {
           const limit = Number(stringLimits[k] || defaultStringLimit);
-          sanitized[k] = this._sanitizeString(v, limit);
+          sanitized[k] =
+            k === "file_name"
+              ? v
+                  .split(/[\\/]/)
+                  .pop()
+                  .replace(/\p{Cc}/gu, "")
+                  .slice(0, limit)
+              : this._sanitizeString(v, limit);
         } else if (typeof v === "number" && Number.isFinite(v)) {
           sanitized[k] = v;
         } else if (typeof v === "boolean") {
@@ -485,7 +498,9 @@ class UsageTracker {
   }
 
   static _isAllowedMetaKey(key) {
-    const raw = String(key || "").trim().toLowerCase();
+    const raw = String(key || "")
+      .trim()
+      .toLowerCase();
     if (!raw) return false;
     const normalized = raw.replace(/[^a-z0-9]/g, "");
     const denied = new Set([
@@ -795,10 +810,7 @@ class UsageTracker {
       tool_usage: [],
       device_usage: [],
     });
-    const makeReferences = () =>
-      references
-        ? { events: [], usage_log: [], error_events: [], tool_usage: [], device_usage: [] }
-        : null;
+    const makeReferences = () => (references ? { events: [], usage_log: [], error_events: [], tool_usage: [], device_usage: [] } : null);
 
     if (!hasItems) {
       return [{ payload: makeChunk(), references: makeReferences() }];
@@ -921,7 +933,12 @@ class UsageTracker {
           );
         }
 
-        if (acknowledged.events.length || acknowledged.usageLogs.length || acknowledged.errorEvents.length || acknowledged.toolUses.length) {
+        if (
+          acknowledged.events.length ||
+          acknowledged.usageLogs.length ||
+          acknowledged.errorEvents.length ||
+          acknowledged.toolUses.length
+        ) {
           // Counts/device_usage are absolute values and remain in state for the
           // next sync. Only remove detail rows from the original snapshot.
           this._state.events = this._removeAcknowledgedRows(this._state.events, acknowledged.events);
@@ -971,7 +988,11 @@ class UsageTracker {
   }
 
   static isIgnoredFeatureId(featureId) {
-    return this.IGNORED_FEATURE_IDS.has(String(featureId || "").trim().toLowerCase());
+    return this.IGNORED_FEATURE_IDS.has(
+      String(featureId || "")
+        .trim()
+        .toLowerCase(),
+    );
   }
 
   static _migrateCanonicalFeatureIds() {
@@ -1014,13 +1035,7 @@ class UsageTracker {
   }
 
   static _getRuntime() {
-    try {
-      const w = typeof window !== "undefined" ? window : {};
-      const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
-      return w.__TAURI__ || w.__TAURI_IPC__ || /tauri/i.test(ua) ? "tauri" : "web";
-    } catch (_) {
-      return "unknown";
-    }
+    return getRuntime();
   }
 
   static _getAppVersion() {

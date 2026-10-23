@@ -1,3 +1,4 @@
+import { UsageTracker } from "../core/UsageTracker.js";
 import { collapseSearchName, getSearchAbbreviations, scoreFuzzyTerm } from "../core/FuzzySearch.js";
 import { getQuickQueryTableInteractionKey, getSearchInteractionKey, RecentInteractionStore } from "../core/RecentInteractionStore.js";
 
@@ -94,7 +95,7 @@ class GlobalSearch {
   /** Wire interactions */
   _bindEvents() {
     // Outside click closes
-    this.overlayEl.addEventListener("click", () => this.close());
+    this.overlayEl.addEventListener("click", () => this.close("outside"));
 
     // Prevent clicks inside modal from closing
     this.modalEl.addEventListener("click", (e) => {
@@ -121,11 +122,11 @@ class GlobalSearch {
           break;
         case "Enter":
           e.preventDefault();
-          this._confirmSelection();
+          this._confirmSelection("keyboard");
           break;
         case "Escape":
           e.preventDefault();
-          this.close();
+          this.close("escape");
           break;
         default:
           break;
@@ -135,7 +136,7 @@ class GlobalSearch {
     // Global escape support via event bus
     if (this.eventBus) {
       this.eventBus.on("escape:pressed", () => {
-        if (this.isOpen) this.close();
+        if (this.isOpen) this.close("escape");
       });
 
       const unsubscribePageChange = this.eventBus.on("page:changed", (data) => this._recordPageInteraction(data));
@@ -158,9 +159,12 @@ class GlobalSearch {
   }
 
   /** Open the overlay */
-  open() {
+  open(source = "programmatic") {
     if (this.isOpen) return;
     this.isOpen = true;
+    this._openedAt = Date.now();
+    this._searchSource = ["shortcut", "header", "mobile"].includes(source) ? source : "programmatic";
+    this._trackSearch("search_open", { source: this._searchSource });
     this.previousActiveElement = document.activeElement;
 
     // Show overlay/modal
@@ -184,8 +188,13 @@ class GlobalSearch {
   }
 
   /** Close the overlay */
-  close() {
+  close(reason = "dismiss") {
     if (!this.isOpen) return;
+    this._trackSearch("search_close", {
+      ...this._searchMeta(),
+      reason,
+      duration_ms: Math.max(0, Date.now() - this._openedAt),
+    });
     this.isOpen = false;
     this._filterRequestId += 1;
 
@@ -307,9 +316,7 @@ class GlobalSearch {
       .then((matches) => {
         if (requestId !== this._filterRequestId) return;
 
-        const items = (Array.isArray(matches) ? matches : [])
-          .map((match) => this._createQuickQueryResult(match))
-          .filter(Boolean);
+        const items = (Array.isArray(matches) ? matches : []).map((match) => this._createQuickQueryResult(match)).filter(Boolean);
 
         if (items.length > 0) {
           this.filtered = this._sortByRecent(items).slice(0, 8);
@@ -482,7 +489,7 @@ class GlobalSearch {
     this.resultsEl.querySelectorAll(".global-search-result-item").forEach((li, idx) => {
       li.addEventListener("click", () => {
         this.activeIndex = idx;
-        this._confirmSelection();
+        this._confirmSelection("pointer");
       });
     });
 
@@ -508,16 +515,49 @@ class GlobalSearch {
   }
 
   /** Confirm selection and navigate */
-  _confirmSelection() {
+  _confirmSelection(inputMethod = "keyboard") {
     const item = this.filtered[this.activeIndex >= 0 ? this.activeIndex : 0];
     if (!item) return;
 
     this._recordInteraction(item);
 
+    this._trackSearch("search_select", {
+      ...this._searchMeta(),
+      target: item.route,
+      result_type: item.type,
+      position: Math.max(0, this.activeIndex) + 1,
+      input_method: inputMethod,
+    });
     // Close first to avoid flicker
-    this.close();
+    this.close("selected");
 
     this.router.navigate(item.route, item.data);
+  }
+
+  _searchMeta() {
+    const query = this.inputEl.value.trim();
+    const prefix = query.match(/^(qq|quick|tools?|pages?):/i)?.[1]?.toLowerCase();
+    return {
+      source: this._searchSource,
+      query_length: query.length,
+      scope:
+        prefix === "qq" || prefix === "quick"
+          ? "quick-query"
+          : prefix?.startsWith("tool")
+            ? "tool"
+            : prefix?.startsWith("page")
+              ? "page"
+              : "all",
+      result_count: this.filtered.length,
+    };
+  }
+
+  _trackSearch(action, meta) {
+    try {
+      UsageTracker.trackEvent("global-search", action, meta);
+    } catch (_) {
+      /* Best effort. */
+    }
   }
 
   /** Icon helper */

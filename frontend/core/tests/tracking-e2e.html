@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>Behavior tracking verification</title>
+  <style>
+    body {
+      font: 14px system-ui;
+      margin: 24px;
+      background: #f7f7f7;
+      color: #222;
+    }
+    button {
+      padding: 10px 18px;
+    }
+    iframe {
+      width: 100%;
+      height: 640px;
+      border: 1px solid #ccc;
+    }
+    pre {
+      white-space: pre-wrap;
+      line-height: 1.6;
+    }
+  </style>
+  <h1>Behavior tracking verification</h1>
+  <button id="run">Run local browser checks</button>
+  <pre id="results">Ready. Uses the real app inside the frame, local event queue, and temporary Velocity document.</pre>
+  <iframe id="app" src="/"></iframe>
+  <script type="module">
+    const frame = document.querySelector("#app");
+    const results = document.querySelector("#results");
+    const waitFor = async (check) => {
+      const until = Date.now() + 20000;
+      while (!check()) {
+        if (Date.now() > until) throw new Error("Timed out waiting for app state");
+        await new Promise((r) => setTimeout(r, 100));
+      }
+    };
+    document.querySelector("#run").onclick = async () => {
+      const lines = [];
+      const check = (label, value) => {
+        lines.push(`${value ? "PASS" : "FAIL"} ${label}`);
+        results.textContent = lines.join("\n");
+        if (!value) throw new Error(label);
+      };
+      let tracker, savedState, enabled, pins, app, tempId;
+      try {
+        await waitFor(() => frame.contentWindow.app?.globalSearch);
+        const win = frame.contentWindow;
+        app = win.app;
+        tracker = (await win.eval('import("/core/tests/tracking-probe.js")')).UsageTracker;
+        savedState = structuredClone(tracker._state);
+        enabled = tracker._enabled;
+        tracker._enabled = true;
+        tracker._state.events = [];
+        tracker._state.toolUses = [];
+        const events = () => tracker._state.events;
+        const uses = () => tracker._state.toolUses;
+        const count = (action) => uses().filter((e) => e.action === action).length;
+        pins = [...app.sidebar.getPinnedToolIds()];
+        win.document.dispatchEvent(new win.KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
+        check(
+          "Cmd+K opens search with shortcut attribution",
+          app.globalSearch.isOpen && events().some((e) => e.action === "search_open" && e.meta.source === "shortcut"),
+        );
+        const input = win.document.querySelector("#global-search-input");
+        input.value = "tool:Velocity";
+        input.dispatchEvent(new win.Event("input", { bubbles: true }));
+        input.dispatchEvent(new win.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        await waitFor(() => app.currentTool?.id === "velocity-template" && app.currentTool.editor && app.currentTool.activeDocument);
+        const tool = app.currentTool;
+        check(
+          "Search selection targets Velocity without storing query text",
+          events().some(
+            (e) =>
+              e.action === "search_select" && e.meta.target === "velocity-template" && !JSON.stringify(e.meta).includes("tool:Velocity"),
+          ),
+        );
+        check(
+          "Velocity page views reach the queue",
+          events().some((e) => e.featureId === "velocity-template" && e.action === "page_view"),
+        );
+        app.sidebar.togglePin("velocity-template");
+        app.sidebar.togglePin("velocity-template");
+        check(
+          "Pin and unpin include persisted state and pin count",
+          ["sidebar_pin", "sidebar_unpin"].every((action) =>
+            events().some((e) => e.action === action && e.meta.persisted === true && typeof e.meta.pinned_count === "number"),
+          ),
+        );
+        await tool.newDocument();
+        tempId = tool.activeDocumentId;
+        tool.editor.setValue("Hello $name");
+        tool.contextEditor.setValue('{"name":"TRACKING_SENTINEL"}');
+        await new Promise((r) => setTimeout(r, 300));
+        check("Automatic previews do not count as successful render uses", count("render") === 0);
+        win.document.querySelector("#btnLocalRenderVelocity").click();
+        check("Explicit valid render records one successful use", count("render") === 1);
+        check(
+          "Shared control event identifies the render button",
+          events().some((e) => e.action === "control_click" && e.meta.control === "btnLocalRenderVelocity"),
+        );
+        tool.contextEditor.setValue("{");
+        win.document.querySelector("#btnLocalRenderVelocity").click();
+        check(
+          "Invalid context records stale result without another successful use",
+          count("render") === 1 && events().some((e) => e.action === "render_result" && e.meta.outcome === "stale"),
+        );
+        tool.editor.setValue("");
+        win.document.querySelector("#btnLocalRenderVelocity").click();
+        check("Empty render does not count as successful use", count("render") === 1);
+        check(
+          "Template/context/output contents stay out of telemetry",
+          !JSON.stringify({ events: events(), uses: uses() }).includes("TRACKING_SENTINEL"),
+        );
+        app.router.navigate("home");
+        await waitFor(() => events().some((e) => e.featureId === "velocity-template" && e.action === "page_leave"));
+        check(
+          "Navigation records visible visit duration",
+          events().some((e) => e.featureId === "velocity-template" && e.action === "page_leave" && e.meta.duration_ms >= 0),
+        );
+        lines.push(`COMPLETE ${lines.length} checks passed. ${new Date().toISOString()}`);
+      } catch (error) {
+        lines.push(`ERROR ${error.message}`);
+      } finally {
+        if (tempId) {
+          const tool = app.tools.get("velocity-template");
+          await tool.closeDocument(tempId);
+        }
+        if (pins) {
+          app.sidebar.pinnedTools = new Set(pins);
+          app.sidebar.savePinnedTools();
+          await app.sidebar.renderTools();
+        }
+        if (savedState) {
+          for (const timer of tracker._debounceTimers.values()) clearTimeout(timer);
+          tracker._debounceTimers.clear();
+          tracker._state = savedState;
+          tracker._enabled = enabled;
+          tracker.flushSync();
+        }
+        results.textContent = lines.join("\n");
+      }
+    };
+  </script>
+</html>

@@ -3,14 +3,18 @@ function normalizeTableName(tableName) {
 }
 
 function normalizeDataType(value) {
-  const raw = String(value || "").trim().toUpperCase();
+  const raw = String(value || "")
+    .trim()
+    .toUpperCase();
   if (!raw) return "UNKNOWN";
   const withoutParams = raw.replace(/\(.*/, "").trim();
   return withoutParams.split(/\s+/)[0] || "UNKNOWN";
 }
 
 function isTruthySchemaFlag(value) {
-  const normalized = String(value || "").trim().toLowerCase();
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
   return ["1", "true", "yes", "y", "pk", "primary", "primary key"].includes(normalized);
 }
 
@@ -100,9 +104,11 @@ export function buildQuickQueryGeneratedMeta({
 
   return {
     table_name: normalizeTableName(tableName),
-    query_type: String(queryType || "").trim().toLowerCase(),
+    query_type: String(queryType || "")
+      .trim()
+      .toLowerCase(),
     row_count: getQuickQueryDataRowCount(inputData),
-    data_source: dataSource === "excel" ? "excel" : "manual",
+    data_source: ["excel", "oracle", "manual", "clipboard", "mixed", "saved", "unknown"].includes(dataSource) ? dataSource : "unknown",
     ...summarizeQuickQuerySchema(schemaData),
     ...summarizeQuickQueryAttachments(attachments),
     used_worker: Boolean(usedWorker),
@@ -121,4 +127,23 @@ export function cleanQuickQueryAnalyticsMeta(meta = {}) {
     }
   });
   return cleaned;
+}
+
+// Keep requested source identifiers while excluding filesystem paths and SQL literals.
+export function getImportFileName(value) {
+  return String(value || "")
+    .split(/[\\/]/)
+    .pop()
+    .replace(/\p{Cc}/gu, "")
+    .slice(0, 255);
+}
+
+export function getOracleImportMeta(query) {
+  if (!query) return {};
+  return {
+    table_name: query.tableName,
+    source_tables: (query.sourceTables || [query.tableName]).join(","),
+    has_join: Boolean(query.hasJoin),
+    column_count: query.fields?.length || 0,
+  };
 }

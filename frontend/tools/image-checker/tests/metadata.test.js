@@ -82,7 +82,7 @@ describe("image metadata", () => {
   it("warns only above 1440 pixels", () => {
     const tool = Object.create(CheckImageTool.prototype);
     const warning = tool.createImageMetrics({ width: 1441, height: 800, sizeBytes: 2048 });
-    expect(warning.textContent).toContain("2 KB");
+    expect(warning.textContent).toContain("2.05 KB");
     expect(warning.querySelector(".image-width-warning").title).toContain("1440 px");
     expect(tool.createImageMetrics({ width: 1440, height: 800 }).querySelector(".image-width-warning")).toBeNull();
   });
@@ -108,7 +108,7 @@ describe("image metadata", () => {
     await tool.fetchOracleMetadata([id], connections, runId);
     expect(tool.root.querySelector("[data-oracle-context]").textContent).toBe("<script>bad</script>Mobile");
     expect(tool.root.querySelector("script")).toBeNull();
-    expect(tool.root.querySelector("[data-oracle-size]").textContent).toBe("2 KB");
+    expect(tool.root.querySelector("[data-oracle-size]").textContent).toBe("2.05 KB");
     tool.checkRunId++;
     await tool.fetchOracleMetadata([id], connections, runId);
     expect(ImageOracleService.fetch).toHaveBeenCalledTimes(1);

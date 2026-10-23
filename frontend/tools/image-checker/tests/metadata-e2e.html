@@ -55,8 +55,7 @@
       const tool = new CheckImageTool();
       tool.baseUrlService.getAllUrls = () => [{ name: "Local CDN", url: location.origin }];
       tool.imageCheckerService.normalizeInput = () => new URL(pngUrl).pathname;
-      tool.saveValues = tool.loadSavedValues = tool.clearSavedValues = tool.recordReferenceHistory = () => {};
-      tool.loadReferenceData = () => {};
+      tool.saveValues = tool.loadSavedValues = tool.clearSavedValues = () => {};
       tool.mount(document.querySelector("#tool"));
       document.querySelector("#verify").addEventListener("click", async () => {
         const report = document.querySelector("#report");
@@ -84,7 +83,7 @@
             `CDN size equals ${pngBytes} response bytes`,
           );
           assert(
-            tool.root.querySelector(".image-width-warning").textContent.trim() === "WARNING" &&
+            tool.root.querySelector(".image-width-warning").textContent.trim() === "Width exceeds 1440 px" &&
               tool.root.querySelector(".image-width-warning").title.includes("1440 px"),
             "Width warning and hover explanation shown",
           );

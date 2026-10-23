@@ -13,6 +13,8 @@ import toolsConfig from "./config/tools.json";
 import { getIconSvg } from "./config/iconRegistry.js";
 import { buildToolDefinitions, getToolDefinition, getToolDefinitionsList } from "./config/toolDefinitions.js";
 import { UsageTracker } from "./core/UsageTracker.js";
+import { BehaviorTracker } from "./core/BehaviorTracker.js";
+import { CapabilityTracker } from "./core/CapabilityTracker.js";
 import { UsageOverviewService } from "./core/UsageOverviewService.js";
 import { getUsageAccessState, normalizeUsageScope } from "./core/UsageOverviewModel.js";
 import { ErrorMonitor } from "./core/ErrorMonitor.js";
@@ -113,6 +115,8 @@ class App {
     }
     // Initialize usage tracking early with the app event bus
     UsageTracker.init(this.eventBus);
+    this.behaviorTracker = new BehaviorTracker(this.eventBus);
+    this.capabilityTracker = new CapabilityTracker(this.eventBus);
     ErrorMonitor.init({
       eventBus: this.eventBus,
       router: this.router,
@@ -269,8 +273,8 @@ class App {
       getIcon: this.getToolIcon.bind(this),
       searchQuickQuery: this.searchQuickQueryTables.bind(this),
     });
-    document.querySelector(".header-search")?.addEventListener("click", () => this.globalSearch.open());
-    document.querySelector(".mobile-search")?.addEventListener("click", () => this.globalSearch.open());
+    document.querySelector(".header-search")?.addEventListener("click", () => this.globalSearch.open("header"));
+    document.querySelector(".mobile-search")?.addEventListener("click", () => this.globalSearch.open("mobile"));
 
     // Setup notification system
     this.setupNotifications();
@@ -1268,7 +1272,7 @@ class App {
     // Cmd/Ctrl + K: Open global search
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
       e.preventDefault();
-      this.globalSearch?.open();
+      this.globalSearch?.open("shortcut");
     }
 
     // Cmd + R: Reload page

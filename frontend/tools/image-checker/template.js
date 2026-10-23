@@ -5,25 +5,15 @@ export const imageCheckerTemplate = /*html*/ `
         <div>
           <label id="imageInputHeading" class="check-image-field-label" for="batchImagePathsInput">Image IDs or paths</label>
         </div>
-        <button
-          id="savedReferencesButton"
-          class="btn btn-ghost btn-sm saved-references-button"
-          type="button"
-          aria-expanded="false"
-          aria-controls="referenceLibrary"
-        >
-          <span>Saved references</span>
-          <span id="savedReferencesCount" class="saved-references-count">0</span>
-        </button>
       </div>
 
       <div class="check-image-input-shell">
         <textarea
           id="batchImagePathsInput"
           class="check-image-textarea"
-          rows="6"
+          rows="3"
           placeholder="e.g. 8f6c2f1a-4f2d-4a8f-9b1e-0fd1a75b21c4\n/content/v1/image/hero-banner.png"
-          aria-describedby="imageInputHelp inputMeta inputValidationMessage"
+          aria-describedby="inputMeta inputValidationMessage"
           autocomplete="off"
           spellcheck="false"
         ></textarea>
@@ -42,7 +32,7 @@ export const imageCheckerTemplate = /*html*/ `
         <div class="check-image-run-actions">
           <div class="environment-control">
             <div class="environment-select-field">
-              <span class="environment-select-label" id="envSelectorLabel">CDN Environment</span>
+              <span class="environment-select-label" id="envSelectorLabel">CDN environments</span>
               <button
                 id="envSelector"
                 class="env-selector"
@@ -102,67 +92,6 @@ export const imageCheckerTemplate = /*html*/ `
         </div>
       </div>
     </section>
-
-    <section id="referenceLibrary" class="reference-library" aria-labelledby="referenceLibraryHeading" hidden>
-      <div class="reference-library-header">
-        <div>
-          <h2 id="referenceLibraryHeading">Image reference library</h2>
-          <p>Keep a human-friendly name next to an identifier you use often.</p>
-        </div>
-        <button id="closeSavedReferencesButton" class="btn btn-ghost btn-sm" type="button">Close</button>
-      </div>
-      <div class="reference-library-grid">
-        <section class="reference-list-section" aria-labelledby="savedReferencesHeading">
-          <div class="reference-list-heading">
-            <h3 id="savedReferencesHeading">Saved references</h3>
-            <span id="savedReferencesListCount" class="reference-list-count">0</span>
-          </div>
-          <div id="savedReferencesList" class="reference-list"></div>
-        </section>
-        <section class="reference-list-section" aria-labelledby="recentReferencesHeading">
-          <div class="reference-list-heading">
-            <h3 id="recentReferencesHeading">Recent identifiers</h3>
-            <span id="recentReferencesListCount" class="reference-list-count">0</span>
-          </div>
-          <div id="recentReferencesList" class="reference-list"></div>
-        </section>
-      </div>
-    </section>
-
-    <section id="referenceEditor" class="reference-editor" aria-labelledby="referenceEditorHeading" hidden>
-      <div class="reference-editor-header">
-        <div>
-          <h2 id="referenceEditorHeading">Save image reference</h2>
-          <p>Give this identifier a name you will recognize later.</p>
-        </div>
-        <button id="referenceEditorCancel" class="btn btn-ghost btn-sm" type="button">Cancel</button>
-      </div>
-      <form id="referenceEditorForm" class="reference-editor-form">
-        <div class="reference-editor-identifier">
-          <span class="reference-form-label">Identifier</span>
-          <code id="referenceEditorPath"></code>
-        </div>
-        <label class="reference-form-field">
-          <span>Name <span aria-hidden="true">*</span></span>
-          <input id="referenceLabelInput" type="text" maxlength="80" placeholder="e.g. Homepage hero" required />
-        </label>
-        <label class="reference-form-field reference-form-field-wide">
-          <span>Note <span class="reference-form-optional">optional</span></span>
-          <input id="referenceNoteInput" type="text" maxlength="160" placeholder="e.g. Approved campaign artwork" />
-        </label>
-        <button class="btn btn-primary" type="submit">Save reference</button>
-      </form>
-    </section>
-
-    <div id="checkProgress" class="check-progress" hidden aria-live="polite">
-      <div class="check-progress-header">
-        <span id="progressLabel">Checking images</span>
-        <span id="progressCount" class="progress-count">0 / 0</span>
-      </div>
-      <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
-        <div id="progressBar" class="progress-bar"></div>
-      </div>
-    </div>
 
     <section id="resultsEmptyState" class="check-image-empty-state" aria-labelledby="emptyStateHeading">
       <div class="empty-state-mark" aria-hidden="true">

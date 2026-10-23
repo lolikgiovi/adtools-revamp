@@ -59,7 +59,9 @@ function maskSql(sql) {
 
 export class OracleDataImportService {
   static parseQuery(sql, schemaFields, { validateFields = true } = {}) {
-    const statement = String(sql || "").trim().replace(/;\s*$/, "");
+    const statement = String(sql || "")
+      .trim()
+      .replace(/;\s*$/, "");
     const masked = maskSql(statement);
     if (!/^SELECT\s+/i.test(masked) || /;/.test(masked)) {
       throw new Error("Enter one SELECT statement. Other statements are not supported for import.");
@@ -85,10 +87,13 @@ export class OracleDataImportService {
     });
     const hasJoin = /\bJOIN\b/i.test(masked);
     const singleTableRemainder = tablePart.slice(table[0].length).trim();
-    if (sources.length !== 1 + (masked.match(/\bJOIN\b/gi)?.length || 0) ||
-      (!hasJoin && singleTableRemainder && !CLAUSE_PATTERN.test(singleTableRemainder) &&
-        !new RegExp(`^${IDENTIFIER}(?:\\s+(?:WHERE|ORDER\\s+BY|FETCH|OFFSET)\\b|\\s*$)`, "i")
-          .test(singleTableRemainder))) {
+    if (
+      sources.length !== 1 + (masked.match(/\bJOIN\b/gi)?.length || 0) ||
+      (!hasJoin &&
+        singleTableRemainder &&
+        !CLAUSE_PATTERN.test(singleTableRemainder) &&
+        !new RegExp(`^${IDENTIFIER}(?:\\s+(?:WHERE|ORDER\\s+BY|FETCH|OFFSET)\\b|\\s*$)`, "i").test(singleTableRemainder))
+    ) {
       throw new Error("Use SCHEMA.TABLE names for each query source.");
     }
     const starQualifier = new RegExp(`^(${IDENTIFIER})\\.\\*$`, "i").exec(projection)?.[1]?.toUpperCase();
@@ -110,32 +115,41 @@ export class OracleDataImportService {
       throw new Error(`Selected fields must exactly match the schema: ${fields.filter((field) => !schemaSet.has(field)).join(", ")}.`);
     }
     if (new Set(fields).size !== fields.length) throw new Error("Each selected field may appear only once.");
-    return { sql: statement, tableName: `${table[1]}.${table[2]}`.toUpperCase(), hasJoin, fields };
+    return {
+      sql: statement,
+      tableName: `${table[1]}.${table[2]}`.toUpperCase(),
+      hasJoin,
+      fields,
+      sourceTables: [...new Set(sources.map((source) => source.tableName))],
+    };
   }
 
   static async fetch(connection, query, blobFields = new Set()) {
-    const result = await OracleConnectionService.queryViaSidecar(
-      connection.name, connection, query.sql, ORACLE_IMPORT_MAX_ROWS,
-    );
-    if (!Array.isArray(result?.columns) || !Array.isArray(result?.rows) ||
+    const result = await OracleConnectionService.queryViaSidecar(connection.name, connection, query.sql, ORACLE_IMPORT_MAX_ROWS);
+    if (
+      !Array.isArray(result?.columns) ||
+      !Array.isArray(result?.rows) ||
       result.columns.length !== query.fields.length ||
       new Set(result.columns).size !== result.columns.length ||
-      result.columns.some((column) => !query.fields.includes(column))) {
+      result.columns.some((column) => !query.fields.includes(column))
+    ) {
       throw new Error("Oracle returned columns that do not match the selected schema fields.");
     }
     if (result.rows.some((row) => !Array.isArray(row) || row.length !== query.fields.length)) {
       throw new Error("Oracle returned an unexpected row shape.");
     }
     const columnIndexes = query.fields.map((field) => result.columns.indexOf(field));
-    return result.rows.map((row) => columnIndexes.map((index) => {
-      const value = row[index];
-      const field = result.columns[index];
-      if (!blobFields.has(field) || value == null) return value;
-      if (value.__adtools_type !== "oracle_blob" || value.encoding !== "base64" || typeof value.data !== "string") {
-        throw new Error(`Oracle returned an unsupported BLOB value for ${field}.`);
-      }
-      // Keep the encoding marker in the cell so generation can distinguish bytes from ordinary BLOB text.
-      return `data:application/octet-stream;base64,${value.data}`;
-    }));
+    return result.rows.map((row) =>
+      columnIndexes.map((index) => {
+        const value = row[index];
+        const field = result.columns[index];
+        if (!blobFields.has(field) || value == null) return value;
+        if (value.__adtools_type !== "oracle_blob" || value.encoding !== "base64" || typeof value.data !== "string") {
+          throw new Error(`Oracle returned an unsupported BLOB value for ${field}.`);
+        }
+        // Keep the encoding marker in the cell so generation can distinguish bytes from ordinary BLOB text.
+        return `data:application/octet-stream;base64,${value.data}`;
+      }),
+    );
   }
 }

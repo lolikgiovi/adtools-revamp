@@ -24,6 +24,7 @@ export default defineConfig({
     // node:sqlite tests run in the root Node suite; workerd cannot load that module.
     exclude: [
       "backend-workers/tests/analytics-count-integrity.test.js",
+      "backend-workers/tests/capability-adoption.test.js",
       "backend-workers/tests/canonical-tool-usage-migration.test.js",
       "backend-workers/tests/dashboard-performance.test.js",
       "backend-workers/tests/dashboard-person.test.js",

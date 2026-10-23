@@ -35,6 +35,21 @@ describe("dashboard navigation", () => {
     expect(root.querySelectorAll("#dynamic-tabs button")).toHaveLength(5);
     expect(root.querySelector("#dynamic-tabs").textContent).not.toContain("QQ Outcomes");
   });
+  it.each(["capability-adoption", "capability-people", "import-sources"])(
+    "keeps %s discoverable and scoped to the selected date range",
+    (id) => {
+      const root = setup();
+      page.tabs = [...tabs, { id, name: id }];
+      expect(page.getReportGroups().find((group) => group.tabs.some((tab) => tab.id === id)).name).not.toBe("Custom Reports");
+      page.switchTab(id);
+      expect(root.querySelector(".dashboard-range").hidden).toBe(false);
+      expect(page.getCacheKey(id)).toBe(`${id}:30d`);
+      page.selectedRange = "7d";
+      expect(page.getCacheKey(id)).toBe(`${id}:7d`);
+      expect(root.querySelector("#dashboard-scope").textContent).toContain("last 30 days");
+    },
+  );
+
   it("groups every report, preserves custom reports, and searches by tool", () => {
     const root = setup();
     page.showReportLibrary();

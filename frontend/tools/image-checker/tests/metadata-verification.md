@@ -47,13 +47,13 @@ Image toolbar labels its two comboboxes **CDN Environment** and **Oracle DB**; t
 Oracle combobox appears only on desktop, and only once a connection is saved; until
 then it offers **Set Oracle connections**, which opens Settings on that section.
 Choose one or more Oracle DBs (or leave **No Oracle DB** to skip the lookup and hide
-the Oracle columns); each selected DB adds its own Context and Base64 size column
-pair, headed with the connection name. Paste image UUIDs or
+the Oracle metadata); each selected DB adds a record in the expandable Oracle metadata row beneath its image. Paste image UUIDs or
 paths, and click **Check images**. Verify the table against matching CONTENT.IMAGE
 rows. CONTEXT is line 1; SUB_CONTEXT is line 2. Base64 size is the UTF-8 byte size
 of stored CONTENT, including its data URI prefix. CDN size is image response bytes;
 when CORS or an HTTP failure prevents reading those bytes, it is **Unavailable**.
-A width above 1440 px appends a red, focusable WARNING badge to the CDN size with a hover explanation.
+A width above 1440 px shows “Width exceeds 1440 px.” CDN payloads strictly above
+300,000 bytes show “Over 300 KB.” Displayed KB use 1,000 bytes.
 
 Live desktop Oracle and production CDN verification remains outstanding.
 
@@ -65,3 +65,5 @@ size from pixels or converting the image. Three focused tests verify native
 routing, native failure handling, and browser byte measurement. Rebuild/restart
 the desktop backend to load the new command. Browser mode still needs readable
 CDN responses. Actual desktop/CDN integration remains unverified.
+
+Current presentation and progress-header evidence: [presentation-verification.md](presentation-verification.md).

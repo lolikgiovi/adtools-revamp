@@ -30,7 +30,7 @@ describe("usage overview model", () => {
     });
   });
 
-  it("omits obsolete velocity-template activity from the rendered scope", () => {
+  it("includes Velocity activity in the rendered scope", () => {
     const scope = normalizeUsageScope({
       totalActivities: 11,
       toolsUsed: 2,
@@ -40,9 +40,12 @@ describe("usage overview model", () => {
       ],
     });
 
-    expect(scope.tools).toEqual([{ id: "run-query", count: 2, name: "run-query" }]);
-    expect(scope.totalActivities).toBe(2);
-    expect(scope.toolsUsed).toBe(1);
+    expect(scope.tools).toEqual([
+      { id: "velocity-template", count: 9, name: "velocity-template" },
+      { id: "run-query", count: 2, name: "run-query" },
+    ]);
+    expect(scope.totalActivities).toBe(11);
+    expect(scope.toolsUsed).toBe(2);
   });
 
   it("hides legacy aliases when their canonical tool rows are present", () => {

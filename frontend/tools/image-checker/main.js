@@ -2,17 +2,16 @@ import { imageCheckerTemplate } from "./template.js";
 import { ImageCheckerService, BaseUrlService, ImageOracleService } from "./service.js";
 import { BaseTool } from "../../core/BaseTool.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import { invoke } from "@tauri-apps/api/core";
 import { isTauri } from "../../core/Runtime.js";
 import { getIconSvg } from "./icon.js";
 import { IMAGE_CHECK_CONCURRENCY, runWithConcurrency } from "./concurrency.js";
 import "./styles.css";
 
-const SAVED_REFERENCES_STORAGE_KEY = "image_checker_saved_references";
-const IMAGE_CHECK_HISTORY_STORAGE_KEY = "image_checker_history";
 const SETTINGS_FOCUS_STORAGE_KEY = "settings.focus";
-const MAX_REFERENCE_HISTORY = 24;
 const ORACLE_CONNECTIONS_SETTING_KEY = "config.oracle.connections";
 const WIDE_IMAGE_WARNING_PX = 1440;
+const CDN_SIZE_WARNING_BYTES = 300000;
 
 class CheckImageTool extends BaseTool {
   constructor(eventBus) {
@@ -24,10 +23,6 @@ class CheckImageTool extends BaseTool {
     this.checkRunId = 0;
     this.timeoutCells = new Map();
     this.completedCells = new Set();
-    this.savedReferences = [];
-    this.referenceHistory = [];
-    this.activeReferenceKey = null;
-    this.activeReferenceIdentifier = null;
     this.isChecking = false;
     this.statusFilter = "all";
     this.runProgress = null;
@@ -98,26 +93,6 @@ class CheckImageTool extends BaseTool {
       configureEnvironmentsButton: this.root.querySelector("#configureEnvironmentsButton"),
       inputMeta: this.root.querySelector("#inputMeta"),
       inputValidationMessage: this.root.querySelector("#inputValidationMessage"),
-      savedReferencesButton: this.root.querySelector("#savedReferencesButton"),
-      savedReferencesCount: this.root.querySelector("#savedReferencesCount"),
-      closeSavedReferencesButton: this.root.querySelector("#closeSavedReferencesButton"),
-      referenceLibrary: this.root.querySelector("#referenceLibrary"),
-      savedReferencesList: this.root.querySelector("#savedReferencesList"),
-      savedReferencesListCount: this.root.querySelector("#savedReferencesListCount"),
-      recentReferencesList: this.root.querySelector("#recentReferencesList"),
-      recentReferencesListCount: this.root.querySelector("#recentReferencesListCount"),
-      referenceEditor: this.root.querySelector("#referenceEditor"),
-      referenceEditorHeading: this.root.querySelector("#referenceEditorHeading"),
-      referenceEditorPath: this.root.querySelector("#referenceEditorPath"),
-      referenceEditorForm: this.root.querySelector("#referenceEditorForm"),
-      referenceEditorCancel: this.root.querySelector("#referenceEditorCancel"),
-      referenceLabelInput: this.root.querySelector("#referenceLabelInput"),
-      referenceNoteInput: this.root.querySelector("#referenceNoteInput"),
-      checkProgress: this.root.querySelector("#checkProgress"),
-      progressLabel: this.root.querySelector("#progressLabel"),
-      progressCount: this.root.querySelector("#progressCount"),
-      progressBar: this.root.querySelector("#progressBar"),
-      progressTrack: this.root.querySelector(".progress-track"),
       resultsEmptyState: this.root.querySelector("#resultsEmptyState"),
       resultsContainer: this.root.querySelector("#resultsContainer"),
     };
@@ -179,24 +154,7 @@ class CheckImageTool extends BaseTool {
     this.elements.configureEnvironmentsButton?.addEventListener("click", () => this.openEnvironmentSettings());
     this.setupEnvironmentSelector();
 
-    this.elements.savedReferencesButton?.addEventListener("click", () => this.toggleReferenceLibrary());
-    this.elements.closeSavedReferencesButton?.addEventListener("click", () => this.toggleReferenceLibrary(false));
-    this.elements.referenceEditorCancel?.addEventListener("click", () => this.closeReferenceEditor());
-    this.elements.referenceEditorForm?.addEventListener("submit", (event) => {
-      event.preventDefault();
-      this.saveReferenceFromEditor();
-    });
-
     this.elements.resultsContainer?.addEventListener("click", (event) => {
-      const referenceButton = event.target.closest("[data-reference-action]");
-      if (referenceButton) {
-        event.stopPropagation();
-        if (referenceButton.dataset.referenceAction === "edit") {
-          this.openReferenceEditor(referenceButton.dataset.identifier);
-        }
-        return;
-      }
-
       const filterButton = event.target.closest("[data-result-filter]");
       if (filterButton) {
         this.setResultFilter(filterButton.dataset.resultFilter);
@@ -209,7 +167,6 @@ class CheckImageTool extends BaseTool {
     this.elements.configureOracleButton?.addEventListener("click", () => this.openOracleSettings());
     this.populateEnvSelector();
     this.loadSavedValues();
-    this.loadReferenceData();
     this.updateInputMeta();
     this.updateCheckButtonState();
   }
@@ -501,9 +458,9 @@ class CheckImageTool extends BaseTool {
    */
   formatBytes(bytes) {
     if (bytes === null || bytes === undefined || !Number.isFinite(bytes)) return "Unavailable";
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${Number((bytes / 1024).toFixed(2))} KB`;
-    return `${Number((bytes / (1024 * 1024)).toFixed(2))} MB`;
+    if (bytes < 1000) return `${bytes} B`;
+    if (bytes < 1000 * 1024) return `${Number((bytes / 1000).toFixed(2))} KB`;
+    return `${Number((bytes / (1000 * 1000)).toFixed(2))} MB`;
   }
 
   /**
@@ -512,21 +469,27 @@ class CheckImageTool extends BaseTool {
   createImageMetrics(result) {
     const metrics = document.createElement("div");
     metrics.className = "image-size-info";
-    const dimensions = document.createElement("div");
-    dimensions.textContent = `${result.width}×${result.height}`;
-    const size = document.createElement("div");
+    const size = document.createElement("strong");
+    size.className = "image-cdn-size";
     size.textContent = `CDN: ${this.formatBytes(result.sizeBytes)}`;
     if (result.sizeBytes == null) size.title = "Image download bytes could not be read. Browser requests may be blocked by CORS.";
+    metrics.appendChild(size);
+    if (result.sizeBytes > CDN_SIZE_WARNING_BYTES) {
+      const warning = document.createElement("span");
+      warning.className = "image-size-warning";
+      warning.textContent = "Over 300 KB";
+      metrics.appendChild(warning);
+    }
+    const dimensions = document.createElement("span");
+    dimensions.textContent = `${result.width}×${result.height}`;
+    metrics.appendChild(dimensions);
     if (result.width > WIDE_IMAGE_WARNING_PX) {
       const warning = document.createElement("span");
       warning.className = "image-width-warning";
-      warning.textContent = "WARNING";
-      warning.title = `This image is ${result.width} px wide, over the ${WIDE_IMAGE_WARNING_PX} px limit. It may be inefficient on mobile screens; consider a smaller image.`;
-      warning.setAttribute("aria-label", warning.title);
-      warning.tabIndex = 0;
-      size.appendChild(warning);
+      warning.textContent = "Width exceeds 1440 px";
+      warning.title = `This image is ${result.width} px wide, over the ${WIDE_IMAGE_WARNING_PX} px limit.`;
+      metrics.appendChild(warning);
     }
-    metrics.append(dimensions, size);
     return metrics;
   }
 
@@ -535,7 +498,9 @@ class CheckImageTool extends BaseTool {
    */
   async fetchOracleMetadata(imagePaths, connections, runId) {
     await Promise.all(
-      (connections || []).map((connection, connectionIndex) => this.fetchOracleMetadataForConnection(imagePaths, connection, connectionIndex, runId)),
+      (connections || []).map((connection, connectionIndex) =>
+        this.fetchOracleMetadataForConnection(imagePaths, connection, connectionIndex, runId),
+      ),
     );
   }
 
@@ -597,7 +562,6 @@ class CheckImageTool extends BaseTool {
 
     const oracleConnections = this.getSelectedOracleConnections();
     this.clearInputValidation();
-    this.recordReferenceHistory(imagePaths);
 
     try {
       UsageTracker.trackEvent("check-image", "check_start", {
@@ -655,7 +619,7 @@ class CheckImageTool extends BaseTool {
       const path = line.trim();
       if (!path) return;
 
-      const key = this.getReferenceKey(path);
+      const key = this.getIdentifierKey(path);
       if (seen.has(key)) {
         duplicateCount += 1;
         return;
@@ -668,7 +632,7 @@ class CheckImageTool extends BaseTool {
     return { imagePaths, duplicateCount };
   }
 
-  getReferenceKey(identifier) {
+  getIdentifierKey(identifier) {
     const value = String(identifier || "").trim();
     if (!value) return "";
 
@@ -685,43 +649,15 @@ class CheckImageTool extends BaseTool {
     return uuidMatch ? uuidMatch[0].replace(/\.png$/i, "") : value;
   }
 
-  getSavedReference(identifier) {
-    const key = this.getReferenceKey(identifier);
-    return (this.savedReferences || []).find((reference) => reference.key === key) || null;
-  }
-
   createImagePathCell(path) {
     const cell = document.createElement("td");
     cell.className = "image-path-cell";
     cell.dataset.imageIdentifier = path;
     cell.title = path;
-
-    const reference = this.getSavedReference(path);
-    const content = document.createElement("div");
-    content.className = "image-id-cell-content";
-
-    if (reference) {
-      const label = document.createElement("span");
-      label.className = "image-reference-label";
-      label.textContent = reference.label;
-      content.appendChild(label);
-    }
-
     const identifier = document.createElement("code");
     identifier.className = "image-id-value";
     identifier.textContent = this.formatImageIdentifier(path);
-    content.appendChild(identifier);
-
-    const action = document.createElement("button");
-    action.type = "button";
-    action.className = "reference-action-button";
-    action.dataset.referenceAction = "edit";
-    action.dataset.identifier = path;
-    action.textContent = reference ? "Edit label" : "Save as label";
-    action.setAttribute("aria-label", `${reference ? "Edit" : "Save"} reference for ${this.formatImageIdentifier(path)}`);
-    content.appendChild(action);
-
-    cell.appendChild(content);
+    cell.appendChild(identifier);
     return cell;
   }
 
@@ -751,6 +687,9 @@ class CheckImageTool extends BaseTool {
     const meta = this.elements?.inputMeta;
     if (!meta) return;
 
+    const textarea = this.elements.batchImagePathsInput;
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 224)}px`;
     const { imagePaths, duplicateCount } = this.getInputEntries();
     if (imagePaths.length === 0) {
       meta.textContent = "Paste one identifier per line.";
@@ -822,7 +761,6 @@ class CheckImageTool extends BaseTool {
       button.textContent = isChecking ? "Checking…" : "Check images";
     }
     if (cancelButton) cancelButton.hidden = !isChecking;
-    if (this.elements?.checkProgress) this.elements.checkProgress.hidden = !isChecking;
     if (this.elements?.oracleSelector) {
       this.elements.oracleSelector.disabled = isChecking;
     }
@@ -836,14 +774,17 @@ class CheckImageTool extends BaseTool {
     const total = this.runProgress.total;
     const progressPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
 
-    if (this.elements?.progressLabel) {
-      this.elements.progressLabel.textContent = completed >= total ? "Check complete" : "Checking images";
-    }
-    if (this.elements?.progressCount) this.elements.progressCount.textContent = `${completed} / ${total}`;
-    if (this.elements?.progressBar) this.elements.progressBar.style.transform = `scaleX(${progressPercent / 100})`;
-    if (this.elements?.progressTrack) {
-      this.elements.progressTrack.setAttribute("aria-valuemax", String(total));
-      this.elements.progressTrack.setAttribute("aria-valuenow", String(completed));
+    const header = this.root.querySelector("#runSummary");
+    const heading = header?.querySelector("[data-progress-heading]");
+    const count = header?.querySelector("[data-progress-count]");
+    const bar = header?.querySelector(".progress-bar");
+    const track = header?.querySelector('[role="progressbar"]');
+    if (heading) heading.textContent = completed >= total ? "Finishing checks" : "Checking images";
+    if (count) count.textContent = `${completed} / ${total} CDN checks`;
+    if (bar) bar.style.transform = `scaleX(${progressPercent / 100})`;
+    if (track) {
+      track.setAttribute("aria-valuemax", String(total));
+      track.setAttribute("aria-valuenow", String(completed));
     }
   }
 
@@ -863,6 +804,7 @@ class CheckImageTool extends BaseTool {
     if (!this.isCheckRunCurrent(runId)) return;
     this.clearResults({ invalidate: false });
     this.timeoutCells.clear();
+    this.summaryScope = null;
     this.setEmptyStateVisible(false);
     const resultsContainer = this.elements.resultsContainer;
 
@@ -874,13 +816,16 @@ class CheckImageTool extends BaseTool {
     summary.id = "runSummary";
     summary.setAttribute("aria-live", "polite");
     summary.innerHTML = `
-      <div class="run-summary-copy">
-        <strong>Checking images</strong>
-        <span class="run-summary-detail">Results will appear as each environment responds.</span>
-      </div>
-      <div class="run-summary-counts">
-        <span class="summary-count summary-count-found"><strong>0</strong> found</span>
-        <span class="summary-count summary-count-issues"><strong>0</strong> issues</span>
+      <div class="run-summary-loading">
+        <div class="check-progress-header">
+          <strong data-progress-heading>Checking images</strong>
+          <span class="progress-count" data-progress-count>0 / ${imagePaths.length * baseUrls.length} CDN checks</span>
+        </div>
+        <span class="run-summary-detail">Results appear as each environment responds.</span>
+        <div class="progress-track" role="progressbar" aria-label="CDN checks completed"
+          aria-valuemin="0" aria-valuemax="${imagePaths.length * baseUrls.length}" aria-valuenow="0">
+          <div class="progress-bar"></div>
+        </div>
       </div>
     `;
     resultsWrapper.appendChild(summary);
@@ -908,14 +853,6 @@ class CheckImageTool extends BaseTool {
       headerRow.appendChild(th);
     });
 
-    oracleConnections.forEach((connection) => {
-      ["Context", "Base64 size"].forEach((label) => {
-        const heading = document.createElement("th");
-        heading.textContent = `${label} (${connection.name})`;
-        heading.scope = "col";
-        headerRow.appendChild(heading);
-      });
-    });
     thead.appendChild(headerRow);
     table.appendChild(thead);
 
@@ -924,6 +861,8 @@ class CheckImageTool extends BaseTool {
 
     imagePaths.forEach((path, rowIndex) => {
       const row = document.createElement("tr");
+      row.className = "image-result-row";
+      row.dataset.rowIndex = rowIndex;
 
       row.appendChild(this.createImagePathCell(path));
 
@@ -942,29 +881,49 @@ class CheckImageTool extends BaseTool {
         row.appendChild(td);
       });
 
-      oracleConnections.forEach((connection, connectionIndex) => {
-        ["context", "size"].forEach((field) => {
-          const td = document.createElement("td");
-          td.className = "image-oracle-cell";
-          td.setAttribute(`data-oracle-${field}`, `${rowIndex}-${connectionIndex}`);
-          td.textContent = "Checking…";
-          row.appendChild(td);
-        });
-      });
       tbody.appendChild(row);
+      if (oracleConnections.length) {
+        const metadataRow = document.createElement("tr");
+        metadataRow.className = "image-metadata-row";
+        metadataRow.dataset.metadataRow = rowIndex;
+        const cell = document.createElement("td");
+        cell.colSpan = baseUrls.length + 1;
+        const details = document.createElement("details");
+        details.className = "image-oracle-details";
+        const summary = document.createElement("summary");
+        summary.textContent = `Oracle metadata · ${oracleConnections.length} database${oracleConnections.length === 1 ? "" : "s"}`;
+        details.appendChild(summary);
+        oracleConnections.forEach((connection, connectionIndex) => {
+          const record = document.createElement("div");
+          record.className = "image-oracle-record";
+          const name = document.createElement("strong");
+          name.textContent = connection.name;
+          record.appendChild(name);
+          ["context", "size"].forEach((field) => {
+            const fieldGroup = document.createElement("div");
+            const label = document.createElement("span");
+            label.className = "oracle-field-label";
+            label.textContent = field === "context" ? "Context / Sub-context" : "Stored Base64 size";
+            const value = document.createElement("div");
+            value.setAttribute(`data-oracle-${field}`, `${rowIndex}-${connectionIndex}`);
+            value.textContent = "Checking…";
+            fieldGroup.append(label, value);
+            record.appendChild(fieldGroup);
+          });
+          details.appendChild(record);
+        });
+        cell.appendChild(details);
+        metadataRow.appendChild(cell);
+        tbody.appendChild(metadataRow);
+      }
     });
 
     table.appendChild(tbody);
     tableContainer.appendChild(table);
     resultsWrapper.appendChild(tableContainer);
 
-    // Add note
-    const note = document.createElement("div");
-    note.className = "batch-results-note";
-    note.textContent = "Select a preview to inspect dimensions and open the source image.";
-    resultsWrapper.appendChild(note);
-
     resultsContainer.appendChild(resultsWrapper);
+    this.updateProgress(runId);
   }
 
   /**
@@ -1016,40 +975,41 @@ class CheckImageTool extends BaseTool {
     }
   }
 
-  renderRunSummary(imageCount, environmentCount, duplicateCount = 0) {
+  renderRunSummary(imageCount, environmentCount, duplicateCount = 0, canceled = false) {
     const summary = this.root?.querySelector("#runSummary");
     if (!summary) return;
 
+    this.summaryScope = { imageCount, environmentCount, duplicateCount };
     const totalCells = imageCount * environmentCount;
     const found = this.root.querySelectorAll(".status-cell.success").length;
     const timeouts = this.root.querySelectorAll(".status-cell.timeout").length;
     const errors = this.root.querySelectorAll(".status-cell.error").length;
-    const issueCount = timeouts + errors;
-    const visibleResultCount = this.root.querySelectorAll(".batch-results-table tbody tr").length;
+    const warnings = this.root.querySelectorAll(".status-cell.has-warning").length;
+    const issueCount = timeouts + errors + warnings;
+    const visibleResultCount = this.root.querySelectorAll(".image-result-row").length;
 
     summary.innerHTML = `
       <div class="run-summary-copy">
-        <strong>${imageCount} image${imageCount === 1 ? "" : "s"} checked</strong>
-        <span class="run-summary-detail">${found} of ${totalCells} environment checks found an image${duplicateCount ? ` · ${duplicateCount} duplicate${duplicateCount === 1 ? "" : "s"} skipped` : ""}</span>
+        <strong>${canceled ? "Check canceled" : issueCount ? `${this.countIssueRows()} image${this.countIssueRows() === 1 ? "" : "s"} with issues` : "All images found"}</strong>
+        <span class="run-summary-detail">${imageCount} image${imageCount === 1 ? "" : "s"} checked · Found in ${found} of ${totalCells} CDN checks${duplicateCount ? ` · ${duplicateCount} duplicate${duplicateCount === 1 ? "" : "s"} skipped` : ""}</span>
       </div>
       <div class="run-summary-actions">
         <div class="run-summary-counts">
           <span class="summary-count summary-count-found"><strong>${found}</strong> found</span>
-          <span class="summary-count summary-count-issues"><strong>${issueCount}</strong> issue${issueCount === 1 ? "" : "s"}</span>
+          <span class="summary-count summary-count-issues"><strong>${timeouts + errors}</strong> failed check${timeouts + errors === 1 ? "" : "s"} · <strong>${warnings}</strong> warning${warnings === 1 ? "" : "s"}</span>
         </div>
         <div class="result-filter-group" role="group" aria-label="Filter image results">
           <button class="result-filter is-active" type="button" data-result-filter="all" aria-pressed="true">All <span>${visibleResultCount}</span></button>
-          <button class="result-filter" type="button" data-result-filter="issues" aria-pressed="false">Issues only <span>${this.countIssueRows()}</span></button>
+          <button class="result-filter" type="button" data-result-filter="issues" aria-pressed="false">With issues <span>${this.countIssueRows()}</span></button>
         </div>
       </div>
     `;
-    this.statusFilter = "all";
-    this.updateProgress(this.runProgress?.runId);
+    this.setResultFilter(this.statusFilter || "all");
   }
 
   countIssueRows() {
-    return [...(this.root?.querySelectorAll(".batch-results-table tbody tr") || [])].filter((row) =>
-      row.querySelector(".status-cell.error, .status-cell.timeout"),
+    return [...(this.root?.querySelectorAll(".image-result-row") || [])].filter((row) =>
+      row.querySelector(".status-cell.error, .status-cell.timeout, .status-cell.has-warning"),
     ).length;
   }
 
@@ -1063,9 +1023,11 @@ class CheckImageTool extends BaseTool {
       button.setAttribute("aria-pressed", String(isActive));
     });
 
-    this.root.querySelectorAll(".batch-results-table tbody tr").forEach((row) => {
-      const hasIssue = Boolean(row.querySelector(".status-cell.error, .status-cell.timeout"));
+    this.root.querySelectorAll(".image-result-row").forEach((row) => {
+      const hasIssue = Boolean(row.querySelector(".status-cell.error, .status-cell.timeout, .status-cell.has-warning"));
       row.hidden = filter === "issues" && !hasIssue;
+      const metadataRow = this.root.querySelector(`[data-metadata-row="${row.dataset.rowIndex}"]`);
+      if (metadataRow) metadataRow.hidden = row.hidden;
     });
   }
 
@@ -1085,6 +1047,12 @@ class CheckImageTool extends BaseTool {
     });
 
     this.setCheckingState(false);
+    this.renderRunSummary(
+      this.root.querySelectorAll(".image-result-row").length,
+      this.root.querySelectorAll(".batch-results-table > thead th").length - 1,
+      0,
+      true,
+    );
     this.updateRetryAllButtonVisibility();
     this.showInputValidation("Check canceled. You can update the identifiers and run it again.", "info");
   }
@@ -1142,6 +1110,7 @@ class CheckImageTool extends BaseTool {
     this.timeoutCells.delete(cellId);
 
     if (result.exists) {
+      cell.classList.toggle("has-warning", result.sizeBytes > CDN_SIZE_WARNING_BYTES || result.width > WIDE_IMAGE_WARNING_PX);
       const container = document.createElement("div");
       container.className = "status-cell-content";
 
@@ -1291,244 +1260,10 @@ class CheckImageTool extends BaseTool {
 
     const normalized = this.imageCheckerService.normalizeInput(originalPath);
     await this.fetchAndUpdateCell(originalPath, normalized, env, rowIndex, colIndex, runId);
-  }
-
-  readStoredArray(storageKey) {
-    try {
-      const raw = localStorage.getItem(storageKey);
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (_) {
-      return [];
+    if (this.isCheckRunCurrent(runId) && !this.isChecking && this.summaryScope) {
+      const { imageCount, environmentCount, duplicateCount } = this.summaryScope;
+      this.renderRunSummary(imageCount, environmentCount, duplicateCount);
     }
-  }
-
-  loadReferenceData() {
-    this.savedReferences = this.readStoredArray(SAVED_REFERENCES_STORAGE_KEY).filter(
-      (reference) => reference && reference.key && reference.identifier && reference.label,
-    );
-    this.referenceHistory = this.readStoredArray(IMAGE_CHECK_HISTORY_STORAGE_KEY).filter(
-      (reference) => reference && reference.key && reference.identifier,
-    );
-    this.renderReferenceLibrary();
-  }
-
-  persistReferenceData() {
-    try {
-      localStorage.setItem(SAVED_REFERENCES_STORAGE_KEY, JSON.stringify(this.savedReferences));
-      localStorage.setItem(IMAGE_CHECK_HISTORY_STORAGE_KEY, JSON.stringify(this.referenceHistory));
-    } catch (error) {
-      this.showError("Could not save image references in this browser.");
-      console.error("Error saving image references:", error);
-    }
-  }
-
-  recordReferenceHistory(imagePaths) {
-    const nextHistory = [];
-    const seen = new Set();
-    const addHistoryEntry = (entry) => {
-      if (!entry?.key || seen.has(entry.key)) return;
-      seen.add(entry.key);
-      nextHistory.push(entry);
-    };
-
-    imagePaths.forEach((identifier) => {
-      addHistoryEntry({
-        key: this.getReferenceKey(identifier),
-        identifier,
-        checkedAt: Date.now(),
-      });
-    });
-    this.referenceHistory.forEach(addHistoryEntry);
-
-    this.referenceHistory = nextHistory.slice(0, MAX_REFERENCE_HISTORY);
-    this.persistReferenceData();
-    this.renderReferenceLibrary();
-  }
-
-  renderReferenceLibrary() {
-    const savedCount = this.savedReferences.length;
-    const historyCount = this.referenceHistory.length;
-
-    if (this.elements?.savedReferencesCount) this.elements.savedReferencesCount.textContent = String(savedCount);
-    if (this.elements?.savedReferencesListCount) this.elements.savedReferencesListCount.textContent = String(savedCount);
-    if (this.elements?.recentReferencesListCount) this.elements.recentReferencesListCount.textContent = String(historyCount);
-
-    const savedList = this.elements?.savedReferencesList;
-    if (savedList) {
-      savedList.innerHTML = "";
-      if (savedCount === 0) {
-        savedList.innerHTML = '<p class="reference-list-empty">Save a label from a result to keep it here.</p>';
-      } else {
-        this.savedReferences.forEach((reference) => savedList.appendChild(this.createReferenceListItem(reference, "saved")));
-      }
-    }
-
-    const recentList = this.elements?.recentReferencesList;
-    if (recentList) {
-      recentList.innerHTML = "";
-      if (historyCount === 0) {
-        recentList.innerHTML = '<p class="reference-list-empty">Checked identifiers will appear here.</p>';
-      } else {
-        this.referenceHistory.forEach((reference) => recentList.appendChild(this.createReferenceListItem(reference, "recent")));
-      }
-    }
-  }
-
-  createReferenceListItem(reference, type) {
-    const item = document.createElement("article");
-    item.className = "reference-list-item";
-
-    const content = document.createElement("div");
-    content.className = "reference-list-item-content";
-
-    const savedReference = type === "recent" ? this.getSavedReference(reference.identifier) : reference;
-    const label = document.createElement("strong");
-    label.className = "reference-list-item-label";
-    label.textContent = savedReference?.label || (type === "recent" ? "Recent identifier" : reference.label);
-    content.appendChild(label);
-
-    const identifier = document.createElement("code");
-    identifier.className = "reference-list-item-identifier";
-    identifier.textContent = this.formatImageIdentifier(reference.identifier);
-    identifier.title = reference.identifier;
-    content.appendChild(identifier);
-
-    if (savedReference?.note) {
-      const note = document.createElement("span");
-      note.className = "reference-list-item-note";
-      note.textContent = savedReference.note;
-      content.appendChild(note);
-    }
-    item.appendChild(content);
-
-    const actions = document.createElement("div");
-    actions.className = "reference-list-item-actions";
-
-    const useButton = document.createElement("button");
-    useButton.type = "button";
-    useButton.className = "reference-list-action";
-    useButton.textContent = "Use";
-    useButton.addEventListener("click", () => this.appendInputValue(reference.identifier));
-    actions.appendChild(useButton);
-
-    if (type === "saved") {
-      const editButton = document.createElement("button");
-      editButton.type = "button";
-      editButton.className = "reference-list-action";
-      editButton.textContent = "Edit";
-      editButton.addEventListener("click", () => this.openReferenceEditor(reference.identifier));
-      actions.appendChild(editButton);
-
-      const deleteButton = document.createElement("button");
-      deleteButton.type = "button";
-      deleteButton.className = "reference-list-action reference-list-action-danger";
-      deleteButton.textContent = "Remove";
-      deleteButton.addEventListener("click", () => this.deleteSavedReference(reference.key));
-      actions.appendChild(deleteButton);
-    }
-
-    item.appendChild(actions);
-    return item;
-  }
-
-  appendInputValue(identifier) {
-    const textarea = this.elements?.batchImagePathsInput;
-    if (!textarea) return;
-
-    const currentEntries = this.getInputEntries().imagePaths;
-    if (currentEntries.some((entry) => this.getReferenceKey(entry) === this.getReferenceKey(identifier))) {
-      this.showSuccess("That identifier is already in the input.");
-      textarea.focus();
-      return;
-    }
-
-    const currentValue = textarea.value.trim();
-    textarea.value = currentValue ? `${currentValue}\n${identifier}` : identifier;
-    this.saveValues();
-    this.updateInputMeta();
-    this.updateCheckButtonState();
-    this.clearInputValidation();
-    textarea.focus();
-  }
-
-  toggleReferenceLibrary(forceOpen) {
-    const library = this.elements?.referenceLibrary;
-    if (!library) return;
-
-    const open = typeof forceOpen === "boolean" ? forceOpen : library.hidden;
-    library.hidden = !open;
-    this.elements.savedReferencesButton?.setAttribute("aria-expanded", String(open));
-    if (open) this.renderReferenceLibrary();
-  }
-
-  openReferenceEditor(identifier) {
-    if (!identifier || !this.elements?.referenceEditor) return;
-
-    const existing = this.getSavedReference(identifier);
-    this.activeReferenceKey = this.getReferenceKey(identifier);
-    this.activeReferenceIdentifier = identifier;
-    this.elements.referenceEditor.hidden = false;
-    this.elements.referenceEditorHeading.textContent = existing ? "Edit image reference" : "Save image reference";
-    this.elements.referenceEditorPath.textContent = identifier;
-    this.elements.referenceLabelInput.value = existing?.label || "";
-    this.elements.referenceNoteInput.value = existing?.note || "";
-
-    this.elements.referenceEditor.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
-    this.elements.referenceLabelInput.focus();
-  }
-
-  closeReferenceEditor() {
-    if (!this.elements?.referenceEditor) return;
-    this.elements.referenceEditor.hidden = true;
-    this.activeReferenceKey = null;
-    this.activeReferenceIdentifier = null;
-  }
-
-  saveReferenceFromEditor() {
-    const label = this.elements?.referenceLabelInput?.value.trim();
-    const identifier = this.activeReferenceIdentifier;
-    if (!label || !identifier) {
-      this.elements?.referenceLabelInput?.focus();
-      return;
-    }
-
-    const now = Date.now();
-    const existingIndex = this.savedReferences.findIndex((reference) => reference.key === this.activeReferenceKey);
-    const existing = existingIndex >= 0 ? this.savedReferences[existingIndex] : null;
-    const nextReference = {
-      id: existing?.id || `${now}-${Math.random().toString(36).slice(2)}`,
-      key: this.activeReferenceKey,
-      identifier,
-      label,
-      note: this.elements.referenceNoteInput?.value.trim() || "",
-      createdAt: existing?.createdAt || now,
-      updatedAt: now,
-    };
-
-    if (existingIndex >= 0) this.savedReferences[existingIndex] = nextReference;
-    else this.savedReferences.unshift(nextReference);
-
-    this.persistReferenceData();
-    this.renderReferenceLibrary();
-    this.refreshRenderedReferenceCells();
-    this.closeReferenceEditor();
-    this.showSuccess(existing ? "Image reference updated." : "Image reference saved.");
-  }
-
-  deleteSavedReference(key) {
-    this.savedReferences = this.savedReferences.filter((reference) => reference.key !== key);
-    this.persistReferenceData();
-    this.renderReferenceLibrary();
-    this.refreshRenderedReferenceCells();
-    this.showSuccess("Image reference removed.");
-  }
-
-  refreshRenderedReferenceCells() {
-    this.root?.querySelectorAll(".image-path-cell[data-image-identifier]").forEach((oldCell) => {
-      const replacement = this.createImagePathCell(oldCell.dataset.imageIdentifier);
-      oldCell.parentElement?.replaceChild(replacement, oldCell);
-    });
   }
 
   /* ──────────────── Rendering ──────────────── */
@@ -1720,6 +1455,20 @@ class CheckImageTool extends BaseTool {
   }
 
   /* ──────────────── Modal ──────────────── */
+  async openImageUrl(url) {
+    if (!url) return;
+    if (isTauri()) {
+      try {
+        await invoke("open_url", { url });
+        return;
+      } catch (_) {
+        // Match Run Query: fall back to a browser tab if the native command fails.
+      }
+    }
+    const opened = window.open(url, "_blank", "noopener,noreferrer");
+    if (opened) opened.opener = null;
+  }
+
   showImageDetails(result, imagePath) {
     const modal = document.createElement("div");
     modal.className = "image-details-modal app-overlay-backdrop";
@@ -1753,7 +1502,7 @@ class CheckImageTool extends BaseTool {
     const details = [
       ["Image ID", imagePath],
       ["Environment", result.name || "Unknown"],
-      ["CDN size", this.formatBytes(result.sizeBytes)],
+      ["CDN size", `${this.formatBytes(result.sizeBytes)}${result.sizeBytes > CDN_SIZE_WARNING_BYTES ? " · Over 300 KB" : ""}`],
       ["Dimensions", `${result.width}×${result.height} (${result.aspectRatio}:1)`],
     ];
     details.forEach(([label, value]) => {
@@ -1773,6 +1522,10 @@ class CheckImageTool extends BaseTool {
     openLink.rel = "noopener noreferrer";
     openLink.className = "btn btn-secondary btn-sm";
     openLink.textContent = "Open image";
+    openLink.addEventListener("click", (event) => {
+      event.preventDefault();
+      this.openImageUrl(result.url);
+    });
     actions.appendChild(openLink);
 
     const copyButton = document.createElement("button");

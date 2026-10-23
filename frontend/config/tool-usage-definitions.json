@@ -7,7 +7,7 @@
   "base64-tools": { "actions": ["encode", "decode"], "boundary": "at least one output is produced" },
   "compress-image": { "actions": ["compress"], "boundary": "a validated lossless, lossy or resized image is ready for download" },
   "char-counter": { "actions": ["count"], "boundary": "non-empty text is counted" },
-  "tlv-viewer": { "actions": ["parse"], "boundary": "input parses and results render" },
+  "tlv-viewer": { "actions": ["parse"], "boundary": "input parses and results render", "embedded_in": "qr-tools" },
   "qr-tools": { "actions": ["download_png", "download_svg"], "boundary": "download is initiated from valid rendered content" },
   "quick-query": { "actions": ["merge", "insert", "update"], "boundary": "query generation succeeds" },
   "querify": { "actions": ["generate"], "boundary": "at least one file generates successfully" },
@@ -21,7 +21,10 @@
   "run-batch": { "actions": ["run"], "boundary": "Jenkins reports the batch run complete" },
   "html-template": { "actions": ["format", "minify", "copy"], "boundary": "transformation or clipboard write succeeds" },
   "splunk-template": { "actions": ["format", "minify", "copy"], "boundary": "transformation or clipboard write succeeds" },
-  "velocity-template": { "actions": ["copy"], "boundary": "template clipboard write succeeds" },
+  "velocity-template": {
+    "actions": ["copy", "copy_output", "render", "validate", "import_sql", "sync_context"],
+    "boundary": "clipboard write, explicit valid local render, 2xx validator response, SQL import or context sync succeeds"
+  },
   "sql-in-clause": { "actions": ["copy"], "boundary": "generated output is copied successfully" },
   "merge-sql": { "actions": ["merge", "report_from_sql"], "boundary": "SQL result is generated and saved" },
   "check-image": { "actions": ["check"], "boundary": "the requested image-check batch completes" },
@@ -32,6 +35,8 @@
   },
   "master-lockey": {
     "actions": [
+      "search_copy_lockey",
+      "search_copy_results",
       "bulk_search",
       "bulk_search_copy",
       "bulk_search_copy_lockey",

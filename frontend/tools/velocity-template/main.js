@@ -504,6 +504,7 @@ class VelocityTemplateTool extends BaseTool {
           id,
         ),
       );
+      this.track("document_switch", "", "", { document_count: this.documents.length }, false);
       if (focusTab)
         [...this.container.querySelectorAll(".velocity-document-tab")]
           .find((tab) => tab.dataset.documentId === id)
@@ -545,6 +546,7 @@ class VelocityTemplateTool extends BaseTool {
       this.renderDocumentTabs();
       this.updatePreview();
       this.editor.focus();
+      this.track("document_create", "", "", { document_count: this.documents.length }, false);
     } finally {
       this._tabTransition = false;
     }
@@ -580,6 +582,7 @@ class VelocityTemplateTool extends BaseTool {
       closing.templateModel.dispose();
       closing.contextModel.dispose();
       this.renderDocumentTabs();
+      this.track("document_close", "", "", { document_count: this.documents.length }, false);
     } finally {
       this._tabTransition = false;
     }
@@ -718,7 +721,15 @@ class VelocityTemplateTool extends BaseTool {
   renderLocally() {
     clearTimeout(this._previewTimer);
     this.updatePreview();
-    this.track("render", this.editor?.getValue() || "");
+    this.track(
+      "render",
+      this.editor?.getValue() || "",
+      this.previewEditor?.getValue() || "",
+      {
+        outcome: this._renderState,
+      },
+      this._renderState === "valid",
+    );
   }
 
   validationSnapshot() {
@@ -765,11 +776,12 @@ class VelocityTemplateTool extends BaseTool {
         throw new Error(`Invalid Context Data: ${error.message}`);
       }
     } catch (error) {
+      this.track("validate", snapshot.template || "", "", { outcome: "invalid_input" }, false);
       this.setValidationStatus(error.message);
       return;
     }
     clearTimeout(this._previewTimer);
-    const request = { controller: new AbortController(), sequence: this._mountSequence };
+    const request = { controller: new AbortController(), sequence: this._mountSequence, startedAt: Date.now() };
     this._validationRequest = request;
     this._apiResult = null;
     this.markPreviewPending();
@@ -793,8 +805,29 @@ class VelocityTemplateTool extends BaseTool {
       }
       this._apiResult = { snapshot, response, at: Date.now() };
       this.showApiResult();
+      this.track(
+        "validate",
+        snapshot.template,
+        response.body,
+        {
+          outcome: response.status >= 200 && response.status < 300 ? "response_received" : "http_error",
+          status_code: response.status,
+          duration_ms: Date.now() - request.startedAt,
+        },
+        response.status >= 200 && response.status < 300,
+      );
     } catch (error) {
       if (this._validationRequest === request && request.sequence === this._mountSequence) {
+        this.track(
+          "validate",
+          snapshot.template,
+          "",
+          {
+            outcome: "unavailable",
+            duration_ms: Date.now() - request.startedAt,
+          },
+          false,
+        );
         this.setValidationStatus(error?.message || "Velocity API validator unavailable.");
       }
     } finally {
@@ -1145,6 +1178,7 @@ class VelocityTemplateTool extends BaseTool {
     missing.forEach(({ path, value }) => setNestedValue(context, path, value));
     this.contextEditor?.setValue(JSON.stringify(context, null, 2));
     this.closeSyncDialog();
+    this.track("sync_context", "", "", { field_count: missing.length });
     this.schedulePreview();
     this.showUndo(`Applied ${missing.length} context ${missing.length === 1 ? "change" : "changes"}`, () =>
       this.restoreDocumentSnapshot(snapshot),
@@ -1160,7 +1194,10 @@ class VelocityTemplateTool extends BaseTool {
     });
     this.persist(this._resultTypeStorageKey, this._resultType);
     document.getElementById("velocityResultTypeMenu")?.removeAttribute("open");
-    if (updatePreview) this.updatePreview();
+    if (updatePreview) {
+      this.updatePreview();
+      this.track("result_type", "", "", { mode: this._resultType }, false);
+    }
   }
 
   initializePaneState() {
@@ -1470,12 +1507,7 @@ class VelocityTemplateTool extends BaseTool {
     const rowIndex = this._sqlImportRowIndex;
     const columnIndex = Number(document.getElementById("velocitySqlField")?.value || 0);
     const templateColumn = this._sqlImportColumns[columnIndex] || "";
-    const identity = getTemplateImportIdentity(
-      query,
-      this._sqlImportColumns,
-      this._sqlImportRows[rowIndex] || [],
-      templateColumn,
-    );
+    const identity = getTemplateImportIdentity(query, this._sqlImportColumns, this._sqlImportRows[rowIndex] || [], templateColumn);
     this.editor?.setValue(document.getElementById("velocitySqlPreview")?.value || "");
     if (identity && this.activeDocument) {
       identity.templateColumn = templateColumn;
@@ -1484,6 +1516,11 @@ class VelocityTemplateTool extends BaseTool {
       this.renderDocumentTabs();
       this.scheduleDocumentSave();
     }
+    this.track("import_sql", this.editor?.getValue() || "", undefined, {
+      outcome: "success",
+      row_count: 1,
+      ...(identity ? { table_name: [identity.schema, identity.table].filter(Boolean).join(".") } : {}),
+    });
     this.closeSqlImport();
     this.showUndo("Template imported from SQL", () => this.restoreDocumentSnapshot(snapshot));
   }
@@ -1508,16 +1545,23 @@ class VelocityTemplateTool extends BaseTool {
       window.app?.router?.navigate("quick-query", {
         createQuery: draft,
       });
+      this.track("query_handoff", "", "", { target: "quick-query" }, false);
     } catch (error) {
       this.showError(error?.message || "Could not create the update query.");
     }
   }
 
-  track(action, input, output = input) {
+  track(action, input, output = input, details = {}, successfulUse = true) {
     try {
-      const meta = cleanAnalyticsMeta({ ...summarizeText(input, "input"), ...summarizeText(output, "output") });
-      UsageTracker.trackEvent("velocity-template", `${action}_action`, meta);
-      UsageTracker.trackToolUse("velocity-template", action, meta);
+      const meta = cleanAnalyticsMeta({
+        ...summarizeText(input, "input"),
+        ...summarizeText(output, "output"),
+        ...details,
+      });
+      UsageTracker.trackEvent("velocity-template", `${action}_result`, meta);
+      if (successfulUse && ["copy", "copy_output", "render", "validate", "import_sql", "sync_context"].includes(action)) {
+        UsageTracker.trackToolUse("velocity-template", action, meta);
+      }
     } catch (_) {
       // Analytics must never interrupt template editing.
     }
@@ -1568,9 +1612,10 @@ class VelocityTemplateTool extends BaseTool {
     document.getElementById("btnCopyVelocity")?.addEventListener("click", async () => {
       if (await this.copyToClipboard(this.editor.getValue(), null, "Template copied")) this.track("copy", this.editor.getValue());
     });
-    document.getElementById("btnCopyVelocityPreview")?.addEventListener("click", () => {
+    document.getElementById("btnCopyVelocityPreview")?.addEventListener("click", async () => {
       if (!["valid", "invalid", "response"].includes(this._renderState)) return;
-      this.copyToClipboard(this.previewEditor?.getValue() || "", null, "Rendered output copied");
+      const value = this.previewEditor?.getValue() || "";
+      if (await this.copyToClipboard(value, null, "Rendered output copied")) this.track("copy_output", value);
     });
     document.getElementById("btnPasteVelocity")?.addEventListener("click", async () => {
       try {

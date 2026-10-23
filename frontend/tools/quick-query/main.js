@@ -36,6 +36,8 @@ import { isTabDraftContentEmpty, mergeDraftSchema } from "./services/TabDraftSta
 import {
   buildQuickQueryGeneratedMeta,
   cleanQuickQueryAnalyticsMeta,
+  getImportFileName,
+  getOracleImportMeta,
   summarizeQuickQueryAttachments,
 } from "./services/QuickQueryAnalyticsService.js";
 import "./styles.css";
@@ -935,6 +937,11 @@ export class QuickQueryUI {
         if (!changes || source === "loadData") return;
 
         if (changes.length > 0) {
+          const tab = this.getActiveTab();
+          if (tab) {
+            const sourceType = source === "CopyPaste.paste" ? "clipboard" : "manual";
+            tab.dataSource = ["unknown", sourceType].includes(tab.dataSource) ? sourceType : "mixed";
+          }
           this.scheduleActiveTabDraftSave();
         }
       },
@@ -1400,6 +1407,7 @@ export class QuickQueryUI {
       createdAt: overrides.createdAt || now,
       lastUpdated: overrides.lastUpdated || now,
       source: overrides.source || null,
+      dataSource: ["manual", "oracle", "clipboard", "mixed", "saved"].includes(overrides.dataSource) ? overrides.dataSource : "unknown",
     };
   }
 
@@ -1492,7 +1500,7 @@ export class QuickQueryUI {
         this.activeTabId = initialTab.id;
         this.renderTabs();
         await this.applyTabDraft(initialTab);
-        await this.loadMostRecentSchema({ mode: "schema-data", skipChoice: true });
+        await this.loadMostRecentSchema({ mode: "schema-data", skipChoice: true, automatic: true });
         await this.saveActiveTabDraft();
         await this.saveTabSession();
         return;
@@ -2544,7 +2552,7 @@ export class QuickQueryUI {
 
       // Use imported Excel data if available, otherwise use Handsontable data
       const hasExcelData = this.excelImportService.hasData();
-      const dataSource = hasExcelData ? "excel" : "manual";
+      const dataSource = hasExcelData ? "excel" : this.tabs?.find((tab) => tab.id === this.activeTabId)?.dataSource || "unknown";
 
       if (!tableName) {
         throw new Error("Please fill in schema_name.table_name.");
@@ -3001,7 +3009,9 @@ export class QuickQueryUI {
    * Track query generation analytics
    */
   trackQuickQueryEvent(event, meta = {}) {
-    UsageTracker.trackEvent("quick-query", event, cleanQuickQueryAnalyticsMeta(meta));
+    try {
+      UsageTracker.trackEvent("quick-query", event, cleanQuickQueryAnalyticsMeta(meta));
+    } catch (_) {}
   }
 
   getCurrentQuickQueryContext(extra = {}) {
@@ -3017,21 +3027,18 @@ export class QuickQueryUI {
     this.eventBus?.emit?.("search:interaction", {
       interactionKey: getQuickQueryTableInteractionKey(tableName),
     });
-    UsageTracker.trackToolUse("quick-query", queryType);
-    this.trackQuickQueryEvent(
-      "query_generated",
-      buildQuickQueryGeneratedMeta({
-        tableName,
-        queryType,
-        schemaData,
-        inputData,
-        dataSource,
-        attachments: this.processedFiles,
-        usedWorker,
-        uuidSession: this.uuidAnalyticsSession,
-      }),
-      { flush: true },
-    );
+    const meta = buildQuickQueryGeneratedMeta({
+      tableName,
+      queryType,
+      schemaData,
+      inputData,
+      dataSource,
+      attachments: this.processedFiles,
+      usedWorker,
+      uuidSession: this.uuidAnalyticsSession,
+    });
+    UsageTracker.trackToolUse("quick-query", queryType, meta);
+    this.trackQuickQueryEvent("query_generated", meta);
   }
 
   async handleClearAll() {
@@ -3958,12 +3965,14 @@ export class QuickQueryUI {
       .filter((row) => row[0])
       .map((row) => row[0]);
     if (!/^[A-Z][A-Z0-9_$#]*\.[A-Z][A-Z0-9_$#]*$/.test(tableName) || fields.length === 0) {
+      this.trackQuickQueryEvent("oracle_import_result", { outcome: "blocked", reason: "schema_required" });
       this.showError("Choose a SCHEMA.TABLE with saved schema fields before importing Oracle rows.");
       return;
     }
     const { OracleEnvImportService } = await import("./services/OracleEnvImportService.js");
     const connections = OracleEnvImportService.loadConnections();
     if (!connections.length) {
+      this.trackQuickQueryEvent("oracle_import_result", { outcome: "blocked", reason: "connection_required" });
       this.showError("No Oracle connections configured. Go to Settings > Oracle Connections.");
       return;
     }
@@ -4054,19 +4063,27 @@ export class QuickQueryUI {
     try {
       query = OracleDataImportService.parseQuery(this._oracleDataEditor.getValue(), fields, { validateFields: false });
       if (!query.hasJoin && query.tableName !== selectedTable) {
+        this.trackQuickQueryEvent("oracle_import_result", { outcome: "blocked", reason: "table_mismatch", ...getOracleImportMeta(query) });
         this.showOracleDataError(`This query reads ${query.tableName}, while the selected table is ${selectedTable}.`, query.tableName);
         return;
       }
       query = OracleDataImportService.parseQuery(this._oracleDataEditor.getValue(), fields);
     } catch (error) {
+      this.trackQuickQueryEvent("oracle_import_result", { outcome: "blocked", reason: "invalid_query", ...getOracleImportMeta(query) });
       this.showOracleDataError(error);
       return;
     }
     const connection = this._oracleDataConnections.find((item) => item.name === this.elements.oracleDataConnection.value);
     if (!connection) {
+      this.trackQuickQueryEvent("oracle_import_result", {
+        outcome: "blocked",
+        reason: "connection_required",
+        ...getOracleImportMeta(query),
+      });
       this.showOracleDataError("Select an Oracle connection.");
       return;
     }
+    const importStartedAt = Date.now();
     this._oracleDataBusy = true;
     this.elements.fetchOracleDataButton.disabled = true;
     this.elements.fetchOracleDataButton.textContent = "Fetching…";
@@ -4086,6 +4103,14 @@ export class QuickQueryUI {
       this.handleClearExcelImport();
       this.setDataSheetColumns(query.fields.length);
       this.dataTable.loadData([query.fields, ...rows]);
+      const tab = this.getActiveTab();
+      if (tab) tab.dataSource = "oracle";
+      this.trackQuickQueryEvent("oracle_import_result", {
+        outcome: "success",
+        ...getOracleImportMeta(query),
+        row_count: rows.length,
+        duration_ms: Date.now() - importStartedAt,
+      });
       this.scheduleActiveTabDraftSave();
       this.eventBus?.emit?.("notification:success", {
         message: `Loaded ${rows.length.toLocaleString()} Oracle rows into the data sheet${rows.length === ORACLE_IMPORT_MAX_ROWS ? " (1,000 row limit reached)" : ""}.`,
@@ -4093,6 +4118,12 @@ export class QuickQueryUI {
       this._oracleDataBusy = false;
       this.closeOracleDataImport();
     } catch (error) {
+      this.trackQuickQueryEvent("oracle_import_result", {
+        outcome: "failed",
+        reason: "fetch_or_apply",
+        ...getOracleImportMeta(query),
+        duration_ms: Date.now() - importStartedAt,
+      });
       this.showOracleDataError(error);
     } finally {
       this._oracleDataBusy = false;
@@ -4154,6 +4185,7 @@ export class QuickQueryUI {
    * Uses Tauri dialog plugin to open file picker
    */
   async _handleImportExcelTauri() {
+    let fileName;
     try {
       // Dynamic import of Tauri plugins
       const { open } = await import("@tauri-apps/plugin-dialog");
@@ -4172,17 +4204,19 @@ export class QuickQueryUI {
       });
 
       if (!selected) {
-        // User cancelled
+        this.trackQuickQueryEvent("excel_import_result", { outcome: "cancelled", reason: "file_picker" });
         return;
       }
+      fileName = getImportFileName(selected);
 
       // Read file contents
       const fileData = await readFile(selected);
 
       // Process Excel file
       const result = await this.excelImportService.processFromUint8Array(fileData);
-      this._onExcelImportSuccess(result);
+      this._onExcelImportSuccess(result, fileName);
     } catch (error) {
+      this.trackQuickQueryEvent("excel_import_result", { outcome: "failed", reason: "file_processing", file_name: fileName });
       console.error("Failed to import Excel (Tauri):", error);
       this.showError(`Failed to import Excel: ${error.message}`);
     }
@@ -4207,8 +4241,13 @@ export class QuickQueryUI {
 
     try {
       const result = await this.excelImportService.processFromFile(file);
-      this._onExcelImportSuccess(result);
+      this._onExcelImportSuccess(result, file.name);
     } catch (error) {
+      this.trackQuickQueryEvent("excel_import_result", {
+        outcome: "failed",
+        reason: "file_processing",
+        file_name: getImportFileName(file.name),
+      });
       console.error("Failed to import Excel:", error);
       this.showError(`Failed to import Excel: ${error.message}`);
     }
@@ -4221,7 +4260,7 @@ export class QuickQueryUI {
    * Called when Excel import is successful
    * Updates UI to show row count without rendering to Handsontable
    */
-  _onExcelImportSuccess(result) {
+  _onExcelImportSuccess(result, fileName) {
     const { header, rowCount } = result;
 
     const schemaData = this.schemaTable.getData().filter((row) => row[0]);
@@ -4235,6 +4274,12 @@ export class QuickQueryUI {
 
     // Update UI to show row count
     this._updateExcelImportUI(rowCount);
+    this.trackQuickQueryEvent("excel_import_result", {
+      outcome: "success",
+      row_count: rowCount,
+      column_count: header?.length || 0,
+      ...(fileName ? { file_name: getImportFileName(fileName) } : {}),
+    });
 
     // Show success notification
     if (this.eventBus) {
@@ -4517,6 +4562,9 @@ export class QuickQueryUI {
         this.handleClearData();
       }
 
+      const activeTab = this.tabs?.find((tab) => tab.id === this.activeTabId);
+      if (activeTab && mode !== "schema-keep-data") activeTab.dataSource = mode === "schema-data" && result.data ? "saved" : "unknown";
+
       this.elements.schemaOverlay.classList.add("hidden");
       this.clearError();
 
@@ -4529,6 +4577,7 @@ export class QuickQueryUI {
         "schema_load",
         {
           source: "cache",
+          automatic: Boolean(options.automatic),
           table_name: fullName,
           has_cached_data: Boolean(result.data),
           load_mode: mode,
@@ -4862,15 +4911,22 @@ export class QuickQueryUI {
         this.closeOracleEnvOverlay();
 
         if (!count) {
+          this.trackQuickQueryEvent("oracle_schema_import_result", { outcome: "blocked", reason: "no_tables" });
           this.showError("No table schemas were imported. The selected schemas may be empty.");
           return;
         }
 
         await this.updateSavedSchemasList();
+        this.trackQuickQueryEvent("oracle_schema_import_result", {
+          outcome: "success",
+          table_count: count,
+          source_tables: [...importedNames].join(","),
+        });
         this.showSuccess(`Successfully imported ${count} table schemas from Oracle`);
         setTimeout(() => this.clearError(), 4000);
       } catch (err) {
         this.hideOracleEnvProgress();
+        this.trackQuickQueryEvent("oracle_schema_import_result", { outcome: "failed", reason: "metadata_or_storage" });
         this.showOracleEnvError(err, 3, { prefix: "Import failed: " });
         this.elements.oracleEnvNext.disabled = false;
         this.elements.oracleEnvBack.disabled = false;
@@ -5323,9 +5379,19 @@ export class QuickQueryUI {
       }
 
       await this.updateSavedSchemasList();
+      this.trackQuickQueryEvent("schema_file_import_result", {
+        outcome: importCount > 0 ? "success" : "blocked",
+        table_count: importCount,
+        file_name: getImportFileName(file.name),
+      });
       this.showSuccess(`Successfully imported ${importCount} table schemas`);
       setTimeout(() => this.clearError(), 3000);
     } catch (error) {
+      this.trackQuickQueryEvent("schema_file_import_result", {
+        outcome: "failed",
+        reason: "file_or_schema",
+        file_name: getImportFileName(file.name),
+      });
       this.showError(`Failed to import schemas: ${error.message}`);
       const file = event?.target?.files?.[0];
       const tableName = this.elements.tableNameInput.value.trim();

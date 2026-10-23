@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><title>Capability reports preview</title>
+  <link rel="stylesheet" href="../../../styles.css" />
+  <style>
+    body {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      background: hsl(var(--background));
+      color: hsl(var(--foreground));
+      font: 14px system-ui;
+    }
+    #root {
+      flex: 1;
+      min-height: 0;
+    }
+    header {
+      padding: 0 0 12px;
+    }
+  </style>
+  <header>Capability reports · fixture data</header>
+  <div id="root"></div>
+  <script type="module">
+    import { AnalyticsDashboardPage } from "../main.js";
+    const page = new AnalyticsDashboardPage();
+    page.mount(document.querySelector("#root"));
+    page.tabs = [
+      { id: "overview", name: "Overview" },
+      { id: "capability-adoption", name: "Capability Adoption" },
+      { id: "capability-people", name: "Capability by User" },
+      { id: "import-sources", name: "Query Import Sources" },
+    ];
+    page.showDashboard();
+    page.loadCurrentTabData = async function () {
+      const content = this.container.querySelector(".panel-content");
+      this.container.querySelector(".panel-loading").style.display = "none";
+      const data =
+        this.currentTab === "capability-adoption"
+          ? [
+              {
+                tool_id: "quick-query",
+                capability: "import_excel",
+                name: "Import rows from Excel",
+                tool_users: 20,
+                exposed_users: 18,
+                explored_users: 12,
+                successful_users: 10,
+                failed_or_blocked_users: 2,
+                explored_without_success: 2,
+                exposed_unused: 6,
+                no_recorded_exposure: 2,
+              },
+              {
+                tool_id: "velocity-template",
+                capability: "api_validate",
+                name: "Validate through API",
+                tool_users: 12,
+                exposed_users: 12,
+                explored_users: 3,
+                successful_users: 2,
+                failed_or_blocked_users: 1,
+                explored_without_success: 1,
+                exposed_unused: 9,
+                no_recorded_exposure: 0,
+              },
+            ]
+          : this.currentTab === "capability-people"
+            ? [
+                {
+                  user: "analyst@example.test",
+                  tool_id: "quick-query",
+                  capability: "import_excel",
+                  name: "Import rows from Excel",
+                  signal: "used",
+                  exposed: 1,
+                  explored: 1,
+                  successful: 1,
+                  failed: 0,
+                  cancelled: 0,
+                },
+                {
+                  user: "analyst@example.test",
+                  tool_id: "quick-query",
+                  capability: "import_oracle_rows",
+                  name: "Import rows from Oracle",
+                  signal: "exposed_unused",
+                  exposed: 1,
+                  explored: 0,
+                  successful: 0,
+                  failed: 0,
+                  cancelled: 0,
+                },
+              ]
+            : [
+                {
+                  user: "analyst@example.test",
+                  tool_id: "quick-query",
+                  source: "Excel rows",
+                  file_name: "rates-202610.xlsx",
+                  table_name: "",
+                  source_tables: "",
+                  outcome: "success",
+                  imports: 2,
+                  rows_loaded: 240,
+                  last_seen: "2026-10-23 08:00:00",
+                },
+                {
+                  user: "analyst@example.test",
+                  tool_id: "quick-query",
+                  source: "Oracle rows",
+                  file_name: "",
+                  table_name: "APP.CONFIG",
+                  source_tables: "APP.CONFIG,APP.CONFIG_TYPE",
+                  outcome: "success",
+                  imports: 3,
+                  rows_loaded: 48,
+                  last_seen: "2026-10-23 08:01:00",
+                },
+              ];
+      this.renderTable(content, data);
+    };
+    page.renderTabs();
+    page.showReportLibrary();
+  </script>
+</html>

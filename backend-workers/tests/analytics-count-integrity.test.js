@@ -7,6 +7,10 @@ import { handleAnalyticsBatchPost, handlePublicAnalyticsOverviewPost } from "../
 function createD1Database() {
   const database = new DatabaseSync(":memory:");
   database.exec(`
+    CREATE TABLE events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, device_id TEXT, feature_id TEXT,
+      action TEXT, properties TEXT, created_time TEXT
+    );
     CREATE TABLE device_usage (
       device_id TEXT NOT NULL,
       user_email TEXT,
@@ -236,7 +240,7 @@ describe("analytics overview count integrity", () => {
     expect(data.global.daily).toEqual([{ day: todayGmt7, count: 4 }]);
   });
 
-  it("ignores obsolete velocity-template rows in ingestion and overview totals", async () => {
+  it("includes Velocity successful uses while keeping behavior out of overview totals", async () => {
     env = createEnvironment();
     const insertLog = env.DB.prepare("INSERT INTO usage_log (user_email, device_id, tool_id, action, created_time) VALUES (?, ?, ?, ?, ?)");
     await insertLog.bind("user@example.com", "device-1", "velocity-template", "open", "2026-09-04 10:00:00").run();
@@ -251,7 +255,10 @@ describe("analytics overview count integrity", () => {
         body: JSON.stringify({
           device_id: "device-1",
           user_email: "user@example.com",
-          events: [{ type: "velocity-template", action: "open" }],
+          events: [{ type: "velocity-template", action: "control_click" }],
+          tool_usage: [
+            { event_id: "velocity-render-1", tool_id: "velocity-template", action: "render", created_time: currentGmt7Timestamp() },
+          ],
           error_events: [{ tool_id: "velocity-template", error_kind: "captured_error", message: "ignored" }],
           usage_log: [{ tool_id: "velocity-template", action: "open", created_time: "2026-09-04 11:00:00" }],
           device_usage: [{ tool_id: "velocity-template", action: "open", count: 12 }],
@@ -263,15 +270,13 @@ describe("analytics overview count integrity", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
-      inserted: { events: 0, error_events: 0, usage_log: 0, device_usage: 0 },
+      inserted: { events: 1, error_events: 1, usage_log: 1, device_usage: 1, tool_usage: 1 },
     });
 
     const data = await readOverview(env);
-    expect(data.user).toMatchObject({ totalActivities: 0, toolsUsed: 0 });
-    expect(data.user.tools).toEqual([]);
-    expect(data.user.daily).toEqual([]);
-    expect(data.global).toMatchObject({ totalActivities: 0, toolsUsed: 0, activeUsers: 0 });
-    expect(data.global.tools).toEqual([]);
-    expect(data.global.daily).toEqual([]);
+    expect(data.user).toMatchObject({ totalActivities: 1, toolsUsed: 1 });
+    expect(data.user.tools).toEqual([{ toolId: "velocity-template", count: 1 }]);
+    expect(data.user.daily).toEqual([{ day: currentGmt7Timestamp().slice(0, 10), count: 1 }]);
+    expect(data.global).toMatchObject({ totalActivities: 1, toolsUsed: 1, activeUsers: 1 });
   });
 });

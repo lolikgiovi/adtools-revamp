@@ -679,11 +679,14 @@ class Sidebar {
 
   savePinnedTools() {
     const storage = this.getStorage();
-    if (!storage) return;
+    if (!storage) return false;
 
     try {
       storage.setItem(Sidebar.PINNED_TOOLS_STORAGE_KEY, JSON.stringify(Array.from(this.getPinnedToolIds())));
-    } catch (_) {}
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   loadPinEducationShown() {
@@ -890,7 +893,7 @@ class Sidebar {
     if (isPinned) pinnedTools.add(normalizedToolId);
     else pinnedTools.delete(normalizedToolId);
     this.pinEducationSuppressed = true;
-    this.savePinnedTools();
+    const persisted = this.savePinnedTools();
     this.closeContextMenu();
     this.hidePinEducation();
 
@@ -898,6 +901,8 @@ class Sidebar {
       UsageTracker.trackEvent(normalizedToolId, isPinned ? "sidebar_pin" : "sidebar_unpin", {
         tool_id: normalizedToolId,
         source: "sidebar_context_menu",
+        pinned_count: pinnedTools.size,
+        persisted,
       });
     } catch (_) {}
 
@@ -982,6 +987,12 @@ class Sidebar {
 
     // Navigate to the tool, page, or action
     if (toolId) {
+      try {
+        UsageTracker.trackEvent(toolId, "sidebar_navigate", {
+          pinned: this.getPinnedToolIds().has(toolId),
+          input_method: e.detail === 0 ? "keyboard" : "pointer",
+        });
+      } catch (_) {}
       this.selectTool(toolId);
     } else if (pageId) {
       this.navigateToPage(pageId);
