@@ -231,7 +231,7 @@ try {
     Object.keys(zip.files).length === 3 && downloaded.name.endsWith(".zip"),
     "ZIP includes every successful image and excludes failures.",
   );
-  const reusableWorker = tool.worker;
+  const workersBeforeRerun = tool.pool.stats.created;
   change("lossy-png", true);
   await compress();
   check(first.blob.type === "image/png" && first.result.lossy, "Opt-in lossy PNG stays PNG and accepts a useful quantized result.");
@@ -243,7 +243,7 @@ try {
     first.logs.some((entry) => entry.stage === "png.lossless-skipped"),
     "Lossy PNG that is clearly smaller skips the lossless pass.",
   );
-  check(tool.worker === reusableWorker, "A warm worker is reused across files and runs.");
+  check(tool.pool.stats.created === workersBeforeRerun, "Warm workers are reused across files and runs.");
   const previousLossy = first.blob;
   const originalRunWorker = tool.runWorker;
   // The worker fully validates every codec output (checked by the png.validated counts
@@ -847,6 +847,135 @@ try {
   change("png-min", "80");
   change("png-target", "95");
   change("lossy-png", false);
+  // Pool failures: more jobs at once than workers, or no overlap on a multi-core machine; cold
+  // workers every batch; the memory budget ignored or a lone over-budget job stuck; one corrupt
+  // or timed-out image taking others down; results depending on pool size; Clear all leaving
+  // workers running or object URLs unrevoked; summary, progress text or ZIP wrong when jobs
+  // finish out of order.
+  const intervals = (items) =>
+    items.map((item) => {
+      const at = (stage) => item.logs.find((entry) => entry.stage === stage)?.details.at ?? NaN;
+      // The worker is free again when its result arrives, before the main thread verifies it.
+      return [at("worker.started"), at("worker.finished")];
+    });
+  const peakOverlap = (spans) => Math.max(...spans.map(([start]) => spans.filter(([from, to]) => from <= start && start < to).length));
+  const poolFiles = (count, prefix) =>
+    Array.from({ length: count }, (_, i) => new File([fixture(480 + i * 8, 300, "gentle")], `${prefix}-${i}.png`, { type: "image/png" }));
+  const poolBatch = async (files) => {
+    tool.clear();
+    change("preset", "balanced");
+    change("lossy-png", false);
+    change("resize", false);
+    select(files);
+    const progress = new Set();
+    const watcher = setInterval(() => progress.add(root.querySelector(".ci-summary").textContent), 5);
+    await compress();
+    clearInterval(watcher);
+    return { items: [...tool.items], progress: [...progress] };
+  };
+  const createdBefore = tool.pool.stats.created;
+  const six = await poolBatch(poolFiles(6, "pool"));
+  const sixSpans = intervals(six.items);
+  check(
+    six.items.every((item) => item.status === "Ready") && sixSpans.every(([start, end]) => start < end),
+    "A batch of 6 completes, and each image records when its worker started.",
+  );
+  check(
+    peakOverlap(sixSpans) <= tool.pool.size,
+    `No more jobs run at once than the pool has workers (${peakOverlap(sixSpans)} of ${tool.pool.size}).`,
+  );
+  check(tool.pool.size === 1 || peakOverlap(sixSpans) > 1, "Jobs run in parallel when the pool has more than one worker.");
+  check(tool.pool.stats.created - createdBefore <= tool.pool.size, "A batch starts no more workers than the pool size.");
+  check(
+    six.progress.some((text) => /Compressing/.test(text) && /\d+ of 6/.test(text)),
+    "The summary shows how many images are done while compressing.",
+  );
+  check(
+    root.querySelector('[data-ci="ready-count"]').textContent === "6 of 6 ready",
+    "The ready count is right after out-of-order finishes.",
+  );
+  const expectedSaved = six.items.reduce((sum, item) => sum + item.file.size - item.blob.size, 0);
+  check(
+    expectedSaved > 0 && root.querySelector(".ci-summary").textContent.includes("saved"),
+    "The batch total is reported after out-of-order finishes.",
+  );
+  await tool.downloadZip();
+  const poolZip = await JSZip.loadAsync(await downloaded.blob.arrayBuffer());
+  check(Object.keys(poolZip.files).length === 6, "The ZIP holds every image after out-of-order finishes.");
+  const createdWarm = tool.pool.stats.created;
+  select(poolFiles(2, "warm"));
+  await compress();
+  check(tool.pool.stats.created === createdWarm, "A second batch reuses the warm workers.");
+
+  const budget = tool.pool.memoryBudget;
+  tool.pool.memoryBudget = 1;
+  const serial = await poolBatch(poolFiles(3, "budget"));
+  tool.pool.memoryBudget = budget;
+  check(
+    serial.items.every((item) => item.status === "Ready") && peakOverlap(intervals(serial.items)) === 1,
+    "With a tiny memory budget, jobs run one at a time and each over-budget job still finishes.",
+  );
+
+  const isolationFiles = () => [
+    ...poolFiles(3, "isolated"),
+    new File(["invalid"], "corrupt.png", { type: "image/png" }),
+    new File([fixture(320, 200, "gentle")], "slow.png", { type: "image/png" }),
+  ];
+  const timeoutFor = tool.pool.timeoutFor;
+  tool.pool.timeoutFor = (job) => (job.name === "slow.png" ? 1 : timeoutFor(job));
+  const parallel = await poolBatch(isolationFiles());
+  const size = tool.pool.size;
+  tool.pool.size = 1;
+  const sequential = await poolBatch(isolationFiles());
+  tool.pool.size = size;
+  tool.pool.timeoutFor = timeoutFor;
+  const statusOf = (run) => run.items.map((item) => item.status).join(",");
+  check(
+    statusOf(parallel) === "Ready,Ready,Ready,Error,Error" && /timed out/i.test(parallel.items[4].error),
+    "A corrupt file and a timed-out file fail on their own; the rest finish.",
+  );
+  const parallelBytes = await Promise.all(parallel.items.slice(0, 3).map(async (item) => new Uint8Array(await item.blob.arrayBuffer())));
+  const sequentialBytes = await Promise.all(
+    sequential.items.slice(0, 3).map(async (item) => new Uint8Array(await item.blob.arrayBuffer())),
+  );
+  check(
+    statusOf(sequential) === statusOf(parallel) && parallelBytes.every((bytes, i) => sameBytes(bytes, sequentialBytes[i])),
+    "Results are byte-identical with one worker and with the full pool.",
+  );
+
+  const nativeCreate = URL.createObjectURL;
+  const nativeRevoke = URL.revokeObjectURL;
+  const liveUrls = new Set();
+  URL.createObjectURL = (blob) => {
+    const url = nativeCreate(blob);
+    liveUrls.add(url);
+    return url;
+  };
+  URL.revokeObjectURL = (url) => {
+    liveUrls.delete(url);
+    nativeRevoke(url);
+  };
+  try {
+    tool.clear();
+    select(poolFiles(6, "cancel"));
+    control("compress").click();
+    const deadline = Date.now() + 10000;
+    while (!tool.items.some((item) => item.logs.some((entry) => entry.stage === "worker.started")) && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    tool.clear();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    check(tool.pool.stats.alive === 0 && !tool.running, "Clear all during a batch stops every worker.");
+    check(liveUrls.size === 0, `Clear all during a batch leaves no object URL behind (${liveUrls.size} left).`);
+  } finally {
+    URL.createObjectURL = nativeCreate;
+    URL.revokeObjectURL = nativeRevoke;
+  }
+  const afterCancel = await poolBatch(poolFiles(2, "after-cancel"));
+  check(
+    afterCancel.items.every((item) => item.status === "Ready"),
+    "A new batch works after cancelling.",
+  );
   document.querySelector("#verification").textContent = `PASS: ${checks.length} browser checks. Open details for the repeatable evidence.`;
   document.querySelector("#evidence").textContent = checks.join("\n");
 } catch (error) {

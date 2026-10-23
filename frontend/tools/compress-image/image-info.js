@@ -83,6 +83,33 @@ export function imageType(bytes) {
   return null;
 }
 
+// Dimensions from the first bytes only, for the worker pool's memory estimate. Returns null when
+// the header is cut off, unknown or invalid; the worker still inspects the whole file.
+export function headerDimensions(bytes) {
+  const type = imageType(bytes);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  try {
+    if (type === "image/png") return bytes.length >= 24 ? { width: view.getUint32(16), height: view.getUint32(20) } : null;
+    if (type === "image/jpeg") {
+      const { width, height } = inspectJpeg(bytes, view);
+      return { width, height };
+    }
+    if (type === "image/webp" && bytes.length >= 30) {
+      const chunk = String.fromCharCode(...bytes.subarray(12, 16));
+      const uint24 = (at) => bytes[at] | (bytes[at + 1] << 8) | (bytes[at + 2] << 16);
+      if (chunk === "VP8X") return { width: uint24(24) + 1, height: uint24(27) + 1 };
+      if (chunk === "VP8 ") return { width: view.getUint16(26, true) & 16383, height: view.getUint16(28, true) & 16383 };
+      if (chunk === "VP8L") {
+        const packed = view.getUint32(21, true);
+        return { width: (packed & 16383) + 1, height: ((packed >>> 14) & 16383) + 1 };
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 // This is an allocation preflight, not proof that the image decodes successfully.
 export function inspectImage(bytes) {
   if (!bytes.length || bytes.length > MAX_FILE_SIZE) throw new Error("Choose an image between 1 byte and 32 MB.");

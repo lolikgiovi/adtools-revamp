@@ -39,6 +39,25 @@ export function skipsLosslessPass(lossyBytes, estimateBytes) {
   return Number.isFinite(estimateBytes) && estimateBytes > 0 && lossyBytes <= estimateBytes * LOSSLESS_SKIP_RATIO;
 }
 
+// Worker pool: cores minus one (the main thread keeps one), at most three, and one on narrow
+// screens. Each job's peak memory is estimated as 16 bytes per pixel (bitmap, canvas, ImageData
+// and codec buffers) plus the file; unknown dimensions count as the 16 MP maximum.
+const UNKNOWN_PIXELS = 16000000;
+export const MEMORY_BUDGET = Object.freeze({ desktop: 768 * 1024 * 1024, narrow: 256 * 1024 * 1024 });
+
+export function poolSize(cores, narrow) {
+  if (narrow || !Number.isFinite(cores)) return 1;
+  return Math.min(3, Math.max(1, cores - 1));
+}
+
+export function jobMemoryBytes(width, height, fileSize) {
+  return (width && height ? width * height : UNKNOWN_PIXELS) * 16 + fileSize;
+}
+
+export function jobTimeoutMs(megapixels) {
+  return Math.min(120000, 15000 + 3000 * (Number.isFinite(megapixels) ? megapixels : UNKNOWN_PIXELS / 1e6));
+}
+
 export function minimumSavings(bytes) {
   return Math.max(Math.ceil(bytes * 0.01), 1024);
 }

@@ -12,9 +12,11 @@ Updated 2026-10-22. This supersedes the earlier Pako/browser-WebP contract.
 | WebP | Browser color decoding → libwebp | WebP |
 
 Images stay on-device. All WASM assets are bundled locally. Processing is
-sequential in a reusable module worker; single-thread Oxipng does not require
-cross-origin isolation headers. Clear/unmount terminates the worker and revokes
-object URLs. A codec error preserves any previous successful result.
+run in a pool of module workers (cores minus one, at most three, one on
+screens under 768 px), started in queue order within a 768 MB (256 MB narrow)
+estimated-memory budget; single-thread Oxipng does not require cross-origin
+isolation headers. Each job's timeout is 15 s plus 3 s per megapixel, up to
+120 s. Clear/unmount terminates every worker and revokes object URLs. A codec error preserves any previous successful result.
 
 Balanced is the default. High Quality/Balanced/Smaller File use Oxipng levels
 2/3/4, JPEG and WebP quality 92/85/75, WebP method 4/4/5, and PNG quantization
@@ -98,7 +100,8 @@ accepted, Lossless result used, Original kept, and Failed. Unchanged output says
 “No worthwhile reduction found. Original kept.”
 
 Input bounds remain 20 files, 32 MiB each, 128 MiB total; 16 megapixels and
-16,384 pixels per side; 64 MiB inflated PNG data; 60-second worker timeout.
+16,384 pixels per side; 64 MiB inflated PNG data; per-job timeout of 15 s plus
+3 s per megapixel, up to 120 s.
 
 ## Automated checks
 

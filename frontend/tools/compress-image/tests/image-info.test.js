@@ -2,7 +2,7 @@
 // frame or invalid segment lengths, zero/oversized dimensions, malformed RIFF
 // sizes/chunks, APNG, and WebP animation. Actual decoding remains mandatory later.
 import { PNG } from "pngjs";
-import { inspectImage } from "../image-info.js";
+import { inspectImage, headerDimensions } from "../image-info.js";
 import { MAX_FILE_SIZE, makeChunk } from "../service.js";
 
 function jpeg(width = 100, height = 50) {
@@ -80,5 +80,22 @@ describe("image header preflight", () => {
     new DataView(lossy.buffer).setUint32(16, 10, true);
     lossy.set([157, 1, 42, 100, 0, 50, 0], 23);
     expect(inspectImage(lossy)).toMatchObject({ width: 100, height: 50, lossless: false });
+  });
+});
+
+// Memory-estimate failures: needing the whole file, throwing on a truncated header instead of
+// returning null, and misreading partial PNG, JPEG or WebP headers.
+describe("header-only dimensions", () => {
+  it("reads dimensions from the start of the file", () => {
+    const largeJpeg = new Uint8Array(200000);
+    largeJpeg.set(jpeg(4000, 3000));
+    expect(headerDimensions(png().slice(0, 24))).toEqual({ width: 3, height: 2 });
+    expect(headerDimensions(largeJpeg.slice(0, 65536))).toEqual({ width: 4000, height: 3000 });
+    expect(headerDimensions(webp(800, 600).slice(0, 30))).toEqual({ width: 800, height: 600 });
+  });
+  it("returns null when the header is cut off or unknown", () => {
+    expect(headerDimensions(png().slice(0, 20))).toBeNull();
+    expect(headerDimensions(jpeg().slice(0, 6))).toBeNull();
+    expect(headerDimensions(new TextEncoder().encode("not an image"))).toBeNull();
   });
 });

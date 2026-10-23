@@ -366,6 +366,37 @@ lossy check expects `source, output`.
 
 ## Phase 3: Worker pool
 
+### Status: done (2026-10-23)
+
+Implemented as designed below, with these differences:
+
+- **`runWorker` stays** as a one-line call into the pool, so the corrupt-candidate check can still stub it.
+- **The timeout clock starts when a job is handed to a worker.** Codec loading happens inside the worker, out of
+  the main thread's sight. Codecs are cached, so this costs little.
+- **Auto-selection prefers the first success.** With out-of-order finishes, a corrupt file can fail first and has
+  no preview. The tool now shows the first image that succeeds, unless the user clicked a row.
+- **The pool reports `onStart` and `onFinish`,** logged as `worker.started` and `worker.finished` with exact times,
+  so overlap is measured between the worker's own events rather than the main thread's verification.
+- **Header-only sizing** uses a new `headerDimensions` (PNG IHDR, JPEG frame within 64 KB, WebP first chunk); unknown
+  dimensions count as 16 MP.
+
+**Tests (written first, each seen failing).** Vitest with fake workers (`tests/worker-pool.test.js`): size limit
+and queue order, idle reuse, memory budget with the lone-job exception, strict order behind a waiting job, timeout
+replacing the worker, an error failing only its job, cancellation (including not starting a queued job on an
+aborted signal, found by an added assertion), `terminate()`, replacing a worker after an 8 MP job, log routing,
+`needsPixels`, transfers, and `onFinish` before the next `onStart`. Sizing rules and `headerDimensions` have unit
+tests too. Browser checks: at most `size` jobs at once and real overlap; no extra workers per batch; warm reuse;
+progress text; ready count, totals and ZIP after out-of-order finishes; a tiny budget runs jobs one at a time; a
+corrupt and a timed-out file fail alone; byte-identical results with one worker and three; Clear all mid-batch stops
+every worker and leaves no object URL; a new batch works afterwards. Two measurement fixes were needed in the
+harness, both found by the overlap check reporting 4 of 3.
+
+Results on the benchmark set (3 workers): Balanced lossless 29.1 s → 11.8 s, Balanced lossy 20.6 s → 7.7 s, Smaller
+File 20.7 s → 7.5 s, byte-identical outputs. Against the phase 0 baseline: 73.0 s, 105.9 s and 130.0 s. The longest
+main-thread frame in the lossless run rose to 50 ms (from 17–33 ms), as three ~6 MB results get their structure and
+checksum check close together; still within the 100 ms goal. Evidence:
+`docs/evidence/compress-image-benchmark-phase3-worker-pool.json`.
+
 ### Design
 
 New module `worker-pool.js`, owned by `CompressImage`:

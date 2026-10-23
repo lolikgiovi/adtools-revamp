@@ -2,8 +2,9 @@ import { BaseTool } from "../../core/BaseTool.js";
 import JSZip from "jszip";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { MAX_FILE_SIZE, fitDimensions } from "./service.js";
-import { inspectImage, imageType } from "./image-info.js";
-import { PRESETS, selectCandidate } from "./config.js";
+import { inspectImage, imageType, headerDimensions } from "./image-info.js";
+import { PRESETS, selectCandidate, poolSize, jobMemoryBytes, jobTimeoutMs, MEMORY_BUDGET } from "./config.js";
+import { WorkerPool } from "./worker-pool.js";
 import { getIconSvg } from "./icon.js";
 import "./styles.css";
 
@@ -23,6 +24,13 @@ export class CompressImage extends BaseTool {
     this.view = "pair";
     // "auto" decodes in the worker when it can; "main" forces the main-thread fallback.
     this.decoder = "auto";
+    const narrow = typeof matchMedia === "function" && matchMedia("(max-width: 767px)").matches;
+    this.pool = new WorkerPool({
+      create: () => new Worker(new URL("./worker.js", import.meta.url), { type: "module" }),
+      size: poolSize(navigator.hardwareConcurrency, narrow),
+      memoryBudget: narrow ? MEMORY_BUDGET.narrow : MEMORY_BUDGET.desktop,
+      timeoutFor: (job) => jobTimeoutMs(job.megapixels),
+    });
   }
   getIconSvg() {
     return getIconSvg();
@@ -155,7 +163,10 @@ export class CompressImage extends BaseTool {
       <td><button class="btn btn-ghost btn-sm ci-download" disabled>Download</button></td>`;
     row.querySelector(".ci-filename").textContent = item.file.name;
     row.querySelector(".ci-before").textContent = size(item.file.size);
-    row.querySelector(".ci-select").addEventListener("click", () => this.selectItem(item));
+    row.querySelector(".ci-select").addEventListener("click", () => {
+      this.pinned = true;
+      this.selectItem(item);
+    });
     row.querySelector(".ci-download").addEventListener("click", () => this.download(item.blob, this.outputName(item)));
     row.querySelector(".ci-download").setAttribute("aria-label", `Download ${item.file.name}`);
     item.row = row;
@@ -206,39 +217,41 @@ export class CompressImage extends BaseTool {
     this.$("changed").hidden = true;
     this.running = true;
     const generation = this.generation;
+    const batch = (this.batch = new AbortController());
     const pending = [...this.items];
     pending.forEach((item) => {
       item.status = "Queued";
       this.updateRow(item);
     });
     this.updateSummary();
-    try {
-      for (const item of pending) {
+    // Every item goes to the pool at once; the pool decides how many run together. Rows and
+    // the summary update as each one finishes, in whatever order that happens.
+    const process = async (item) => {
+      try {
+        await this.compressItem(item, settings, generation, batch.signal);
         if (generation !== this.generation) return;
-        item.status = "Compressing…";
-        this.updateRow(item);
-        this.updateSummary();
+        item.status = "Ready";
+        this.log(item, "Completed", { outcome: item.result.outcome });
+        item.error = null;
         try {
-          await this.compressItem(item, settings, generation);
-          if (generation !== this.generation) return;
-          item.status = "Ready";
-          this.log(item, "Completed", { outcome: item.result.outcome });
-          item.error = null;
-          try {
-            UsageTracker.trackToolUse("compress-image", "compress");
-          } catch (_) {
-            /* Analytics cannot interrupt local processing. */
-          }
-        } catch (error) {
-          if (generation !== this.generation) return;
-          item.status = "Error";
-          item.error = `${error.message}${item.result ? " Previous result kept." : ""}`;
-          this.log(item, "processing.failed", { message: error.message });
+          UsageTracker.trackToolUse("compress-image", "compress");
+        } catch (_) {
+          /* Analytics cannot interrupt local processing. */
         }
-        this.updateRow(item);
-        this.updateSummary();
-        if (!this.selected || this.selected === item) this.selectItem(item);
+      } catch (error) {
+        if (generation !== this.generation) return;
+        item.status = "Error";
+        item.error = `${error.message}${item.result ? " Previous result kept." : ""}`;
+        this.log(item, "processing.failed", { message: error.message });
       }
+      this.updateRow(item);
+      this.updateSummary();
+      // Jobs finish in any order: show the first success, unless the user picked a row.
+      const replaceFailure = !this.pinned && !this.selected?.result && item.result;
+      if (!this.selected || this.selected === item || replaceFailure) this.selectItem(item);
+    };
+    try {
+      await Promise.allSettled(pending.map(process));
     } finally {
       if (generation === this.generation) {
         this.running = false;
@@ -246,27 +259,42 @@ export class CompressImage extends BaseTool {
       }
     }
   }
-  async compressItem(item, settings, generation) {
+  async compressItem(item, settings, generation, signal) {
     item.logs = [];
     item.startedAt = performance.now();
     this.log(item, "Reading", { inputBytes: item.file.size });
     if (!item.file.size || item.file.size > MAX_FILE_SIZE) throw new Error("Choose an image between 1 byte and 32 MB.");
-    const type = imageType(new Uint8Array(await item.file.slice(0, 12).arrayBuffer()));
+    const head = new Uint8Array(await item.file.slice(0, 65536).arrayBuffer());
+    const type = imageType(head);
     if (!type) throw new Error("Choose a valid PNG, JPEG or still WebP image.");
     if (generation !== this.generation) return;
+    // The pool schedules by estimated memory and sizes the timeout by megapixels.
+    const dimensions = headerDimensions(head);
+    const job = {
+      name: item.file.name,
+      signal,
+      memory: jobMemoryBytes(dimensions?.width, dimensions?.height, item.file.size),
+      megapixels: dimensions ? (dimensions.width * dimensions.height) / 1e6 : undefined,
+      onStart: () => {
+        item.status = "Compressing…";
+        this.log(item, "worker.started", { at: performance.now() });
+        this.updateSummary();
+      },
+      onFinish: () => this.log(item, "worker.finished", { at: performance.now() }),
+    };
     const before = URL.createObjectURL(new Blob([item.file], { type }));
     const temporaryUrls = new Set([before]);
     const report = (stage, details) => this.log(item, stage, details);
     try {
       // The worker reads, decodes and resizes the file. It asks for pixels instead when it
       // cannot decode there, and the main thread then prepares them the way it used to.
-      let result = await this.runWorker({ file: item.file, decoder: this.decoder, ...settings }, report);
+      let result = await this.runWorker({ file: item.file, decoder: this.decoder, ...settings }, report, job);
       if (generation !== this.generation) return;
       let expected;
       if (result.needsPixels) {
         const prepared = await this.preparePixels(item, settings, generation, before);
         if (!prepared) return;
-        result = await this.runWorker(prepared.payload, report);
+        result = await this.runWorker(prepared.payload, report, job);
         expected = prepared.expected;
       } else {
         const width = result.originalWidth,
@@ -607,32 +635,9 @@ export class CompressImage extends BaseTool {
       this.updateRow(item);
     }
   }
-  runWorker(payload, report) {
-    return new Promise((resolve, reject) => {
-      const worker = (this.worker ||= new Worker(new URL("./worker.js", import.meta.url), { type: "module" }));
-      let finished = false;
-      const finish = (error, result) => {
-        if (finished) return;
-        finished = true;
-        clearTimeout(timer);
-        worker.onmessage = worker.onerror = worker.onmessageerror = null;
-        this.cancelWorker = null;
-        if (error) {
-          worker.terminate();
-          if (this.worker === worker) this.worker = null;
-          reject(error);
-        } else resolve(result);
-      };
-      const timer = setTimeout(() => finish(new Error("Compression timed out. Try a smaller image.")), 60000);
-      this.cancelWorker = () => finish(new Error("Cancelled"));
-      worker.onmessage = ({ data }) => {
-        if (data.log) report(data.log.stage, data.log.details);
-        else finish(data.error ? new Error(data.error) : null, data.needsPixels ? { needsPixels: true } : data.result);
-      };
-      worker.onerror = (event) => finish(new Error(event.message || "Compression worker failed."));
-      worker.onmessageerror = () => finish(new Error("Unable to read the compression worker response."));
-      worker.postMessage(payload, [...(payload.bytes ? [payload.bytes] : []), ...(payload.image ? [payload.image.data.buffer] : [])]);
-    });
+  async runWorker(payload, report, job = {}) {
+    const transfer = [...(payload.bytes ? [payload.bytes] : []), ...(payload.image ? [payload.image.data.buffer] : [])];
+    return this.pool.run(payload, { ...job, onLog: report, transfer });
   }
 
   updateSummary() {
@@ -645,7 +650,7 @@ export class CompressImage extends BaseTool {
     this.container.querySelector(".ci-summary").textContent = this.zipping
       ? "Creating ZIP…"
       : this.items.length
-        ? `${ready.length ? `${size(before)} → ${size(after)} · ${after <= before ? `${size(before - after)} saved` : `${size(after - before)} larger`} (${savings(before, after)})` : "Images are queued. Choose settings, then compress."}${errors ? ` · ${errors} failed` : ""}${this.running ? " · Compressing…" : ""}`
+        ? `${ready.length ? `${size(before)} → ${size(after)} · ${after <= before ? `${size(before - after)} saved` : `${size(after - before)} larger`} (${savings(before, after)})` : "Images are queued. Choose settings, then compress."}${errors ? ` · ${errors} failed` : ""}${this.running ? ` · Compressing… ${this.items.filter((item) => item.status === "Ready" || item.status === "Error").length} of ${this.items.length} done` : ""}`
         : "Add images, choose compression, then compare the results.";
     this.container.querySelector(".ci-list").hidden = !this.items.length;
     this.$("clear").disabled = !this.items.length;
@@ -711,12 +716,12 @@ export class CompressImage extends BaseTool {
   }
   clear() {
     this.generation++;
-    this.cancelWorker?.();
-    this.worker?.terminate();
-    this.worker = null;
+    this.batch?.abort();
+    this.pool.terminate();
     this.items.forEach((item) => item.urls.forEach((url) => URL.revokeObjectURL(url)));
     this.items = [];
     this.selected = null;
+    this.pinned = false;
     this.running = false;
     this.container?.querySelector(".ci-results").replaceChildren();
     const inspector = this.container?.querySelector(".ci-inspector");
