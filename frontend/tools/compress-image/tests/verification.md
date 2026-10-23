@@ -284,3 +284,51 @@ material items; the verdict pass scored seven resolved and one partial, plus
 two regressions (mobile drop height, the stacked view's label, the moving
 Before column). All three were fixed and checked in the captures; no third
 review round ran.
+
+## Final verification (phase 4) — 2026-10-23
+
+Automated: 67 tool tests and the full suite (1,718 tests in 152 files) pass.
+
+Browser harness, 127 checks, PASS in every run:
+
+- dev server: desktop light and dark; review page at 390 px and 768 px, light
+  and dark;
+- production assets (`vite build --mode tauri --config tests/vite.config.mjs`,
+  served by `vite preview` on port 1235): light and dark;
+- packaged desktop app (WebKit/WKWebView), see below.
+
+Benchmark (`docs/evidence/compress-image-benchmark-final.json`, 3 workers,
+headless Chrome) against the phase 0 baseline on the same 16 PNGs:
+
+| Scenario | Baseline | Final | Longest stall | Errors |
+| --- | --- | --- | --- | --- |
+| High, lossless | 31.1 s | 11.4 s | 267 → 33 ms | 1 → 0 |
+| High, lossy PNG | 44.6 s | 7.7 s | 150 → 17 ms | 1 → 0 |
+| Balanced, lossless | 73.0 s | 10.5 s | 150 → 17 ms | 1 → 0 |
+| Balanced, lossy PNG | 105.9 s | 7.3 s | 150 → 17 ms | 1 → 0 |
+| Smaller File, lossless | 93.9 s | 10.4 s | 150 → 17 ms | 1 → 0 |
+| Smaller File, lossy PNG | 130.0 s | 7.3 s | 150 → 17 ms | 1 → 0 |
+
+Saved percentages are not directly comparable: the baseline failed the
+ICC-profile file and used Oxipng levels 3 and 4 (now 2: lossless 9.26% against
+9.42–9.59%; lossy 63–75%, unchanged within 1 point).
+
+Packaged desktop: `node frontend/tools/compress-image/tests/build-desktop-verification.mjs`
+built `AD Tools Image Optimizer Verification.app` offline (unsigned debug).
+It was run with no Oracle sidecar on port 21522 (AD Tools closed first). The
+window was captured with `screencapture -l` after Screen Recording was allowed
+for the terminal; the status line is now pinned at the top of the harness page
+so a capture always shows it. Result: PASS: 127 browser checks
+(`docs/evidence/compress-image-desktop-webkit-pass.png`). This supersedes the
+earlier inconclusive native attempt.
+
+The native runs found two harness assumptions that only held in Chromium:
+
+- WebKit's canvas cannot encode WebP (`toBlob` returns PNG), so the
+  semi-transparent WebP fixture is now made with the bundled libwebp encoder.
+- WebKit's worker (`createImageBitmap` + `OffscreenCanvas`) and `<img>` + canvas
+  resize paths are not byte-identical (after a 7–13× shrink and re-encoding:
+  translucent WebP max 12, hard-edged checkerboard WebP max 64, gentle PNG max
+  10 per channel; P3 identical). The check now scores both against an ideal
+  area-average downscale of the original pixels and requires the worker to be
+  at least as close (within 1); Chromium scores them equal. It passes in WebKit.

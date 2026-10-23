@@ -457,6 +457,15 @@ Failure modes, as browser checks:
 
 ## Phase 4: Final verification
 
+### Status: done (2026-10-23)
+
+All steps ran; details and numbers in `frontend/tools/compress-image/tests/verification.md` ("Final verification").
+127 browser checks pass on the dev server (desktop, 390 px, 768 px; light and dark), on production assets, and in
+the packaged desktop app's WebKit, a first conclusive native run. Balanced finishes the benchmark set in 10.5 s
+lossless and 7.3 s lossy, against 73.0 s and 105.9 s at baseline, with the longest main-thread stall at 17 ms.
+Two harness assumptions that only held in Chromium were fixed (WebP fixture source; resize equivalence judged
+against an ideal downscale).
+
 1. Run `./node_modules/.bin/vitest run frontend/tools/compress-image/tests`, then `npm run test:ci`.
 2. Browser harness: dev server, production-asset preview, and `review.html` at 390 px and 768 px, light and dark.
 3. Benchmark: run it again and commit `docs/evidence/compress-image-benchmark-after.json`. Write the comparison

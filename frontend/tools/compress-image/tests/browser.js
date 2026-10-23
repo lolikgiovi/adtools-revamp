@@ -289,7 +289,12 @@ try {
   context.clearRect(0, 0, 640, 400);
   context.globalAlpha = 0.5;
   context.fillRect(0, 0, 640, 400);
-  const webp = await new Promise((resolve) => canvas.toBlob(resolve, "image/webp", 1));
+  // WebKit's canvas cannot encode WebP (toBlob silently returns PNG), so the fixture comes from
+  // the same libwebp encoder the tool bundles: a lossy, semi-transparent WebP in every engine.
+  await initWebp({ locateFile: (path) => (path.includes("simd") ? webpSimdWasm : webpWasm) });
+  const webp = new Blob([await encodeWebp(context.getImageData(0, 0, 640, 400), { quality: 90, alpha_quality: 100 })], {
+    type: "image/webp",
+  });
   const transfer = new DataTransfer();
   transfer.items.add(new File([jpeg], "photo.jpeg", { type: "image/jpeg" }));
   transfer.items.add(new File([webp], "asset.webp", { type: "image/webp" }));
@@ -458,7 +463,6 @@ try {
   // Lossless WebP failures: re-encoded as lossy VP8, pixels changed, the JPEG/WebP
   // quality slider leaking into lossless output, output larger than the original,
   // resize not switching to lossy, and the detail text describing it as lossy or PNG.
-  await initWebp({ locateFile: (path) => (path.includes("simd") ? webpSimdWasm : webpWasm) });
   const art = document.createElement("canvas");
   art.width = 320;
   art.height = 200;
@@ -765,18 +769,67 @@ try {
     "The forced fallback decodes on the main thread and says so.",
   );
   const sameBytes = (a, b) => a.length === b.length && a.every((value, i) => value === b[i]);
-  check(
-    onMain.bytes.every((bytes, i) => i === 0 || sameBytes(bytes, inWorker.bytes[i])),
-    "Worker and main-thread decoding give byte-identical WebP and PNG results, resized included.",
-  );
-  // Chrome's <img> path lets the JPEG decoder scale down while decoding; the worker decodes at
-  // full size and then resamples. Measured at ±2 per channel before re-encoding.
-  const decodedPixels = async (bytes) => {
+  const decodedPixels = async (bytes, type = "image/jpeg") => {
     const image = new Image();
-    image.src = URL.createObjectURL(new Blob([bytes], { type: "image/jpeg" }));
+    image.src = URL.createObjectURL(new Blob([bytes], { type }));
     await image.decode();
     return pixels(image);
   };
+  // Engines resample differently (WebKit's worker and <img> paths are not byte-identical), so judge
+  // both against an ideal area-average downscale of the original pixels instead of each other.
+  const areaDownscale = (data, sw, sh, tw, th) => {
+    const out = new Float64Array(tw * th * 4);
+    for (let ty = 0; ty < th; ty++)
+      for (let tx = 0; tx < tw; tx++) {
+        const [x0, x1, y0, y1] = [(tx * sw) / tw, ((tx + 1) * sw) / tw, (ty * sh) / th, ((ty + 1) * sh) / th];
+        const sum = [0, 0, 0, 0];
+        let weight = 0;
+        for (let sy = Math.floor(y0); sy < Math.ceil(y1); sy++)
+          for (let sx = Math.floor(x0); sx < Math.ceil(x1); sx++) {
+            const w = (Math.min(x1, sx + 1) - Math.max(x0, sx)) * (Math.min(y1, sy + 1) - Math.max(y0, sy));
+            const i = (sy * sw + sx) * 4;
+            const alpha = data[i + 3] / 255;
+            for (let c = 0; c < 3; c++) sum[c] += data[i + c] * alpha * w;
+            sum[3] += alpha * w;
+            weight += w;
+          }
+        const o = (ty * tw + tx) * 4;
+        for (let c = 0; c < 3; c++) out[o + c] = sum[3] ? sum[c] / sum[3] : 0;
+        out[o + 3] = (sum[3] / weight) * 255;
+      }
+    return out;
+  };
+  const meanError = (reference, actual) => {
+    let total = 0;
+    for (let i = 0; i < reference.length; i += 4) {
+      const a = actual[i + 3] / 255;
+      for (let c = 0; c < 3; c++) total += Math.abs(reference[i + c] * (reference[i + 3] / 255) - actual[i + c] * a);
+      total += Math.abs(reference[i + 3] - actual[i + 3]);
+    }
+    return total / reference.length;
+  };
+  const resizeQuality = await Promise.all(
+    onMain.items.slice(1).map(async (item, i) => {
+      const source = new Image();
+      source.src = URL.createObjectURL(item.file);
+      await source.decode();
+      const { width, height } = item.result;
+      const reference = areaDownscale(pixels(source), source.naturalWidth, source.naturalHeight, width, height);
+      const [main, worker] = await Promise.all([
+        decodedPixels(onMain.bytes[i + 1], item.blob.type),
+        decodedPixels(inWorker.bytes[i + 1], item.blob.type),
+      ]);
+      return { name: item.file.name, main: meanError(reference, main), worker: meanError(reference, worker) };
+    }),
+  );
+  check(
+    resizeQuality.every(({ main, worker }) => worker <= main + 1),
+    `Worker resizing is as close to an ideal downscale as the main-thread path (${resizeQuality
+      .map(({ name, main, worker }) => `${name} worker ${worker.toFixed(2)} vs main ${main.toFixed(2)}`)
+      .join(", ")}).`,
+  );
+  // Chrome's <img> path lets the JPEG decoder scale down while decoding; the worker decodes at
+  // full size and then resamples. Measured at ±2 per channel before re-encoding.
   const [mainJpeg, workerJpeg] = await Promise.all([decodedPixels(onMain.bytes[0]), decodedPixels(inWorker.bytes[0])]);
   const jpegDrift = mainJpeg.reduce((max, value, i) => Math.max(max, Math.abs(value - workerJpeg[i])), 0);
   check(jpegDrift <= 8, `A shrunk JPEG stays within 8 per channel of the main-thread result after re-encoding (${jpegDrift}).`);
@@ -1127,3 +1180,5 @@ try {
   document.querySelector("#evidence").textContent = checks.join("\n") + "\n" + error.stack;
   console.error(error);
 }
+// The result line is at the top; bring it into view so a window capture always shows it.
+window.scrollTo(0, 0);

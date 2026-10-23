@@ -8,7 +8,24 @@
   </head>
   <body style="padding: 24px">
     <h1>Compress Image browser verification</h1>
-    <p id="verification" role="status">Running real file-input, worker, decode, preview, slider and ZIP checks…</p>
+    <!-- Pinned so a window capture always shows the run's state, wherever the page has scrolled. -->
+    <p
+      id="verification"
+      role="status"
+      style="
+        position: fixed;
+        inset: 0 0 auto 0;
+        z-index: 1000;
+        margin: 0;
+        padding: 8px 24px;
+        background: #fff;
+        color: #000;
+        border-bottom: 1px solid #ccc;
+        font: 600 14px/1.4 system-ui;
+      "
+    >
+      Running real file-input, worker, decode, preview, slider and ZIP checks…
+    </p>
     <details>
       <summary>Verification evidence</summary>
       <pre id="evidence"></pre>
