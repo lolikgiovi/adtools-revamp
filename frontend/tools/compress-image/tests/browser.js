@@ -155,7 +155,7 @@ const root = document.querySelector("#tool");
 const control = (name) => root.querySelector(`[data-ci="${name}"]`);
 function change(name, value) {
   const input = control(name);
-  if (input.type === "checkbox") input.checked = value;
+  if (input.type === "checkbox" || input.type === "radio") input.checked = value;
   else input.value = value;
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }
@@ -174,10 +174,10 @@ try {
     !!element &&
     element.getClientRects().length > 0 &&
     (element.checkVisibility ? element.checkVisibility({ visibilityProperty: true }) : getComputedStyle(element).visibility !== "hidden");
-  const visibleButtons = () => [...root.querySelectorAll("button")].filter(visible);
+
   check(
-    visibleButtons().length === 1 && visibleButtons()[0] === control("choose") && visible(root.querySelector(".ci-drop")),
-    "With no images, the only control is Add images on the drop target.",
+    visible(control("settings-panel")) && visible(root.querySelector(".ci-drop")) && visible(control("add")),
+    "Empty state keeps settings and pane actions visible alongside the drop target.",
   );
   select([
     new File([fixture(320, 320, "gentle")], "transparent.png", { type: "image/png" }),
@@ -206,6 +206,56 @@ try {
     "Lossless output has identical browser-rendered RGBA including transparency.",
   );
   check(tool.view === "pair", "Side by side opens first.");
+  const separator = control("resizer");
+  if (innerWidth > 960) {
+    const start = Number(separator.getAttribute("aria-valuenow"));
+    separator.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    check(Number(separator.getAttribute("aria-valuenow")) > start, "Pane separator supports keyboard resizing.");
+    separator.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+  }
+  check(first.row.querySelector(".ci-method").textContent === "Lossless", "Table reports the actual compression method.");
+  const gesturePane = root.querySelector(".ci-pair .ci-viewport");
+  gesturePane.dispatchEvent(new WheelEvent("wheel", { deltaY: -100, ctrlKey: true, bubbles: true, cancelable: true }));
+  check(Number(control("zoom").value) > 1, "Trackpad pinch wheel events zoom the linked preview.");
+  control("fit").click();
+  // Synthetic pointers exercise gesture math; pointer capture requires physical input,
+  // so only that browser primitive is replaced for these dispatched events.
+  const savedCapture = gesturePane.setPointerCapture;
+  gesturePane.setPointerCapture = () => {};
+  const pointer = (name, id, x, y, type = "touch") =>
+    gesturePane.dispatchEvent(
+      new PointerEvent(name, {
+        pointerId: id,
+        pointerType: type,
+        clientX: x,
+        clientY: y,
+        button: 0,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  const gestureRect = gesturePane.getBoundingClientRect();
+  const gx = gestureRect.left + gestureRect.width / 2;
+  const gy = gestureRect.top + gestureRect.height / 2;
+  try {
+    pointer("pointerdown", 31, gx - 50, gy);
+    pointer("pointerdown", 32, gx + 50, gy);
+    pointer("pointermove", 32, gx + 150, gy);
+    check(Number(control("zoom").value) === 2, "Two touch pointers pinch from fit to 2× zoom.");
+    pointer("pointerup", 31, gx - 50, gy);
+    pointer("pointerup", 32, gx + 150, gy);
+    const beforeDrag = root.querySelector(".ci-pair img").style.transform;
+    pointer("pointerdown", 33, gx, gy, "mouse");
+    pointer("pointermove", 33, gx - 30, gy + 30, "mouse");
+    const afterDrag = [...root.querySelectorAll(".ci-pair img")].map((img) => img.style.transform);
+    check(afterDrag[0] !== beforeDrag && afterDrag[0] === afterDrag[1], "Dragging pans both images by the same amount.");
+    pointer("pointercancel", 33, gx - 30, gy + 30, "mouse");
+    pointer("pointermove", 33, gx - 50, gy + 50, "mouse");
+    check(root.querySelector(".ci-pair img").style.transform === afterDrag[0], "Cancelled gestures cannot leave pan stuck.");
+  } finally {
+    gesturePane.setPointerCapture = savedCapture;
+    control("fit").click();
+  }
   control("zoom").value = "3";
   control("zoom").dispatchEvent(new Event("input", { bubbles: true }));
   const pane = root.querySelector(".ci-viewport");
@@ -223,6 +273,29 @@ try {
     "Slider changes the clipping boundary while image geometry stays aligned.",
   );
   check(root.querySelector(".ci-divider").style.left === "75%", "Visible divider tracks the slider.");
+  const divider = root.querySelector(".ci-divider");
+  divider.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+  check(control("split").value === "74", "The on-image divider has a keyboard alternative to dragging.");
+  const captureDivider = divider.setPointerCapture;
+  divider.setPointerCapture = () => {};
+  try {
+    const rect = divider.parentElement.getBoundingClientRect();
+    divider.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        pointerId: 41,
+        button: 0,
+        clientX: rect.left + rect.width * 0.25,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    divider.dispatchEvent(new PointerEvent("pointermove", { pointerId: 41, clientX: rect.left + rect.width * 0.75, bubbles: true }));
+    divider.dispatchEvent(new PointerEvent("pointerup", { pointerId: 41, bubbles: true }));
+    check(Math.abs(Number(control("split").value) - 75) < 1, "Dragging the on-image divider updates both clipping and the range control.");
+  } finally {
+    divider.setPointerCapture = captureDivider;
+  }
+
   let downloaded;
   tool.download = (blob, name) => {
     downloaded = { blob, name };
@@ -307,7 +380,7 @@ try {
   Object.defineProperty(drop, "dataTransfer", { value: transfer });
   root.querySelector(".ci-drop").dispatchEvent(drop);
   change("preset", "small");
-  check(control("quality").value === "75" && control("png-min").value === "65", "Preset changes update all codec quality controls.");
+  check(control("quality").value === "75" && control("png-min").value === "80", "JPEG/WebP presets preserve PNG quality controls.");
   await compress();
   const jpegItem = tool.items.find((item) => item.file.name === "photo.jpeg"),
     webpItem = tool.items.find((item) => item.file.name === "asset.webp");
@@ -356,6 +429,8 @@ try {
   await compress();
   check(first.blob === previousQuality && !tool.running, "Invalid PNG quality bounds preserve previous results.");
   change("preset", "balanced");
+  change("png-min", "80");
+  change("png-target", "95");
   change("lossy-png", false);
   change("width", "0");
   const previous = first.blob;
@@ -608,17 +683,16 @@ try {
     change("lossy-png", false);
     change("resize", false);
   }
-  // Preset failures: Smaller File leaving PNG lossless, the PNG quality fields staying
-  // hidden, another preset silently undoing the user's choice, High Quality or Balanced
-  // turning color reduction on, and the setting not reaching the compressed result.
+  // Presets must affect JPEG/WebP only; PNG mode and quality remain explicit choices.
   tool.clear();
   change("preset", "balanced");
   change("lossy-png", false);
   change("preset", "high");
   check(!control("lossy-png").checked, "High Quality leaves PNG lossless.");
   change("preset", "small");
-  check(control("lossy-png").checked, "Smaller File turns on lossy PNG.");
-  check(!control("png-quality").hidden, "Smaller File shows the PNG quality fields.");
+  check(!control("lossy-png").checked, "JPEG/WebP presets leave PNG lossless.");
+  change("lossy-png", true);
+  check(!control("png-quality").hidden, "Lossy PNG shows its quality fields.");
   change("preset", "balanced");
   check(control("lossy-png").checked, "Switching away from Smaller File keeps lossy PNG on.");
   change("preset", "small");
@@ -1057,20 +1131,26 @@ try {
     control("compress").classList.contains("btn-primary") && !visible(control("zip")),
     "Before compressing, Compress is the primary action and there is nothing to download.",
   );
-  check(!visible(control("settings-panel")), "Settings stay closed until asked for.");
+  check(visible(control("settings-panel")), "Settings remain visible after upload.");
+  check(control("resize").getAttribute("role") === "switch", "Resize uses an accessible toggle.");
   check(
-    !visible(tool.items[0].row.querySelector(".ci-download")) && !visible(tool.items[0].row.querySelector(".ci-after")),
-    "Before any result, rows show no download button or empty result columns.",
+    visible(control("png-settings")) && visible(control("photo-settings")) && control("photo-settings").disabled,
+    "Irrelevant photo settings stay visible and disabled.",
+  );
+  check(tool.selected === tool.items[0] && visible(root.querySelector(".ci-original-preview")), "Queued files open an original preview.");
+  check(
+    tool.items[0].row.querySelector(".ci-download").disabled && tool.items[0].row.querySelector(".ci-after").textContent.includes("—"),
+    "Queued rows retain the result column and disable download until a result exists.",
   );
   tool.clear();
   select([
-    new File([fixture(1600, 120, "gentle")], "wide.png", { type: "image/png" }),
+    new File([fixture(4000, 300, "gentle")], "wide.png", { type: "image/png" }),
     new File([fixture(320, 200, "gentle")], "fits.png", { type: "image/png" }),
   ]);
   await new Promise((resolve) => setTimeout(resolve, 50));
   const sizeCard = control("advice-size");
   check(
-    visible(sizeCard) && /1 image/.test(sizeCard.textContent) && /1320/.test(sizeCard.textContent),
+    visible(sizeCard) && /1 oversized image/.test(sizeCard.textContent) && /1440/.test(sizeCard.textContent),
     "One oversized image gets one size card.",
   );
   const choice = (name) => sizeCard.querySelector(`[data-size="${name}"]`);
@@ -1078,10 +1158,10 @@ try {
   choice("full").click();
   check(
     control("resize").checked &&
-      control("width").value === "1320" &&
-      control("height").value === "2868" &&
+      control("width").value === "1440" &&
+      control("height").value === "3200" &&
       choice("full").getAttribute("aria-pressed") === "true",
-    "Choosing phone full width sets the resize bounds to 1320 × 2868.",
+    "Choosing phone full width sets the resize bounds to 1440 × 3200.",
   );
   check(
     tool.items.every((item) => item.status === "Queued" && !item.result),
@@ -1090,16 +1170,17 @@ try {
   await compress();
   const wide = tool.items.find((item) => item.file.name === "wide.png");
   const fits = tool.items.find((item) => item.file.name === "fits.png");
-  check(wide.result.width === 1320 && fits.result.width === 320, "The chosen size shrinks only images larger than it.");
+  check(wide.result.width === 1440 && fits.result.width === 320, "The chosen size shrinks only images larger than it.");
   check(
     !/Optimized|Lossless result used|Lossy PNG accepted|px/.test(fits.row.querySelector(".ci-file-state").textContent) &&
-      wide.row.querySelector(".ci-file-state").textContent === "1320 × 99 · Resized",
+      wide.row.querySelector(".ci-file-state").textContent === "Resized" &&
+      wide.row.querySelector(".ci-dimensions").textContent.includes("1440 × 108"),
     "Row notes give dimensions in one format and only news, never engine terms.",
   );
   tool.selectItem(wide);
   const panes = [...root.querySelectorAll(".ci-pair .ci-viewport")].map((pane) => pane.getBoundingClientRect());
   check(
-    innerWidth >= 680 || (panes[1].top >= panes[0].bottom && Math.abs(panes[0].width / panes[0].height - 1320 / 99) < 0.5),
+    innerWidth >= 680 || (panes[1].top >= panes[0].bottom && Math.abs(panes[0].width / panes[0].height - 1440 / 108) < 0.5),
     "On narrow screens the comparison stacks Original above Result at the image's shape.",
   );
   check(

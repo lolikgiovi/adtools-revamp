@@ -26,8 +26,11 @@
       const width = ["768", "1536", "2394"].includes(params.get("width")) ? Number(params.get("width")) : 390;
       frame.style.width = `${width}px`;
       frame.title = `${width} pixel viewport`;
-      frame.src = params.has("layout") ? "./layout.html" : `./browser.html?theme=${params.get("theme") === "dark" ? "dark" : "light"}`;
+      frame.src = params.has("layout")
+        ? `./layout.html?${params.has("sample") ? "sample" : ""}${params.has("processed") ? "&processed" : ""}`
+        : `./browser.html?theme=${params.get("theme") === "dark" ? "dark" : "light"}`;
       if (params.has("layout")) {
+        frame.style.height = `${Math.round(window.innerHeight / Math.min(1, window.innerWidth / width))}px`;
         frame.style.transformOrigin = "top left";
         frame.style.transform = `scale(${Math.min(1, window.innerWidth / width)})`;
         document.body.style.overflow = "hidden";

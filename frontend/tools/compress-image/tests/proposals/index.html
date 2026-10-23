@@ -1,0 +1,1248 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0e1013" />
+    <title>Compress Image — layout proposals</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0e1013;
+        --panel: #171a20;
+        --soft: #20242b;
+        --ink: #f1f3f5;
+        --muted: #a5aebc;
+        --blue: #5da4ff;
+        --green: #82d7ad;
+        --line: #2a3039;
+        --radius: 8px;
+        font-family:
+          Inter,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        color: var(--ink);
+        background: var(--bg);
+        font-size: 13px;
+        font-synthesis: none;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+      }
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+      button,
+      input,
+      select,
+      label {
+        touch-action: manipulation;
+      }
+      button {
+        color: inherit;
+        cursor: pointer;
+        border: 0;
+      }
+      button:focus-visible,
+      input:focus-visible,
+      select:focus-visible,
+      a:focus-visible {
+        outline: 2px solid var(--blue);
+        outline-offset: 4px;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      button:hover {
+        filter: brightness(1.14);
+      }
+      button:active {
+        transform: translateY(1px);
+      }
+      button {
+        transition:
+          background-color 140ms ease,
+          color 140ms ease;
+      }
+      a {
+        color: var(--blue);
+        text-underline-offset: 3px;
+      }
+      ::selection {
+        background: #345888;
+        color: white;
+      }
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+      h1 {
+        font-size: 17px;
+        letter-spacing: -0.025em;
+      }
+      h2 {
+        font-size: 14px;
+        letter-spacing: -0.015em;
+      }
+      h3 {
+        font-size: 13px;
+      }
+      small,
+      .muted {
+        color: var(--muted);
+      }
+      small {
+        font-size: 12px;
+      }
+      button svg {
+        width: 16px;
+        height: 16px;
+        vertical-align: middle;
+      }
+      svg {
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.5;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .proposal-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        min-height: 74px;
+        padding: 14px 24px;
+        background: #08090b;
+      }
+      .proposal-title {
+        display: grid;
+        gap: 5px;
+      }
+      .proposal-title strong {
+        font-size: 13px;
+      }
+      .proposal-nav {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .proposal-nav a {
+        color: var(--muted);
+        text-decoration: none;
+        padding: 10px 14px;
+        border-radius: 6px;
+      }
+      .proposal-nav a[aria-current="page"] {
+        background: #242932;
+        color: var(--ink);
+      }
+      .sample {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .sample select {
+        background: var(--soft);
+        color: var(--ink);
+        border: 0;
+        border-radius: 5px;
+        padding: 8px;
+      }
+      .shell {
+        max-width: 1800px;
+        margin: auto;
+        padding: 0 22px 22px;
+      }
+      .app-bar {
+        min-height: 76px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .heading {
+        display: flex;
+        gap: 18px;
+        align-items: baseline;
+      }
+      .heading small {
+        font-variant-numeric: tabular-nums;
+      }
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .btn {
+        background: var(--soft);
+        border-radius: 6px;
+        padding: 10px 13px;
+        white-space: nowrap;
+        min-height: 36px;
+      }
+      .btn.primary {
+        background: var(--blue);
+        color: #091525;
+        font-weight: 650;
+      }
+      .btn.ghost {
+        background: transparent;
+        color: var(--muted);
+      }
+      .btn.icon {
+        padding: 9px;
+        min-width: 36px;
+      }
+      .workspace {
+        display: grid;
+        gap: 16px;
+        align-items: stretch;
+        min-height: max(480px, calc(100dvh - 220px));
+      }
+      .studio .workspace {
+        grid-template-columns: 218px minmax(0, 1fr) 260px;
+      }
+      .file-rail,
+      .settings {
+        background: var(--panel);
+        border-radius: var(--radius);
+        min-width: 0;
+      }
+      .rail-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 14px 14px;
+      }
+      .file-list {
+        display: grid;
+        gap: 4px;
+        padding: 0 6px;
+      }
+      .file {
+        display: grid;
+        grid-template-columns: 38px minmax(0, 1fr);
+        gap: 10px;
+        align-items: center;
+        width: 100%;
+        padding: 11px 8px;
+        background: transparent;
+        text-align: left;
+        border-radius: 6px;
+      }
+      .file[aria-pressed="true"] {
+        background: #263448;
+      }
+      .file-copy {
+        display: grid;
+        gap: 5px;
+        min-width: 0;
+      }
+      .file-name {
+        font-size: 12px;
+        font-weight: 550;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .file-meta {
+        font-size: 11px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .thumb,
+      .art {
+        background-image: url("./reference.png");
+        background-size: 295% 256%;
+        background-position: 45.5% 74%;
+        background-repeat: no-repeat;
+        background-color: #33250f;
+      }
+      .thumb {
+        height: 38px;
+        border-radius: 4px;
+      }
+      .thumb.variant-1 {
+        filter: saturate(0.7) hue-rotate(8deg);
+      }
+      .thumb.variant-2 {
+        filter: saturate(0.8) brightness(0.8);
+      }
+      .rail-total {
+        margin: 20px 14px;
+        padding-top: 18px;
+        display: grid;
+        gap: 8px;
+      }
+      .rail-total div {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+      }
+      .file-warning {
+        color: #e8bf80;
+        font-size: 11px;
+      }
+      .green {
+        color: var(--green);
+      }
+      .preview {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .preview-title {
+        padding: 4px 2px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .preview-title h2 {
+        margin-bottom: 6px;
+        overflow-wrap: anywhere;
+      }
+      .preview-title small {
+        font-size: 12px;
+      }
+      .viewbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .segments {
+        display: inline-flex;
+        background: var(--soft);
+        padding: 3px;
+        border-radius: 7px;
+        gap: 3px;
+      }
+      .segments button {
+        padding: 7px 10px;
+        border-radius: 5px;
+        background: transparent;
+        color: var(--muted);
+        font-size: 12px;
+        min-height: 30px;
+      }
+      .segments button[aria-pressed="true"] {
+        background: #383f49;
+        color: var(--ink);
+      }
+      .zoom {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .zoom .btn {
+        padding: 6px;
+        min-width: 28px;
+        min-height: 30px;
+      }
+      .images {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        flex: 1;
+        min-height: 300px;
+      }
+      .image-pane {
+        position: relative;
+        background: #171a1e;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        overflow: hidden;
+        border-radius: 7px;
+      }
+      .image-pane .art {
+        flex: 1;
+        min-height: 260px;
+        transform-origin: center;
+      }
+      .image-label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px;
+        font-size: 12px;
+        background: #1d2229;
+        gap: 8px;
+      }
+      .image-label span {
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .image-label .green {
+        color: var(--green);
+      }
+      .preview-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 2px 0;
+      }
+      .text-btn {
+        background: transparent;
+        color: var(--muted);
+        padding: 8px 0;
+        font-size: 12px;
+      }
+      .preview-footer .actions {
+        gap: 16px;
+      }
+      .settings {
+        padding: 19px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+      .settings-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .scope {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .settings section {
+        display: grid;
+        gap: 12px;
+      }
+      .mode-options {
+        display: grid;
+        gap: 6px;
+      }
+      .mode {
+        display: flex;
+        gap: 10px;
+        padding: 11px 10px;
+        align-items: center;
+        background: #21262e;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .mode:has(input:checked) {
+        background: #23364b;
+      }
+      .mode input {
+        margin: 0;
+        accent-color: var(--blue);
+        width: 15px;
+        height: 15px;
+        flex-shrink: 0;
+      }
+      .mode span {
+        display: grid;
+        gap: 5px;
+        font-size: 12px;
+      }
+      .mode small {
+        font-size: 11px;
+      }
+      .offer {
+        color: var(--green);
+        font-size: 11px;
+        line-height: 1.5;
+      }
+      .toggle-label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        cursor: pointer;
+        font-weight: 550;
+      }
+      .toggle {
+        position: relative;
+        display: inline-flex;
+      }
+      .toggle input {
+        position: absolute;
+        opacity: 0;
+        width: 32px;
+        height: 20px;
+        margin: 0;
+      }
+      .switch {
+        display: inline-block;
+        background: #4a535e;
+        width: 32px;
+        height: 20px;
+        border-radius: 10px;
+        padding: 3px;
+      }
+      .switch:after {
+        content: "";
+        display: block;
+        background: #f4f6f8;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        transition: transform 150ms ease;
+      }
+      .toggle input:checked + .switch {
+        background: #377bc7;
+      }
+      .toggle input:checked + .switch:after {
+        transform: translateX(12px);
+      }
+      .toggle input:focus-visible + .switch {
+        outline: 2px solid var(--blue);
+        outline-offset: 4px;
+      }
+      .resize-fields {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .resize-fields label,
+      .quality label {
+        display: grid;
+        gap: 7px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      input[type="number"],
+      select {
+        width: 100%;
+        background: #242a33;
+        color: var(--ink);
+        padding: 9px;
+        border: 1px solid #424c59;
+        border-radius: 5px;
+        min-width: 0;
+      }
+      input[type="range"] {
+        accent-color: var(--blue);
+        width: 100%;
+        margin: 0;
+        min-height: 24px;
+      }
+      .phone-note {
+        color: #e8bf80;
+        font-size: 11px;
+        line-height: 1.5;
+      }
+      .resize-presets {
+        display: grid;
+        gap: 5px;
+      }
+      .resize-presets button {
+        background: var(--soft);
+        text-align: left;
+        border-radius: 5px;
+        padding: 9px;
+        font-size: 11px;
+      }
+      .resize-presets button[aria-pressed="true"] {
+        background: #23364b;
+        color: #c7e1ff;
+      }
+      .settings-bottom {
+        margin-top: auto;
+        display: grid;
+        gap: 10px;
+      }
+      .settings-bottom small {
+        font-size: 11px;
+        text-align: center;
+      }
+      .quality {
+        display: grid;
+        gap: 9px;
+      }
+      .quality label span {
+        display: flex;
+        justify-content: space-between;
+      }
+      .quality output {
+        color: var(--ink);
+      }
+      [hidden] {
+        display: none !important;
+      }
+      .slider-view {
+        grid-template-columns: 1fr;
+        position: relative;
+      }
+      .slider-view .image-pane:nth-child(2) {
+        position: absolute;
+        inset: 0;
+        clip-path: inset(0 0 0 var(--split, 50%));
+        border-radius: 7px;
+      }
+      .split-control {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .split-control input {
+        flex: 1;
+      }
+      .design-caption {
+        margin-top: 17px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+        display: flex;
+        gap: 10px;
+      }
+      .design-caption strong {
+        color: var(--ink);
+      }
+      /* Canvas: image stage first; thumbnails replace the vertical list. */
+      .canvas .workspace {
+        grid-template-columns: minmax(0, 1fr) 274px;
+      }
+      .canvas .file-rail {
+        display: none;
+      }
+      .canvas .images {
+        min-height: 300px;
+      }
+      .filmstrip {
+        display: flex;
+        gap: 9px;
+        overflow: auto;
+        padding: 4px 0 0;
+      }
+      .filmstrip .file {
+        width: 230px;
+        flex: 0 0 230px;
+        background: var(--panel);
+        grid-template-columns: 48px minmax(0, 1fr);
+        padding: 12px;
+      }
+      .filmstrip .file[aria-pressed="true"] {
+        background: #263448;
+      }
+      .filmstrip .thumb {
+        height: 42px;
+      }
+      .canvas .preview-footer {
+        order: 2;
+      }
+      .canvas .filmstrip {
+        order: 3;
+      }
+      .canvas .preview {
+        gap: 14px;
+      }
+      /* Batch desk: tabular scan and a compact selected-file inspector. */
+      .batch .workspace {
+        grid-template-columns: minmax(400px, 0.95fr) minmax(0, 1.3fr);
+        grid-template-rows: auto 1fr;
+        min-height: max(480px, calc(100dvh - 220px));
+      }
+      .batch .settings {
+        grid-column: 1/-1;
+        display: grid;
+        grid-template-columns: minmax(250px, 1.2fr) minmax(230px, 1fr) 210px;
+        gap: 26px;
+        align-items: start;
+        padding: 16px 18px;
+      }
+      .batch .settings-heading,
+      .batch .settings-bottom {
+        display: none;
+      }
+      .batch .settings section {
+        gap: 9px;
+      }
+      .batch .mode-options {
+        grid-template-columns: 1fr 1fr;
+      }
+      .batch .mode {
+        padding: 9px;
+      }
+      .batch .mode span {
+        font-size: 11px;
+      }
+      .batch .offer {
+        font-size: 11px;
+      }
+      .batch .settings .resize-fields {
+        grid-template-columns: 1fr 1fr;
+      }
+      .batch .quality {
+        margin-top: 0;
+      }
+      .batch .settings .format-photo {
+        grid-column: 3;
+      }
+      .batch .file-rail {
+        grid-column: 1;
+        grid-row: 2;
+        background: transparent;
+      }
+      .batch .preview {
+        grid-column: 2;
+        grid-row: 2;
+      }
+      .batch .images {
+        min-height: 300px;
+      }
+      .batch .images .art {
+        min-height: 300px;
+      }
+      .batch .rail-head {
+        padding: 5px 0 15px;
+      }
+      .batch .file-list {
+        display: block;
+        padding: 0;
+        background: var(--panel);
+        border-radius: 7px;
+        overflow: hidden;
+      }
+      .batch .file {
+        border-radius: 0;
+        grid-template-columns: minmax(0, 1fr) 65px 65px;
+        gap: 8px;
+        padding: 16px 12px;
+      }
+      .batch .file .thumb {
+        display: none;
+      }
+      .batch .file .file-name {
+        font-size: 12px;
+      }
+      .batch .file .file-meta {
+        font-size: 11px;
+      }
+      .table-size {
+        display: grid;
+        gap: 6px;
+        font-size: 12px;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .table-size small {
+        font-size: 10px;
+      }
+      .batch .table-head {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 65px 65px;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 11px;
+        padding: 12px;
+        background: #1d2229;
+      }
+      .batch .table-head span:not(:first-child) {
+        text-align: right;
+      }
+      .batch .rail-total {
+        margin: 18px 0;
+        padding: 0;
+      }
+      .batch .rail-total div {
+        font-size: 13px;
+      }
+      .table-size,
+      .table-head {
+        display: none;
+      }
+      .batch .table-size {
+        display: grid;
+      }
+      .batch .preview-title {
+        padding: 5px 0;
+      }
+      .batch .images {
+        gap: 6px;
+      }
+      .batch .preview-footer .text-btn:first-child {
+        max-width: 140px;
+      }
+      .batch .settings .mode small {
+        font-size: 10px;
+      }
+      .batch .settings section:first-of-type h3 {
+        font-size: 12px;
+      }
+      .batch .app-bar .heading small {
+        display: none;
+      }
+      @media (min-width: 1500px) {
+        .studio .workspace {
+          grid-template-columns: 250px minmax(0, 1fr) 290px;
+        }
+        .workspace {
+          min-height: max(520px, calc(100dvh - 220px));
+        }
+        .image-pane .art {
+          min-height: 300px;
+        }
+      }
+      @media (max-width: 1050px) and (min-width: 721px) {
+        .studio .workspace {
+          grid-template-columns: 180px minmax(0, 1fr) 226px;
+          gap: 12px;
+        }
+        .shell {
+          padding: 0 16px 16px;
+        }
+        .settings {
+          padding: 16px 12px;
+        }
+        .file {
+          grid-template-columns: 28px minmax(0, 1fr);
+          gap: 7px;
+        }
+        .thumb {
+          height: 30px;
+        }
+        .studio .image-label {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 4px;
+        }
+        .proposal-bar {
+          padding: 12px 16px;
+        }
+        .proposal-title small {
+          display: none;
+        }
+      }
+      @media (max-width: 720px) {
+        .proposal-bar {
+          padding: 12px 14px;
+          flex-wrap: wrap;
+          gap: 12px;
+        }
+        .proposal-title {
+          display: none;
+        }
+        .proposal-nav {
+          width: 100%;
+          justify-content: space-between;
+        }
+        .proposal-nav a {
+          padding: 9px 10px;
+        }
+        .sample {
+          justify-content: space-between;
+          width: 100%;
+        }
+        .sample select {
+          width: auto;
+        }
+        .shell {
+          padding: 0 14px 20px;
+        }
+        .app-bar {
+          align-items: flex-start;
+          padding: 18px 0;
+          min-height: 95px;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .heading {
+          gap: 7px;
+          align-items: flex-start;
+          flex-direction: column;
+        }
+        h1 {
+          font-size: 16px;
+        }
+        .app-bar .actions {
+          margin-left: auto;
+        }
+        .app-bar .btn {
+          padding: 9px 10px;
+          font-size: 12px;
+        }
+        .workspace,
+        .studio .workspace,
+        .canvas .workspace,
+        .batch .workspace {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 16px;
+          min-height: 0;
+        }
+        .studio .file-rail {
+          order: 1;
+        }
+        .studio .preview {
+          order: 2;
+        }
+        .studio .settings {
+          order: 3;
+        }
+        .studio .file-list {
+          display: flex;
+          overflow: auto;
+          padding: 0 8px 10px;
+          gap: 6px;
+        }
+        .studio .file {
+          flex: 0 0 230px;
+        }
+        .studio .rail-head {
+          padding: 13px;
+        }
+        .studio .rail-total {
+          display: none;
+        }
+        .images,
+        .canvas .images,
+        .batch .images {
+          min-height: 290px;
+        }
+        .image-pane .art,
+        .batch .images .art {
+          min-height: 290px;
+        }
+        .image-label {
+          padding: 9px;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 4px;
+          font-size: 11px;
+        }
+        .preview-title h2 {
+          font-size: 13px;
+        }
+        .preview-title small {
+          font-size: 11px;
+        }
+        .viewbar {
+          gap: 8px;
+        }
+        .segments button {
+          padding: 7px 9px;
+        }
+        .settings {
+          gap: 20px;
+          padding: 17px;
+        }
+        .settings .mode-options {
+          grid-template-columns: 1fr 1fr;
+        }
+        .settings-bottom {
+          margin: 0;
+        }
+        .preview-footer {
+          flex-wrap: wrap;
+          gap: 2px;
+        }
+        .preview-footer .actions {
+          margin-left: auto;
+        }
+        .canvas .settings {
+          grid-row: 2;
+        }
+        .canvas .filmstrip .file {
+          flex-basis: 230px;
+        }
+        .canvas .preview-footer {
+          order: 4;
+        }
+        .batch .settings {
+          grid-column: 1;
+          grid-row: 2;
+          display: flex;
+          gap: 20px;
+        }
+        .batch .settings-heading {
+          display: flex;
+        }
+        .batch .settings .phone-note,
+        .batch .settings .resize-presets,
+        .batch .settings-bottom {
+          display: grid;
+        }
+        .batch .file-rail {
+          grid-column: 1;
+          grid-row: 1;
+        }
+        .batch .preview {
+          grid-column: 1;
+          grid-row: 3;
+        }
+        .batch .table-head {
+          grid-template-columns: minmax(0, 1fr) 60px 60px;
+        }
+        .batch .file {
+          grid-template-columns: minmax(0, 1fr) 60px 60px;
+          padding: 15px 12px;
+        }
+        .batch .rail-total {
+          margin: 14px 0;
+        }
+        .design-caption {
+          display: block;
+          font-size: 12px;
+        }
+        .design-caption strong {
+          display: block;
+          margin-bottom: 5px;
+        }
+        .preview-footer .text-btn {
+          font-size: 11px;
+        }
+      }
+      /* Batch Desk refinement: explicit format scopes in outlined fieldsets. */
+      .batch .settings {
+        background: transparent;
+        padding: 0;
+        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+        align-items: stretch;
+      }
+      .batch .settings-group {
+        min-width: 0;
+        margin: 0;
+        padding: 12px 14px 14px;
+        border: 1px solid #343d49;
+        border-radius: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .batch .settings-group legend {
+        padding: 0 6px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--ink);
+      }
+      .batch .settings-group .mode {
+        background: transparent;
+        padding: 10px;
+        min-height: 54px;
+      }
+      .batch .settings-group .mode:has(input:checked) {
+        background: #23364b;
+      }
+      .batch .settings-group .mode-options {
+        background: var(--panel);
+        border-radius: 6px;
+        padding: 3px;
+      }
+      .batch .settings-group .mode small {
+        font-size: 11px;
+      }
+      .batch .settings-group .resize-presets {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .batch .settings-group .resize-presets button {
+        flex: 1;
+        white-space: nowrap;
+        text-align: center;
+      }
+      .batch .settings .format-photo {
+        grid-column: auto;
+      }
+      .batch .settings-group .phone-note {
+        font-size: 11px;
+      }
+      @media (max-width: 720px) {
+        .batch .settings {
+          gap: 12px;
+        }
+        .batch .settings-group {
+          flex: 1;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        button,
+        .switch:after {
+          transition: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="proposal-bar">
+      <div class="proposal-title"><strong>Compress Image · proposals</strong><small>Interactive layouts · illustrative results</small></div>
+      <nav class="proposal-nav" aria-label="Layout proposals">
+        <a href="?layout=studio" data-layout="studio">Studio</a><a href="?layout=canvas" data-layout="canvas">Canvas</a
+        ><a href="?layout=batch" data-layout="batch">Batch desk</a>
+      </nav>
+      <label class="sample"
+        >Sample batch
+        <select id="sample" name="sample">
+          <option value="png">PNG only</option>
+          <option value="mixed">PNG + JPEG / WebP</option>
+        </select></label
+      >
+    </header>
+    <main class="shell" id="main"></main>
+    <script type="module">
+      const params = new URLSearchParams(location.search);
+      const layout = ["studio", "canvas", "batch"].includes(params.get("layout")) ? params.get("layout") : "studio";
+      const mixed = params.get("sample") === "mixed";
+      const main = document.querySelector("main");
+      main.classList.add(layout);
+      document.querySelector(`[data-layout="${layout}"]`).setAttribute("aria-current", "page");
+      document.querySelectorAll("[data-layout]").forEach((a) => {
+        a.href = `?layout=${a.dataset.layout}${mixed ? "&sample=mixed" : ""}`;
+      });
+      const sample = document.querySelector("#sample");
+      sample.value = mixed ? "mixed" : "png";
+      sample.addEventListener("change", () => (location.href = `?layout=${layout}&sample=${sample.value}`));
+      const files = [
+        ["alumni-prioritas-chip.png", "2440 × 1530", "6.70 MB", "6.40 MB", "4.4%"],
+        ["alumni-private-chip.png", "2440 × 1530", "6.55 MB", "6.25 MB", "4.6%"],
+        [mixed ? "campaign-banner.jpg" : "alumni-platinum-chip.png", mixed ? "4000 × 1800" : "2440 × 1530", "5.44 MB", "4.89 MB", "10.1%"],
+      ];
+      if (mixed) files.push(["product-thumbnail.webp", "800 × 800", "320 KB", "215 KB", "32.8%"]);
+      const icon = (name) =>
+        ({
+          plus: '<path d="M8 3v10M3 8h10"/>',
+          minus: '<path d="M3 8h10"/>',
+          download: '<path d="M8 2v8m-3-3 3 3 3-3M3 11v3h10v-3"/>',
+          reset: '<path d="M3 6a5 5 0 1 1 0 4M3 2v4h4"/>',
+        })[name];
+      const svg = (name) => `<svg viewBox="0 0 16 16" aria-hidden="true">${icon(name)}</svg>`;
+      const fileMarkup = () =>
+        files
+          .map(
+            (f, i) =>
+              `<button class="file" data-file="${i}" aria-pressed="${i === 0}" title="${f[0]}"><span class="thumb variant-${i % 3}" aria-hidden="true"></span><span class="file-copy"><span class="file-name">${f[0]}</span><span class="file-meta">${f[1]}${layout === "batch" ? "" : ` · ${f[2]}`}</span>${mixed && i === 2 ? '<span class="file-warning">Resize suggested</span>' : ""}</span><span class="table-size">${f[2]}<small>Original</small></span><span class="table-size">${f[3]}<small class="green">−${f[4]}</small></span></button>`,
+          )
+          .join("");
+      const rail = `<aside class="file-rail" aria-label="Image files"><div class="rail-head"><h2>${files.length} images</h2><button class="btn ghost icon add" aria-label="Add images">${svg("plus")}</button></div><div class="file-list"><div class="table-head"><span>Image</span><span>Original</span><span>Result</span></div>${fileMarkup()}</div><div class="rail-total"><div><span class="muted">Original</span><span>18.69 MB</span></div><div><span class="muted">Result</span><span>17.54 MB</span></div><div><span class="muted">Saved</span><span class="green">1.15 MB · 6.1%</span></div></div></aside>`;
+      let settings = `<aside class="settings" aria-label="Batch compression settings"><div class="settings-heading"><h2>Settings</h2><span class="scope">All images</span></div><section><h3>PNG</h3><div class="mode-options"><label class="mode"><input type="radio" name="png-mode" value="lossless" checked><span>Lossless<small>Exact pixel colors</small></span></label><label class="mode"><input type="radio" name="png-mode" value="lossy"><span>Lossy<small>Visually similar</small></span></label></div><p class="offer">Lossy option: 5.54 MB · 68% smaller</p></section><section><label class="toggle-label">Resize<span class="toggle"><input type="checkbox" role="switch" name="resize" aria-label="Resize images"><span class="switch" aria-hidden="true"></span></span></label><p class="phone-note" ${mixed ? "" : "hidden"}>campaign-banner.jpg exceeds phone dimensions.</p><div class="resize-presets" ${mixed ? "" : "hidden"}><button data-bounds="1440,3200" aria-pressed="false">Portrait · 1440 × 3200</button><button data-bounds="2670,2670" aria-pressed="false">Square · 2670 × 2670</button></div><div class="resize-fields" hidden><label>Max width<input type="number" name="width" min="1" max="16384" value="1440"></label><label>Max height<input type="number" name="height" min="1" max="16384" value="3200"></label></div><small class="resize-impact" hidden>Fits without cropping. Changes pixels.</small></section><section class="format-photo" ${mixed ? "" : "hidden"}><h3>JPEG / WebP</h3><div class="quality"><label><span>Lossy quality <output>85</output></span><input name="quality" aria-label="JPEG and WebP quality" type="range" min="1" max="100" value="85"></label></div><small>Lossless WebP stays lossless.</small></section><div class="settings-bottom"><button class="btn compress">Compress ${files.length} images</button><small class="settings-status" role="status">Lossless · original dimensions</small></div></aside>`;
+      if (layout === "batch") {
+        const template = document.createElement("template");
+        template.innerHTML = settings;
+        const root = template.content.querySelector("aside");
+        const sections = [...root.querySelectorAll(":scope > section")];
+        const group = (section, title, className) => {
+          const fieldset = document.createElement("fieldset");
+          fieldset.className = `settings-group ${className}`;
+          fieldset.hidden = section.hidden;
+          section.querySelector("h3")?.remove();
+          const legend = document.createElement("legend");
+          legend.textContent = title;
+          fieldset.append(legend, ...section.childNodes);
+          return fieldset;
+        };
+        root.querySelector(".settings-heading").remove();
+        const all = group(sections[1], "All", "settings-all");
+        const png = group(sections[0], "PNG Only", "settings-png");
+        const photo = group(sections[2], "JPEG & WebP Only", "format-photo");
+        all.querySelector(".phone-note").textContent = "1 image exceeds phone dimensions.";
+        sections.forEach((section) => section.remove());
+        root.prepend(all, png, photo);
+        settings = root.outerHTML;
+      }
+      const preview = `<section class="preview" aria-label="Selected image comparison"><header class="preview-title"><div><h2 class="selected-name">${files[0][0]}</h2><small class="selected-detail">2440 × 1530 · Lossless</small></div></header><div class="viewbar"><div class="segments" role="group" aria-label="Comparison view"><button aria-pressed="true" data-view="pair">Side by side</button><button aria-pressed="false" data-view="slider">Slider</button></div><div class="zoom"><button class="btn ghost icon" aria-label="Zoom out" data-zoom="-1">${svg("minus")}</button><span class="zoom-value" aria-live="polite">Fit</span><button class="btn ghost icon" aria-label="Zoom in" data-zoom="1">${svg("plus")}</button><button class="btn ghost icon" aria-label="Reset zoom" data-zoom="0">${svg("reset")}</button></div></div><div class="images"><div class="image-pane"><div class="image-label">Original<span class="before-size">6.70 MB</span></div><div class="art" role="img" aria-label="Gold architectural card artwork, original"></div></div><div class="image-pane"><div class="image-label">Result<span><span class="after-size">6.40 MB</span> <span class="green selected-saved">−4.4%</span></span></div><div class="art" role="img" aria-label="Gold architectural card artwork, proposed result"></div></div></div><label class="split-control" hidden>Original<input type="range" name="comparison-split" min="0" max="100" value="50" aria-label="Before and after divider">Result</label><footer class="preview-footer"><button class="text-btn logs">Processing log</button><div class="actions"><button class="text-btn original-download">Download original</button><button class="btn result-download">${svg("download")} Download result</button></div></footer><p class="log-output muted" role="status" hidden>Design preview — no files are processed or downloaded.</p>${layout === "canvas" ? `<nav class="filmstrip" aria-label="Image files">${fileMarkup()}</nav>` : ""}</section>`;
+      const descriptions = {
+        studio: ["Studio", "Files on the left, comparison in the center, batch settings on the right."],
+        canvas: ["Canvas", "A larger image stage with a thumbnail strip; settings stay beside the artwork."],
+        batch: ["Batch desk", "A compact size ledger for scanning many files, paired with a selected-image preview."],
+      };
+      main.innerHTML = `<header class="app-bar"><div class="heading"><h1>Compress Image</h1><small>${files.length} images · 1.15 MB saved</small></div><div class="actions"><button class="btn ghost add">${svg("plus")} Add images</button>${layout === "batch" ? `<button class="btn compress">Compress ${files.length} images</button>` : ""}<button class="btn primary zip">Download ZIP</button></div></header><div class="workspace">${layout === "batch" ? settings + rail + preview : rail + preview + settings}</div><p class="design-caption"><strong>${descriptions[layout][0]}</strong><span>${descriptions[layout][1]}</span></p><p class="feedback muted" role="status"></p>`;
+      let selected = 0,
+        zoom = 1;
+      const feedback = (text) => (document.querySelector(".feedback").textContent = text);
+      const wireFiles = () =>
+        document.querySelectorAll("[data-file]").forEach((button) =>
+          button.addEventListener("click", () => {
+            selected = Number(button.dataset.file);
+            const f = files[selected];
+            document
+              .querySelectorAll("[data-file]")
+              .forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.file) === selected)));
+            document.querySelector(".selected-name").textContent = f[0];
+            document.querySelector(".selected-detail").textContent = `${f[1]} · ${f[0].endsWith(".png") ? "Lossless" : "Quality 85"}`;
+            document.querySelector(".before-size").textContent = f[2];
+            document.querySelector(".after-size").textContent = f[3];
+            document.querySelector(".selected-saved").textContent = `−${f[4]}`;
+          }),
+        );
+      wireFiles();
+      document.querySelectorAll("[data-view]").forEach((button) =>
+        button.addEventListener("click", () => {
+          document.querySelectorAll("[data-view]").forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
+          document.querySelector(".images").classList.toggle("slider-view", button.dataset.view === "slider");
+          document.querySelector(".split-control").hidden = button.dataset.view !== "slider";
+        }),
+      );
+      document
+        .querySelector("[name=comparison-split]")
+        .addEventListener("input", (e) => document.querySelector(".images").style.setProperty("--split", `${e.target.value}%`));
+      document.querySelectorAll("[data-zoom]").forEach((button) =>
+        button.addEventListener("click", () => {
+          const step = Number(button.dataset.zoom);
+          zoom = step === 0 ? 1 : Math.max(1, Math.min(4, zoom + step * 0.5));
+          document.querySelector(".zoom-value").textContent = zoom === 1 ? "Fit" : `${zoom}×`;
+          document.querySelectorAll(".art").forEach((art) => (art.style.transform = `scale(${zoom})`));
+        }),
+      );
+      const resize = document.querySelector("[name=resize]");
+      const updateSettings = () => {
+        document.querySelector(".zip").classList.remove("primary");
+        if (!resize.checked) {
+          document.querySelectorAll("[data-bounds]").forEach((button) => button.setAttribute("aria-pressed", "false"));
+        }
+        document.querySelector(".resize-fields").hidden = !resize.checked;
+        document.querySelector(".resize-impact").hidden = !resize.checked;
+        document.querySelector(".settings-status").textContent =
+          `${document.querySelector("[name=png-mode]:checked").value === "lossy" ? "Lossy" : "Lossless"} · ${resize.checked ? "resize enabled" : "original dimensions"}`;
+        document.querySelectorAll(".compress").forEach((b) => {
+          b.textContent = `Compress ${files.length} images`;
+          b.classList.add("primary");
+        });
+      };
+      resize.addEventListener("change", updateSettings);
+      document.querySelectorAll("[name=png-mode]").forEach((r) => r.addEventListener("change", updateSettings));
+      document.querySelectorAll("[data-bounds]").forEach((b) =>
+        b.addEventListener("click", () => {
+          resize.checked = true;
+          const [w, h] = b.dataset.bounds.split(",");
+          document.querySelector("[name=width]").value = w;
+          document.querySelector("[name=height]").value = h;
+          document.querySelectorAll("[data-bounds]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+          updateSettings();
+        }),
+      );
+      document.querySelector("[name=quality]").addEventListener("input", (e) => {
+        document.querySelector("output").textContent = e.target.value;
+        updateSettings();
+      });
+      document
+        .querySelectorAll(".compress")
+        .forEach((b) =>
+          b.addEventListener("click", () =>
+            feedback("Design preview — compression settings are interactive; the production engine is unchanged."),
+          ),
+        );
+      document
+        .querySelectorAll(".original-download,.result-download,.zip,.add")
+        .forEach((b) => b.addEventListener("click", () => feedback("Design preview — no file is uploaded or downloaded.")));
+      document.querySelector(".logs").addEventListener("click", () => {
+        const log = document.querySelector(".log-output");
+        log.hidden = !log.hidden;
+      });
+    </script>
+  </body>
+</html>

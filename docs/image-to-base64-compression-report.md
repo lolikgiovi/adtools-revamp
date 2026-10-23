@@ -13,13 +13,13 @@ compressor?
 
 ## Evidence and method
 
-| Item | Value |
-| --- | --- |
-| Route → component chunk | `main-N6HRUKF3.js` route table → `chunk-33TG6M3V.js` |
+| Item                     | Value                                                                                    |
+| ------------------------ | ---------------------------------------------------------------------------------------- |
+| Route → component chunk  | `main-N6HRUKF3.js` route table → `chunk-33TG6M3V.js`                                     |
 | Component chunk identity | sha256 `5df37533aec48427d55600a64a0d1bdc42294aac514803666c501ce143b92039`, 158 635 bytes |
-| Bundle capture | `ev_5e266d0a…` (`analyze_web_bundle`, 59 scripts, 0 parse failures) |
-| Rendered UI + i18n | `ev_4e2e3792…` (`capture_browser_scenario`, DOM + `assets/i18n/en.json`) |
-| Source read | Chunk fetched from the deployment; byte count matches the capture exactly |
+| Bundle capture           | `ev_5e266d0a…` (`analyze_web_bundle`, 59 scripts, 0 parse failures)                      |
+| Rendered UI + i18n       | `ev_4e2e3792…` (`capture_browser_scenario`, DOM + `assets/i18n/en.json`)                 |
+| Source read              | Chunk fetched from the deployment; byte count matches the capture exactly                |
 
 Method: static analysis of the shipped JavaScript (REA bundle capture, then direct reads of the route chunk) plus
 one rendered-page capture for UI strings. **No compression was executed** — the capture path has no file-input
@@ -31,7 +31,12 @@ Evidence type per claim: function bodies are observed; cost estimates are marked
 
 Everything is client-side. There is no upload and no server codec: the file is decoded into a `<canvas>`, re-encoded
 with either the canvas encoder or UPNG.js, and the resulting bytes become the Base64 output. The chunk bundles
-**UPNG.js + pako** (`window.UPNG`), not a compression library like `browser-image-compression`.
+**UPNG.js + pako** (UPNG's UMD shim, `window.UPNG`, is still in the source), not a compression library like
+`browser-image-compression`.
+
+The Base64 comes from the compressed `Blob` via `readAsDataURL` (`te`). `includePrefix` (default on) decides
+whether the `data:image/…;base64,` header is kept, and `On` wraps the result as plain text, `<img src>`,
+CSS `background-image`, or Markdown.
 
 ```mermaid
 flowchart TD
@@ -42,7 +47,7 @@ flowchart TD
   P -->|remaster, default off| PR[3x3 luma unsharp 0.40, contrast 1.03]
   PB --> M{mode}
   PR --> M
-  P --> M
+  P -->|neither| M
   M -->|auto| A[no size budget]
   M -->|target KB| T[budget search]
   M -->|lossless| L[PNG only: toBlob PNG]
@@ -65,12 +70,12 @@ Defaults: `lossy = true`, `auto = true`, `lossless = true`, `remaster = false`, 
 
 ### Per-mode encoding
 
-| Mode | Function | PNG | JPEG / WebP | Other `image/*` |
-| --- | --- | --- | --- | --- |
-| Auto | `Ya` → `Fl` | `Nl`: UPNG lossless, then dithered palettes 256/192/128, stop when mean colour error grows >15% | `toBlob(type, 0.82)` | `toBlob(type)`, accepted only if the browser returns that type, else JPEG 0.82 |
-| Target | `ja` → `Rl` | `Hl`: UPNG lossless, then palette ladder **256,192,128,96,64,48,32,16** (custom dither), then UPNG native palette at the same ladder | 8-step binary search, quality 0.05–0.98 | single `toBlob(type)`; JPEG search if over |
-| Lossless | `Ka` → `Ll` | `toBlob('image/png')`, canvas re-encode | untouched | untouched |
-| Original | — | untouched | untouched | untouched |
+| Mode     | Function    | PNG                                                                                                                                  | JPEG / WebP                             | Other `image/*`                                                                |
+| -------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------- | ------------------------------------------------------------------------------ |
+| Auto     | `Ya` → `Fl` | `Nl`: UPNG lossless, then dithered palettes 256/192/128, stop when mean colour error grows >15%                                      | `toBlob(type, 0.82)`                    | `toBlob(type)`, accepted only if the browser returns that type, else JPEG 0.82 |
+| Target   | `ja` → `Rl` | `Hl`: UPNG lossless, then palette ladder **256,192,128,96,64,48,32,16** (custom dither), then UPNG native palette at the same ladder | 8-step binary search, quality 0.05–0.98 | single `toBlob(type)`; JPEG search if over                                     |
+| Lossless | `Ka` → `Ll` | `toBlob('image/png')`, canvas re-encode                                                                                              | untouched                               | untouched                                                                      |
+| Original | —           | untouched                                                                                                                            | untouched                               | untouched                                                                      |
 
 Acceptance is always `Ga`: use the candidate only when `candidate.size < original.size`, otherwise keep the
 original and report `optimized: false`. There is no quality floor in any mode; the only lower bound is the search
@@ -93,7 +98,7 @@ whichever candidate is smaller — an ad-hoc two-quantizer ensemble.
 Only reachable when the user enables it and the source has no alpha (`if (r && !n)`):
 flatten onto white (`Dn`), JPEG at 0.82 in auto mode, or the same quality search as the target in target mode.
 
-Formats outside PNG/JPEG/WebP (GIF, BMP, TIFF, ICO) take the generic branch: `toBlob(type)` with the *source*
+Formats outside PNG/JPEG/WebP (GIF, BMP, TIFF, ICO) take the generic branch: `toBlob(type)` with the _source_
 type, accepted only when the browser returns that same type. A canvas cannot encode GIF/BMP/TIFF, so it returns
 PNG, the `type === source` check fails, and the dispatcher falls through to JPEG 0.82. A GIF therefore loses
 animation and becomes a single-frame JPEG whenever that is smaller. The same guard means an SVG upload re-encodes
@@ -101,32 +106,32 @@ through the canvas (rasterised at natural size) rather than being passed through
 
 ## Behaviours worth knowing (and not copying)
 
-| Behaviour | Detail |
-| --- | --- |
-| No resizing anywhere | every canvas is `naturalWidth × naturalHeight`; savings come only from palette or quality |
+| Behaviour                      | Detail                                                                                                    |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| No resizing anywhere           | every canvas is `naturalWidth × naturalHeight`; savings come only from palette or quality                 |
 | Lossy off disables Target Size | the resolver returns `lossless`/`original` without consulting `targetKb`; the UI note claims the opposite |
-| Two sources of target state | `targetSizePercent` (25) and `targetSizeKb` (null) are kept in sync by hand and drift when auto toggles |
-| Fixed 0.82 | auto-mode JPEG/WebP quality is a constant; no measurement, no floor |
-| Canvas PNG "lossless" | re-encodes pixels and drops ancillary chunks; no metadata or ICC comparison |
-| Main-thread encoding | UPNG quantize/encode is synchronous JS; no Worker, no OffscreenCanvas, no `createImageBitmap` |
-| Format/name drift | `mimeType` follows produced bytes, the file name keeps the source extension |
-| Auto mode is not adaptive | no size budget, no floor, no resize; "TinyPNG-style" describes the palette step only |
+| Two sources of target state    | `targetSizePercent` (25) and `targetSizeKb` (null) are kept in sync by hand and drift when auto toggles   |
+| Fixed 0.82                     | auto-mode JPEG/WebP quality is a constant; no measurement, no floor                                       |
+| Canvas PNG "lossless"          | re-encodes pixels and drops ancillary chunks; no metadata or ICC comparison                               |
+| Main-thread encoding           | UPNG quantize/encode is synchronous JS; no Worker, no OffscreenCanvas, no `createImageBitmap`             |
+| Format/name drift              | `mimeType` follows produced bytes, the file name keeps the source extension                               |
+| Auto mode is not adaptive      | no size budget, no floor, no resize; "TinyPNG-style" describes the palette step only                      |
 
 ## Comparison with our compressor
 
-| Capability | Image to Base64 | `frontend/tools/compress-image` |
-| --- | --- | --- |
-| JPEG encoder | canvas (`toBlob`) | MozJPEG wasm, progressive, optimize_coding |
-| WebP encoder | canvas | libwebp wasm, method per preset |
-| PNG lossless | UPNG / canvas re-encode | Oxipng in place, metadata and ICC verified |
-| PNG lossy | hand-rolled palette + Floyd–Steinberg | libimagequant (quality floor, `maxColors`) → Oxipng |
-| Quality control | presets only (`0.82`), no floor | per-preset quality + PNG min/target quality |
-| Size budget | **binary search / palette ladder** | **none** |
-| Resize | none | `fitDimensions`, optional |
-| Preprocessing | deep-black clamp, unsharp | none |
-| Candidate policy | smallest wins | `selectCandidate`: 1% / 1 KB minimum saving vs best baseline |
-| Execution | main thread | worker (+ worker pool planned) |
-| Integrity | none | dimension/type checks, `verifyPngMetadata`, corrupt-zlib guard |
+| Capability       | Image to Base64                                     | `frontend/tools/compress-image`                                |
+| ---------------- | --------------------------------------------------- | -------------------------------------------------------------- |
+| JPEG encoder     | canvas (`toBlob`)                                   | MozJPEG wasm, progressive, optimize_coding                     |
+| WebP encoder     | canvas                                              | libwebp wasm, method per preset                                |
+| PNG lossless     | UPNG / canvas re-encode                             | Oxipng in place, metadata and ICC verified                     |
+| PNG lossy        | hand-rolled palette + Floyd–Steinberg               | libimagequant (quality floor, `maxColors`) → Oxipng            |
+| Quality control  | presets only (`0.82`), no floor                     | per-preset quality + PNG min/target quality                    |
+| Size budget      | **binary search / palette ladder**                  | **none**                                                       |
+| Resize           | none                                                | `fitDimensions`, optional                                      |
+| Preprocessing    | deep-black clamp, unsharp                           | none                                                           |
+| Candidate policy | smallest wins                                       | `selectCandidate`: 1% / 1 KB minimum saving vs best baseline   |
+| Execution        | main thread                                         | worker (+ worker pool planned)                                 |
+| Integrity        | size-only guard, no metadata or format verification | dimension/type checks, `verifyPngMetadata`, corrupt-zlib guard |
 
 The technology gap runs the other way: our codecs and guards are stronger. The one structural idea we lack is
 **encoding against a byte budget**.
@@ -147,8 +152,8 @@ preset. NF proves the search shape works; it lacks the floor and the escape hatc
 async function encodeToTarget(encode, image, settings, targetBytes, floor, probes = 7) {
   let lo = floor;
   let hi = 100;
-  let best = null;      // largest quality that met the budget
-  let smallest = null;  // smallest output seen
+  let best = null; // largest quality that met the budget
+  let smallest = null; // smallest output seen
   for (let i = 0; i < probes && lo <= hi; i += 1) {
     const quality = Math.round((lo + hi) / 2);
     const bytes = new Uint8Array(await encode(image, { ...settings, quality }));
@@ -200,7 +205,8 @@ baseline; we never compare across codecs.
 
 - Race the source type against WebP when a new "allow format change" toggle is on; PNG with alpha must never go to
   JPEG (NF's one good guard: `if (r && !n)`), and WebP keeps alpha.
-- Every candidate still passes `verifyPngMetadata`/dimension/type checks, which NF does not do.
+- Every candidate still passes the dimension and type checks; PNG candidates still pass `verifyPngMetadata`. NF
+  does neither.
 - Extend `selectCandidate` to an N-candidate form that returns the winner and the reason; keep the 1% / 1 KB rule
   for automatic mode.
 
@@ -223,16 +229,16 @@ the email/template builders.
 
 ## Do not port
 
-| Item | Why |
-| --- | --- |
-| Canvas `toBlob('image/png')` as "lossless" | drops ancillary chunks/ICC; our Oxipng path preserves and verifies them |
-| UPNG + hand-rolled dithering | libimagequant already dithers with a perceptual metric and a quality floor |
-| Fixed 0.82 quality | unmeasured; we have presets and (after A) a search |
-| Main-thread encode | our worker/pool plan exists precisely to avoid this |
-| `targetSizePercent` + `targetSizeKb` dual state | drifts; use one derived value |
-| Lossy-off ignoring target | resolver quirk; keep target independent of other toggles |
-| MIME/extension drift | breaks downstream consumers and our type checks |
-| JPEG fallback by default | alpha flattening is silent data loss; keep opt-in and alpha-guarded |
+| Item                                            | Why                                                                        |
+| ----------------------------------------------- | -------------------------------------------------------------------------- |
+| Canvas `toBlob('image/png')` as "lossless"      | drops ancillary chunks/ICC; our Oxipng path preserves and verifies them    |
+| UPNG + hand-rolled dithering                    | libimagequant already dithers with a perceptual metric and a quality floor |
+| Fixed 0.82 quality                              | unmeasured; we have presets and (after A) a search                         |
+| Main-thread encode                              | our worker/pool plan exists precisely to avoid this                        |
+| `targetSizePercent` + `targetSizeKb` dual state | drifts; use one derived value                                              |
+| Lossy-off ignoring target                       | resolver quirk; keep target independent of other toggles                   |
+| MIME/extension drift                            | breaks downstream consumers and our type checks                            |
+| JPEG fallback by default                        | alpha flattening is silent data loss; keep opt-in and alpha-guarded        |
 
 ## Verification plan
 
@@ -253,34 +259,34 @@ Tests first, per the ground rules in `docs/compress-image-optimization-plan.md`.
 
 ## Open decisions
 
-| Decision | Recommendation |
-| --- | --- |
-| Budget unit | KB input (matches user language), compared in bytes |
-| Quality floor for JPEG/WebP | Per preset: high 85, balanced 75, small 60 `[proposal]` |
-| PNG ladder depth | Full 256→16; early exit on first rung under budget |
-| Resize escalation | 0.85×, max 3 rounds, only in target mode |
-| Cross-codec race | Opt-in toggle, default off; WebP only when alpha is present |
+| Decision                    | Recommendation                                              |
+| --------------------------- | ----------------------------------------------------------- |
+| Budget unit                 | KB input (matches user language), compared in bytes         |
+| Quality floor for JPEG/WebP | Per preset: high 85, balanced 75, small 60 `[proposal]`     |
+| PNG ladder depth            | Full 256→16; early exit on first rung under budget          |
+| Resize escalation           | 0.85×, max 3 rounds, only in target mode                    |
+| Cross-codec race            | Opt-in toggle, default off; WebP only when alpha is present |
 
 ## Appendix: symbol map in `chunk-33TG6M3V.js`
 
-| Symbol | Role |
-| --- | --- |
-| `Ua` | boolean → mode resolver (`auto` / `target` / `lossless` / `original`) |
-| `Ya` | auto mode orchestration |
-| `ja` | target mode orchestration (early return when already under budget) |
-| `Ka` | lossless mode (PNG only) |
-| `Fl` | auto-mode encoder dispatch |
-| `Rl` | target-mode encoder dispatch |
-| `Nl` | auto PNG: lossless + 256/192/128 dithered ladder + 15% error band |
-| `Hl` | target PNG: lossless + full palette ladder + UPNG-native second pass |
-| `Ln` | palette + serpentine Floyd–Steinberg dithering |
-| `ea` | quality binary search (8 probes, 0.05–0.98) |
-| `Za` | single `toBlob` at 0.82 |
-| `Le` | `canvas.toBlob` promise wrapper |
-| `Pn` | deep-black clamp |
-| `An` | remaster unsharp |
-| `Dn` | white flatten |
-| `Ga` | keep candidate only if smaller |
-| `te` | Blob → data URL |
-| `On` | Base64 wrapper (plain / img / css / markdown) |
-| `In` | before/after stats |
+| Symbol | Role                                                                  |
+| ------ | --------------------------------------------------------------------- |
+| `Ua`   | boolean → mode resolver (`auto` / `target` / `lossless` / `original`) |
+| `Ya`   | auto mode orchestration                                               |
+| `ja`   | target mode orchestration (early return when already under budget)    |
+| `Ka`   | lossless mode (PNG only)                                              |
+| `Fl`   | auto-mode encoder dispatch                                            |
+| `Rl`   | target-mode encoder dispatch                                          |
+| `Nl`   | auto PNG: lossless + 256/192/128 dithered ladder + 15% error band     |
+| `Hl`   | target PNG: lossless + full palette ladder + UPNG-native second pass  |
+| `Ln`   | palette + serpentine Floyd–Steinberg dithering                        |
+| `ea`   | quality binary search (8 probes, 0.05–0.98)                           |
+| `Za`   | single `toBlob` at 0.82                                               |
+| `Le`   | `canvas.toBlob` promise wrapper                                       |
+| `Pn`   | deep-black clamp                                                      |
+| `An`   | remaster unsharp                                                      |
+| `Dn`   | white flatten                                                         |
+| `Ga`   | keep candidate only if smaller                                        |
+| `te`   | Blob → data URL                                                       |
+| `On`   | Base64 wrapper (plain / img / css / markdown)                         |
+| `In`   | before/after stats                                                    |

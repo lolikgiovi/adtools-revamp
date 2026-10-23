@@ -7,11 +7,9 @@ const PNG_LEVEL = 2;
 // time; q100/m6 saved another 1.3% but took 11× longer, up to 30 s for one image.
 export const WEBP_LOSSLESS = Object.freeze({ lossless: 1, exact: 1, quality: 90, method: 5 });
 
-// enablesLossyPng: choosing the preset turns on color reduction. Leaving the preset keeps the
-// user's toggle, and lossy PNG still has to beat the lossless result to be used.
-function preset(quality, method, min, target, enablesLossyPng = false) {
+// The UI keeps PNG mode and quality independent from JPEG/WebP presets.
+function preset(quality, method, min, target) {
   return Object.freeze({
-    enablesLossyPng,
     png: Object.freeze({ level: PNG_LEVEL, interlace: false, optimiseAlpha: false }),
     jpeg: Object.freeze({ quality, progressive: true, optimize_coding: true }),
     webp: Object.freeze({ quality, method, lossless: 0, alpha_quality: 100 }),
@@ -26,7 +24,7 @@ function preset(quality, method, min, target, enablesLossyPng = false) {
 export const PRESETS = Object.freeze({
   high: preset(92, 4, 90, 100),
   balanced: preset(85, 4, 80, 95),
-  small: preset(75, 5, 65, 85, true),
+  small: preset(75, 5, 65, 85),
 });
 
 // With lossy PNG on, the lossless Oxipng pass is skipped when the lossy result is at most
@@ -39,15 +37,18 @@ export function skipsLosslessPass(lossyBytes, estimateBytes) {
   return Number.isFinite(estimateBytes) && estimateBytes > 0 && lossyBytes <= estimateBytes * LOSSLESS_SKIP_RATIO;
 }
 
-// Size advice targets the widest common phone layout: 440 x 956 CSS px at 3x (iPhone 16/17 Pro
-// Max, 1320 x 2868 device pixels; checked 2026-10-23). Most phones are 360-430 CSS px wide.
+// User-supplied phone bounds, independent of device model names.
 export const PHONE_SIZES = Object.freeze({
-  full: Object.freeze({ width: 1320, height: 2868 }),
-  half: Object.freeze({ width: 660, height: 1434 }),
+  full: Object.freeze({ width: 1440, height: 3200 }),
+  square: Object.freeze({ width: 2670, height: 2670 }),
 });
 
 export function largerThan(dimensions, bounds) {
-  return !!dimensions && (dimensions.width > bounds.width || dimensions.height > bounds.height);
+  if (!dimensions) return false;
+  return (
+    Math.min(dimensions.width, dimensions.height) > Math.min(bounds.width, bounds.height) ||
+    Math.max(dimensions.width, dimensions.height) > Math.max(bounds.width, bounds.height)
+  );
 }
 
 // Worker pool: cores minus one (the main thread keeps one), at most three, and one on narrow

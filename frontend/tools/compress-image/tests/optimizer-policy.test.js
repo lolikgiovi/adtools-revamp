@@ -57,19 +57,18 @@ describe("lossless pass skip", () => {
   });
 });
 
-// Size-advice failures: advising images that already fit, missing tall (portrait) images, wrong
-// phone targets, and treating unknown dimensions as oversized.
+// Advice must handle both supplied bounds, rotated images, exact boundaries, and unknown sizes.
 describe("phone size advice", () => {
-  it("targets the widest common phone layout at 3x: 440 x 956 CSS px", () => {
-    expect(PHONE_SIZES.full).toEqual({ width: 1320, height: 2868 });
-    expect(PHONE_SIZES.half).toEqual({ width: 660, height: 1434 });
+  it("uses the requested portrait and square bounds", () => {
+    expect(PHONE_SIZES.full).toEqual({ width: 1440, height: 3200 });
+    expect(PHONE_SIZES.square).toEqual({ width: 2670, height: 2670 });
     expect(Object.isFrozen(PHONE_SIZES)).toBe(true);
   });
-  it("flags only images a full-width phone target would shrink", () => {
-    expect(largerThan({ width: 2440, height: 1530 }, PHONE_SIZES.full)).toBe(true);
-    expect(largerThan({ width: 1000, height: 3000 }, PHONE_SIZES.full)).toBe(true);
-    expect(largerThan({ width: 1320, height: 828 }, PHONE_SIZES.full)).toBe(false);
-    expect(largerThan({ width: 600, height: 388 }, PHONE_SIZES.full)).toBe(false);
+  it("compares dimensions independent of orientation", () => {
+    expect(largerThan({ width: 3200, height: 1440 }, PHONE_SIZES.full)).toBe(false);
+    expect(largerThan({ width: 1440, height: 3201 }, PHONE_SIZES.full)).toBe(true);
+    expect(largerThan({ width: 2670, height: 2670 }, PHONE_SIZES.square)).toBe(false);
+    expect(largerThan({ width: 2671, height: 2670 }, PHONE_SIZES.square)).toBe(true);
     expect(largerThan(undefined, PHONE_SIZES.full)).toBe(false);
   });
 });

@@ -1,5 +1,11 @@
 # AGENTS.md
 
+For UI:
+- Avoid unnecessary secondary labels and descriptions. 
+- Let the layout do the explaining. Cut taglines, helper text and secondary labels. 
+- If a screen needs them to make sense, fix the layout. 
+- Make the best decision that will elevate all three: the user experience (UX), developer experience (DX), and agent experience (AX) always, without breaking anything.
+
 ## Development autonomy
 
 Work autonomously on development tasks. Complete as much of the task as possible without asking for confirmation.

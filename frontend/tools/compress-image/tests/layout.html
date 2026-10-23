@@ -13,6 +13,36 @@
       document.documentElement.classList.add("dark-grey");
       const tool = new CompressImage();
       tool.mount(document.querySelector("#tool"));
+      const params = new URLSearchParams(location.search);
+      if (params.has("sample")) {
+        const files = [];
+        for (const [name, width, height, type] of [
+          ["campaign-banner.png", 4000, 1200, "image/png"],
+          ["product-photo.jpg", 1200, 800, "image/jpeg"],
+          ["thumbnail.webp", 600, 600, "image/webp"],
+        ]) {
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          const gradient = ctx.createLinearGradient(0, 0, width, height);
+          gradient.addColorStop(0, "#114b5f");
+          gradient.addColorStop(1, "#d8eee3");
+          ctx.fillStyle = gradient;
+          ctx.fillRect(0, 0, width, height);
+          ctx.fillStyle = "#faf5e5";
+          ctx.beginPath();
+          ctx.arc(width * 0.7, height * 0.5, height * 0.32, 0, Math.PI * 2);
+          ctx.fill();
+          files.push(new File([await new Promise((resolve) => canvas.toBlob(resolve, type))], name, { type }));
+        }
+        const transfer = new DataTransfer();
+        files.forEach((file) => transfer.items.add(file));
+        const input = document.querySelector("#ci-files");
+        input.files = transfer.files;
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        if (params.has("processed")) await tool.processQueue();
+      }
     </script>
   </body>
 </html>

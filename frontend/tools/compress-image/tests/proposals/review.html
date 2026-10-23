@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Proposal responsive review</title>
+    <style>
+      body {
+        margin: 0;
+        background: #08090b;
+      }
+      iframe {
+        display: block;
+        border: 0;
+        transform-origin: top left;
+      }
+    </style>
+  </head>
+  <body>
+    <iframe title="Proposal responsive viewport"></iframe>
+    <script>
+      const p = new URLSearchParams(location.search),
+        frame = document.querySelector("iframe");
+      const width = p.get("width") === "1440" ? 1440 : 390;
+      frame.width = width;
+      frame.height = width === 390 ? 1450 : 850;
+      frame.src = `./index.html?layout=${["studio", "canvas", "batch"].includes(p.get("layout")) ? p.get("layout") : "studio"}&sample=mixed`;
+      frame.style.transform = `scale(${Math.min(1, innerWidth / width)})`;
+    </script>
+  </body>
+</html>
