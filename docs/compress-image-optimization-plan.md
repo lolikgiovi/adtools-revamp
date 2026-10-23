@@ -112,21 +112,15 @@ JPEG/WebP quality, WebP method and quantization bounds. The baseline picked leve
 watch it fail. Add a browser check: the same lossless PNG fixture through High Quality and Smaller File gives
 byte-identical output.
 
-### 1.2 Alpha optimization on the lossy PNG path only
+### 1.2 Alpha optimization on the lossy PNG path: dropped
 
-**Problem.** `optimiseAlpha: false` everywhere. Alpha optimization rewrites the RGB values of fully transparent
-pixels, which can't be seen and often compresses much better.
+**Measured, not implemented (2026-10-23).** Alpha optimization saved 0 bytes on the lossy path for all 16 benchmark
+images. The lossy candidate is a palette image, and the browser canvas already reads fully transparent pixels as
+`0,0,0,0`, so Oxipng has nothing to rewrite. On the lossless path it ranged from −0.03% to +0.21%, and that path
+must keep transparent RGB unchanged anyway. `optimiseAlpha` stays `false` everywhere.
 
-**Change.** Pass `optimiseAlpha: true` only to the Oxipng call that compresses the quantized candidate in
-`worker.js`. The lossless path keeps `false`, because the contract (and an existing check) promises unchanged
-transparent RGB. `optimizePng` needs to read `options.optimiseAlpha` instead of hard-coding `false` in the
-`optimise()` call (`png-codec.js:20`).
-
-**Tests first.**
-
-- Browser check: on a fixture with fully transparent noise pixels, the lossy candidate is smaller with alpha
-  optimization than without it.
-- Browser check: the existing check that compares lossless pixels, transparent RGB included, still passes.
+Evidence: `docs/evidence/compress-image-alpha-optimization-probe.txt`. Reproduce with
+`node frontend/tools/compress-image/tests/alpha-optimization-probe.mjs`.
 
 ### 1.3 Lossless WebP stays lossless
 
@@ -353,6 +347,7 @@ Failure modes, as browser checks:
 | ----------------------------- | --------------------------------------------------------------------- |
 | Benchmark images (phase 0)    | The user supplies 10–20 real ad images; the agent can't download them |
 | Fixed Oxipng level (1.1)      | Level 2. The baseline showed level 4 gains 0.17 points at 3× the time |
+| Alpha optimization (1.2)      | Dropped: it saved 0 bytes on the lossy path                           |
 | Lossy PNG visibility (1.6)    | Smaller File turns it on; defaults otherwise unchanged                |
 | Lossless WebP semantics (1.3) | Keep lossless; label it "lossless relative to decoded pixels"         |
 
