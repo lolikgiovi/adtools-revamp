@@ -806,7 +806,7 @@ class CheckImageTool extends BaseTool {
   }
 
   openEnvironmentSettings() {
-    this.openSettings("config.baseUrls", "Open Settings to configure CDN Base URLs.");
+    this.openSettings("config.environments", "Open Settings to configure Testing Environments.");
   }
 
   openOracleSettings() {

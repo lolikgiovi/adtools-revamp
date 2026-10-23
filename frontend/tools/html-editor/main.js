@@ -5,6 +5,7 @@ import "monaco-editor/esm/vs/language/html/monaco.contribution.js";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
+import { readEnvironments } from "../../core/Environments.js";
 import { HTMLTemplateToolTemplate } from "./template.js";
 import { HtmlDocumentStore } from "./documentStore.js";
 import { analyzeHtmlEncoding, convertHtmlForToad, decodeHtmlBytes, listEncodingCharacters, markEncodingPreview, simulateWindows1252Import, visibleTextOffsets } from "./encoding.js";
@@ -1599,16 +1600,10 @@ class HTMLTemplateTool extends BaseTool {
     const controls = document.getElementById("envControls");
     if (!select) return;
 
-    // Load config.baseUrls from localStorage (kvlist of { key, value })
-    let pairs = [];
-    try {
-      const raw = localStorage.getItem("config.baseUrls");
-      const parsed = raw ? JSON.parse(raw) : [];
-      pairs = Array.isArray(parsed) ? parsed.filter((p) => p && p.key && p.value) : [];
-    } catch (_) {
-      pairs = [];
-    }
-    this.baseUrls = pairs;
+    // Load the shared environment model (legacy config.baseUrls migrates automatically).
+    this.baseUrls = readEnvironments()
+      .filter((environment) => environment.cdnPublicUrl)
+      .map((environment) => ({ key: environment.name, value: environment.cdnPublicUrl }));
 
     // Hide controls if no environments configured
     if (!this.baseUrls.length) {

@@ -1,25 +1,14 @@
 import { isTauri } from "../../core/Runtime.js";
 import { OracleConnectionService } from "../../core/OracleConnectionService.js";
+import { listBaseUrls } from "../../core/Environments.js";
 
 export class BaseUrlService {
-  static STORAGE_KEY = "config.baseUrls";
-
   /**
-   * Return all configured base URLs from localStorage kvlist
-   * Shape: [{ key: <env>, value: <baseUrl> }, ...]
-   * Maps to: [{ name, url }]
+   * Return the CDN entry point for every configured environment.
+   * Shape: [{ name, url, directUrl }]
    */
   getAllUrls() {
-    let pairs;
-    try {
-      const raw = localStorage.getItem(BaseUrlService.STORAGE_KEY);
-      const parsed = raw ? JSON.parse(raw) : [];
-      pairs = Array.isArray(parsed) ? parsed.filter((p) => p && p.key && p.value) : [];
-    } catch (_) {
-      pairs = [];
-    }
-
-    return pairs.map((p) => ({ name: p.key, url: p.value }));
+    return listBaseUrls();
   }
 }
 
