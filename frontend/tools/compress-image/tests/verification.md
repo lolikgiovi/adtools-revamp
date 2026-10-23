@@ -49,6 +49,14 @@ validation: WebKit may accept a corrupt zlib stream during image decoding, so
 browser decode success alone is insufficient. The larger-corrupt-candidate
 regression was observed failing before this boundary check was added.
 
+Since 2026-10-23 the full stream validation (structure, CRC, zlib, filters)
+runs in the worker, once per PNG: the source, then each Oxipng output. The
+libimagequant and sRGB-tagging intermediates get a structure and CRC check
+only, because the Oxipng output built from them is fully validated. The main
+thread checks structure, CRC, format and dimensions without decompressing.
+Browser checks count the `png.validated` log stages (2 lossless, 3 lossy,
+2 resized) and confirm zero `pako.Inflate` calls on the main thread.
+
 Acceptance:
 
 - Lossless PNG must be strictly smaller than the original; otherwise original

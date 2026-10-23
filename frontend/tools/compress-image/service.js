@@ -12,7 +12,7 @@ const CRC_TABLE = Uint32Array.from({ length: 256 }, (_, n) => {
 });
 function crc32(bytes) {
   let crc = 0xffffffff;
-  for (const byte of bytes) crc = CRC_TABLE[(crc ^ byte) & 255] ^ (crc >>> 8);
+  for (let i = 0; i < bytes.length; i++) crc = CRC_TABLE[(crc ^ bytes[i]) & 255] ^ (crc >>> 8);
   return (crc ^ 0xffffffff) >>> 0;
 }
 function join(parts) {
@@ -129,14 +129,16 @@ function inflateChecked(parsed) {
   }
   return decoded;
 }
-export function validatePng(bytes) {
+// Full validation decompresses every image row, so each PNG goes through it once:
+// the worker's source and each codec output. Logs a png.validated stage per call.
+export function validatePng(bytes, report = () => {}, role = "png") {
   const parsed = parsePng(bytes);
   inflateChecked(parsed);
+  report("png.validated", { role, inputBytes: bytes.length });
   return parsed;
 }
 
-export function removePngText(bytes) {
-  const parsed = parsePng(bytes);
+export function removePngText(bytes, parsed = parsePng(bytes)) {
   const retained = parsed.chunks.filter((chunk) => chunk.type !== "tEXt");
   const removedBytes = parsed.chunks.filter((chunk) => chunk.type === "tEXt").reduce((total, chunk) => total + chunk.raw.length, 0);
   return { bytes: removedBytes ? join([SIGNATURE, ...retained.map((chunk) => chunk.raw)]) : bytes, removedBytes };

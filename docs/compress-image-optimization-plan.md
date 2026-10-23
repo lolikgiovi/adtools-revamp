@@ -165,36 +165,40 @@ Evidence: `docs/evidence/compress-image-benchmark-phase1-no-png-decode.json`.
 `HTMLImageElement.prototype.decode` sees no decode of the source for lossless PNG; dimensions stay correct, Adam7
 included; resized and lossy PNG still decode their pixels.
 
-### 1.5 Validate each PNG once
+### 1.5 Validate each PNG once: done
 
-**Problem.** The same data is decompressed many times (see the table above). Two of those runs are on the main
-thread, so the page freezes. `crc32` also loops with `for...of` over a `Uint8Array`, which is slow.
+**Problem.** The same PNG data was fully decompressed 4 times for lossless and 8 times for lossy, two of them on the
+main thread.
 
-**Change.**
+**Change (implemented 2026-10-23).**
 
-1. **Validate the worker's input once.** The worker calls `validatePng(source)` once and passes the parsed result
-   down. `optimizePng(bytes, options, report, parsed)` uses `parsed` when it's given, so it skips its own source
-   check.
-2. **Reuse that parse in `removePngText`.** It takes the parsed chunks instead of parsing again.
-3. **Make `srgbPng` parse only.** Use `parsePng` (structure and checksums, no decompression). Its output goes
-   straight into `optimizePng`, whose Oxipng output is fully validated anyway.
-4. **Validate each codec output exactly once, in the worker,** right after Oxipng returns. This is the guard
-   against corrupt output that WebKit would still display, and it stays.
-5. **Main thread: structure check only.** Replace `validatePng(candidate)` (`main.js:299`) with `inspectImage`,
-   which parses the structure without decompressing. Phase 2 moves this check into the worker.
-6. **Speed up `crc32`** with an indexed `for` loop.
-7. **Log the count.** `validatePng` takes an optional `report` and logs a `png.validated` stage, so tests and the
-   benchmark can count calls.
+- `validatePng(bytes, report, role)` logs a `png.validated` stage. The worker validates its source once and passes
+  the parse to `optimizePng`, which validates only the Oxipng output. `removePngText` reuses that parse.
+- `srgbPng` and the quantized input to the second Oxipng pass get a structure and CRC check only, because the
+  Oxipng output built from them is fully validated.
+- The main thread no longer decompresses: `verify()` relies on `inspectImage` (structure, CRC, format,
+  dimensions) and the browser decode.
+- `crc32` uses an indexed loop.
 
-**Tests first.**
+**Result.** Full decompressions per PNG: lossless 4 → 2, lossy 8 → 3, resized 4 → 2; main thread 2 → 0. On the
+benchmark set with Balanced:
 
-- Browser check: count `png.validated` log entries. Expected: 2 for lossless and 3 for lossy.
-- **Re-target the existing check** "Invalid candidates preserve prior results and cannot hide behind size
-  fallback". Today it stubs `tool.runWorker` to return a PNG whose zlib data is corrupt (its checksums are valid),
-  and it relies on the main thread decompressing that data. After this change the guard lives in the worker. The
-  harness will instead import `png-codec.js` and call the worker's output gate with the same corrupt bytes. It
-  checks two things: the gate throws, and the item ends in `Error` with its previous result kept.
-- Vitest (`png-codec.test.js`): `crc32` results are unchanged on the existing fixtures.
+| Lossy PNG | Wall time       | Longest main-thread stall | Frames over 100 ms |
+| --------- | --------------- | ------------------------- | ------------------ |
+| Off       | 31.0 s → 29.3 s | 200 ms → 17 ms            | 3 → 0              |
+| On        | 47.5 s → 44.3 s | 150 ms → 50 ms            | 6 → 0              |
+
+Output bytes are identical. The remaining lossy stall comes from the canvas decode and `getImageData` on the main
+thread, which phase 2 moves to the worker. Evidence: `docs/evidence/compress-image-benchmark-phase1-validate-once.json`.
+
+**Tests (written first, each seen failing).** Vitest: `optimizePng` reports `source, output`, only `output` when
+given a parse, and `encodePng` reports `output`. Browser checks: lossless `source, output`; lossy
+`source, output, output`; resized `source, output`; zero `pako.Inflate` calls on the main thread.
+
+**Re-targeted check.** "Invalid candidates preserve prior results and cannot hide behind size fallback" used to stub
+a result with corrupt zlib data, which only the main-thread decompression caught. It now stubs a result with a bad
+CRC, which the main-thread structure check catches. Corrupt zlib from a codec is caught in the worker, as the
+`png.validated` counts show for every output.
 
 ### 1.6 Make lossy PNG easier to find (decision needed)
 

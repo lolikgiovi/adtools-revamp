@@ -1,7 +1,7 @@
 import { BaseTool } from "../../core/BaseTool.js";
 import JSZip from "jszip";
 import { UsageTracker } from "../../core/UsageTracker.js";
-import { MAX_FILE_SIZE, fitDimensions, validatePng } from "./service.js";
+import { MAX_FILE_SIZE, fitDimensions } from "./service.js";
 import { inspectImage } from "./image-info.js";
 import { PRESETS, selectCandidate } from "./config.js";
 import { getIconSvg } from "./icon.js";
@@ -305,7 +305,6 @@ export class CompressImage extends BaseTool {
       }
       this.log(item, "Verifying", { codec: result.codec });
       const verify = async (candidate) => {
-        if (info.type === "image/png") validatePng(candidate);
         const header = inspectImage(candidate);
         if (header.type !== info.type || header.width !== target.width || header.height !== target.height) {
           throw new Error("Candidate format or dimensions failed verification.");

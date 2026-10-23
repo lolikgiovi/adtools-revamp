@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { deflateSync } from "node:zlib";
 import { PNG } from "pngjs";
 import { initSync } from "@jsquash/oxipng/codec/pkg/squoosh_oxipng.js";
-import { optimizePng } from "../png-codec.js";
+import { optimizePng, encodePng } from "../png-codec.js";
 import { parsePng, makeChunk, verifyPngMetadata } from "../service.js";
 import { PRESETS } from "../config.js";
 
@@ -81,6 +81,25 @@ describe("Oxipng lossless encoding", () => {
     const bomb = new Uint8Array(5 * 1024 * 1024);
     const bytes = insert(fixture(), iccp("Display", bomb, { compressed: deflateSync(bomb, { level: 9 }) }));
     expect(() => verifyPngMetadata(parsePng(bytes), parsePng(bytes))).toThrow(/metadata changed/);
+  });
+  // Validation failures: the source inflated more than once, a codec output that is
+  // never fully validated, or a caller's parsed source ignored.
+  const validations = async (run) => {
+    const logs = [];
+    await run((stage, details) => logs.push({ stage, details }));
+    return logs.filter((entry) => entry.stage === "png.validated").map((entry) => entry.details.role);
+  };
+  it("validates the source and the Oxipng output once each", async () => {
+    expect(await validations((report) => optimizePng(fixture(), PRESETS.balanced.png, report))).toEqual(["source", "output"]);
+  });
+  it("reuses a parsed source instead of validating it again", async () => {
+    const source = fixture();
+    const roles = await validations((report) => optimizePng(source, PRESETS.balanced.png, report, parsePng(source)));
+    expect(roles).toEqual(["output"]);
+  });
+  it("validates resized Oxipng output once", async () => {
+    const image = { data: new Uint8ClampedArray(decoded(fixture()).data), width: 32, height: 32 };
+    expect(await validations((report) => encodePng(image, PRESETS.balanced.png, report))).toEqual(["output"]);
   });
   it("does not inflate an already optimized source", async () => {
     const first = await optimizePng(fixture());

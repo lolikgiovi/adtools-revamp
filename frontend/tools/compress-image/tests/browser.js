@@ -246,9 +246,12 @@ try {
   check(tool.worker === reusableWorker, "A warm worker is reused across files and runs.");
   const previousLossy = first.blob;
   const originalRunWorker = tool.runWorker;
+  // The worker fully validates every codec output (checked by the png.validated counts
+  // below); the main thread still rejects a structurally broken result.
   tool.runWorker = async function () {
     const source = fixture(320, 320);
     const bytes = join([source.slice(0, 33), makeChunk("IDAT", new Uint8Array(1024 * 1024)), makeChunk("IEND", new Uint8Array())]);
+    bytes[bytes.length - 20] ^= 1;
     return { bytes, width: 320, height: 320, type: "image/png", lossy: true };
   };
   try {
@@ -545,6 +548,43 @@ try {
     check(quantized.decoded && quantized.item.status === "Ready", "Lossy PNG still decodes its pixels.");
   } finally {
     HTMLImageElement.prototype.decode = nativeDecode;
+    change("lossy-png", false);
+    change("resize", false);
+  }
+  // Validation failures: the source decompressed more than once, a codec output that is
+  // never fully validated, and full PNG decompression left on the main thread.
+  const NativeInflate = pako.Inflate;
+  let mainThreadInflates = 0;
+  pako.Inflate = function (...args) {
+    mainThreadInflates++;
+    return new NativeInflate(...args);
+  };
+  const validatedRoles = async (file, { lossy = false, resize = false } = {}) => {
+    tool.clear();
+    change("lossy-png", lossy);
+    change("resize", resize);
+    if (resize) {
+      change("width", "100");
+      change("height", "100");
+    }
+    select([file]);
+    await compress();
+    const item = tool.items[0];
+    return item.status === "Ready" ? item.logs.filter((entry) => entry.stage === "png.validated").map((entry) => entry.details.role) : [];
+  };
+  try {
+    const roles = (list) => list.join(", ");
+    const lossless = await validatedRoles(new File([fixture(320, 200)], "once.png", { type: "image/png" }));
+    const quantized = await validatedRoles(new File([fixture(320, 200, "gentle")], "once-lossy.png", { type: "image/png" }), {
+      lossy: true,
+    });
+    const resizedRoles = await validatedRoles(new File([fixture(320, 200)], "once-resized.png", { type: "image/png" }), { resize: true });
+    check(mainThreadInflates === 0, "PNG data is never decompressed on the main thread.");
+    check(roles(lossless) === "source, output", "Lossless PNG validates the source and the output once each.");
+    check(roles(quantized) === "source, output, output", "Lossy PNG validates the source once and each output once.");
+    check(roles(resizedRoles) === "source, output", "Resized PNG validates the source and the output once each.");
+  } finally {
+    pako.Inflate = NativeInflate;
     change("lossy-png", false);
     change("resize", false);
   }

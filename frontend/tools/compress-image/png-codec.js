@@ -12,14 +12,14 @@ async function load(report) {
   await ready;
 }
 
-export async function optimizePng(bytes, options = PRESETS.balanced.png, report = () => {}) {
-  const source = validatePng(bytes);
-  const cleaned = removePngText(bytes);
+// Pass `source` when the caller already parsed or validated `bytes`.
+export async function optimizePng(bytes, options = PRESETS.balanced.png, report = () => {}, source = validatePng(bytes, report, "source")) {
+  const cleaned = removePngText(bytes, source);
   await load(report);
   report("Optimizing", { codec: "Oxipng", ...options, inputBytes: bytes.length });
   const candidate = optimise(cleaned.bytes, options.level, options.interlace, false);
   report("Verifying", { codec: "Oxipng", outputBytes: candidate.length });
-  const output = validatePng(candidate);
+  const output = validatePng(candidate, report, "output");
   if (output.width !== source.width || output.height !== source.height) throw new Error("PNG dimensions changed during optimization.");
   verifyPngMetadata(source, output);
   const best = candidate.length < cleaned.bytes.length ? candidate : cleaned.bytes;
@@ -31,6 +31,6 @@ export async function encodePng(image, options, report) {
   await load(report);
   report("Encoding", { codec: "Oxipng", ...options, resized: true });
   const bytes = optimise_raw(image.data, image.width, image.height, options.level, options.interlace, false);
-  validatePng(bytes);
+  validatePng(bytes, report, "output");
   return { bytes, width: image.width, height: image.height, metadataRemovedBytes: 0 };
 }

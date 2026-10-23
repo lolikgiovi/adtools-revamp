@@ -1,6 +1,6 @@
 import { optimizePng, encodePng } from "./png-codec.js";
 import { PRESETS, WEBP_LOSSLESS } from "./config.js";
-import { validatePng, makeChunk } from "./service.js";
+import { validatePng, parsePng, makeChunk } from "./service.js";
 import jpegWasm from "@jsquash/jpeg/codec/enc/mozjpeg_enc.wasm?url";
 import webpWasm from "@jsquash/webp/codec/enc/webp_enc.wasm?url";
 import webpSimdWasm from "@jsquash/webp/codec/enc/webp_enc_simd.wasm?url";
@@ -38,8 +38,9 @@ async function quantizationEngine() {
   }
   return quantReady;
 }
+// Structure only: the bytes come from a codec, and the final Oxipng output is fully validated.
 function srgbPng(bytes) {
-  const parsed = validatePng(bytes);
+  const parsed = parsePng(bytes);
   const parts = [bytes.subarray(0, 33), makeChunk("sRGB", new Uint8Array([0]))];
   for (const chunk of parsed.chunks.slice(1)) {
     if (!["sRGB", "gAMA", "cHRM", "iCCP"].includes(chunk.type)) parts.push(chunk.raw);
@@ -88,15 +89,15 @@ self.onmessage = async ({ data }) => {
     const source = new Uint8Array(data.bytes);
     let result;
     if (type === "image/png") {
-      const input = validatePng(source);
-      result = resized ? await encodePng(image, options.png, report) : await optimizePng(source, options.png, report);
+      const input = validatePng(source, report, "source");
+      result = resized ? await encodePng(image, options.png, report) : await optimizePng(source, options.png, report, input);
       if (resized) result.bytes = srgbPng(result.bytes);
       result.lossy = false;
       result.codec = "Oxipng";
       if (lossyPng && input.chunks[0].data[8] !== 16) {
         const quantized = await quantize(image, { ...options.quantize, quality: pngQuality });
         if (quantized) {
-          const lossy = await optimizePng(quantized.bytes, options.png, report);
+          const lossy = await optimizePng(quantized.bytes, options.png, report, parsePng(quantized.bytes));
           report("png.candidates", { losslessBytes: result.bytes.length, lossyBytes: lossy.bytes.length, quality: quantized.quality });
           result = {
             ...result,
