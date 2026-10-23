@@ -2,6 +2,7 @@ import pako from "pako";
 
 export const MAX_FILE_SIZE = 32 * 1024 * 1024;
 const MAX_DECODED_SIZE = 64 * 1024 * 1024;
+const MAX_ICC_SIZE = 4 * 1024 * 1024;
 const SIGNATURE = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
 const CHANNELS = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 };
 const DEPTHS = { 0: [1, 2, 4, 8, 16], 2: [8, 16], 3: [1, 2, 4, 8], 4: [8, 16], 6: [8, 16] };
@@ -141,14 +142,42 @@ export function removePngText(bytes) {
   return { bytes: removedBytes ? join([SIGNATURE, ...retained.map((chunk) => chunk.raw)]) : bytes, removedBytes };
 }
 
+// Oxipng recompresses iCCP and renames the profile. The name is only a label, so an
+// ICC profile counts as unchanged when its decompressed bytes are identical.
+function iccProfile(data) {
+  const separator = data.indexOf(0);
+  if (separator < 1 || separator > 79 || data[separator + 1] !== 0) return null;
+  const stream = new pako.Inflate({ chunkSize: 65536 });
+  const parts = [];
+  let size = 0;
+  stream.onData = (part) => {
+    size += part.length;
+    if (size > MAX_ICC_SIZE) throw new Error("ICC profile is too large.");
+    parts.push(part);
+  };
+  try {
+    stream.push(data.subarray(separator + 2), true);
+  } catch {
+    return null;
+  }
+  return stream.err || !stream.ended ? null : join(parts);
+}
+function sameBytes(a, b) {
+  return a.length === b.length && a.every((value, i) => value === b[i]);
+}
+
 export function verifyPngMetadata(source, output) {
   const metadata = (parsed) => parsed.chunks.filter((chunk) => !["IHDR", "PLTE", "tRNS", "IDAT", "IEND", "tEXt"].includes(chunk.type));
   const before = metadata(source);
   const after = metadata(output);
-  if (
-    before.length !== after.length ||
-    before.some((chunk, i) => chunk.raw.length !== after[i].raw.length || !chunk.raw.every((value, j) => value === after[i].raw[j]))
-  ) {
+  const unchanged = (chunk, i) => {
+    if (chunk.type !== after[i].type) return false;
+    if (chunk.type !== "iCCP") return sameBytes(chunk.raw, after[i].raw);
+    const profile = iccProfile(chunk.data);
+    const optimized = iccProfile(after[i].data);
+    return !!profile && !!optimized && sameBytes(profile, optimized);
+  };
+  if (before.length !== after.length || !before.every(unchanged)) {
     throw new Error("PNG metadata changed during lossless optimization. Original image kept available.");
   }
 }

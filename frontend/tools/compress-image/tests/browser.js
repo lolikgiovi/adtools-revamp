@@ -405,6 +405,20 @@ try {
   const zipTask = tool.downloadZip();
   check(control("zip").textContent === "Creating ZIP…", "ZIP generation exposes a busy label.");
   await zipTask;
+  tool.clear();
+  const profile = Uint8Array.from({ length: 600 }, (_, i) => (i * 7) % 251);
+  const iccp = makeChunk(
+    "iCCP",
+    join([new TextEncoder().encode("sRGB IEC61966-2.1"), new Uint8Array([0, 0]), pako.deflate(profile, { level: 0 })]),
+  );
+  const withProfile = fixture(320, 320, "gentle");
+  select([new File([join([withProfile.slice(0, 33), iccp, withProfile.slice(33)])], "profile.png", { type: "image/png" })]);
+  await compress();
+  const profiled = tool.items[0];
+  check(
+    profiled.status === "Ready" && profiled.blob.size < profiled.file.size && profiled.result.outcome === "Optimized",
+    "PNG with an embedded ICC profile compresses losslessly instead of failing.",
+  );
   document.querySelector("#verification").textContent = `PASS: ${checks.length} browser checks. Open details for the repeatable evidence.`;
   document.querySelector("#evidence").textContent = checks.join("\n");
 } catch (error) {

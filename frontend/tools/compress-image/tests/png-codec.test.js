@@ -2,10 +2,11 @@
 // samples, dropped profiles/ancillary chunks, palette/refilter transformations,
 // lost text savings, and output larger than the input. Use real Oxipng WASM.
 import { readFileSync } from "node:fs";
+import { deflateSync } from "node:zlib";
 import { PNG } from "pngjs";
 import { initSync } from "@jsquash/oxipng/codec/pkg/squoosh_oxipng.js";
 import { optimizePng } from "../png-codec.js";
-import { parsePng, makeChunk } from "../service.js";
+import { parsePng, makeChunk, verifyPngMetadata } from "../service.js";
 import { PRESETS } from "../config.js";
 
 beforeAll(() => {
@@ -21,6 +22,13 @@ function insert(bytes, chunk) {
 }
 function decoded(bytes) {
   return PNG.sync.read(Buffer.from(bytes), { skipRescale: true });
+}
+const PROFILE = new Uint8Array(Array.from({ length: 600 }, (_, i) => (i * 7) % 251));
+function iccp(name, profile = PROFILE, { method = 0, compressed = deflateSync(profile, { level: 0 }) } = {}) {
+  return makeChunk("iCCP", new Uint8Array([...new TextEncoder().encode(name), 0, method, ...compressed]));
+}
+function chunk(bytes, type) {
+  return parsePng(bytes).chunks.find((entry) => entry.type === type);
 }
 
 describe("Oxipng lossless encoding", () => {
@@ -47,6 +55,32 @@ describe("Oxipng lossless encoding", () => {
       expect(chunks.find((chunk) => chunk.type === type).raw).toEqual(parsePng(source).chunks.find((chunk) => chunk.type === type).raw);
     }
     expect(decoded(result.bytes).data).toEqual(decoded(source).data);
+  });
+  // ICC failures: Oxipng recompressing/renaming an unchanged profile is rejected
+  // (the bug), while a changed, dropped, added, corrupt or non-zlib profile is accepted.
+  it("accepts an ICC profile that Oxipng recompresses or renames without changing it", async () => {
+    const source = insert(fixture(), iccp("sRGB IEC61966-2.1"));
+    const result = await optimizePng(source);
+    expect(chunk(result.bytes, "iCCP")).toBeDefined();
+    expect(decoded(result.bytes).data).toEqual(decoded(source).data);
+  });
+  it("rejects ICC profile changes", () => {
+    const source = parsePng(insert(fixture(), iccp("Display")));
+    const verify = (bytes) => () => verifyPngMetadata(source, parsePng(bytes));
+    const changed = PROFILE.slice();
+    changed[100] ^= 1;
+    expect(verify(insert(fixture(), iccp("Display", PROFILE, { compressed: deflateSync(PROFILE, { level: 9 }) })))).not.toThrow();
+    expect(verify(insert(fixture(), iccp("icc")))).not.toThrow();
+    expect(verify(insert(fixture(), iccp("Display", changed)))).toThrow(/metadata changed/);
+    expect(verify(fixture())).toThrow(/metadata changed/);
+    expect(verify(insert(fixture(), iccp("Display", PROFILE, { compressed: new Uint8Array([1, 2, 3]) })))).toThrow(/metadata changed/);
+    expect(verify(insert(fixture(), iccp("Display", PROFILE, { method: 1 })))).toThrow(/metadata changed/);
+    expect(() => verifyPngMetadata(parsePng(fixture()), source)).toThrow(/metadata changed/);
+  });
+  it("rejects an ICC profile that decompresses beyond 4 MB", () => {
+    const bomb = new Uint8Array(5 * 1024 * 1024);
+    const bytes = insert(fixture(), iccp("Display", bomb, { compressed: deflateSync(bomb, { level: 9 }) }));
+    expect(() => verifyPngMetadata(parsePng(bytes), parsePng(bytes))).toThrow(/metadata changed/);
   });
   it("does not inflate an already optimized source", async () => {
     const first = await optimizePng(fixture());
