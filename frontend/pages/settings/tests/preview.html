@@ -58,15 +58,30 @@
         page.searchInput.addEventListener("input", () => page.applySearch());
         // Browser layout fixture only. No Tauri globals, IPC, secrets, or real connections.
         // Render desktop-only controls without changing production runtime gates.
+        page.runtime = params.get("runtime") === "web" ? "web" : "tauri";
         if (params.get("runtime") !== "web") {
           page.service.shouldShowCategory = () => true;
           page.service.shouldShowItem = () => true;
         }
         const values = new Map();
         if (params.has("populated")) {
-          values.set("config.baseUrls", [
-            { key: "uat1", value: "https://example.com/uat1/customer/" },
-            { key: "uat2", value: "https://example.com/uat2/customer/" },
+          values.set("config.environments", [
+            {
+              id: "uat1",
+              name: "uat1",
+              criticalConnection: "DEV",
+              complementaryConnection: "KEEP",
+              cdnPublicUrl: "https://example.com/uat1/customer/",
+              cdnDirectUrl: "https://10.243.137.100:5501/",
+            },
+            {
+              id: "uat2",
+              name: "uat2",
+              criticalConnection: "",
+              complementaryConnection: "",
+              cdnPublicUrl: "https://example.com/uat2/customer/",
+              cdnDirectUrl: "",
+            },
           ]);
           values.set("config.lockeyDomains", [
             { key: "uat1", value: "https://example.com/uat1/customer/localization/v1/language-pack?languagePackVersionUuid=1" },

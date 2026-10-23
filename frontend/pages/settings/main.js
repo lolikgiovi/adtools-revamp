@@ -5,6 +5,7 @@ import { buildListPlan, buildKafkaPlan, applyListPlan } from "./bulk-list.js";
 import "./styles.css";
 import { SettingsService } from "./service.js";
 import { SettingsSearch } from "./search.js";
+import { clearConnectionReference, mergeLegacyBaseUrls, updateConnectionReference } from "../../core/Environments.js";
 import { confirmAction } from "../../components/ConfirmationDialog.js";
 import { openOtpOverlay } from "../../components/OtpOverlay.js";
 import { invoke } from "@tauri-apps/api/core";
@@ -248,6 +249,18 @@ class SettingsPage {
       for (const entry of data) {
         if (!entry || typeof entry !== "object") continue;
         for (const [k, v] of Object.entries(entry)) {
+          if (k === "config.baseUrls") {
+            let pairs = v;
+            if (typeof pairs === "string") {
+              try {
+                pairs = JSON.parse(pairs);
+              } catch (_) {
+                pairs = [];
+              }
+            }
+            mergeLegacyBaseUrls(Array.isArray(pairs) ? pairs : []);
+            continue;
+          }
           if (Array.isArray(v)) {
             try {
               localStorage.setItem(k, JSON.stringify(v));
@@ -282,6 +295,10 @@ class SettingsPage {
         return findInCats(this.currentConfig?.categories || []) || "string";
       };
       for (const [key, value] of Object.entries(data)) {
+        if (key === "config.baseUrls") {
+          mergeLegacyBaseUrls(Array.isArray(value) ? value : []);
+          continue;
+        }
         const type = getType(key);
         if (type === "secret") continue;
         try {
@@ -625,8 +642,254 @@ class SettingsPage {
     return wrapper;
   }
 
+  renderEnvironmentsItem(item) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "setting-item setting-item-environments";
+    wrapper.dataset.setting = item.key;
+    wrapper.dataset.type = item.type;
+    const uid = Math.random().toString(36).slice(2, 8);
+    wrapper.innerHTML = `
+      <div class="environments-header">
+        <button type="button" class="btn btn-secondary btn-sm environment-add-btn">Add Environment</button>
+      </div>
+      <div class="environments-list"></div>
+      <form class="environment-form" hidden>
+        <h4 class="environment-form-title">Add Environment</h4>
+        <div class="environment-form-row">
+          <label for="environment-name-${uid}">Environment</label>
+          <input id="environment-name-${uid}" class="environment-name" type="text" maxlength="48" autocomplete="off" spellcheck="false" placeholder="e.g. UAT1" />
+        </div>
+        <div class="environment-form-row" data-db-row>
+          <label for="environment-critical-${uid}">Critical Database</label>
+          <select id="environment-critical-${uid}" class="environment-critical"></select>
+        </div>
+        <div class="environment-form-row" data-db-row>
+          <label for="environment-complementary-${uid}">Complementary Database</label>
+          <select id="environment-complementary-${uid}" class="environment-complementary"></select>
+        </div>
+        <p class="environment-desktop-note" hidden>Database bindings need the Desktop app. CDN URLs still apply on Web.</p>
+        <div class="environment-form-row">
+          <label for="environment-public-url-${uid}">CDN Public URL</label>
+          <input id="environment-public-url-${uid}" class="environment-public-url" type="url" autocomplete="off" spellcheck="false" placeholder="https://public.example.com/" />
+        </div>
+        <div class="environment-form-row">
+          <label for="environment-direct-url-${uid}">CDN Direct URL</label>
+          <input id="environment-direct-url-${uid}" class="environment-direct-url" type="url" autocomplete="off" spellcheck="false" placeholder="https://10.0.0.0:5501/" />
+        </div>
+        <div class="environment-form-status" role="status" aria-live="polite"></div>
+        <div class="environment-form-actions">
+          <button type="button" class="btn btn-secondary btn-sm environment-cancel">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm environment-save">Save Environment</button>
+        </div>
+      </form>
+    `;
+
+    const list = wrapper.querySelector(".environments-list");
+    const form = wrapper.querySelector(".environment-form");
+    const formTitle = wrapper.querySelector(".environment-form-title");
+    const nameInput = wrapper.querySelector(".environment-name");
+    const criticalSelect = wrapper.querySelector(".environment-critical");
+    const complementarySelect = wrapper.querySelector(".environment-complementary");
+    const publicInput = wrapper.querySelector(".environment-public-url");
+    const directInput = wrapper.querySelector(".environment-direct-url");
+    const status = wrapper.querySelector(".environment-form-status");
+    const saveButton = wrapper.querySelector(".environment-save");
+    const addButton = wrapper.querySelector(".environment-add-btn");
+    const isDesktop = this.runtime === "tauri";
+    let editingId = "";
+
+    const readList = () => {
+      const value = this.service.getValue(item.storageKey || item.key, "environments", []);
+      return Array.isArray(value) ? value : [];
+    };
+    const saveList = (environments) => this.service.setValue(item.storageKey || item.key, "environments", environments);
+
+    if (!isDesktop) {
+      form.querySelectorAll("[data-db-row]").forEach((row) => {
+        row.hidden = true;
+      });
+      form.querySelector(".environment-desktop-note").hidden = false;
+    }
+
+    const connections = () => {
+      const value = this.service.getValue("config.oracle.connections", "oracle-connections", []);
+      return Array.isArray(value) ? value.filter((entry) => entry?.name) : [];
+    };
+
+    const fillConnectionOptions = (select, selected) => {
+      const options = connections();
+      select.replaceChildren(new Option("None", ""));
+      for (const connection of options) select.appendChild(new Option(connection.name, connection.name));
+      if (selected && !options.some((connection) => connection.name === selected)) {
+        select.appendChild(new Option(`${selected} (not configured)`, selected));
+      }
+      select.value = selected || "";
+    };
+
+    const renderList = () => {
+      const environments = readList();
+      list.replaceChildren();
+      if (!environments.length) {
+        const empty = document.createElement("p");
+        empty.className = "environments-empty";
+        empty.textContent = "No testing environments configured.";
+        list.appendChild(empty);
+        return;
+      }
+      for (const environment of environments) {
+        const row = document.createElement("div");
+        row.className = "environment-row";
+        const identity = document.createElement("div");
+        identity.className = "environment-identity";
+        const name = document.createElement("strong");
+        name.textContent = environment.name;
+        identity.appendChild(name);
+        const database = document.createElement("span");
+        database.className = "environment-meta";
+        database.textContent = `Critical: ${environment.criticalConnection || "—"} · Complementary: ${
+          environment.complementaryConnection || "—"
+        }`;
+        identity.appendChild(database);
+        if (environment.cdnPublicUrl) {
+          const publicUrl = document.createElement("span");
+          publicUrl.className = "environment-meta";
+          publicUrl.textContent = `Public: ${environment.cdnPublicUrl}`;
+          identity.appendChild(publicUrl);
+        }
+        if (environment.cdnDirectUrl) {
+          const directUrl = document.createElement("span");
+          directUrl.className = "environment-meta";
+          directUrl.textContent = `Direct: ${environment.cdnDirectUrl}`;
+          identity.appendChild(directUrl);
+        }
+
+        const actions = document.createElement("div");
+        actions.className = "environment-actions";
+        const edit = document.createElement("button");
+        edit.type = "button";
+        edit.className = "btn btn-outline btn-sm environment-edit";
+        edit.dataset.environmentId = environment.id;
+        edit.textContent = "Edit";
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "btn btn-outline btn-sm btn-danger environment-delete";
+        remove.dataset.environmentId = environment.id;
+        remove.textContent = "Delete";
+        actions.append(edit, remove);
+        row.append(identity, actions);
+        list.appendChild(row);
+      }
+    };
+
+    const showForm = (environment = null) => {
+      editingId = environment?.id || "";
+      formTitle.textContent = environment ? "Edit Environment" : "Add Environment";
+      nameInput.value = environment?.name || "";
+      fillConnectionOptions(criticalSelect, environment?.criticalConnection || "");
+      fillConnectionOptions(complementarySelect, environment?.complementaryConnection || "");
+      publicInput.value = environment?.cdnPublicUrl || "";
+      directInput.value = environment?.cdnDirectUrl || "";
+      status.textContent = "";
+      status.dataset.state = "";
+      saveButton.textContent = environment ? "Save changes" : "Save Environment";
+      form.hidden = false;
+      nameInput.focus();
+    };
+
+    const hideForm = () => {
+      form.hidden = true;
+      editingId = "";
+      addButton.focus();
+    };
+
+    addButton.addEventListener("click", () => showForm());
+    wrapper.querySelector(".environment-cancel").addEventListener("click", hideForm);
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const name = nameInput.value.trim();
+      if (!name) {
+        status.textContent = "Environment name is required.";
+        status.dataset.state = "error";
+        nameInput.focus();
+        return;
+      }
+
+      const environments = readList();
+      if (environments.some((environment) => environment.id !== editingId && environment.name.toLowerCase() === name.toLowerCase())) {
+        status.textContent = "That environment name is already in use.";
+        status.dataset.state = "error";
+        nameInput.focus();
+        return;
+      }
+
+      for (const [label, input] of [
+        ["CDN Public URL", publicInput],
+        ["CDN Direct URL", directInput],
+      ]) {
+        const value = input.value.trim();
+        if (!value) continue;
+        try {
+          const url = new URL(value);
+          if (!url.protocol.startsWith("http")) throw new Error("protocol");
+        } catch (_) {
+          status.textContent = `${label} must be an http(s) URL.`;
+          status.dataset.state = "error";
+          input.focus();
+          return;
+        }
+      }
+
+      const existing = environments.find((environment) => environment.id === editingId);
+      const next = {
+        name,
+        criticalConnection: isDesktop ? criticalSelect.value : existing?.criticalConnection || "",
+        complementaryConnection: isDesktop ? complementarySelect.value : existing?.complementaryConnection || "",
+        cdnPublicUrl: publicInput.value.trim(),
+        cdnDirectUrl: directInput.value.trim(),
+      };
+      const updated = editingId
+        ? environments.map((environment) => (environment.id === editingId ? { ...environment, ...next } : environment))
+        : [...environments, next];
+
+      saveList(updated);
+      form.hidden = true;
+      editingId = "";
+      renderList();
+      addButton.focus();
+      this.eventBus?.emit?.("notification:success", { message: `Environment "${name}" saved` });
+    });
+
+    list.addEventListener("click", async (event) => {
+      const edit = event.target.closest(".environment-edit");
+      if (edit) {
+        const environment = readList().find((entry) => entry.id === edit.dataset.environmentId);
+        if (environment) showForm(environment);
+        return;
+      }
+
+      const remove = event.target.closest(".environment-delete");
+      if (!remove) return;
+      const environment = readList().find((entry) => entry.id === remove.dataset.environmentId);
+      if (!environment) return;
+      const confirmed = await confirmAction({
+        title: "Delete environment?",
+        description: `Delete the ${environment.name} environment? Tools will no longer see its database or CDN URLs.`,
+        confirmLabel: "Delete environment",
+      });
+      if (!confirmed) return;
+      saveList(readList().filter((entry) => entry.id !== environment.id));
+      renderList();
+      this.eventBus?.emit?.("notification:success", { message: `Environment "${environment.name}" deleted` });
+    });
+
+    renderList();
+    return wrapper;
+  }
+
   renderItem(item) {
     if (item.type === "kafka-brokers") return this.renderKafkaBrokersItem(item);
+    if (item.type === "environments") return this.renderEnvironmentsItem(item);
     const storageKey = item.storageKey || item.key;
     const current = this.service.getValue(storageKey, item.type, item.default);
 
@@ -948,6 +1211,7 @@ class SettingsPage {
               try {
                 await invoke("delete_oracle_credentials", { name: previousName });
               } catch (_) {}
+              updateConnectionReference(previousName, name);
             }
             conns[editingIndex] = connData;
           } else {
@@ -1083,6 +1347,7 @@ class SettingsPage {
             try {
               await invoke("delete_oracle_credentials", { name: conn.name });
             } catch (_) {}
+            clearConnectionReference(conn.name);
             conns.splice(idx, 1);
             this.service.setValue(storageKey, "oracle-connections", conns);
             renderList();

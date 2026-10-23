@@ -1,4 +1,5 @@
 import { getRuntime } from "../../core/Runtime.js";
+import { readEnvironments, writeEnvironments } from "../../core/Environments.js";
 
 class SettingsService {
   constructor({ eventBus, themeManager } = {}) {
@@ -42,6 +43,7 @@ class SettingsService {
   }
 
   getValue(key, type, defaultValue) {
+    if (type === "environments") return readEnvironments();
     const raw = localStorage.getItem(key);
     if (raw === null || raw === "null") {
       if (type === "boolean" && defaultValue === "system") {
@@ -62,7 +64,7 @@ class SettingsService {
           return "light";
         }
       }
-      if (type === "kvlist" || type === "oracle-connections") {
+      if (type === "kvlist" || type === "oracle-connections" || type === "environments") {
         return Array.isArray(defaultValue) ? defaultValue : [];
       }
       if (type === "string-list") {
@@ -80,7 +82,8 @@ class SettingsService {
         case "boolean":
           return raw === "true";
         case "kvlist":
-        case "oracle-connections": {
+        case "oracle-connections":
+        case "environments": {
           try {
             const val = JSON.parse(raw);
             return Array.isArray(val) ? val : [];
@@ -112,6 +115,12 @@ class SettingsService {
   }
 
   setValue(key, type, value, applyHint) {
+    if (type === "environments") {
+      const environments = writeEnvironments(Array.isArray(value) ? value : []);
+      this.eventBus?.emit?.("notification:success", { message: "Setting saved", duration: 1000 });
+      return environments;
+    }
+
     let storeVal = value;
     switch (type) {
       case "number":
@@ -174,6 +183,27 @@ class SettingsService {
         if (Number.isNaN(num)) return { valid: false, message: "Must be a number" };
         if (typeof rules.min === "number" && num < rules.min) return { valid: false, message: `Minimum is ${rules.min}` };
         if (typeof rules.max === "number" && num > rules.max) return { valid: false, message: `Maximum is ${rules.max}` };
+        return { valid: true };
+      }
+      case "environments": {
+        const rows = Array.isArray(value) ? value : [];
+        const names = new Set();
+        for (const row of rows) {
+          const name = String(row?.name ?? "").trim();
+          if (!name) return { valid: false, message: "Environment name is required" };
+          const nameKey = name.toLowerCase();
+          if (names.has(nameKey)) return { valid: false, message: `Environment "${name}" is duplicated` };
+          names.add(nameKey);
+          for (const url of [row?.cdnPublicUrl, row?.cdnDirectUrl]) {
+            if (!url) continue;
+            try {
+              const parsed = new URL(url);
+              if (!parsed.protocol.startsWith("http")) return { valid: false, message: "URLs must be http(s)" };
+            } catch (_) {
+              return { valid: false, message: `Invalid URL format: ${url}` };
+            }
+          }
+        }
         return { valid: true };
       }
       case "kvlist": {

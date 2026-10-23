@@ -96,6 +96,21 @@
       ]
     },
     {
+      "id": "environments",
+      "label": "Testing Environments",
+      "initiallyExpanded": true,
+      "items": [
+        {
+          "key": "config.environments",
+          "storageKey": "config.environments",
+          "label": "Environments",
+          "type": "environments",
+          "default": [],
+          "description": "Each environment pairs a critical database, an optional complementary database, and the CDN public and direct URLs. Tools read this shared model."
+        }
+      ]
+    },
+    {
       "id": "jenkins",
       "label": "Jenkins",
       "initiallyExpanded": true,
@@ -342,23 +357,6 @@
       "label": "Tool Settings",
       "initiallyExpanded": true,
       "categories": [
-        {
-          "id": "cdn",
-          "label": "CDN",
-          "initiallyExpanded": true,
-          "items": [
-            {
-              "key": "config.baseUrls",
-              "storageKey": "config.baseUrls",
-              "label": "CDN Base URLs",
-              "type": "kvlist",
-              "default": [],
-              "keyPlaceholder": "Environment",
-              "valuePlaceholder": "Base URL",
-              "description": "Add environment \u279d base URL pairs."
-            }
-          ]
-        },
         {
           "id": "lockey",
           "label": "Lockey",

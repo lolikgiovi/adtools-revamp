@@ -568,6 +568,109 @@
   margin-right: auto;
 }
 
+.environments-header {
+  margin-bottom: 12px;
+}
+
+.environment-add-btn {
+  flex-shrink: 0;
+}
+
+.environments-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.environment-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.environment-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.environment-identity strong {
+  color: hsl(var(--foreground));
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.environment-meta,
+.environments-empty,
+.environment-desktop-note {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+
+.environments-empty {
+  margin: 0;
+  padding: 8px 0;
+}
+
+.environment-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.environment-form {
+  margin-top: 12px;
+  padding: 12px 0 0;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.environment-form[hidden] {
+  display: none;
+}
+
+.environment-form-title {
+  margin: 0 0 16px;
+  font-size: 0.875rem;
+}
+
+.environment-form-row {
+  display: grid;
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
+  align-items: center;
+  gap: 8px 20px;
+  margin-bottom: 12px;
+}
+
+.environment-form-row[hidden] {
+  display: none;
+}
+
+.environment-form-row label {
+  color: hsl(var(--foreground));
+  font-size: 0.8125rem;
+}
+
+.environment-form-row input {
+  width: 100%;
+  height: 2.25rem;
+  padding: 0.5rem 0.7rem;
+  font: inherit;
+  line-height: 1.2;
+}
+
+.environment-form-actions {
+  margin-top: 12px;
+}
+
+.environment-desktop-note {
+  margin: 0 0 12px;
+}
+
 .setting-item.settings-focus-highlight {
   outline: 2px solid hsl(var(--ring));
   outline-offset: 4px;
@@ -623,7 +726,8 @@
   }
 
   .kafka-broker-form,
-  .oracle-form-row {
+  .oracle-form-row,
+  .environment-form-row {
     grid-template-columns: minmax(0, 1fr);
     gap: 6px;
   }
@@ -633,7 +737,8 @@
   }
 
   .kafka-broker-row,
-  .oracle-connection-row {
+  .oracle-connection-row,
+  .environment-row {
     flex-direction: column;
     gap: 10px;
   }
