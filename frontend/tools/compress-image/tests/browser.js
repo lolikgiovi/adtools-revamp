@@ -220,6 +220,25 @@ try {
     separator.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
   }
   check(first.row.querySelector(".ci-method").textContent === "Lossless", "Table reports the actual compression method.");
+  const leftHeader = root.querySelector(".ci-batch-header").getBoundingClientRect();
+  const rightHeader = root.querySelector(".ci-inspector-header").getBoundingClientRect();
+  check(Math.abs(leftHeader.height - rightHeader.height) < 1, "File and preview headers have the same height.");
+  check(!root.querySelector(".ci-inspector-header .ci-detail"), "Image metadata lives below the preview header.");
+  check(Number(control("zoom").max) === 32, "Preview zoom supports up to 32×.");
+  control("zoom").value = "16";
+  control("zoom").dispatchEvent(new Event("input", { bubbles: true }));
+  check(root.querySelector(".ci-pair img").style.transform.includes("scale(16)"), "Linked images zoom beyond 8×.");
+  const scrollPane = root.querySelector(".ci-pair .ci-viewport");
+  const beforeWheel = root.querySelector(".ci-pair img").style.transform;
+  const scroll = new WheelEvent("wheel", { deltaX: 24, deltaY: 36, bubbles: true, cancelable: true });
+  scrollPane.dispatchEvent(scroll);
+  const wheelTransforms = [...root.querySelectorAll(".ci-pair img")].map((img) => img.style.transform);
+  check(
+    scroll.defaultPrevented && wheelTransforms[0] !== beforeWheel && wheelTransforms[0] === wheelTransforms[1],
+    "Ordinary scrolling pans linked images and stays inside the preview.",
+  );
+  check(Number(control("zoom").value) === 16, "Ordinary scrolling preserves zoom.");
+  control("fit").click();
   const gesturePane = root.querySelector(".ci-pair .ci-viewport");
   gesturePane.dispatchEvent(new WheelEvent("wheel", { deltaY: -100, ctrlKey: true, bubbles: true, cancelable: true }));
   check(Number(control("zoom").value) > 1, "Trackpad pinch wheel events zoom the linked preview.");

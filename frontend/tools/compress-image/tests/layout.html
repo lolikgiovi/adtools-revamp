@@ -8,12 +8,39 @@
   </head>
   <body style="padding: 24px">
     <div id="tool"></div>
+    <script>
+      addEventListener("error", (event) => {
+        const report = document.createElement("pre");
+        report.id = "geometry-evidence";
+        report.textContent = `FAIL: ${event.message}`;
+        document.body.append(report);
+      });
+      addEventListener("unhandledrejection", (event) => {
+        const report = document.createElement("pre");
+        report.id = "geometry-evidence";
+        report.textContent = `FAIL: ${event.reason}`;
+        document.body.append(report);
+      });
+    </script>
     <script type="module">
       import { CompressImage } from "../main.js";
       document.documentElement.classList.add("dark-grey");
+      const params = new URLSearchParams(location.search);
+      if (params.has("shell")) {
+        document.body.style.padding = "0";
+        const root = document.querySelector("#tool");
+        root.className = "tool-root";
+        const shell = document.createElement("div");
+        shell.className = "sidebar-provider";
+        shell.style.height = "100dvh";
+        shell.innerHTML =
+          '<main class="main" style="margin-left:0"><header class="main-header">Compress Image</header><div class="main-content"></div></main>';
+        shell.querySelector(".main-content").append(root);
+        document.body.append(shell);
+        if (params.has("native")) document.documentElement.dataset.tauri = "true";
+      }
       const tool = new CompressImage();
       tool.mount(document.querySelector("#tool"));
-      const params = new URLSearchParams(location.search);
       if (params.has("sample")) {
         const files = [];
         for (const [name, width, height, type] of [
@@ -42,6 +69,45 @@
         input.files = transfer.files;
         input.dispatchEvent(new Event("change", { bubbles: true }));
         if (params.has("processed")) await tool.processQueue();
+        if (params.has("many")) {
+          tool.addFiles(Array.from({ length: 17 }, (_, i) => new File([files[1]], `queued-image-${i + 1}.jpg`, { type: "image/jpeg" })));
+        }
+        if (params.has("verify")) {
+          await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          const checks = [];
+          const check = (value, label) => {
+            if (!value) throw new Error(label);
+            checks.push(label);
+          };
+          const rect = (selector) => document.querySelector(selector).getBoundingClientRect();
+          const left = rect(".ci-file-pane"),
+            right = rect(".ci-inspector");
+          check(left.bottom <= innerHeight && right.bottom <= innerHeight, "Both panes end inside the viewport");
+          check(Math.abs(left.height - right.height) < 1, "Both panes share the same height");
+          check(
+            Math.abs(rect(".ci-batch-header").height - rect(".ci-inspector-header").height) < 1,
+            "Header heights match even when batch actions wrap",
+          );
+          const list = document.querySelector(".ci-list");
+          check(list.scrollHeight > list.clientHeight, "A long batch scrolls inside the file pane");
+          list.scrollTop = list.scrollHeight;
+          check(list.scrollTop > 0 && rect(".ci-file-pane").bottom === left.bottom, "Scrolling rows preserves pane bounds");
+          tool.selectItem(tool.items[0]);
+          tool.$("copy-log").closest("details").open = true;
+          check(
+            document.querySelector(".ci-inspector-body").scrollHeight >= document.querySelector(".ci-inspector-body").clientHeight,
+            "Preview and expanded log stay in the scrolling body",
+          );
+          const report = document.createElement("pre");
+          report.id = "geometry-evidence";
+          report.hidden = true;
+          report.textContent =
+            `PASS: ${checks.length} viewport checks\n` +
+            checks.join("\n") +
+            "\n" +
+            JSON.stringify({ left: left.toJSON(), right: right.toJSON(), viewport: innerHeight });
+          document.body.append(report);
+        }
       }
     </script>
   </body>

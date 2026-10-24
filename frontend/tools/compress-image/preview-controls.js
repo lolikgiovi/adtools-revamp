@@ -18,7 +18,7 @@ export function attachPreviewControls({ preview, zoomInput, zoomValue, fit, spli
     zoomValue.textContent = zoom === 1 ? "Fit" : `${Number(zoom.toFixed(2))}×`;
   };
   const zoomAt = (value, anchorX = 0, anchorY = 0) => {
-    const next = clamp(value, 1, 8),
+    const next = clamp(value, 1, Number(zoomInput.max)),
       scale = next / zoom;
     x = anchorX - (anchorX - x) * scale;
     y = anchorY - (anchorY - y) * scale;
@@ -76,10 +76,16 @@ export function attachPreviewControls({ preview, zoomInput, zoomValue, fit, spli
     pane.addEventListener(
       "wheel",
       (event) => {
-        if (!event.ctrlKey) return;
         event.preventDefault();
-        const anchor = location(event);
-        zoomAt(zoom * Math.exp(-event.deltaY * 0.01), anchor.x, anchor.y);
+        const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? pane.clientHeight : 1;
+        if (event.ctrlKey) {
+          const anchor = location(event);
+          zoomAt(zoom * Math.exp(-event.deltaY * unit * 0.01), anchor.x, anchor.y);
+        } else {
+          x -= (event.deltaX * unit) / pane.clientWidth;
+          y -= (event.deltaY * unit) / pane.clientHeight;
+          update();
+        }
       },
       { passive: false },
     );

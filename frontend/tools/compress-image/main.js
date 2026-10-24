@@ -142,6 +142,11 @@ export class CompressImage extends BaseTool {
     this.$("undo-smaller").addEventListener("click", () => this.useSmaller(false));
     this.updateSettings();
     this.resizerCleanup = attachPaneResizer(this.$("workspace"), this.$("resizer"));
+    const header = this.container.querySelector(".ci-batch-header");
+    const syncHeader = () => this.$("workspace").style.setProperty("--ci-header-height", `${header.getBoundingClientRect().height}px`);
+    this.headerObserver = new ResizeObserver(syncHeader);
+    this.headerObserver.observe(header);
+    syncHeader();
   }
   // The settings controls are the single source of truth; cards and presets only write to them.
   readSettings() {
@@ -642,7 +647,7 @@ export class CompressImage extends BaseTool {
         item.previewUrl = URL.createObjectURL(item.file);
         item.urls.push(item.previewUrl);
       }
-      inspector.innerHTML = `<header class="ci-inspector-header"><div><h3></h3><p class="ci-detail"></p></div></header><div class="ci-original-preview ci-checker"><img alt="Original image"></div>`;
+      inspector.innerHTML = `<header class="ci-inspector-header"><div><h3></h3></div></header><div class="ci-inspector-body"><p class="ci-detail"></p><div class="ci-original-preview ci-checker"><img alt="Original image"></div></div>`;
       inspector.querySelector("h3").textContent = item.file.name;
       inspector.querySelector(".ci-detail").textContent =
         item.error || (item.dimensions ? `${item.dimensions.width} × ${item.dimensions.height} · Original` : "Original");
@@ -653,11 +658,11 @@ export class CompressImage extends BaseTool {
       inspector.querySelector("img").src = item.previewUrl;
       return;
     }
-    inspector.innerHTML = `<header class="ci-inspector-header"><div><h3></h3><p class="ci-detail"></p></div><div data-ci="preview-controls"></div><div class="ci-view-controls" role="group" aria-label="Comparison view"><button class="btn btn-sm btn-secondary" data-ci="pair"><span class="ci-label-wide">Side by side</span><span class="ci-label-narrow">Both</span></button>
+    inspector.innerHTML = `<header class="ci-inspector-header"><div><h3></h3></div><div data-ci="preview-controls"></div><div class="ci-view-controls" role="group" aria-label="Comparison view"><button class="btn btn-sm btn-secondary" data-ci="pair"><span class="ci-label-wide">Side by side</span><span class="ci-label-narrow">Both</span></button>
       <button class="btn btn-sm btn-secondary" data-ci="overlay">Slider</button></div></header>
-      <div class="ci-preview"></div><details class="ci-diagnostics"><summary><svg class="ci-chevron" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Log</summary>
+      <div class="ci-inspector-body"><p class="ci-detail"></p><div class="ci-preview"></div><details class="ci-diagnostics"><summary><svg class="ci-chevron" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Log</summary>
       <div class="ci-log-actions"><a href="./licenses/image-optimizer/NOTICE.txt" target="_blank" rel="noopener">Image library licenses</a>
-      <button class="btn btn-secondary btn-sm" data-ci="copy-log">Copy log</button></div><pre tabindex="0" aria-label="Processing log"></pre></details>`;
+      <button class="btn btn-secondary btn-sm" data-ci="copy-log">Copy log</button></div><pre tabindex="0" aria-label="Processing log"></pre></details></div>`;
     inspector.querySelector("h3").textContent = item.file.name;
     const result = item.result;
     inspector.querySelector(".ci-detail").textContent = item.error || (result ? this.describe(item) : "");
@@ -701,7 +706,7 @@ export class CompressImage extends BaseTool {
       return;
     }
     this.$("preview-controls").innerHTML =
-      `<div class="ci-zoom-controls"><label>Zoom <input data-ci="zoom" type="range" min="1" max="8" step="0.25" value="1"><output data-ci="zoom-value">Fit</output></label>
+      `<div class="ci-zoom-controls"><label>Zoom <input data-ci="zoom" type="range" min="1" max="32" step="0.25" value="1"><output data-ci="zoom-value">Fit</output></label>
       <button class="btn btn-ghost btn-sm ci-reset" data-ci="fit" aria-label="Reset zoom" title="Reset zoom"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 7a5 5 0 1 1 0 4M3 2v5h5"/></svg></button></div>`;
     const downloads = document.createElement("div");
     downloads.className = "ci-preview-downloads";
@@ -873,6 +878,7 @@ export class CompressImage extends BaseTool {
     return this.running || this.zipping;
   }
   onUnmount() {
+    this.headerObserver?.disconnect();
     this.resizerCleanup?.();
     this.clear();
   }

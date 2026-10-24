@@ -1,0 +1,8 @@
+PASS: 6 viewport checks
+Both panes end inside the viewport
+Both panes share the same height
+Header heights match even when batch actions wrap
+A long batch scrolls inside the file pane
+Scrolling rows preserves pane bounds
+Preview and expanded log stay in the scrolling body
+{"left":{"x":16,"y":313.5546875,"width":561.359375,"height":390.4453125,"top":313.5546875,"right":577.359375,"bottom":704,"left":16},"right":{"x":605.359375,"y":313.5546875,"width":658.640625,"height":390.4453125,"top":313.5546875,"right":1264,"bottom":704,"left":605.359375},"viewport":720}
