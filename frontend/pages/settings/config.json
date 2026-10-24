@@ -2,8 +2,8 @@
   "version": 2,
   "categories": [
     {
-      "id": "appearance",
-      "label": "Appearance",
+      "id": "app-settings",
+      "label": "App Settings",
       "initiallyExpanded": true,
       "items": [
         {
@@ -92,6 +92,33 @@
           ],
           "apply": "theme",
           "description": "Choose the color theme for the app."
+        },
+        {
+          "key": "update.autoCheck",
+          "storageKey": "update.autoCheck",
+          "label": "Check for Auto Update",
+          "type": "boolean",
+          "default": true,
+          "description": "When enabled, the app checks at startup and scheduled times.",
+          "requiresTauri": true
+        },
+        {
+          "key": "update.allowBeta",
+          "storageKey": "update.allowBeta",
+          "label": "Allow Beta Update",
+          "type": "boolean",
+          "default": false,
+          "description": "Opt into beta channel updates (uses manifest/beta.json).",
+          "requiresTauri": true
+        },
+        {
+          "key": "update.check",
+          "storageKey": "update.check",
+          "label": "Check for Update",
+          "type": "action",
+          "buttonLabel": "Check Now",
+          "description": "Manually check for updates and show banner if available.",
+          "requiresTauri": true
         }
       ]
     },
@@ -438,38 +465,6 @@
               "description": "JSON sends an object with context and template. Form sends context as JSON text and template as raw Velocity in separate encoded fields."
             }
           ]
-        }
-      ]
-    },
-    {
-      "id": "updates",
-      "label": "Updates",
-      "requiresTauri": true,
-      "initiallyExpanded": true,
-      "items": [
-        {
-          "key": "update.autoCheck",
-          "storageKey": "update.autoCheck",
-          "label": "Check for Auto Update",
-          "type": "boolean",
-          "default": true,
-          "description": "When enabled, the app checks at startup and scheduled times."
-        },
-        {
-          "key": "update.allowBeta",
-          "storageKey": "update.allowBeta",
-          "label": "Allow Beta Update",
-          "type": "boolean",
-          "default": false,
-          "description": "Opt into beta channel updates (uses manifest/beta.json)."
-        },
-        {
-          "key": "update.check",
-          "storageKey": "update.check",
-          "label": "Check for Update",
-          "type": "action",
-          "buttonLabel": "Check Now",
-          "description": "Manually check for updates and show banner if available."
         }
       ]
     }
