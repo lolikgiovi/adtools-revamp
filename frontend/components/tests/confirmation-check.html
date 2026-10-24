@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Confirmation overlay checks</title>
+    <style>
+      body {
+        margin: 16px;
+        font: 14px system-ui;
+      }
+      iframe {
+        height: 720px;
+        border: 1px solid #888;
+      }
+      .pass {
+        color: #16702c;
+      }
+      .fail {
+        color: #b00020;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Confirmation overlay checks</h1>
+    <ol id="results"></ol>
+    <iframe title="Confirmation under test"></iframe>
+    <script type="module">
+      const frame = document.querySelector("iframe");
+      const results = document.querySelector("#results");
+      let total = 0;
+      let failures = 0;
+      const settle = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const labels = [
+        "Delete environment",
+        "Delete connection",
+        "Update existing CONFIG_IDs",
+        "Delete all selected environments permanently",
+        "LongAction".repeat(12),
+      ];
+      function check(passed, label) {
+        total++;
+        if (!passed) failures++;
+        const row = document.createElement("li");
+        row.className = passed ? "pass" : "fail";
+        row.textContent = `${passed ? "PASS" : "FAIL"}: ${label}`;
+        results.append(row);
+      }
+      for (const theme of ["dark", "light"]) {
+        for (const width of [1100, 390, 320]) {
+          for (const label of labels) {
+            frame.style.width = `${width}px`;
+            await new Promise((resolve) => {
+              frame.onload = resolve;
+              frame.src = `./confirmation-preview.html?theme=${theme}&label=${encodeURIComponent(label)}`;
+            });
+            const doc = frame.contentDocument;
+            const dialog = doc.querySelector("dialog[open]");
+            const actions = dialog.querySelector("footer");
+            const buttons = [...actions.querySelectorAll("button")];
+            const rect = dialog.getBoundingClientRect();
+            const prefix = `${theme} ${width}px ${label.slice(0, 28)}`;
+            check(
+              buttons.every((button) => {
+                const box = button.getBoundingClientRect();
+                const style = frame.contentWindow.getComputedStyle(button);
+                const range = doc.createRange();
+                range.selectNodeContents(button);
+                return (
+                  button.scrollWidth <= button.clientWidth + 1 &&
+                  [...range.getClientRects()].every(
+                    (text) =>
+                      text.left >= box.left + parseFloat(style.paddingLeft) - 1 &&
+                      text.right <= box.right - parseFloat(style.paddingRight) + 1,
+                  )
+                );
+              }),
+              `${prefix}: button text fits with padding`,
+            );
+            check(
+              buttons.every((button) => {
+                const box = button.getBoundingClientRect();
+                return box.left >= rect.left && box.right <= rect.right && box.top >= rect.top && box.bottom <= rect.bottom;
+              }) &&
+                rect.width <= width &&
+                dialog.scrollWidth <= dialog.clientWidth + 1,
+              `${prefix}: actions stay inside dialog`,
+            );
+            buttons[1].click();
+            await settle();
+            check(
+              !doc.querySelector("dialog") &&
+                doc.querySelector("#result").textContent === "Cancelled" &&
+                doc.activeElement === doc.querySelector("#open"),
+              `${prefix}: cancel restores focus`,
+            );
+          }
+        }
+      }
+      document.body.dataset.result = failures ? "failed" : "passed";
+      document.title = `${total - failures}/${total} passed — Confirmation overlay checks`;
+    </script>
+  </body>
+</html>

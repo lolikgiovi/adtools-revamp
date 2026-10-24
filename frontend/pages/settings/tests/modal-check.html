@@ -44,7 +44,7 @@
         frame.style.width = `${width}px`;
         await new Promise((resolve) => {
           frame.onload = resolve;
-          frame.src = `./preview.html?populated&theme=light&width=${width}`;
+          frame.src = `./preview.html?populated&json&credential-failure-once&theme=light&width=${width}`;
         });
         const doc = frame.contentDocument;
         const win = frame.contentWindow;
@@ -166,6 +166,82 @@
           click('[data-setting="config.mergeSql.squadNames"] .setting-edit');
           check(fits(), label("list editor fits viewport"));
           cancel();
+          const connections = find("#settings-category-connections").parentElement;
+          const oracle = find("#settings-category-oracle").parentElement;
+          for (const category of [oracle, connections]) {
+            if (category.getAttribute("aria-expanded") === "true") category.querySelector(".settings-category-header").click();
+          }
+          click(".environment-add-btn");
+          input(".environment-name", "Connection workflow");
+          input(".environment-public-url", "https://public.example.test/env/");
+          input(".environment-direct-url", "https://direct.example.test/env/");
+          find(".environment-complementary").value = "KEEP";
+          find(".environment-complementary").dispatchEvent(new win.Event("change", { bubbles: true }));
+          const bindings = {};
+          for (const slot of ["critical", "complementary"]) {
+            const select = find(`.environment-${slot}`);
+            select.value = [...select.options].find((option) => option.dataset.action === "add-connection").value;
+            select.dispatchEvent(new win.Event("change", { bubbles: true }));
+            check(
+              doc.querySelectorAll("dialog[open]").length === 1 && find("dialog[open] h2").textContent === "Add Connection" && fits(),
+              label(`${slot}: switches to Oracle editor without stacked dialogs`),
+            );
+            const name = `FLOW_${slot.toUpperCase()}`;
+            input(".oracle-name", name);
+            input(".oracle-connect-string", "db.example.test:1521/FIXTURE");
+            input(".oracle-username", "fixture-user");
+            input(".oracle-password", "fixture-password");
+            click(".oracle-save-btn");
+            await settle();
+            if (slot === "critical") {
+              check(
+                find("dialog[open] h2").textContent === "Add Connection" &&
+                  find(".oracle-form-status").textContent.includes("Fixture keychain failure"),
+                label("keychain failure keeps Oracle editor open"),
+              );
+              click(".oracle-save-btn");
+              await settle();
+            }
+            bindings[slot] = name;
+            check(
+              find("dialog[open] h2").textContent === "Add Environment" && select.value === name && doc.activeElement === select && fits(),
+              label(`${slot}: resumes environment with new connection selected and focused`),
+            );
+            check(
+              find(".environment-name").value === "Connection workflow" &&
+                find(".environment-public-url").value === "https://public.example.test/env/" &&
+                find(".environment-direct-url").value === "https://direct.example.test/env/",
+              label(`${slot}: preserves environment name and URL draft`),
+            );
+            check(
+              find(`.environment-${slot === "critical" ? "complementary" : "critical"}`).value ===
+                (slot === "critical" ? "KEEP" : bindings.critical),
+              label(`${slot}: preserves the other database binding`),
+            );
+            check(
+              connections.getAttribute("aria-expanded") === "false" && oracle.getAttribute("aria-expanded") === "false",
+              label(`${slot}: restores collapsed connection sections`),
+            );
+          }
+          const select = find(".environment-critical");
+          select.value = [...select.options].find((option) => option.dataset.action === "add-connection").value;
+          select.dispatchEvent(new win.Event("change", { bubbles: true }));
+          find("dialog[open]").dispatchEvent(new win.Event("cancel", { cancelable: true }));
+          await settle();
+          check(
+            find("dialog[open] h2").textContent === "Add Environment" &&
+              select.value === bindings.critical &&
+              find(".oracle-password").value === "",
+            label("Oracle cancellation returns to the preserved draft and clears password"),
+          );
+          click(".environment-save");
+          await settle();
+          check(
+            !find("dialog[open]") &&
+              find(".environments-list").textContent.includes(bindings.critical) &&
+              find(".environments-list").textContent.includes(bindings.complementary),
+            label("environment saves both newly created connection references"),
+          );
           check(!find("dialog[open]"), label("all dialogs close cleanly"));
         } catch (error) {
           check(false, label(error.message));

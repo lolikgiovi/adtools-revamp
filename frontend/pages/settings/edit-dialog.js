@@ -34,6 +34,12 @@ export function mountEditDialog({ root, form, onCancel, isBusy = () => false, wi
       title.textContent = label;
       if (!dialog.open) dialog.showModal();
     },
+    suspend() {
+      if (dialog.open) dialog.close();
+    },
+    resume() {
+      if (!disposed && root.isConnected && !dialog.open) dialog.showModal();
+    },
     close() {
       if (!dialog.open) return;
       dialog.close();

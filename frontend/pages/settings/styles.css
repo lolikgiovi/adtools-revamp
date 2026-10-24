@@ -17,12 +17,6 @@
   margin-bottom: 12px;
 }
 
-.settings-header h2 {
-  margin: 0;
-  font-size: 1.125rem;
-  flex: none;
-}
-
 .settings-header-tools {
   display: flex;
   align-items: center;
@@ -327,7 +321,8 @@
 }
 
 /* Nested service groups read as subsections within their parent. */
-.settings-category-content > :is(.settings-category, .setting-integration) {
+.settings-category-content > :is(.settings-category, .setting-integration),
+.environments-list > .environment-row {
   margin-inline-start: 12px;
 }
 
@@ -883,7 +878,8 @@
 }
 
 @media (max-width: 760px) {
-  .settings-category-content > :is(.settings-category, .setting-integration) {
+  .settings-category-content > :is(.settings-category, .setting-integration),
+  .environments-list > .environment-row {
     margin-inline-start: 8px;
   }
 

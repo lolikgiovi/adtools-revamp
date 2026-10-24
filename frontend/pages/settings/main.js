@@ -33,6 +33,7 @@ class SettingsPage {
     this.currentConfig = null;
     this._runtimeRetrySettings = false;
     this.settingDisposers = new Set();
+    this.oracleConnectionEditor = null;
   }
 
   async mount(root, routeData = null) {
@@ -875,6 +876,7 @@ class SettingsPage {
       return Array.isArray(value) ? value.filter((entry) => entry?.name) : [];
     };
 
+    const selectedConnections = new Map();
     const fillConnectionOptions = (select, selected) => {
       const options = connections();
       select.replaceChildren(new Option("None", ""));
@@ -882,7 +884,13 @@ class SettingsPage {
       if (selected && !options.some((connection) => connection.name === selected)) {
         select.appendChild(new Option(`${selected} (not configured)`, selected));
       }
+      if (isDesktop) {
+        const add = new Option("Add connection…", `add-oracle-${uid}`);
+        add.dataset.action = "add-connection";
+        select.append(add);
+      }
       select.value = selected || "";
+      selectedConnections.set(select, select.value);
     };
 
     const renderList = () => {
@@ -891,7 +899,7 @@ class SettingsPage {
       if (!environments.length) {
         const empty = document.createElement("p");
         empty.className = "environments-empty";
-        empty.textContent = "No testing environments configured.";
+        empty.textContent = "No environments configured.";
         list.appendChild(empty);
         return;
       }
@@ -950,6 +958,35 @@ class SettingsPage {
     });
     formTitle.hidden = true;
     this.settingDisposers.add(() => modal.dispose());
+
+    for (const select of [criticalSelect, complementarySelect]) {
+      select.addEventListener("change", () => {
+        if (select.selectedOptions[0]?.dataset.action !== "add-connection") {
+          selectedConnections.set(select, select.value);
+          return;
+        }
+        select.value = selectedConnections.get(select) || "";
+        const resume = () => {
+          modal.resume();
+          select.focus();
+        };
+        if (!this.oracleConnectionEditor) {
+          status.textContent = "Oracle connection editor is unavailable. Reopen Settings and try again.";
+          select.focus();
+          return;
+        }
+        modal.suspend();
+        const opened = this.oracleConnectionEditor.openCreate({
+          onSaved: (name) => {
+            fillConnectionOptions(criticalSelect, select === criticalSelect ? name : criticalSelect.value);
+            fillConnectionOptions(complementarySelect, select === complementarySelect ? name : complementarySelect.value);
+            resume();
+          },
+          onCancel: resume,
+        });
+        if (!opened) resume();
+      });
+    }
 
     const showForm = (environment = null) => {
       editingId = environment?.id || "";
@@ -1201,6 +1238,7 @@ class SettingsPage {
       const statusEl = wrapper.querySelector(".oracle-form-status");
       let editingIndex = -1;
       let formGeneration = 0;
+      let connectionFlow = null;
       const modal = mountEditDialog({
         root: wrapper,
         form: formEl,
@@ -1275,13 +1313,45 @@ class SettingsPage {
         }
       };
 
-      const hideForm = () => {
+      const hideForm = (savedName = null) => {
         formEl.style.display = "none";
         formEl.querySelector(".oracle-password").value = "";
         formGeneration += 1;
         modal.close();
         editingIndex = -1;
+        const flow = connectionFlow;
+        connectionFlow = null;
+        for (const category of flow?.expandedCategories || []) {
+          category.setAttribute("aria-expanded", "false");
+          category.querySelector(".settings-category-header")?.setAttribute("aria-expanded", "false");
+        }
+        if (savedName) flow?.onSaved(savedName);
+        else flow?.onCancel();
       };
+
+      const controller = {
+        openCreate: ({ onSaved, onCancel }) => {
+          if (formEl.querySelector(".oracle-save-btn").disabled) return false;
+          const expandedCategories = [];
+          let category = wrapper.closest(".settings-category");
+          while (category) {
+            if (category.getAttribute("aria-expanded") !== "true") {
+              expandedCategories.push(category);
+              category.setAttribute("aria-expanded", "true");
+              category.querySelector(".settings-category-header")?.setAttribute("aria-expanded", "true");
+            }
+            category = category.parentElement?.closest(".settings-category");
+          }
+          connectionFlow = { onSaved, onCancel, expandedCategories };
+          showForm();
+          return true;
+        },
+      };
+      this.oracleConnectionEditor = controller;
+      this.settingDisposers.add(() => {
+        connectionFlow = null;
+        if (this.oracleConnectionEditor === controller) this.oracleConnectionEditor = null;
+      });
 
       const bulk = mountBulkEditor({
         root: wrapper,
@@ -1370,7 +1440,7 @@ class SettingsPage {
         try {
           // Save credentials to keychain
           try {
-            await invoke("set_oracle_credentials", { name, username, password });
+            await OracleConnectionService.setOracleCredentials(name, username, password);
           } catch (err) {
             statusEl.textContent = `Failed to save credentials: ${err}`;
             statusEl.className = "oracle-form-status error";
@@ -1403,7 +1473,7 @@ class SettingsPage {
           }
 
           this.service.setValue(storageKey, "oracle-connections", conns);
-          hideForm();
+          hideForm(name);
           renderList();
           this.eventBus?.emit?.("notification:success", { message: `Connection "${name}" saved` });
         } finally {

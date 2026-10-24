@@ -101,7 +101,12 @@
             ["KEEP", "reader"],
           ]);
           OracleConnectionService.getOracleUsername = async (name) => users.get(name) || "";
+          let failCredentialsOnce = params.has("credential-failure-once");
           OracleConnectionService.setOracleCredentials = async (name, username) => {
+            if (failCredentialsOnce) {
+              failCredentialsOnce = false;
+              throw new Error("Fixture keychain failure");
+            }
             users.set(name, username);
           };
         }

@@ -1,7 +1,6 @@
 export const SettingsTemplate = /*html*/ `
   <section class="settings-page">
     <header class="settings-header">
-      <h2>Settings</h2>
       <input
         id="settings-search"
         class="settings-search"

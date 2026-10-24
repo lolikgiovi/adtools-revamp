@@ -170,11 +170,25 @@ body .app-confirm-dialog:focus-visible {
 
 .app-confirm-dialog-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
   padding: 13px 20px;
   border-top: 1px solid hsl(var(--border));
   background: hsl(var(--muted) / 0.3);
+}
+
+body .app-confirm-dialog-actions > button {
+  width: auto;
+  min-width: var(--app-modal-action-width);
+  max-width: 100%;
+  height: auto;
+  max-height: none;
+  flex: 0 1 auto;
+  justify-content: center;
+  padding: 8px 14px;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 480px) {

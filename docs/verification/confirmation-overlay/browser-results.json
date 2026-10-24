@@ -1,0 +1,372 @@
+{
+  "date": "2026-10-24",
+  "reproduce": "npm run dev, then open http://localhost:1234/components/tests/confirmation-check.html",
+  "before": {
+    "buttonContentWidth": 98,
+    "labelWidth": 104.0625
+  },
+  "checks": [
+    {
+      "label": "PASS: dark 1100px Delete environment: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 1100px Delete environment: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 1100px Delete environment: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 1100px Delete connection: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 1100px Delete connection: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 1100px Delete connection: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 1100px Update existing CONFIG_IDs: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 1100px Update existing CONFIG_IDs: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 1100px Update existing CONFIG_IDs: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 1100px Delete all selected environm: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 1100px Delete all selected environm: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 1100px Delete all selected environm: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 1100px LongActionLongActionLongActi: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 1100px LongActionLongActionLongActi: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 1100px LongActionLongActionLongActi: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 390px Delete environment: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 390px Delete environment: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 390px Delete environment: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 390px Delete connection: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 390px Delete connection: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 390px Delete connection: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 390px Update existing CONFIG_IDs: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 390px Update existing CONFIG_IDs: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 390px Update existing CONFIG_IDs: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 390px Delete all selected environm: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 390px Delete all selected environm: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 390px Delete all selected environm: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 390px LongActionLongActionLongActi: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 390px LongActionLongActionLongActi: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 390px LongActionLongActionLongActi: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 320px Delete environment: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 320px Delete environment: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 320px Delete environment: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 320px Delete connection: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 320px Delete connection: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 320px Delete connection: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 320px Update existing CONFIG_IDs: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 320px Update existing CONFIG_IDs: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 320px Update existing CONFIG_IDs: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 320px Delete all selected environm: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 320px Delete all selected environm: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 320px Delete all selected environm: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 320px LongActionLongActionLongActi: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 320px LongActionLongActionLongActi: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: dark 320px LongActionLongActionLongActi: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 1100px Delete environment: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 1100px Delete environment: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 1100px Delete environment: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 1100px Delete connection: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 1100px Delete connection: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 1100px Delete connection: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 1100px Update existing CONFIG_IDs: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 1100px Update existing CONFIG_IDs: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 1100px Update existing CONFIG_IDs: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 1100px Delete all selected environm: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 1100px Delete all selected environm: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 1100px Delete all selected environm: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 1100px LongActionLongActionLongActi: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 1100px LongActionLongActionLongActi: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 1100px LongActionLongActionLongActi: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 390px Delete environment: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 390px Delete environment: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 390px Delete environment: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 390px Delete connection: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 390px Delete connection: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 390px Delete connection: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 390px Update existing CONFIG_IDs: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 390px Update existing CONFIG_IDs: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 390px Update existing CONFIG_IDs: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 390px Delete all selected environm: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 390px Delete all selected environm: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 390px Delete all selected environm: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 390px LongActionLongActionLongActi: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 390px LongActionLongActionLongActi: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 390px LongActionLongActionLongActi: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 320px Delete environment: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 320px Delete environment: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 320px Delete environment: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 320px Delete connection: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 320px Delete connection: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 320px Delete connection: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 320px Update existing CONFIG_IDs: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 320px Update existing CONFIG_IDs: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 320px Update existing CONFIG_IDs: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 320px Delete all selected environm: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 320px Delete all selected environm: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 320px Delete all selected environm: cancel restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 320px LongActionLongActionLongActi: button text fits with padding",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 320px LongActionLongActionLongActi: actions stay inside dialog",
+      "passed": true
+    },
+    {
+      "label": "PASS: light 320px LongActionLongActionLongActi: cancel restores focus",
+      "passed": true
+    }
+  ],
+  "result": "passed",
+  "title": "90/90 passed — Confirmation overlay checks"
+}

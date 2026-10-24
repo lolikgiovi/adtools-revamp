@@ -127,7 +127,7 @@
     },
     {
       "id": "environments",
-      "label": "Testing Environments",
+      "label": "Environments",
       "initiallyExpanded": true,
       "items": [
         {

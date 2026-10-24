@@ -60,7 +60,9 @@ describe("Testing Environments editor", () => {
 
     const desktop = mount("tauri");
     desktop.querySelector(".environment-edit").click();
-    expect([...desktop.querySelector(".environment-critical").options].map((option) => option.value)).toEqual(["", "CORE", "EXTRA"]);
+    expect(
+      [...desktop.querySelector(".environment-critical").options].filter((option) => !option.dataset.action).map((option) => option.value),
+    ).toEqual(["", "CORE", "EXTRA"]);
     expect(desktop.querySelector(".environment-critical").value).toBe("CORE");
     desktop.querySelector(".environment-complementary").value = "EXTRA";
     submit(desktop);

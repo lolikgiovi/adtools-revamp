@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Confirmation overlay preview</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <button id="open" type="button">Open confirmation</button>
+    <p id="result" role="status"></p>
+    <script type="module">
+      import { confirmAction } from "../ConfirmationDialog.js";
+      const params = new URLSearchParams(location.search);
+      document.documentElement.dataset.theme = params.get("theme") || "dark";
+      document.documentElement.classList.toggle("dark", params.get("theme") !== "light");
+      const button = document.querySelector("#open");
+      button.addEventListener("click", async () => {
+        button.focus();
+        const accepted = await confirmAction({
+          title: "Delete environment?",
+          description: "Delete the Demo environment? Tools will no longer see its database or CDN URLs.",
+          confirmLabel: params.get("label") || "Delete environment",
+        });
+        document.querySelector("#result").textContent = accepted ? "Confirmed" : "Cancelled";
+      });
+      button.click();
+    </script>
+  </body>
+</html>
