@@ -14,14 +14,14 @@ delivery; and preserving unrelated settings, theme, update preferences, and loca
 
 ## UI direction
 
-Extend the existing Settings surface using its buttons, fields, disclosure controls, spacing, and theme tokens. A Publish settings link opens
+Use the Dashboard surface with the existing buttons, fields, spacing, and theme tokens. The Publish Settings section opens
 an administrator workspace with the existing dashboard password gate. The task order is audience, selected settings, preview, publish, history.
 Use native labelled controls, inline errors and status, and a responsive single-column flow. No new visual identity or decorative labels.
 The preview lists the exact recipient emails and selected values. Any edit invalidates it. Publishing requires the same audience snapshot.
 
 ## Operation
 
-Open **Settings → Publish settings** and unlock with the existing analytics dashboard password. This is the existing global administrator
+Open **Dashboard → Publish Settings** and unlock with the existing analytics dashboard password. This is the existing global administrator
 permission, not a new department-admin role. Choose emails or departments, select settings, edit their values, and preview. The preview lists
 the exact registered users and values. Publishing refuses an audience that changed since preview. No publication can target everyone implicitly.
 

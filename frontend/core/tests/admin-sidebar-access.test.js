@@ -17,7 +17,7 @@ describe("privileged sidebar pages", () => {
     if (flag !== null) localStorage.setItem("administrator", flag);
     const app = Object.create(App.prototype);
 
-    expect(app.buildMenuConfig().footer.map((item) => item.id)).toEqual(["about", "settings", "analytics-dashboard", "approval"]);
+    expect(app.buildMenuConfig().footer.map((item) => item.id)).toEqual(["about", "settings", "dashboard"]);
   });
 
   it.each(["", "another@bankmandiri.co.id"])("does not show the privileged pages for other email %s with the flag", (email) => {
@@ -44,7 +44,8 @@ describe("privileged sidebar pages", () => {
     document.body.innerHTML = '<div class="sidebar-menu" data-group="footer"></div>';
 
     await sidebar.renderMenuGroups();
-    expect(document.querySelector('[data-page="analytics-dashboard"]')).not.toBeNull();
-    expect(document.querySelector('[data-page="approval"]')).not.toBeNull();
+    expect(document.querySelector('[data-page="dashboard"]')).not.toBeNull();
+    expect(document.querySelector('[data-page="analytics-dashboard"]')).toBeNull();
+    expect(document.querySelector('[data-page="approval"]')).toBeNull();
   });
 });

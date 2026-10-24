@@ -1,0 +1,219 @@
+vite v7.3.7 building client environment for tauri...
+transforming...
+✓ 2491 modules transformed.
+rendering chunks...
+[plugin vite:reporter] 
+(!) /Users/ddl/projects/ad-tools-revamp/frontend/core/Runtime.js is dynamically imported by /Users/ddl/projects/ad-tools-revamp/frontend/components/Sidebar.js, /Users/ddl/projects/ad-tools-revamp/frontend/components/Sidebar.js, /Users/ddl/projects/ad-tools-revamp/frontend/pages/settings/main.js, /Users/ddl/projects/ad-tools-revamp/frontend/pages/settings/main.js but also statically imported by /Users/ddl/projects/ad-tools-revamp/frontend/App.js, /Users/ddl/projects/ad-tools-revamp/frontend/components/OtpOverlay.js, /Users/ddl/projects/ad-tools-revamp/frontend/core/CapabilityTracker.js, /Users/ddl/projects/ad-tools-revamp/frontend/core/ConnectionIndicators.js, /Users/ddl/projects/ad-tools-revamp/frontend/core/ErrorMonitor.js, /Users/ddl/projects/ad-tools-revamp/frontend/core/KeychainMigration.js, /Users/ddl/projects/ad-tools-revamp/frontend/core/Updater.js, /Users/ddl/projects/ad-tools-revamp/frontend/core/UsageTracker.js, /Users/ddl/projects/ad-tools-revamp/frontend/core/WebUpdateChecker.js, /Users/ddl/projects/ad-tools-revamp/frontend/pages/register/main.js, /Users/ddl/projects/ad-tools-revamp/frontend/pages/settings/service.js, /Users/ddl/projects/ad-tools-revamp/frontend/tools/base64-tools/main.js, /Users/ddl/projects/ad-tools-revamp/frontend/tools/compare-config/lib/unified-data-service.js, /Users/ddl/projects/ad-tools-revamp/frontend/tools/compare-config/main.js, /Users/ddl/projects/ad-tools-revamp/frontend/tools/html-editor/main.js, /Users/ddl/projects/ad-tools-revamp/frontend/tools/image-checker/main.js, /Users/ddl/projects/ad-tools-revamp/frontend/tools/image-checker/service.js, /Users/ddl/projects/ad-tools-revamp/frontend/tools/json-tools/main.js, /Users/ddl/projects/ad-tools-revamp/frontend/tools/monitoring-query/main.js, /Users/ddl/projects/ad-tools-revamp/frontend/tools/querify/main.js, /Users/ddl/projects/ad-tools-revamp/frontend/tools/quick-query/main.js, /Users/ddl/projects/ad-tools-revamp/frontend/tools/run-batch/main.js, /Users/ddl/projects/ad-tools-revamp/frontend/tools/run-batch/service.js, /Users/ddl/projects/ad-tools-revamp/frontend/tools/run-query/main.js, /Users/ddl/projects/ad-tools-revamp/frontend/tools/run-query/service.js, /Users/ddl/projects/ad-tools-revamp/frontend/tools/velocity-template/main.js, /Users/ddl/projects/ad-tools-revamp/frontend/tools/velocity-template/validator.js, dynamic import will not move module into another chunk.
+
+computing gzip size...
+../.wrangler/dashboard-build/assets/encode-BQ1iPzuM.js                                    1.18 kB
+../.wrangler/dashboard-build/assets/split.worker-CJkIo7Mg.js                              2.47 kB
+../.wrangler/dashboard-build/assets/libimagequant_wasm-Dt_UEuwt.js                        7.08 kB
+../.wrangler/dashboard-build/index.html                                                   8.39 kB │ gzip:   1.94 kB
+../.wrangler/dashboard-build/assets/diff-worker-CiyFJvGm.js                              11.42 kB
+../.wrangler/dashboard-build/assets/config-CHkD0KHk.json                                 15.77 kB │ gzip:   2.92 kB
+../.wrangler/dashboard-build/assets/encode-DdTL4m45.js                                   19.40 kB
+../.wrangler/dashboard-build/assets/webp_enc_simd-wLRrhhLU.js                            20.19 kB
+../.wrangler/dashboard-build/assets/webp_enc-2l0OY9rs.js                                 20.23 kB
+../.wrangler/dashboard-build/assets/128x128@2x-8c9S7lpj.png                              20.82 kB
+../.wrangler/dashboard-build/assets/IBMPlexSans-latin-ext-wght-normal-CIII54If.woff2     30.96 kB
+../.wrangler/dashboard-build/assets/IBMPlexSans-latin-wght-normal-IvpUvPa2.woff2         45.71 kB
+../.wrangler/dashboard-build/assets/worker-CpZkpGuq.js                                   65.70 kB
+../.wrangler/dashboard-build/assets/codicon-B_Z2XQ3P.ttf                                 90.73 kB
+../.wrangler/dashboard-build/assets/query.worker-DmITHixx.js                            116.98 kB
+../.wrangler/dashboard-build/assets/squoosh_oxipng_bg-OFMN1KwG.wasm                     164.17 kB │ gzip:  76.15 kB
+../.wrangler/dashboard-build/assets/editor.worker-CUiqKN-W.js                           250.87 kB
+../.wrangler/dashboard-build/assets/mozjpeg_enc-DO-zoExo.wasm                           251.52 kB │ gzip:  59.85 kB
+../.wrangler/dashboard-build/assets/webp_enc-BpZvKflB.wasm                              281.26 kB │ gzip: 114.97 kB
+../.wrangler/dashboard-build/assets/libimagequant_wasm_bg-U6AOGdhx.wasm                 324.05 kB │ gzip: 144.67 kB
+../.wrangler/dashboard-build/assets/webp_enc_simd-CFvKQ_80.wasm                         345.58 kB │ gzip: 127.98 kB
+../.wrangler/dashboard-build/assets/excel.worker-CKxG5TLu.js                            366.96 kB
+../.wrangler/dashboard-build/assets/file-parser.worker-C2QhSKaL.js                      367.07 kB
+../.wrangler/dashboard-build/assets/json.worker-CYYcPfDN.js                             382.11 kB
+../.wrangler/dashboard-build/assets/minify.worker-Bi-Qa2jp.js                           576.85 kB
+../.wrangler/dashboard-build/assets/html.worker-Ckn_qFYN.js                             692.18 kB
+../.wrangler/dashboard-build/assets/main-Cp9a7ZIS.css                                     1.59 kB │ gzip:   0.48 kB
+../.wrangler/dashboard-build/assets/main-cGSW7TVS.css                                     1.68 kB │ gzip:   0.59 kB
+../.wrangler/dashboard-build/assets/main-vGphl1LD.css                                     2.50 kB │ gzip:   0.74 kB
+../.wrangler/dashboard-build/assets/main-arGKqSb8.css                                     4.93 kB │ gzip:   1.26 kB
+../.wrangler/dashboard-build/assets/main-ByfYpSI0.css                                     6.58 kB │ gzip:   1.60 kB
+../.wrangler/dashboard-build/assets/main-Dk7MZLo-.css                                     6.66 kB │ gzip:   1.58 kB
+../.wrangler/dashboard-build/assets/main-CAJdhueZ.css                                     6.79 kB │ gzip:   1.62 kB
+../.wrangler/dashboard-build/assets/main-DqDgANse.css                                     6.88 kB │ gzip:   1.82 kB
+../.wrangler/dashboard-build/assets/main-CHKe0LoR.css                                     8.56 kB │ gzip:   2.27 kB
+../.wrangler/dashboard-build/assets/main-DHXF-lG5.css                                    10.33 kB │ gzip:   2.46 kB
+../.wrangler/dashboard-build/assets/main-BUQaTzB0.css                                    10.97 kB │ gzip:   2.32 kB
+../.wrangler/dashboard-build/assets/main-BEjpiHVI.css                                    14.06 kB │ gzip:   3.06 kB
+../.wrangler/dashboard-build/assets/main-BWwcB9W7.css                                    15.30 kB │ gzip:   3.25 kB
+../.wrangler/dashboard-build/assets/main-C_n5l1Cw.css                                    15.46 kB │ gzip:   3.76 kB
+../.wrangler/dashboard-build/assets/main-D5y97BMb.css                                    15.99 kB │ gzip:   3.69 kB
+../.wrangler/dashboard-build/assets/main-BkaYocOQ.css                                    17.03 kB │ gzip:   3.40 kB
+../.wrangler/dashboard-build/assets/main-BypkbSRw.css                                    17.04 kB │ gzip:   3.43 kB
+../.wrangler/dashboard-build/assets/main-DFt9lVCC.css                                    21.76 kB │ gzip:   3.65 kB
+../.wrangler/dashboard-build/assets/main-BK3M9NJj.css                                    22.65 kB │ gzip:   4.08 kB
+../.wrangler/dashboard-build/assets/main-D538-WrK.css                                    22.72 kB │ gzip:   4.49 kB
+../.wrangler/dashboard-build/assets/main-D-FNBKGx.css                                    23.86 kB │ gzip:   4.99 kB
+../.wrangler/dashboard-build/assets/main-C8seuybt.css                                    27.94 kB │ gzip:   5.20 kB
+../.wrangler/dashboard-build/assets/main-CS8nMXMT.css                                    28.00 kB │ gzip:   5.47 kB
+../.wrangler/dashboard-build/assets/main-RkHjSZes.css                                    45.45 kB │ gzip:   8.13 kB
+../.wrangler/dashboard-build/assets/main-BEyK2nQ0.css                                    57.11 kB │ gzip:  11.09 kB
+../.wrangler/dashboard-build/assets/editor-B_l5Z0WY.css                                  71.14 kB │ gzip:  11.76 kB
+../.wrangler/dashboard-build/assets/monaco-kXWXwTYS.css                                  74.19 kB │ gzip:  11.78 kB
+../.wrangler/dashboard-build/assets/main-CPSs99f5.css                                    90.53 kB │ gzip:  14.39 kB
+../.wrangler/dashboard-build/assets/ht-theme-main-QPEZX3JA.css                          125.08 kB │ gzip:  16.23 kB
+../.wrangler/dashboard-build/assets/index-BpHConA2.css                                  176.03 kB │ gzip:  28.66 kB
+../.wrangler/dashboard-build/assets/json.worker-CgkA8Xea.js                               0.14 kB │ gzip:   0.15 kB
+../.wrangler/dashboard-build/assets/editor.worker-C87Kyrjp.js                             0.15 kB │ gzip:   0.15 kB
+../.wrangler/dashboard-build/assets/minify.worker-DK6CAKxl.js                             0.15 kB │ gzip:   0.15 kB
+../.wrangler/dashboard-build/assets/_commonjsHelpers-Cpj98o6Y.js                          0.24 kB │ gzip:   0.18 kB
+../.wrangler/dashboard-build/assets/MonacoWorkers-DTBNEHPH.js                             0.26 kB │ gzip:   0.20 kB
+../.wrangler/dashboard-build/assets/image-kA_UmpgK.js                                     0.64 kB │ gzip:   0.35 kB
+../.wrangler/dashboard-build/assets/index-DI4ICBiq.js                                     0.69 kB │ gzip:   0.31 kB
+../.wrangler/dashboard-build/assets/azcli-1IWB1ccx.js                                     0.71 kB │ gzip:   0.28 kB
+../.wrangler/dashboard-build/assets/javascript-BgZO80IU.js                                0.84 kB │ gzip:   0.47 kB
+../.wrangler/dashboard-build/assets/ini-BvajGCUy.js                                       0.96 kB │ gzip:   0.49 kB
+../.wrangler/dashboard-build/assets/Categories-HjfNco5T.js                                0.99 kB │ gzip:   0.47 kB
+../.wrangler/dashboard-build/assets/json-editor-Q1A8ZVml.js                               1.01 kB │ gzip:   0.61 kB
+../.wrangler/dashboard-build/assets/index-D9c1CLhv.js                                     1.06 kB │ gzip:   0.51 kB
+../.wrangler/dashboard-build/assets/KeychainMigration-BKpMwgU0.js                         1.15 kB │ gzip:   0.48 kB
+../.wrangler/dashboard-build/assets/index-CBc2RASv.js                                     1.27 kB │ gzip:   0.44 kB
+../.wrangler/dashboard-build/assets/app-Comhu6Dp.js                                       1.28 kB │ gzip:   0.54 kB
+../.wrangler/dashboard-build/assets/csp-C46ZqvIl.js                                       1.28 kB │ gzip:   0.49 kB
+../.wrangler/dashboard-build/assets/event-iqD-r1Mo.js                                     1.33 kB │ gzip:   0.66 kB
+../.wrangler/dashboard-build/assets/pla-CjnFlu4u.js                                       1.54 kB │ gzip:   0.60 kB
+../.wrangler/dashboard-build/assets/file-parser-core-8EOA2YZE.js                          1.54 kB │ gzip:   0.75 kB
+../.wrangler/dashboard-build/assets/scheme-Dhb-2j9p.js                                    1.63 kB │ gzip:   0.78 kB
+../.wrangler/dashboard-build/assets/flow9-Cac8vKd7.js                                     1.67 kB │ gzip:   0.81 kB
+../.wrangler/dashboard-build/assets/sb-BYAiYHFx.js                                        1.69 kB │ gzip:   0.78 kB
+../.wrangler/dashboard-build/assets/bat-DPkNLes8.js                                       1.71 kB │ gzip:   0.83 kB
+../.wrangler/dashboard-build/assets/dockerfile-DLk6rpji.js                                1.73 kB │ gzip:   0.63 kB
+../.wrangler/dashboard-build/assets/pascaligo-5jv8CcQD.js                                 1.86 kB │ gzip:   0.87 kB
+../.wrangler/dashboard-build/assets/BaseTool-BoEGRqbV.js                                  1.93 kB │ gzip:   0.91 kB
+../.wrangler/dashboard-build/assets/lua-D28Ae8-K.js                                       1.98 kB │ gzip:   0.89 kB
+../.wrangler/dashboard-build/assets/cameligo-CGrWLZr3.js                                  2.05 kB │ gzip:   0.92 kB
+../.wrangler/dashboard-build/assets/AnalyticsMeta-hWGfxgby.js                             2.08 kB │ gzip:   0.96 kB
+../.wrangler/dashboard-build/assets/graphql-LQdxqEYJ.js                                   2.12 kB │ gzip:   0.99 kB
+../.wrangler/dashboard-build/assets/ConfirmationDialog-CZUjs6st.js                        2.15 kB │ gzip:   0.82 kB
+../.wrangler/dashboard-build/assets/objective-c-B1aVtJYH.js                               2.26 kB │ gzip:   1.02 kB
+../.wrangler/dashboard-build/assets/lexon-Canl7DCW.js                                     2.30 kB │ gzip:   0.88 kB
+../.wrangler/dashboard-build/assets/xml-D8wBFLCR.js                                       2.33 kB │ gzip:   0.96 kB
+../.wrangler/dashboard-build/assets/bicep-Corcdgou.js                                     2.40 kB │ gzip:   0.93 kB
+../.wrangler/dashboard-build/assets/sparql-KEyrF7De.js                                    2.41 kB │ gzip:   1.12 kB
+../.wrangler/dashboard-build/assets/mips-CdjsipkG.js                                      2.44 kB │ gzip:   1.03 kB
+../.wrangler/dashboard-build/assets/core-CKq3Z5BB.js                                      2.45 kB │ gzip:   0.98 kB
+../.wrangler/dashboard-build/assets/go-O9LJTZXk.js                                        2.52 kB │ gzip:   1.11 kB
+../.wrangler/dashboard-build/assets/sophia-RYC1BQQz.js                                    2.62 kB │ gzip:   1.17 kB
+../.wrangler/dashboard-build/assets/typespec-CzxlYoT_.js                                  2.66 kB │ gzip:   1.05 kB
+../.wrangler/dashboard-build/assets/m3-DPitgjJI.js                                        2.68 kB │ gzip:   1.28 kB
+../.wrangler/dashboard-build/assets/diff-adapter-IX0GUuQd.js                              2.70 kB │ gzip:   1.19 kB
+../.wrangler/dashboard-build/assets/fsharp-fd1GTHhf.js                                    2.84 kB │ gzip:   1.28 kB
+../.wrangler/dashboard-build/assets/pascal-BhNW15KB.js                                    2.86 kB │ gzip:   1.35 kB
+../.wrangler/dashboard-build/assets/shell-CsDZo4DB.js                                     2.93 kB │ gzip:   1.16 kB
+../.wrangler/dashboard-build/assets/r-BIFz-_sK.js                                         2.99 kB │ gzip:   1.24 kB
+../.wrangler/dashboard-build/assets/qsharp-q7JyzKFN.js                                    3.05 kB │ gzip:   1.37 kB
+../.wrangler/dashboard-build/assets/java-SYsfObOQ.js                                      3.08 kB │ gzip:   1.36 kB
+../.wrangler/dashboard-build/assets/powershell-Bu_VLpJB.js                                3.13 kB │ gzip:   1.34 kB
+../.wrangler/dashboard-build/assets/RegistrationAuthMode-BwkxUDhR.js                      3.22 kB │ gzip:   1.39 kB
+../.wrangler/dashboard-build/assets/cypher-D84EuPTj.js                                    3.25 kB │ gzip:   1.40 kB
+../.wrangler/dashboard-build/assets/kotlin-qQ0MG-9I.js                                    3.30 kB │ gzip:   1.44 kB
+../.wrangler/dashboard-build/assets/redis-CHOsPHWR.js                                     3.42 kB │ gzip:   1.44 kB
+../.wrangler/dashboard-build/assets/tcl-PloMZuKG.js                                       3.43 kB │ gzip:   1.33 kB
+../.wrangler/dashboard-build/assets/coffee-B7EJu28W.js                                    3.45 kB │ gzip:   1.26 kB
+../.wrangler/dashboard-build/assets/hcl-DxDQ3s82.js                                       3.45 kB │ gzip:   1.45 kB
+../.wrangler/dashboard-build/assets/markdown-B811l8j2.js                                  3.65 kB │ gzip:   1.35 kB
+../.wrangler/dashboard-build/assets/restructuredtext-CghPJEOS.js                          3.75 kB │ gzip:   1.33 kB
+../.wrangler/dashboard-build/assets/less-GGFNNJHn.js                                      3.76 kB │ gzip:   1.38 kB
+../.wrangler/dashboard-build/assets/apex-DnsZk_dE.js                                      3.81 kB │ gzip:   1.73 kB
+../.wrangler/dashboard-build/assets/OracleEnvImportService-Dn5DW0Oz.js                    3.82 kB │ gzip:   1.78 kB
+../.wrangler/dashboard-build/assets/liquid-CWVyQaDO.js                                    3.88 kB │ gzip:   1.65 kB
+../.wrangler/dashboard-build/assets/yaml-Vsbauv4a.js                                      3.93 kB │ gzip:   1.51 kB
+../.wrangler/dashboard-build/assets/rust-DMDD0SHb.js                                      4.02 kB │ gzip:   1.79 kB
+../.wrangler/dashboard-build/assets/python-_MGNOKvU.js                                    4.11 kB │ gzip:   1.67 kB
+../.wrangler/dashboard-build/assets/dart-D8lhlL1r.js                                      4.11 kB │ gzip:   1.61 kB
+../.wrangler/dashboard-build/assets/main--gLQA0fu.js                                      4.27 kB │ gzip:   1.16 kB
+../.wrangler/dashboard-build/assets/css-DQU6DXDx.js                                       4.37 kB │ gzip:   1.34 kB
+../.wrangler/dashboard-build/assets/csharp-BoL64M5l.js                                    4.38 kB │ gzip:   1.69 kB
+../.wrangler/dashboard-build/assets/pug-kFxLfcjb.js                                       4.69 kB │ gzip:   1.61 kB
+../.wrangler/dashboard-build/assets/msdax-CYqgjx_P.js                                     4.77 kB │ gzip:   1.90 kB
+../.wrangler/dashboard-build/assets/swift-D7IUmUK8.js                                     4.77 kB │ gzip:   2.00 kB
+../.wrangler/dashboard-build/assets/mdx-rvSoijNx.js                                       4.78 kB │ gzip:   1.44 kB
+../.wrangler/dashboard-build/assets/html-DfHU-z6A.js                                      4.93 kB │ gzip:   1.38 kB
+../.wrangler/dashboard-build/assets/cpp-SEyurbux.js                                       5.16 kB │ gzip:   2.05 kB
+../.wrangler/dashboard-build/assets/ecl-BO6FnfXk.js                                       5.20 kB │ gzip:   2.19 kB
+../.wrangler/dashboard-build/assets/typescript-DOU3ZUcS.js                                5.32 kB │ gzip:   2.16 kB
+../.wrangler/dashboard-build/assets/vb-BwAE3J76.js                                        5.65 kB │ gzip:   2.02 kB
+../.wrangler/dashboard-build/assets/MonacoOracle-CNGKnn7G.js                              5.71 kB │ gzip:   2.34 kB
+../.wrangler/dashboard-build/assets/Updater-D8mIjBvp.js                                   5.81 kB │ gzip:   2.40 kB
+../.wrangler/dashboard-build/assets/twig-BfRIq3la.js                                      5.83 kB │ gzip:   1.48 kB
+../.wrangler/dashboard-build/assets/scss-CTwUZ5N7.js                                      6.27 kB │ gzip:   1.71 kB
+../.wrangler/dashboard-build/assets/main-DQpyEIvt.js                                      6.58 kB │ gzip:   2.37 kB
+../.wrangler/dashboard-build/assets/handlebars-BX_oi5sZ.js                                6.69 kB │ gzip:   1.60 kB
+../.wrangler/dashboard-build/assets/index-CQ6jce-B.js                                     6.84 kB │ gzip:   1.87 kB
+../.wrangler/dashboard-build/assets/julia-DQXNmw_w.js                                     7.01 kB │ gzip:   2.62 kB
+../.wrangler/dashboard-build/assets/scala-Bqvq8jcR.js                                     7.18 kB │ gzip:   2.06 kB
+../.wrangler/dashboard-build/assets/wgsl-B_1kOXbF.js                                      7.21 kB │ gzip:   2.72 kB
+../.wrangler/dashboard-build/assets/st-C7iG7M4S.js                                        7.26 kB │ gzip:   2.21 kB
+../.wrangler/dashboard-build/assets/systemverilog-DgMryOEJ.js                             7.46 kB │ gzip:   2.72 kB
+../.wrangler/dashboard-build/assets/postiats-CQpG440k.js                                  7.72 kB │ gzip:   2.40 kB
+../.wrangler/dashboard-build/assets/php-120yhfDK.js                                       7.89 kB │ gzip:   2.04 kB
+../.wrangler/dashboard-build/assets/perl-DlYyT36c.js                                      8.12 kB │ gzip:   3.10 kB
+../.wrangler/dashboard-build/assets/ruby-CYWGW-b1.js                                      8.36 kB │ gzip:   2.54 kB
+../.wrangler/dashboard-build/assets/main-Cut22vjT.js                                      8.65 kB │ gzip:   2.62 kB
+../.wrangler/dashboard-build/assets/razor-BCd-Xbh0.js                                     8.69 kB │ gzip:   2.28 kB
+../.wrangler/dashboard-build/assets/protobuf-IBS6jZEB.js                                  8.91 kB │ gzip:   2.04 kB
+../.wrangler/dashboard-build/assets/OtpOverlay-CAMIz4SJ.js                                8.96 kB │ gzip:   3.31 kB
+../.wrangler/dashboard-build/assets/clojure-D9WOWImG.js                                   9.50 kB │ gzip:   3.57 kB
+../.wrangler/dashboard-build/assets/elixir-BRjLKONM.js                                   10.12 kB │ gzip:   2.50 kB
+../.wrangler/dashboard-build/assets/sql-BdTr02Mf.js                                      10.16 kB │ gzip:   3.79 kB
+../.wrangler/dashboard-build/assets/mysql-BHd6q0vd.js                                    11.13 kB │ gzip:   4.01 kB
+../.wrangler/dashboard-build/assets/redshift-CBifECDb.js                                 11.66 kB │ gzip:   4.30 kB
+../.wrangler/dashboard-build/assets/main-DAMLQ0MC.js                                     12.69 kB │ gzip:   3.79 kB
+../.wrangler/dashboard-build/assets/main-DIXtzPCt.js                                     13.26 kB │ gzip:   5.00 kB
+../.wrangler/dashboard-build/assets/pgsql-Dy0bjov7.js                                    13.32 kB │ gzip:   4.46 kB
+../.wrangler/dashboard-build/assets/abap-CRCWOmpq.js                                     14.02 kB │ gzip:   5.27 kB
+../.wrangler/dashboard-build/assets/freemarker2-bFo4g1Ij.js                              16.01 kB │ gzip:   4.14 kB
+../.wrangler/dashboard-build/assets/powerquery-DdJtto1Z.js                               16.80 kB │ gzip:   4.81 kB
+../.wrangler/dashboard-build/assets/IndexedDBStorageService-DGMzCA2m.js                  16.89 kB │ gzip:   4.87 kB
+../.wrangler/dashboard-build/assets/solidity-CME5AdoB.js                                 18.46 kB │ gzip:   4.41 kB
+../.wrangler/dashboard-build/assets/main-RYF6ahDP.js                                     19.42 kB │ gzip:   6.19 kB
+../.wrangler/dashboard-build/assets/tsMode-CImAP6kb.js                                   23.56 kB │ gzip:   6.69 kB
+../.wrangler/dashboard-build/assets/main-B53adgIK.js                                     26.10 kB │ gzip:   6.65 kB
+../.wrangler/dashboard-build/assets/cssMode-wLh9qHb3.js                                  33.06 kB │ gzip:   8.99 kB
+../.wrangler/dashboard-build/assets/htmlMode-BNvdC2NZ.js                                 33.61 kB │ gzip:   9.11 kB
+../.wrangler/dashboard-build/assets/QueryExecutionService-yNiK7sTG.js                    33.64 kB │ gzip:  10.84 kB
+../.wrangler/dashboard-build/assets/package-C604nkAL.js                                  36.75 kB │ gzip:  11.48 kB
+../.wrangler/dashboard-build/assets/main-Cwtev7wX.js                                     37.51 kB │ gzip:   9.45 kB
+../.wrangler/dashboard-build/assets/main-6Hw4ALS5.js                                     37.86 kB │ gzip:   9.62 kB
+../.wrangler/dashboard-build/assets/main-CGcWa8Ar.js                                     39.40 kB │ gzip:  11.76 kB
+../.wrangler/dashboard-build/assets/jsonMode-Cw9qYFgW.js                                 42.48 kB │ gzip:  12.32 kB
+../.wrangler/dashboard-build/assets/main-B9ql_dqo.js                                     44.29 kB │ gzip:  10.26 kB
+../.wrangler/dashboard-build/assets/main-DZBWE_pY.js                                     47.67 kB │ gzip:  15.39 kB
+../.wrangler/dashboard-build/assets/index-TrcWuvLj.js                                    47.90 kB │ gzip:  15.70 kB
+../.wrangler/dashboard-build/assets/main-Dh8WdlcR.js                                     48.01 kB │ gzip:  12.91 kB
+../.wrangler/dashboard-build/assets/main-B2HiPnaN.js                                     49.02 kB │ gzip:  15.45 kB
+../.wrangler/dashboard-build/assets/main-D65vfxP9.js                                     61.42 kB │ gzip:  16.90 kB
+../.wrangler/dashboard-build/assets/moment-yOkmV8b9.js                                   62.70 kB │ gzip:  20.22 kB
+../.wrangler/dashboard-build/assets/main-CVm7J0xT.js                                     68.29 kB │ gzip:  23.58 kB
+../.wrangler/dashboard-build/assets/main-BulnataP.js                                     76.48 kB │ gzip:  20.78 kB
+../.wrangler/dashboard-build/assets/main-Gj1_F9Qf.js                                     77.38 kB │ gzip:  18.46 kB
+../.wrangler/dashboard-build/assets/main-Ckx5nLs-.js                                     77.55 kB │ gzip:  22.41 kB
+../.wrangler/dashboard-build/assets/main-D1aFwv4Z.js                                     78.86 kB │ gzip:  20.65 kB
+../.wrangler/dashboard-build/assets/main-BJ8OrNZO.js                                     82.93 kB │ gzip:  24.44 kB
+../.wrangler/dashboard-build/assets/main-CWVjLsRB.js                                     83.90 kB │ gzip:  19.39 kB
+../.wrangler/dashboard-build/assets/jszip.min-DkUyrEX8.js                                97.16 kB │ gzip:  30.10 kB
+../.wrangler/dashboard-build/assets/main-WcYw77mL.js                                    100.31 kB │ gzip:  32.18 kB
+../.wrangler/dashboard-build/assets/main-CS2E1Rcx.js                                    107.03 kB │ gzip:  25.16 kB
+../.wrangler/dashboard-build/assets/html2canvas.esm-DXEQVQnt.js                         201.04 kB │ gzip:  47.43 kB
+../.wrangler/dashboard-build/assets/main-DDB34kpN.js                                    207.18 kB │ gzip:  50.98 kB
+../.wrangler/dashboard-build/assets/main-Dy13yhIH.js                                    252.94 kB │ gzip:  61.84 kB
+../.wrangler/dashboard-build/assets/index-P2HE2AuH.js                                   267.94 kB │ gzip:  75.42 kB
+../.wrangler/dashboard-build/assets/xlsx-YQ4lDkt_.js                                    499.54 kB │ gzip: 162.96 kB
+../.wrangler/dashboard-build/assets/editor.main-o4INbOpk.js                           1,107.14 kB │ gzip: 283.53 kB
+../.wrangler/dashboard-build/assets/index-CSlIBKGw.js                                 1,107.39 kB │ gzip: 281.39 kB
+../.wrangler/dashboard-build/assets/monaco.contribution-pGuG5CO6.js                   2,570.29 kB │ gzip: 670.97 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 10.13s

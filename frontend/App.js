@@ -33,7 +33,8 @@ import { ConnectionIndicators } from "./core/ConnectionIndicators.js";
 const ASSET_LOAD_RETRY_DELAY_MS = 3000;
 
 function isLocalDevelopmentSession() {
-  return Boolean(import.meta?.env?.DEV) && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+  return Boolean(import.meta?.env?.DEV) && !import.meta.env.VITE_WORKER_BASE &&
+    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
 }
 
 function hasCompletedRegistration() {
@@ -154,9 +155,10 @@ class App {
     // Build global search index after routes/tools are ready
     this.updateGlobalSearchIndex();
 
-    // Always start on Home on initial load for both web and Tauri. The Home
-    // handler preserves the registration redirect for first-time users.
-    this.router.navigate("home");
+    // Dashboard links can be opened directly; other launches keep the Home start screen.
+    const initialRoute = window.location.hash.slice(1).split("/")[0];
+    if (["dashboard", "analytics-dashboard", "approval"].includes(initialRoute)) this.router.handleRouteChange();
+    else this.router.navigate("home");
 
     this.bindGlobalEvents();
     void this.setupDesktopTabShortcuts();
@@ -381,21 +383,15 @@ class App {
       });
     });
 
-    // Analytics dashboard (authorized desktop users also get a sidebar entry)
-    this.router.register("analytics-dashboard", ({ navigationId } = {}) => {
-      this.showAnalyticsDashboard(navigationId).catch((error) => {
-        if (!this.isNavigationCurrent(navigationId, "analytics-dashboard")) return;
-        console.error("Failed to show analytics dashboard:", error);
+    this.router.register("dashboard", ({ navigationId, params } = {}) => {
+      this.showDashboard(navigationId, params?.[0]).catch((error) => {
+        if (!this.isNavigationCurrent(navigationId, "dashboard")) return;
+        console.error("Failed to show dashboard:", error);
       });
     });
-
-    // Manual account approvals (authorized desktop users also get a sidebar entry)
-    this.router.register("approval", ({ navigationId } = {}) => {
-      this.showApproval(navigationId).catch((error) => {
-        if (!this.isNavigationCurrent(navigationId, "approval")) return;
-        console.error("Failed to show approval dashboard:", error);
-      });
-    });
+    // Preserve existing bookmarks inside the unified Dashboard.
+    this.router.register("analytics-dashboard", () => this.router.navigate("dashboard/analytics"));
+    this.router.register("approval", () => this.router.navigate("dashboard/approvals"));
 
     // Set default route based on registration state
     const registered = hasCompletedRegistration();
@@ -558,25 +554,15 @@ class App {
     });
   }
 
-  showAnalyticsDashboard(navigationId = null) {
+  showDashboard(navigationId = null, section = "analytics") {
     return this.showShellPage({
-      pageId: "analytics-dashboard",
-      title: "Analytics Dashboard",
-      eventName: "analytics-dashboard",
+      pageId: "dashboard",
+      title: "Dashboard",
+      eventName: "dashboard",
       navigationId,
-      loader: () => import("./pages/analytics-dashboard/main.js").then((module) => module.AnalyticsDashboardPage),
+      data: { section },
+      loader: () => import("./pages/dashboard/main.js").then((module) => module.DashboardPage),
       createOptions: () => ({ eventBus: this.eventBus }),
-    });
-  }
-
-  showApproval(navigationId = null) {
-    return this.showShellPage({
-      pageId: "approval",
-      title: "Account Approval",
-      eventName: "approval",
-      navigationId,
-      loader: () => import("./pages/approval/main.js").then((module) => module.ApprovalPage),
-      createOptions: () => ({}),
     });
   }
 
@@ -1684,8 +1670,7 @@ class App {
     if (!this.hasPrivilegedSidebarAccess()) return [];
 
     return [
-      { id: "analytics-dashboard", name: "Analytics", icon: "analytics-dashboard", type: "page", requiresTauri: false },
-      { id: "approval", name: "Approval", icon: "approval", type: "page", requiresTauri: false },
+      { id: "dashboard", name: "Dashboard", icon: "analytics-dashboard", type: "page", requiresTauri: false },
     ];
   }
 

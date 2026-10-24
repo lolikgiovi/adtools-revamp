@@ -1,0 +1,70 @@
+.main-content:has(> .dashboard-page) {
+  flex: 1 0 auto;
+}
+
+.dashboard-page,
+.dashboard-section {
+  width: 100%;
+  min-width: 0;
+}
+
+.dashboard-navigation {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.dashboard-navigation a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  color: hsl(var(--muted-foreground));
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.dashboard-navigation a:hover {
+  background: hsl(var(--accent));
+  color: hsl(var(--foreground));
+}
+
+.dashboard-navigation a[aria-current="page"] {
+  background: hsl(var(--secondary));
+  color: hsl(var(--foreground));
+}
+
+.dashboard-navigation a:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+.dashboard-section.settings-publishing {
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+@media (max-width: 480px) {
+  .dashboard-navigation {
+    gap: 0;
+  }
+
+  .dashboard-navigation a {
+    padding-inline: 10px;
+  }
+
+  .dashboard-section .dashboard-auth,
+  .dashboard-section .approval-auth {
+    padding: 16px 0;
+  }
+
+  .dashboard-section .auth-card {
+    padding: 24px 16px;
+  }
+}

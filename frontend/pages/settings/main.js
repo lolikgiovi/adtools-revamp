@@ -14,7 +14,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { ensureUnifiedKeychain } from "../../core/KeychainMigration.js";
 import { OracleConnectionService } from "../../core/OracleConnectionService.js";
 import { readKafkaBrokerProfiles, saveKafkaBrokerProfiles } from "../../tools/kafka/service.js";
-import { SettingsPublisher } from "./publishing.js";
 import { publishedSettingsSync } from "../../core/PublishedSettings.js";
 
 const SETTINGS_FOCUS_STORAGE_KEY = "settings.focus";
@@ -119,15 +118,6 @@ class SettingsPage {
 
     // Bind toolbar actions
     root.querySelector(".settings-load-defaults")?.addEventListener("click", () => this.openOtpModal());
-    const publisherRoot = root.querySelector("#settings-publishing");
-    root.querySelector(".settings-publish")?.addEventListener("click", (event) => {
-      publisherRoot.hidden = !publisherRoot.hidden;
-      event.currentTarget.setAttribute("aria-expanded", String(!publisherRoot.hidden));
-      if (!this.publisher) {
-        this.publisher = new SettingsPublisher();
-        this.publisher.mount(publisherRoot);
-      }
-    });
     const showSyncStatus = () => {
       const status = root.querySelector(".settings-sync-status");
       status.textContent = ["auth", "error"].includes(publishedSettingsSync.status) ? publishedSettingsSync.message : "";
@@ -2015,8 +2005,6 @@ class SettingsPage {
   deactivate() {
     for (const dispose of this.syncDisposers || []) dispose();
     this.syncDisposers = [];
-    this.publisher?.destroy();
-    this.publisher = null;
     for (const dispose of this.settingDisposers) dispose();
     this.settingDisposers.clear();
     this.container = null;

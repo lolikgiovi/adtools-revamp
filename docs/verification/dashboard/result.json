@@ -1,0 +1,28 @@
+{
+  "passed": true,
+  "base": "http://localhost:1246",
+  "checks": [
+    "1440: Analytics navigation, password gate, no overflow, API auth request",
+    "1440: Approvals navigation, password gate, no overflow, API auth request",
+    "1440: Publish Settings navigation, password gate, no overflow, API auth request",
+    "1440: legacy bookmarks, Settings has no publishing entry",
+    "390: Analytics navigation, password gate, no overflow, API auth request",
+    "390: Approvals navigation, password gate, no overflow, API auth request",
+    "390: Publish Settings navigation, password gate, no overflow, API auth request",
+    "390: legacy bookmarks, Settings has no publishing entry",
+    "All three sections authenticate against the production Worker in explicit production API mode"
+  ],
+  "errors": [],
+  "apiRequests": [
+    "https://adtools.lolik.workers.dev/device/version",
+    "https://adtools.lolik.workers.dev/dashboard/verify",
+    "https://adtools.lolik.workers.dev/dashboard/verify",
+    "https://adtools.lolik.workers.dev/dashboard/verify",
+    "https://adtools.lolik.workers.dev/device/version",
+    "https://adtools.lolik.workers.dev/dashboard/verify",
+    "https://adtools.lolik.workers.dev/dashboard/verify",
+    "https://adtools.lolik.workers.dev/dashboard/verify"
+  ],
+  "api": "mocked",
+  "command": "PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs node frontend/pages/dashboard/tests/browser.mjs"
+}

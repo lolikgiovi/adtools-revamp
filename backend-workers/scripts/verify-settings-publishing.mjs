@@ -136,14 +136,14 @@ try {
     page.on("pageerror", (error) => failures.push(error.message));
     await page.goto("http://127.0.0.1:1244/#settings");
     await page.locator('[data-page="settings"] .sidebar-menu-button').click();
-    await page.locator(".settings-publish").waitFor();
+    await page.locator(".settings-categories").waitFor();
     await page.waitForFunction(() => Boolean(localStorage.getItem("settings.sync.credential")));
     return page;
   }
   const one = await client(0);
   const two = await client(1);
   await check("Admin password gate", async () => {
-    await one.locator(".settings-publish").click();
+    await one.goto("http://127.0.0.1:1244/#dashboard/publish-settings");
     await one.locator("#publish-password").fill("local-settings-test");
     await one.getByRole("button", { name: "Unlock publishing" }).click();
     await one.locator(".publish-workspace").waitFor({ state: "visible" });
@@ -215,6 +215,10 @@ try {
     }
   });
   await check("Visible Settings refresh keeps the page usable", async () => {
+    await one.goto("http://127.0.0.1:1244/#settings");
+    await one.locator('[data-page="settings"] .sidebar-menu-button').click();
+    await one.locator(".settings-categories").waitFor();
+    await one.evaluate(() => window.dispatchEvent(new Event("adtools:settings-published")));
     await one.getByRole("button", { name: "Refresh settings", exact: true }).click();
     await one.getByRole("button", { name: "Refresh settings", exact: true }).waitFor({ state: "hidden" });
   });
@@ -226,11 +230,11 @@ try {
     });
     await one.reload();
     await one.locator('[data-page="settings"] .sidebar-menu-button').click();
-    await one.locator(".settings-publish").waitFor();
+    await one.locator(".settings-categories").waitFor();
     assert.equal(await one.evaluate(() => localStorage.getItem("config.redis.port")), "6390");
   });
   await check("Email targeting updates only the selected email", async () => {
-    await one.locator(".settings-publish").click();
+    await one.goto("http://127.0.0.1:1244/#dashboard/publish-settings");
     await one.locator(".publish-workspace").waitFor({ state: "visible" });
     await one.locator("#publish-title").fill("Selected user setup");
     await one.locator("#publish-emails").fill(users[1].email);

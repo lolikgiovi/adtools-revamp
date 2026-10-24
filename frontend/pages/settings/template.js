@@ -12,14 +12,12 @@ export const SettingsTemplate = /*html*/ `
         spellcheck="false"
       />
       <div class="settings-header-tools">
-      <button type="button" class="btn btn-secondary btn-sm settings-publish" aria-expanded="false" aria-controls="settings-publishing">Publish settings</button>
       <button type="button" class="btn btn-secondary btn-sm settings-load-defaults" aria-label="Load default settings">Load Default Settings</button>
       <div class="runtime-status" aria-live="polite">
         <span id="runtime-status" class="runtime-status-badge" data-state="detecting">Detecting…</span>
       </div>
       </div>
     </header>
-    <section id="settings-publishing" class="settings-publishing" hidden></section>
     <div class="settings-sync-row">
       <span class="settings-sync-status" role="status" aria-live="polite"></span>
       <button type="button" class="btn btn-secondary btn-sm settings-sync-verify" hidden>Verify account</button>
