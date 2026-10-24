@@ -1,6 +1,8 @@
 import { SettingsTemplate } from "./template.js";
 import { buildOracleJsonPlan, applyOracleJsonPlan } from "./oracle-json.js";
 import { mountBulkEditor } from "./bulk-editor.js";
+import { mountEditDialog } from "./edit-dialog.js";
+import { mountIntegration } from "./integration.js";
 import { buildListPlan, buildKafkaPlan, applyListPlan } from "./bulk-list.js";
 import "./styles.css";
 import { SettingsService } from "./service.js";
@@ -177,7 +179,9 @@ class SettingsPage {
     }
     if (!settingKey || !this.categoriesRoot) return;
 
-    const setting = Array.from(this.categoriesRoot.querySelectorAll(".setting-item")).find((item) => item.dataset.setting === settingKey);
+    const setting = Array.from(this.categoriesRoot.querySelectorAll(".setting-item")).find(
+      (item) => item.dataset.setting === settingKey || item.dataset.settingKeys?.split(" ").includes(settingKey),
+    );
     if (!setting) return;
 
     let category = setting.closest(".settings-category");
@@ -479,6 +483,11 @@ class SettingsPage {
   }
 
   renderCategory(cat, headingLevel = 3) {
+    if (cat.integration) {
+      const { element, dispose } = mountIntegration(cat, this.service);
+      this.settingDisposers.add(dispose);
+      return element;
+    }
     const catId = cat.id || Math.random().toString(36).slice(2);
     const expandedKey = `settings.ui.expanded.${catId}`;
     const initiallyExpanded = localStorage.getItem(expandedKey) ?? (cat.initiallyExpanded ? "true" : "false");
@@ -563,6 +572,15 @@ class SettingsPage {
     const addressesInput = wrapper.querySelector("#kafkaBrokerAddresses");
     const formStatus = wrapper.querySelector(".kafka-broker-form-status");
     let editingId = "";
+    const modal = mountEditDialog({
+      root: wrapper,
+      form,
+      onCancel: () => wrapper.querySelector(".kafka-broker-cancel").click(),
+      fallbackFocus: (trigger) =>
+        wrapper.querySelector(`.kafka-broker-edit[data-profile-id="${trigger?.dataset.profileId}"]`) ||
+        wrapper.querySelector(".kafka-broker-add"),
+    });
+    this.settingDisposers.add(() => modal.dispose());
 
     const renderList = () => {
       const profiles = readKafkaBrokerProfiles();
@@ -612,6 +630,7 @@ class SettingsPage {
       formStatus.dataset.state = "";
       wrapper.querySelector(".kafka-broker-save").textContent = profile ? "Save changes" : "Save broker";
       form.hidden = false;
+      modal.open(profile ? "Edit broker" : "Add broker");
       nameInput.focus();
     };
 
@@ -622,6 +641,7 @@ class SettingsPage {
       hint: "Match by name. Omitted broker connections stay unchanged.",
       onOpen: () => {
         form.hidden = true;
+        modal.close();
       },
       load: () => ({ value: readKafkaBrokerProfiles().map(({ name, brokers }) => ({ name, brokers })) }),
       plan: (text) => buildKafkaPlan(text, readKafkaBrokerProfiles()),
@@ -641,7 +661,7 @@ class SettingsPage {
     wrapper.querySelector(".kafka-broker-add").addEventListener("click", () => showForm());
     wrapper.querySelector(".kafka-broker-cancel").addEventListener("click", () => {
       form.hidden = true;
-      wrapper.querySelector(".kafka-broker-add").focus();
+      modal.close();
     });
     form.addEventListener("submit", (event) => {
       event.preventDefault();
@@ -666,6 +686,7 @@ class SettingsPage {
         : [...profiles, { id, name, brokers }];
       saveKafkaBrokerProfiles(next);
       form.hidden = true;
+      modal.close();
       renderList();
       this.eventBus?.emit?.("notification:success", { message: `Broker "${name}" saved` });
     });
@@ -836,6 +857,17 @@ class SettingsPage {
       }
     };
 
+    const modal = mountEditDialog({
+      root: wrapper,
+      form,
+      wide: true,
+      onCancel: () => hideForm(),
+      fallbackFocus: (trigger) =>
+        list.querySelector(`.environment-edit[data-environment-id="${trigger?.dataset.environmentId}"]`) || addButton,
+    });
+    formTitle.hidden = true;
+    this.settingDisposers.add(() => modal.dispose());
+
     const showForm = (environment = null) => {
       editingId = environment?.id || "";
       formTitle.textContent = environment ? "Edit Environment" : "Add Environment";
@@ -848,13 +880,14 @@ class SettingsPage {
       status.dataset.state = "";
       saveButton.textContent = environment ? "Save changes" : "Save Environment";
       form.hidden = false;
+      modal.open(formTitle.textContent);
       nameInput.focus();
     };
 
     const hideForm = () => {
       form.hidden = true;
       editingId = "";
-      addButton.focus();
+      modal.close();
     };
 
     addButton.addEventListener("click", () => showForm());
@@ -911,7 +944,7 @@ class SettingsPage {
       form.hidden = true;
       editingId = "";
       renderList();
-      addButton.focus();
+      modal.close();
       this.eventBus?.emit?.("notification:success", { message: `Environment "${name}" saved` });
     });
 
@@ -1084,6 +1117,17 @@ class SettingsPage {
       const testBtn = wrapper.querySelector(".oracle-test-btn");
       const statusEl = wrapper.querySelector(".oracle-form-status");
       let editingIndex = -1;
+      let formGeneration = 0;
+      const modal = mountEditDialog({
+        root: wrapper,
+        form: formEl,
+        wide: true,
+        onCancel: () => cancelBtn.click(),
+        isBusy: () => cancelBtn.disabled,
+        fallbackFocus: (trigger) => listEl.querySelector(`.oracle-edit-conn[data-index="${trigger?.dataset.index}"]`) || addBtn,
+      });
+      formEl.querySelector(".oracle-form-title").hidden = true;
+      this.settingDisposers.add(() => modal.dispose());
 
       // Local escape function for HTML content
       const esc = (s) =>
@@ -1121,7 +1165,7 @@ class SettingsPage {
           .join("");
       };
 
-      const showForm = (conn = null, index = -1, afterRowEl = null) => {
+      const showForm = (conn = null, index = -1) => {
         bulk.close();
         editingIndex = index;
         formEl.querySelector(".oracle-form-title").textContent = conn ? "Edit Connection" : "Add Connection";
@@ -1131,20 +1175,18 @@ class SettingsPage {
         formEl.querySelector(".oracle-password").value = "";
         statusEl.textContent = "";
         statusEl.className = "oracle-form-status";
-        // Position form: after the specific row when editing, or after the list when adding
-        if (afterRowEl) {
-          afterRowEl.insertAdjacentElement("afterend", formEl);
-        } else {
-          wrapper.appendChild(formEl);
-        }
         formEl.style.display = "block";
+        const generation = ++formGeneration;
+        modal.open(conn ? "Edit Connection" : "Add Connection");
         formEl.querySelector(".oracle-name").focus();
         // If editing, show only the non-secret username. A blank password retains the saved value.
         if (conn) {
           (async () => {
             try {
               const user = await OracleConnectionService.getOracleUsername(conn.name);
-              formEl.querySelector(".oracle-username").value = user || "";
+              if (generation === formGeneration && !formEl.querySelector(".oracle-username").value) {
+                formEl.querySelector(".oracle-username").value = user || "";
+              }
             } catch (_) {}
           })();
         }
@@ -1153,9 +1195,8 @@ class SettingsPage {
       const hideForm = () => {
         formEl.style.display = "none";
         formEl.querySelector(".oracle-password").value = "";
-        addBtn.focus();
-        // Move form back to wrapper so renderList() won't destroy it
-        wrapper.appendChild(formEl);
+        formGeneration += 1;
+        modal.close();
         editingIndex = -1;
       };
 
@@ -1198,7 +1239,6 @@ class SettingsPage {
               button.disabled = true;
             });
           else {
-            wrapper.appendChild(formEl);
             renderList();
           }
         },
@@ -1382,8 +1422,7 @@ class SettingsPage {
         if (editBtn) {
           const idx = parseInt(editBtn.dataset.index, 10);
           const conns = this.service.getValue(storageKey, "oracle-connections", []);
-          const rowEl = editBtn.closest(".oracle-connection-row");
-          if (conns[idx]) showForm(conns[idx], idx, rowEl);
+          if (conns[idx]) showForm(conns[idx], idx);
         }
 
         if (deleteBtn) {
@@ -1430,7 +1469,7 @@ class SettingsPage {
       displayValue = this.escapeText(this.formatValueForDisplay(current, item.type));
     }
 
-    // Non-boolean: direct inline editing when clicking the value
+    // Explicit editing uses a modal; immediate controls stay in the row.
     row.innerHTML = `
       <div class="setting-name">${item.label}${
         isRequired ? ' <span class="setting-required" title="Required" aria-hidden="true">*</span>' : ""
@@ -1472,7 +1511,7 @@ class SettingsPage {
       input.name = item.key;
       if (item.type === "number") input.type = "number";
       input.autocomplete = item.type === "secret" ? "new-password" : "off";
-      input.setAttribute("aria-labelledby", `${fieldId}-label`);
+      input.setAttribute("aria-label", item.label);
       input.setAttribute("aria-describedby", `${fieldId}-error`);
       if (item.validation?.required) input.setAttribute("aria-required", "true");
       if (item.type === "secret") {
@@ -1515,13 +1554,21 @@ class SettingsPage {
     }
 
     let bulk = null;
-    const openInline = () => {
+    const modal = mountEditDialog({
+      root: wrapper,
+      form: panel,
+      onCancel: () => panel.querySelector(".setting-cancel").click(),
+      isBusy: () => confirmBtn.disabled,
+      wide: ["kvlist", "string-list", "json"].includes(item.type),
+    });
+    this.settingDisposers.add(() => modal.dispose());
+    const openEditor = () => {
       bulk?.close();
       wrapper.dataset.editing = "true";
       errorEl.textContent = "";
       input?.removeAttribute("aria-invalid");
       panel.style.display = "flex";
-      valueEl.setAttribute("aria-expanded", "true");
+      modal.open(`Edit ${item.label}`);
       if (item.type === "kvlist") {
         const firstKey = panel.querySelector(".kv-key");
         firstKey?.focus();
@@ -1530,22 +1577,16 @@ class SettingsPage {
       }
     };
 
-    const closeInline = () => {
+    const closeEditor = () => {
       wrapper.dataset.editing = "false";
       panel.style.display = "none";
-      valueEl.setAttribute("aria-expanded", "false");
-      valueEl.focus();
+      if (item.type === "secret") input.value = "";
+      modal.close();
     };
 
     const valueEl = row.querySelector(".setting-edit");
-    valueEl.setAttribute("aria-expanded", "false");
-    valueEl.addEventListener("click", openInline);
-    panel.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        panel.querySelector(".setting-cancel").click();
-      }
-    });
+    valueEl.setAttribute("aria-haspopup", "dialog");
+    valueEl.addEventListener("click", openEditor);
     panel.addEventListener("submit", (event) => {
       event.preventDefault();
       confirmBtn.click();
@@ -1567,7 +1608,7 @@ class SettingsPage {
           }
         }
         validateAndToggle();
-        closeInline();
+        closeEditor();
       }
       if (action === "confirm") {
         const value = getCurrentEditValue();
@@ -1584,40 +1625,7 @@ class SettingsPage {
         panel.querySelector(".setting-cancel").disabled = true;
         try {
           let stored;
-          if (storageKey === "secure.jenkins.token") {
-            try {
-              // Pass username from localStorage to store token under that key
-              const username = localStorage.getItem("config.jenkins.username") || "";
-              if (!username) {
-                errorEl.textContent = "Set Jenkins Username first";
-                return;
-              }
-              await invoke("set_jenkins_token", { username, token: value });
-            } catch (err) {
-              errorEl.textContent = String(err);
-              return;
-            }
-            // Store a marker only, not the token itself
-            stored = this.service.setValue(storageKey, "secret", "set", item.apply);
-          } else if (storageKey === "secure.confluence.pat") {
-            try {
-              await invoke("set_confluence_pat", { pat: value });
-            } catch (err) {
-              errorEl.textContent = String(err);
-              return;
-            }
-            // Store a marker only, not the PAT itself
-            stored = this.service.setValue(storageKey, "secret", "set", item.apply);
-          } else if (storageKey === "secure.jira.pat") {
-            try {
-              await invoke("set_jira_pat", { pat: value });
-            } catch (err) {
-              errorEl.textContent = String(err);
-              return;
-            }
-            // Store a marker only, not the PAT itself
-            stored = this.service.setValue(storageKey, "secret", "set", item.apply);
-          } else if (storageKey === "secure.redis.password") {
+          if (storageKey === "secure.redis.password") {
             try {
               if (value) {
                 const username = localStorage.getItem("config.redis.username") || "";
@@ -1630,20 +1638,6 @@ class SettingsPage {
               return;
             }
             stored = this.service.setValue(storageKey, "secret", value ? "set" : "", item.apply);
-          } else if (storageKey === "config.jenkins.url" || storageKey === "config.jira.url") {
-            // Strong URL validation via URL parser
-            try {
-              const u = new URL(String(value));
-              if (storageKey === "config.jira.url" && u.protocol !== "https:") {
-                throw new Error("Jira URL must use HTTPS");
-              }
-              if (storageKey === "config.jenkins.url" && !u.protocol.startsWith("http")) throw new Error("URL must be http(s)");
-              if (u.search || u.hash) throw new Error("URL cannot include query or fragment");
-            } catch (err) {
-              errorEl.textContent = "Invalid URL format";
-              return;
-            }
-            stored = this.service.setValue(storageKey, "string", value, item.apply);
           } else {
             stored = this.service.setValue(storageKey, item.type, value, item.apply);
           }
@@ -1661,7 +1655,7 @@ class SettingsPage {
             display = this.escapeText(this.formatValueForDisplay(stored, item.type));
           }
           row.querySelector("[data-value]").innerHTML = display;
-          closeInline();
+          closeEditor();
         } catch (error) {
           errorEl.textContent = `Could not save changes: ${error.message || error}`;
         } finally {
@@ -1674,7 +1668,7 @@ class SettingsPage {
     });
 
     wrapper.appendChild(row);
-    wrapper.appendChild(panel);
+
     if (item.type === "kvlist" || item.type === "string-list") {
       const button = document.createElement("button");
       button.type = "button";
@@ -1691,7 +1685,7 @@ class SettingsPage {
         button,
         label: item.label,
         hint: "Replaces this list. Review removals before applying.",
-        onOpen: closeInline,
+        onOpen: closeEditor,
         load: () => ({ value: read() }),
         plan: (text) => buildListPlan(text, read(), item.type, (value) => this.service.validate(value, item.type, item.validation || {})),
         apply: (plan) => applyListPlan(plan, read, (value) => this.service.setValue(storageKey, item.type, value, item.apply)),

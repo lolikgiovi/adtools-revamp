@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Settings modal checks</title>
+    <style>
+      body {
+        font: 14px system-ui;
+        margin: 16px;
+      }
+      iframe {
+        height: 844px;
+        border: 1px solid #888;
+      }
+      .pass {
+        color: #16702c;
+      }
+      .fail {
+        color: #b00020;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Settings modal checks</h1>
+    <p>Browser integration fixture. Uses preview-only setting values; no native IPC or database connections.</p>
+    <ol id="results"></ol>
+    <iframe title="Settings under test"></iframe>
+    <script type="module">
+      const frame = document.querySelector("iframe");
+      const results = document.querySelector("#results");
+      let failures = 0;
+      let checks = 0;
+      function check(condition, label) {
+        checks++;
+        const row = document.createElement("li");
+        row.className = condition ? "pass" : "fail";
+        row.textContent = `${condition ? "PASS" : "FAIL"}: ${label}`;
+        results.append(row);
+        if (!condition) failures++;
+      }
+      const settle = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      for (const width of [1100, 390]) {
+        frame.style.width = `${width}px`;
+        await new Promise((resolve) => {
+          frame.onload = resolve;
+          frame.src = `./preview.html?populated&theme=light&width=${width}`;
+        });
+        const doc = frame.contentDocument;
+        const win = frame.contentWindow;
+        const find = (selector) => doc.querySelector(selector);
+        const click = (selector) => find(selector).click();
+        const input = (selector, value) => {
+          find(selector).value = value;
+          find(selector).dispatchEvent(new win.Event("input", { bubbles: true }));
+        };
+        const fits = () => {
+          const dialog = find("dialog[open]");
+          const rect = dialog.getBoundingClientRect();
+          return (
+            rect.left >= 0 &&
+            rect.right <= win.innerWidth + 1 &&
+            rect.top >= 0 &&
+            rect.bottom <= win.innerHeight + 1 &&
+            dialog.scrollWidth <= dialog.clientWidth + 1
+          );
+        };
+        const cancel = () =>
+          click(
+            "dialog[open] .setting-cancel, dialog[open] .environment-cancel, dialog[open] .kafka-broker-cancel, dialog[open] .oracle-cancel-btn",
+          );
+        const label = (text) => `${width}px: ${text}`;
+        try {
+          check(
+            find("#settings-category-app-integration")?.querySelectorAll(".setting-integration").length === 3,
+            label("App Integration contains three grouped apps"),
+          );
+          check(!find('[data-setting="config.jira.allowInvalidTls"]'), label("Jira TLS toggle is removed"));
+          check(
+            find("#settings-category-app-integration").querySelectorAll(":scope > .setting-item").length === 3,
+            label("exactly one row per integration"),
+          );
+          for (const key of ["config.confluence.domain", "config.jira.url", "config.jenkins.url"]) {
+            click(`[data-setting="${key}"] .setting-edit`);
+            check(find("dialog[open]").querySelectorAll("input").length === 3 && fits(), label(`${key} has one three-field modal`));
+            check(
+              find('dialog[open] [name="token"]').value === "" && find('dialog[open] [name="token"]').type === "password",
+              label(`${key} keeps saved token masked and blank`),
+            );
+            cancel();
+          }
+          click('[data-setting="config.confluence.domain"] .setting-edit');
+          input('dialog[open] [name="domain"]', "https://updated.example.test");
+          input('dialog[open] [name="username"]', "updated-user");
+          click('dialog[open] [type="submit"]');
+          await settle();
+          check(
+            !find("dialog[open]") &&
+              find('[data-setting="config.confluence.domain"] .integration-summary').textContent.includes("updated-user"),
+            label("integration saves domain and username while retaining token"),
+          );
+          click('[data-setting="config.jira.url"] .setting-edit');
+          input("dialog[open] textarea", "EVDEV\nPAYMENTS");
+          click('dialog[open] [type="submit"]');
+          await settle();
+          check(
+            find('[data-setting="config.jira.url"] .string-list-preview').children.length === 2,
+            label("Jira project keys save as multiple chips inside the Jira row"),
+          );
+          const edit = find('[data-setting="config.velocityValidator.url"] .setting-edit');
+          edit.focus();
+          edit.click();
+          check(find("dialog[open]")?.matches(":modal") && fits(), label("scalar editor is modal and fits viewport"));
+          input("dialog[open] input", "bad-url");
+          click("dialog[open] .setting-confirm");
+          check(!!find("dialog[open] .setting-error").textContent, label("invalid value stays open with an error"));
+          input("dialog[open] input", "https://example.test");
+          click("dialog[open] .setting-confirm");
+          await settle();
+          check(!find("dialog[open]") && doc.activeElement === edit, label("save closes and restores focus"));
+          check(
+            find('[data-setting="config.velocityValidator.url"] [data-value]').textContent === "https://example.test",
+            label("saved value updates row"),
+          );
+          edit.focus();
+          edit.click();
+          input("dialog[open] input", "https://discard.test");
+          cancel();
+          await settle();
+          check(
+            find('[data-setting="config.velocityValidator.url"] [data-value]').textContent === "https://example.test",
+            label("cancel discards draft"),
+          );
+          click('[data-setting="secure.redis.password"] .setting-edit');
+          check(
+            find("dialog[open] input").type === "password" && find("dialog[open] input").value === "",
+            label("secret starts blank and masked"),
+          );
+          cancel();
+          click(".environment-add-btn");
+          check(fits(), label("environment form fits viewport"));
+          input(".environment-name", "Browser fixture");
+          input(".environment-public-url", "ftp://example.test");
+          click(".environment-save");
+          check(!!find("dialog[open] .environment-form-status").textContent, label("environment validates URL"));
+          input(".environment-public-url", "https://example.test");
+          click(".environment-save");
+          await settle();
+          check(
+            !find("dialog[open]") && find(".environments-list").textContent.includes("Browser fixture"),
+            label("environment saves and closes"),
+          );
+          const envEdit = find(".environment-edit");
+          envEdit.focus();
+          envEdit.click();
+          check(find("dialog[open] h2").textContent === "Edit Environment", label("existing environment opens Edit modal"));
+          cancel();
+          await settle();
+          check(doc.activeElement === envEdit, label("cancel returns focus to existing Edit button"));
+          click(".kafka-broker-add");
+          check(fits() && find("dialog[open] h2").textContent === "Add broker", label("Kafka Add opens modal"));
+          cancel();
+          click(".oracle-add-btn");
+          check(fits() && find("dialog[open] h2").textContent === "Add Connection", label("Oracle Add opens modal"));
+          cancel();
+          click('[data-setting="config.mergeSql.squadNames"] .setting-edit');
+          check(fits(), label("list editor fits viewport"));
+          cancel();
+          check(!find("dialog[open]"), label("all dialogs close cleanly"));
+        } catch (error) {
+          check(false, label(error.message));
+          find("dialog[open]")?.close();
+        }
+      }
+      document.body.dataset.result = failures ? "failed" : "passed";
+      document.title = `${checks - failures}/${checks} passed — Settings modal checks`;
+    </script>
+  </body>
+</html>

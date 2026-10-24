@@ -45,6 +45,10 @@ class SettingsService {
   getValue(key, type, defaultValue) {
     if (type === "environments") return readEnvironments();
     if (key === "config.lockeyPath") return normalizePath(localStorage.getItem(key) ?? "");
+    if (key === "config.jira.projectKeys" && localStorage.getItem(key) === null) {
+      const legacy = localStorage.getItem("config.jira.projectKey");
+      if (legacy?.trim()) return [legacy.trim()];
+    }
     const raw = localStorage.getItem(key);
     if (raw === null || raw === "null") {
       if (type === "boolean" && defaultValue === "system") {
@@ -115,10 +119,10 @@ class SettingsService {
     }
   }
 
-  setValue(key, type, value, applyHint) {
+  setValue(key, type, value, applyHint, { notify = true } = {}) {
     if (type === "environments") {
       const environments = writeEnvironments(Array.isArray(value) ? value : []);
-      this.eventBus?.emit?.("notification:success", { message: "Setting saved", duration: 1000 });
+      if (notify) this.eventBus?.emit?.("notification:success", { message: "Setting saved", duration: 1000 });
       return environments;
     }
     if (key === "config.lockeyPath") value = normalizePath(value);
@@ -136,11 +140,7 @@ class SettingsService {
         storeVal = JSON.stringify(Array.isArray(value) ? value : []);
         break;
       case "string-list":
-        storeVal = JSON.stringify(
-          Array.isArray(value)
-            ? value.map((item) => String(item ?? "").trim()).filter(Boolean)
-            : [],
-        );
+        storeVal = JSON.stringify(Array.isArray(value) ? value.map((item) => String(item ?? "").trim()).filter(Boolean) : []);
         break;
       case "date":
       case "time":
@@ -167,7 +167,7 @@ class SettingsService {
       this.themeManager?.setTheme?.(theme);
     }
 
-    this.eventBus?.emit?.("notification:success", { message: "Setting saved", duration: 1000 });
+    if (notify) this.eventBus?.emit?.("notification:success", { message: "Setting saved", duration: 1000 });
     if (type === "kvlist" || type === "oracle-connections" || type === "string-list") {
       return Array.isArray(value) ? value : [];
     }
@@ -227,10 +227,15 @@ class SettingsService {
       }
       case "string-list": {
         const rows = Array.isArray(value) ? value : [];
+        if (rules.required && !rows.length) return { valid: false, message: "Enter at least one value" };
+        const pattern = new RegExp(rules.itemPattern || "^[A-Za-z0-9_-]+$");
         for (const item of rows) {
           if (!item) continue;
-          if (!/^[A-Za-z0-9_-]+$/.test(String(item))) {
-            return { valid: false, message: "Each squad name must be a single token using letters, numbers, _ or -" };
+          if (!pattern.test(String(item))) {
+            return {
+              valid: false,
+              message: `Each ${rules.itemLabel || "squad name"} must be a single token using letters, numbers, _ or -`,
+            };
           }
         }
         return { valid: true };
@@ -300,7 +305,7 @@ class SettingsService {
       }
       case "string-list": {
         return `
-          <textarea class="setting-input setting-textarea setting-list-input" rows="6" placeholder="One squad name per line" aria-label="${item.label}"></textarea>
+          <textarea class="setting-input setting-textarea setting-list-input" rows="6" placeholder="${item.placeholder || "One squad name per line"}" aria-label="${item.label}"></textarea>
         `;
       }
       case "json": {

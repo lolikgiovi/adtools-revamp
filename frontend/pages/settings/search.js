@@ -46,7 +46,8 @@ class SettingsSearch {
       if (content) {
         for (const item of content.querySelectorAll(":scope > .setting-item")) {
           total += 1;
-          const haystack = `${item.dataset.setting || ""} ${item.textContent || ""}`.toLowerCase();
+          const haystack =
+            `${item.dataset.setting || ""} ${item.dataset.settingKeys || ""} ${item.dataset.searchText || ""} ${item.textContent || ""}`.toLowerCase();
           const isMatch = categoryMatches || haystack.includes(q);
           item.hidden = !isMatch;
           if (isMatch) {

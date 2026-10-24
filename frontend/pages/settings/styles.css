@@ -403,20 +403,6 @@
   transform: rotate(90deg);
 }
 
-.setting-item[data-editing="true"] {
-  display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  gap: 8px 24px;
-}
-
-.setting-item[data-editing="true"] .setting-row {
-  display: contents;
-}
-
-.setting-item[data-editing="true"] .setting-value {
-  display: none;
-}
-
 .setting-edit-panel {
   display: none;
   flex-direction: column;
@@ -915,8 +901,7 @@
     width: 100%;
   }
 
-  .setting-row,
-  .setting-item[data-editing="true"] {
+  .setting-row {
     grid-template-columns: minmax(0, 1fr);
     gap: 10px;
   }
@@ -1142,5 +1127,94 @@ body .settings-bulk-dialog {
 
   .settings-bulk-dialog .settings-bulk-form {
     padding-inline: 12px;
+  }
+}
+
+body .settings-edit-dialog {
+  width: min(480px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+body .settings-edit-dialog-wide {
+  width: min(680px, calc(100vw - 32px));
+}
+
+.settings-edit-dialog > form {
+  margin: 0;
+  padding: 16px;
+  border: 0;
+  min-width: 0;
+}
+
+.settings-edit-dialog .setting-edit-row {
+  align-items: stretch;
+}
+
+.settings-edit-dialog .setting-actions,
+.settings-edit-dialog .oracle-form-actions,
+.settings-edit-dialog .environment-form-actions,
+.settings-edit-dialog .kafka-broker-form-footer {
+  padding-top: 12px;
+  border-top: 1px solid hsl(var(--border));
+}
+
+@media (max-width: 600px) {
+  .settings-edit-dialog .oracle-form-row,
+  .settings-edit-dialog .environment-form-row,
+  .settings-edit-dialog .kafka-broker-form {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+}
+
+.settings-edit-dialog .environment-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.integration-summary {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 6px;
+  padding-block: 3px;
+  overflow-wrap: anywhere;
+}
+
+.integration-account {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+.integration-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.integration-field {
+  display: grid;
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
+  align-items: center;
+  gap: 8px 20px;
+  font-size: 0.8125rem;
+}
+
+.integration-field .setting-input {
+  width: 100%;
+}
+
+@media (max-width: 600px) {
+  .integration-field {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

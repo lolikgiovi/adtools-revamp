@@ -111,135 +111,148 @@
       ]
     },
     {
-      "id": "jenkins",
-      "label": "Jenkins",
+      "id": "app-integration",
+      "label": "App Integration",
       "initiallyExpanded": true,
-      "items": [
+      "categories": [
         {
-          "key": "config.jenkins.url",
-          "storageKey": "config.jenkins.url",
-          "label": "Jenkins URL",
-          "type": "string",
-          "default": "",
-          "description": "Dedicated Jenkins URL used by the Jenkins Query Runner.",
-          "validation": {
-            "required": true,
-            "pattern": "^https?://"
-          }
+          "id": "confluence",
+          "label": "Confluence",
+          "initiallyExpanded": true,
+          "items": [
+            {
+              "key": "config.confluence.domain",
+              "storageKey": "config.confluence.domain",
+              "label": "Confluence Domain",
+              "type": "string",
+              "default": "",
+              "description": "Base URL (e.g., https://confluence.example.com)",
+              "validation": {
+                "pattern": "^https?://"
+              }
+            },
+            {
+              "key": "config.confluence.username",
+              "storageKey": "config.confluence.username",
+              "label": "Confluence Username",
+              "type": "string",
+              "default": "",
+              "description": "Username for Confluence authentication",
+              "requiresTauri": true
+            },
+            {
+              "key": "secure.confluence.pat",
+              "storageKey": "secure.confluence.pat",
+              "label": "Confluence PAT",
+              "type": "secret",
+              "default": "",
+              "description": "Personal Access Token. Generate in Confluence: Profile \u2192 Personal Access Tokens \u2192 Create token. Stored in macOS Keychain.",
+              "validation": {
+                "required": true,
+                "minLength": 8
+              },
+              "requiresTauri": true
+            }
+          ],
+          "integration": true
         },
         {
-          "key": "config.jenkins.username",
-          "storageKey": "config.jenkins.username",
-          "label": "Jenkins Username",
-          "type": "string",
-          "default": "",
-          "description": "Username paired with Jenkins API token.",
-          "requiresTauri": true
+          "id": "jira",
+          "label": "Jira",
+          "initiallyExpanded": true,
+          "items": [
+            {
+              "key": "config.jira.url",
+              "storageKey": "config.jira.url",
+              "label": "Jira URL",
+              "type": "string",
+              "default": "https://jira.corp.devmandiri.co.id",
+              "description": "Jira Data Center base URL used by Ticket Template.",
+              "validation": {
+                "required": true,
+                "pattern": "^https://"
+              }
+            },
+            {
+              "key": "config.jira.username",
+              "storageKey": "config.jira.username",
+              "label": "Jira Username",
+              "type": "string",
+              "default": "",
+              "requiresTauri": true
+            },
+            {
+              "key": "secure.jira.pat",
+              "storageKey": "secure.jira.pat",
+              "label": "Jira PAT",
+              "type": "secret",
+              "default": "",
+              "description": "Personal Access Token for Jira 9.17.3. Stored in macOS Keychain and sent only by the Tauri backend.",
+              "validation": {
+                "required": true,
+                "minLength": 8
+              },
+              "requiresTauri": true
+            },
+            {
+              "key": "config.jira.projectKeys",
+              "storageKey": "config.jira.projectKeys",
+              "label": "Jira Project Keys",
+              "type": "string-list",
+              "default": ["EVDEV"],
+              "description": "Jira project keys. Enter one key per line.",
+              "placeholder": "One project key per line",
+              "validation": {
+                "required": true,
+                "itemPattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+                "itemLabel": "project key"
+              },
+              "aliases": ["config.jira.projectKey"]
+            }
+          ],
+          "integration": true
         },
         {
-          "key": "secure.jenkins.token",
-          "storageKey": "secure.jenkins.token",
-          "label": "Jenkins Token",
-          "type": "secret",
-          "default": "",
-          "description": "Generate an API token from Jenkins (User \u279d Configure \u279d API Token). Token is stored securely in macOS Keychain, shown masked, and can only be replaced.",
-          "validation": {
-            "required": true,
-            "minLength": 8
-          },
-          "requiresTauri": true
-        }
-      ]
-    },
-    {
-      "id": "confluence",
-      "label": "Confluence",
-      "initiallyExpanded": true,
-      "items": [
-        {
-          "key": "config.confluence.domain",
-          "storageKey": "config.confluence.domain",
-          "label": "Confluence Domain",
-          "type": "string",
-          "default": "",
-          "description": "Base URL (e.g., https://confluence.example.com)",
-          "validation": {
-            "pattern": "^https?://"
-          }
-        },
-        {
-          "key": "config.confluence.username",
-          "storageKey": "config.confluence.username",
-          "label": "Confluence Username",
-          "type": "string",
-          "default": "",
-          "description": "Username for Confluence authentication",
-          "requiresTauri": true
-        },
-        {
-          "key": "secure.confluence.pat",
-          "storageKey": "secure.confluence.pat",
-          "label": "Confluence PAT",
-          "type": "secret",
-          "default": "",
-          "description": "Personal Access Token. Generate in Confluence: Profile \u2192 Personal Access Tokens \u2192 Create token. Stored in macOS Keychain.",
-          "validation": {
-            "required": true,
-            "minLength": 8
-          },
-          "requiresTauri": true
-        }
-      ]
-    },
-    {
-      "id": "jira",
-      "label": "Jira",
-      "initiallyExpanded": true,
-      "items": [
-        {
-          "key": "config.jira.url",
-          "storageKey": "config.jira.url",
-          "label": "Jira URL",
-          "type": "string",
-          "default": "https://jira.corp.devmandiri.co.id",
-          "description": "Jira Data Center base URL used by Ticket Template.",
-          "validation": {
-            "required": true,
-            "pattern": "^https://"
-          }
-        },
-        {
-          "key": "config.jira.projectKey",
-          "storageKey": "config.jira.projectKey",
-          "label": "Jira Project Key",
-          "type": "string",
-          "default": "EVDEV",
-          "description": "Default Jira project for ticket template discovery and creation.",
-          "validation": {
-            "required": true,
-            "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
-          }
-        },
-        {
-          "key": "config.jira.allowInvalidTls",
-          "storageKey": "config.jira.allowInvalidTls",
-          "label": "Allow Untrusted Jira Certificate",
-          "type": "boolean",
-          "default": false,
-          "description": "Jira-only fallback for a corporate self-signed certificate. This disables certificate verification and can expose the PAT to interception; prefer installing the corporate CA in macOS Keychain."
-        },
-        {
-          "key": "secure.jira.pat",
-          "storageKey": "secure.jira.pat",
-          "label": "Jira PAT",
-          "type": "secret",
-          "default": "",
-          "description": "Personal Access Token for Jira 9.17.3. Stored in macOS Keychain and sent only by the Tauri backend.",
-          "validation": {
-            "required": true,
-            "minLength": 8
-          },
-          "requiresTauri": true
+          "id": "jenkins",
+          "label": "Jenkins",
+          "initiallyExpanded": true,
+          "items": [
+            {
+              "key": "config.jenkins.url",
+              "storageKey": "config.jenkins.url",
+              "label": "Jenkins URL",
+              "type": "string",
+              "default": "",
+              "description": "Dedicated Jenkins URL used by the Jenkins Query Runner.",
+              "validation": {
+                "required": true,
+                "pattern": "^https?://"
+              }
+            },
+            {
+              "key": "config.jenkins.username",
+              "storageKey": "config.jenkins.username",
+              "label": "Jenkins Username",
+              "type": "string",
+              "default": "",
+              "description": "Username paired with Jenkins API token.",
+              "requiresTauri": true
+            },
+            {
+              "key": "secure.jenkins.token",
+              "storageKey": "secure.jenkins.token",
+              "label": "Jenkins Token",
+              "type": "secret",
+              "default": "",
+              "description": "Generate an API token from Jenkins (User \u279d Configure \u279d API Token). Token is stored securely in macOS Keychain, shown masked, and can only be replaced.",
+              "validation": {
+                "required": true,
+                "minLength": 8
+              },
+              "requiresTauri": true
+            }
+          ],
+          "integration": true
         }
       ]
     },

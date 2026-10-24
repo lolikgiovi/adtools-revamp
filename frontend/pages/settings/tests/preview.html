@@ -83,6 +83,11 @@
               cdnDirectUrl: "",
             },
           ]);
+          for (const app of ["confluence", "jira", "jenkins"]) {
+            values.set(`config.${app}.${app === "confluence" ? "domain" : "url"}`, `https://${app}.example.test`);
+            values.set(`config.${app}.username`, "fixture-user");
+            values.set(`secure.${app}.${app === "jenkins" ? "token" : "pat"}`, "set");
+          }
           values.set("config.lockeyPath", "/localization/v1/language-pack?languagePackVersionUuid=1");
         }
         if (params.has("json")) {

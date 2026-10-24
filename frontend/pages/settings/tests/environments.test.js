@@ -18,6 +18,12 @@ function submit(item) {
 }
 
 beforeEach(() => {
+  HTMLDialogElement.prototype.showModal = function () {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.close = function () {
+    this.open = false;
+  };
   localStorage.clear();
   document.body.replaceChildren();
 });

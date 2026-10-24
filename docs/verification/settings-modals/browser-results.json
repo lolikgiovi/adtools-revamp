@@ -1,0 +1,129 @@
+{
+  "date": "2026-10-24",
+  "reproduce": "npm run dev, then open http://localhost:1234/pages/settings/tests/modal-check.html",
+  "scope": "Browser integration fixture; no native IPC, keychain, or database verification",
+  "checks": [
+    {
+      "label": "PASS: 1100px: scalar editor is modal and fits viewport",
+      "passed": true
+    },
+    {
+      "label": "PASS: 1100px: invalid value stays open with an error",
+      "passed": true
+    },
+    {
+      "label": "PASS: 1100px: save closes and restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: 1100px: saved value updates row",
+      "passed": true
+    },
+    {
+      "label": "PASS: 1100px: cancel discards draft",
+      "passed": true
+    },
+    {
+      "label": "PASS: 1100px: secret starts blank and masked",
+      "passed": true
+    },
+    {
+      "label": "PASS: 1100px: environment form fits viewport",
+      "passed": true
+    },
+    {
+      "label": "PASS: 1100px: environment validates URL",
+      "passed": true
+    },
+    {
+      "label": "PASS: 1100px: environment saves and closes",
+      "passed": true
+    },
+    {
+      "label": "PASS: 1100px: existing environment opens Edit modal",
+      "passed": true
+    },
+    {
+      "label": "PASS: 1100px: cancel returns focus to existing Edit button",
+      "passed": true
+    },
+    {
+      "label": "PASS: 1100px: Kafka Add opens modal",
+      "passed": true
+    },
+    {
+      "label": "PASS: 1100px: Oracle Add opens modal",
+      "passed": true
+    },
+    {
+      "label": "PASS: 1100px: list editor fits viewport",
+      "passed": true
+    },
+    {
+      "label": "PASS: 1100px: all dialogs close cleanly",
+      "passed": true
+    },
+    {
+      "label": "PASS: 390px: scalar editor is modal and fits viewport",
+      "passed": true
+    },
+    {
+      "label": "PASS: 390px: invalid value stays open with an error",
+      "passed": true
+    },
+    {
+      "label": "PASS: 390px: save closes and restores focus",
+      "passed": true
+    },
+    {
+      "label": "PASS: 390px: saved value updates row",
+      "passed": true
+    },
+    {
+      "label": "PASS: 390px: cancel discards draft",
+      "passed": true
+    },
+    {
+      "label": "PASS: 390px: secret starts blank and masked",
+      "passed": true
+    },
+    {
+      "label": "PASS: 390px: environment form fits viewport",
+      "passed": true
+    },
+    {
+      "label": "PASS: 390px: environment validates URL",
+      "passed": true
+    },
+    {
+      "label": "PASS: 390px: environment saves and closes",
+      "passed": true
+    },
+    {
+      "label": "PASS: 390px: existing environment opens Edit modal",
+      "passed": true
+    },
+    {
+      "label": "PASS: 390px: cancel returns focus to existing Edit button",
+      "passed": true
+    },
+    {
+      "label": "PASS: 390px: Kafka Add opens modal",
+      "passed": true
+    },
+    {
+      "label": "PASS: 390px: Oracle Add opens modal",
+      "passed": true
+    },
+    {
+      "label": "PASS: 390px: list editor fits viewport",
+      "passed": true
+    },
+    {
+      "label": "PASS: 390px: all dialogs close cleanly",
+      "passed": true
+    }
+  ],
+  "result": "passed",
+  "title": "30/30 passed — Settings modal checks"
+}
