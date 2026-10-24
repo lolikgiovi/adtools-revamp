@@ -225,16 +225,30 @@ try {
   check(Math.abs(leftHeader.height - rightHeader.height) < 1, "File and preview headers have the same height.");
   check(!root.querySelector(".ci-inspector-header .ci-detail"), "Image metadata lives below the preview header.");
   check(Number(control("zoom").max) === 32, "Preview zoom supports up to 32×.");
+  const pose = (image) => {
+    const bounds = image.getBoundingClientRect();
+    const paneBounds = image.closest(".ci-viewport").getBoundingClientRect();
+    return {
+      width: bounds.width,
+      height: bounds.height,
+      x: bounds.left + bounds.width / 2 - paneBounds.left - paneBounds.width / 2,
+      y: bounds.top + bounds.height / 2 - paneBounds.top - paneBounds.height / 2,
+    };
+  };
+  const samePose = (a, b) => Object.keys(a).every((key) => Math.abs(a[key] - b[key]) < 1);
   control("zoom").value = "16";
   control("zoom").dispatchEvent(new Event("input", { bubbles: true }));
-  check(root.querySelector(".ci-pair img").style.transform.includes("scale(16)"), "Linked images zoom beyond 8×.");
+  check(
+    pose(root.querySelector(".ci-pair img")).width > root.querySelector(".ci-pair .ci-viewport").clientWidth * 8,
+    "Linked images zoom beyond 8×.",
+  );
   const scrollPane = root.querySelector(".ci-pair .ci-viewport");
-  const beforeWheel = root.querySelector(".ci-pair img").style.transform;
+  const beforeWheel = pose(root.querySelector(".ci-pair img"));
   const scroll = new WheelEvent("wheel", { deltaX: 24, deltaY: 36, bubbles: true, cancelable: true });
   scrollPane.dispatchEvent(scroll);
-  const wheelTransforms = [...root.querySelectorAll(".ci-pair img")].map((img) => img.style.transform);
+  const wheelTransforms = [...root.querySelectorAll(".ci-pair img")].map(pose);
   check(
-    scroll.defaultPrevented && wheelTransforms[0] !== beforeWheel && wheelTransforms[0] === wheelTransforms[1],
+    scroll.defaultPrevented && !samePose(wheelTransforms[0], beforeWheel) && samePose(wheelTransforms[0], wheelTransforms[1]),
     "Ordinary scrolling pans linked images and stays inside the preview.",
   );
   check(Number(control("zoom").value) === 16, "Ordinary scrolling preserves zoom.");
@@ -269,14 +283,14 @@ try {
     check(Number(control("zoom").value) === 2, "Two touch pointers pinch from fit to 2× zoom.");
     pointer("pointerup", 31, gx - 50, gy);
     pointer("pointerup", 32, gx + 150, gy);
-    const beforeDrag = root.querySelector(".ci-pair img").style.transform;
+    const beforeDrag = pose(root.querySelector(".ci-pair img"));
     pointer("pointerdown", 33, gx, gy, "mouse");
     pointer("pointermove", 33, gx - 30, gy + 30, "mouse");
-    const afterDrag = [...root.querySelectorAll(".ci-pair img")].map((img) => img.style.transform);
-    check(afterDrag[0] !== beforeDrag && afterDrag[0] === afterDrag[1], "Dragging pans both images by the same amount.");
+    const afterDrag = [...root.querySelectorAll(".ci-pair img")].map(pose);
+    check(!samePose(afterDrag[0], beforeDrag) && samePose(afterDrag[0], afterDrag[1]), "Dragging pans both images by the same amount.");
     pointer("pointercancel", 33, gx - 30, gy + 30, "mouse");
     pointer("pointermove", 33, gx - 50, gy + 50, "mouse");
-    check(root.querySelector(".ci-pair img").style.transform === afterDrag[0], "Cancelled gestures cannot leave pan stuck.");
+    check(samePose(pose(root.querySelector(".ci-pair img")), afterDrag[0]), "Cancelled gestures cannot leave pan stuck.");
   } finally {
     gesturePane.setPointerCapture = savedCapture;
     control("fit").click();
@@ -285,8 +299,11 @@ try {
   control("zoom").dispatchEvent(new Event("input", { bubbles: true }));
   const pane = root.querySelector(".ci-viewport");
   pane.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
-  const transforms = [...root.querySelectorAll(".ci-pair img")].map((img) => img.style.transform);
-  check(transforms[0] === transforms[1] && transforms[0].includes("scale(3)"), "Zoom and keyboard pan stay linked between panes.");
+  const transforms = [...root.querySelectorAll(".ci-pair img")].map(pose);
+  check(
+    samePose(transforms[0], transforms[1]) && Math.abs(transforms[0].width / Math.min(pane.clientWidth, pane.clientHeight) - 3) < 0.01,
+    "Zoom and keyboard pan stay linked between panes.",
+  );
   pane.dispatchEvent(new PointerEvent("pointermove", { clientX: 100, clientY: 100, bubbles: true }));
   check(root.querySelectorAll(".ci-cursor:not([hidden])").length === 2, "Hover indicates matching positions in both panes.");
   control("overlay").click();

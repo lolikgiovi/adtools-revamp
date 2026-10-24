@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Zoom clarity check</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      body {
+        padding: 16px;
+      }
+      #tool {
+        width: 1100px;
+      }
+      #tool .ci-settings {
+        display: none;
+      }
+      .ci-workspace {
+        grid-template-columns: 320px 4px 740px !important;
+      }
+      .ci-inspector {
+        height: 620px;
+      }
+      #tool .ci-detail {
+        line-height: 16px;
+      }
+      #tool .ci-pair figcaption {
+        height: 32px;
+      }
+      .ci-pair {
+        flex: none;
+        grid-template-columns: 256px 256px;
+      }
+      .ci-pair .ci-viewport {
+        flex: none;
+        width: 256px;
+        height: 256px;
+        min-height: 0;
+      }
+      #result {
+        display: none;
+        position: fixed;
+        right: 10px;
+        bottom: 10px;
+        background: white;
+        color: black;
+        z-index: 10;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="tool"></div>
+    <pre id="result">Running</pre>
+    <script type="module">
+      import { CompressImage } from "../main.js";
+      import { UsageTracker } from "../../../core/UsageTracker.js";
+      UsageTracker.trackToolUse = () => {};
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 1024;
+      const context = canvas.getContext("2d");
+      const data = context.createImageData(1024, 1024);
+      for (let y = 0; y < 1024; y++)
+        for (let x = 0; x < 1024; x++) {
+          const offset = (y * 1024 + x) * 4;
+          data.data.fill((x + y) % 2 ? 255 : 0, offset, offset + 3);
+          data.data[offset + 3] = 255;
+        }
+      context.putImageData(data, 0, 0);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+      const tool = new CompressImage();
+      tool.mount(document.querySelector("#tool"));
+      tool.addFiles([new File([blob], "pixel-detail.png", { type: "image/png" })]);
+      await tool.processQueue();
+      tool.selectItem(tool.items[0]);
+      await Promise.all([...document.querySelectorAll(".ci-preview img")].map((img) => img.decode()));
+      tool.$("zoom").value = "8";
+      tool.$("zoom").dispatchEvent(new Event("input"));
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const images = [...document.querySelectorAll(".ci-pair img")];
+      const pixels = (img) => {
+        context.clearRect(0, 0, 1024, 1024);
+        context.drawImage(img, 0, 0);
+        return context.getImageData(0, 0, 1024, 1024).data;
+      };
+      const before = pixels(images[0]),
+        after = pixels(images[1]);
+      const report = {
+        sourcePixelsEqual: before.every((value, i) => value === after[i]),
+        panes: [...document.querySelectorAll(".ci-pair .ci-viewport")].map((pane) => pane.getBoundingClientRect().toJSON()),
+        images: images.map((img) => ({
+          width: img.naturalWidth,
+          rect: img.getBoundingClientRect().toJSON(),
+          rendering: getComputedStyle(img).imageRendering,
+        })),
+      };
+      document.querySelector("#result").textContent = JSON.stringify(report, null, 2);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,55 @@
+{
+  "sourcePixelsEqual": true,
+  "panes": [
+    {
+      "x": 375,
+      "y": 133.5,
+      "width": 256,
+      "height": 256,
+      "top": 133.5,
+      "right": 631,
+      "bottom": 389.5,
+      "left": 375
+    },
+    {
+      "x": 738,
+      "y": 133.5,
+      "width": 256,
+      "height": 256,
+      "top": 133.5,
+      "right": 994,
+      "bottom": 389.5,
+      "left": 738
+    }
+  ],
+  "images": [
+    {
+      "width": 1024,
+      "rect": {
+        "x": -521,
+        "y": -762.5,
+        "width": 2048,
+        "height": 2048,
+        "top": -762.5,
+        "right": 1527,
+        "bottom": 1285.5,
+        "left": -521
+      },
+      "rendering": "auto"
+    },
+    {
+      "width": 1024,
+      "rect": {
+        "x": -158,
+        "y": -762.5,
+        "width": 2048,
+        "height": 2048,
+        "top": -762.5,
+        "right": 1890,
+        "bottom": 1285.5,
+        "left": -158
+      },
+      "rendering": "auto"
+    }
+  ]
+}

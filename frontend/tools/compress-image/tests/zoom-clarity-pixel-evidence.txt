@@ -1,0 +1,38 @@
+{
+  "sourcePixelsEqual": true,
+  "samples": [
+    {
+      "colors": [
+        0,
+        1,
+        4,
+        250,
+        254,
+        255
+      ],
+      "interpolatedPixels": 0,
+      "samplePixels": 4096
+    },
+    {
+      "colors": [
+        0,
+        1,
+        2,
+        5,
+        7,
+        9,
+        245,
+        247,
+        248,
+        250,
+        252,
+        253,
+        254,
+        255
+      ],
+      "interpolatedPixels": 0,
+      "samplePixels": 4096
+    }
+  ]
+}
+PASS: original and lossless result preserve black/white source-pixel contrast at 2x native size

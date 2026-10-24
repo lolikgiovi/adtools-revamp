@@ -1,4 +1,4 @@
-// All transforms use viewport fractions, so different pane sizes stay visually linked.
+// Pan uses viewport fractions, so different pane sizes stay visually linked.
 export function attachPreviewControls({ preview, zoomInput, zoomValue, fit, splitInput }) {
   const images = preview.querySelectorAll("img");
   const cursors = preview.querySelectorAll(".ci-cursor");
@@ -12,7 +12,23 @@ export function attachPreviewControls({ preview, zoomInput, zoomValue, fit, spli
     x = clamp(x, -bound, bound);
     y = clamp(y, -bound, bound);
     images.forEach((image) => {
-      image.style.transform = `translate(${x * 100}%, ${y * 100}%) scale(${zoom})`;
+      const pane = image.closest(".ci-viewport");
+      const rect = pane.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      const sourceWidth = image.naturalWidth || image.width;
+      const sourceHeight = image.naturalHeight || image.height;
+      if (!sourceWidth || !sourceHeight) return;
+      const fitScale = Math.min(rect.width / sourceWidth, rect.height / sourceHeight);
+      const width = sourceWidth * fitScale * zoom;
+      const height = sourceHeight * fitScale * zoom;
+      const pixels = window.devicePixelRatio || 1;
+      const snap = (value) => Math.round(value * pixels) / pixels;
+      // Size the decoded image directly: scaling a fitted compositor layer can blur it.
+      // Align the image to screen pixels so identical sources use the same sampling phase.
+      image.style.width = `${width}px`;
+      image.style.height = `${height}px`;
+      image.style.left = `${snap(rect.left + (rect.width - width) / 2 + x * rect.width) - rect.left}px`;
+      image.style.top = `${snap(rect.top + (rect.height - height) / 2 + y * rect.height) - rect.top}px`;
     });
     zoomInput.value = String(zoom);
     zoomValue.textContent = zoom === 1 ? "Fit" : `${Number(zoom.toFixed(2))}×`;
@@ -148,6 +164,13 @@ export function attachPreviewControls({ preview, zoomInput, zoomValue, fit, spli
     event.stopPropagation();
     split(values[event.key]);
   });
+  const observer = new ResizeObserver(update);
+  preview.querySelectorAll(".ci-viewport").forEach((pane) => observer.observe(pane));
+  images.forEach((image) => image.addEventListener("load", update));
   split(splitInput.value);
   update();
+  return () => {
+    observer.disconnect();
+    images.forEach((image) => image.removeEventListener("load", update));
+  };
 }

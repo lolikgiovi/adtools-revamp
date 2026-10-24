@@ -563,7 +563,7 @@
   height: 100%;
   max-width: none;
   object-fit: contain;
-  transform-origin: center;
+  image-rendering: pixelated;
   pointer-events: none;
 }
 .ci-reveal {

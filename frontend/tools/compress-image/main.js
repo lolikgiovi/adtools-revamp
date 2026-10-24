@@ -635,6 +635,7 @@ export class CompressImage extends BaseTool {
     }
   }
   selectItem(item) {
+    this.previewCleanup?.();
     this.selected = item;
     this.items.forEach((entry) => {
       entry.row.classList.toggle("is-selected", entry === item);
@@ -698,6 +699,7 @@ export class CompressImage extends BaseTool {
     return [dimensions, encoding, result.fallbackReason, removed].filter(Boolean).join(" · ");
   }
   showPreview(item) {
+    this.previewCleanup?.();
     const preview = this.container.querySelector(".ci-preview");
     this.$("pair").setAttribute("aria-pressed", String(this.view === "pair"));
     this.$("overlay").setAttribute("aria-pressed", String(this.view === "overlay"));
@@ -733,7 +735,7 @@ export class CompressImage extends BaseTool {
       images[i].width = i % 2 ? item.result.width : item.result.originalWidth;
       images[i].height = i % 2 ? item.result.height : item.result.originalHeight;
     });
-    attachPreviewControls({
+    this.previewCleanup = attachPreviewControls({
       preview,
       zoomInput: this.$("zoom"),
       zoomValue: this.$("zoom-value"),
@@ -852,6 +854,8 @@ export class CompressImage extends BaseTool {
     }
   }
   clear() {
+    this.previewCleanup?.();
+    this.previewCleanup = null;
     this.generation++;
     this.batch?.abort();
     this.offerBatch?.abort();
