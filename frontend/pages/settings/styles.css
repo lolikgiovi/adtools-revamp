@@ -327,8 +327,11 @@
 }
 
 /* Nested service groups read as subsections within their parent. */
-.settings-category-content > .settings-category {
+.settings-category-content > :is(.settings-category, .setting-integration) {
   margin-inline-start: 12px;
+}
+
+.settings-category-content > .settings-category {
   border: 0;
   border-bottom: 1px solid hsl(var(--border));
   border-radius: 0;
@@ -880,7 +883,7 @@
 }
 
 @media (max-width: 760px) {
-  .settings-category-content > .settings-category {
+  .settings-category-content > :is(.settings-category, .setting-integration) {
     margin-inline-start: 8px;
   }
 
