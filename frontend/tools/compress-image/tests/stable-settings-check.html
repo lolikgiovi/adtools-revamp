@@ -52,7 +52,7 @@
           const original = panel.getBoundingClientRect();
           assert(control("width").disabled && control("height").disabled, `${width}: resize fields stay disabled when off`);
           assert(control("bounds").getBoundingClientRect().height > 0, `${width}: resize fields remain visible`);
-          assert(control("png-quality-preset").disabled, `${width}: lossless disables PNG quality`);
+          assert(!control("png-quality-preset").disabled, `${width}: PNG quality stays available for precomputed lossy output`);
           assert(!doc.querySelector('input[type="radio"]'), `${width}: PNG uses a select instead of radio cards`);
           const mode = control("png-mode");
           for (const resize of [true, false]) {
@@ -70,7 +70,7 @@
                 control("width").disabled === !resize && control("height").disabled === !resize,
                 `${width}: resize fields follow the switch`,
               );
-              assert(control("png-quality-preset").disabled === (pngMode === "lossless"), `${width}: PNG quality follows mode`);
+              assert(!control("png-quality-preset").disabled, `${width}: PNG quality stays available for both modes`);
             }
           }
           assert(doc.documentElement.scrollWidth === width, `${width}: no page overflow`);

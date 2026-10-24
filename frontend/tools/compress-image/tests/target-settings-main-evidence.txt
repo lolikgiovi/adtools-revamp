@@ -1,0 +1,30 @@
+PASS: 29 checks
+Quality uses a number field
+Dimension and size limits are opt-in
+Invalid target rejected before encoding
+KB converts to decimal bytes
+All three formats encode with a target
+noise.jpg: no implicit resize
+noise.jpg: format preserved
+noise.jpg: target outcome matches downloaded bytes
+noise.jpg: target met within quality floor
+noise.png: no implicit resize
+noise.png: format preserved
+noise.png: target outcome matches downloaded bytes
+noise.webp: no implicit resize
+noise.webp: format preserved
+noise.webp: target outcome matches downloaded bytes
+noise.webp: target met within quality floor
+Lossless PNG stays lossless with a target
+noise.jpg: max dimensions preserve ratio
+noise.jpg: unreachable target disclosed
+noise.png: max dimensions preserve ratio
+noise.png: unreachable target disclosed
+noise.webp: max dimensions preserve ratio
+noise.webp: unreachable target disclosed
+Target changes invalidate results
+Blank target restores normal compression
+Lossy PNG reaches the target with real quantization
+PNG output respects quality floor and strict byte target
+A target never converts lossless WebP to lossy
+No horizontal page overflow

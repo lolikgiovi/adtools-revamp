@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="stylesheet" href="/styles.css" />
+    <title>PNG choices and target dimensions</title>
+  </head>
+  <body style="padding: 16px">
+    <pre id="result">Running…</pre>
+    <div id="tool"></div>
+    <script type="module">
+      import JSZip from "jszip";
+      import { fitDimensions } from "../service.js";
+      import { CompressImage } from "../main.js";
+      import { UsageTracker } from "../../../core/UsageTracker.js";
+      UsageTracker.trackToolUse = () => {};
+      document.documentElement.classList.add("dark-grey");
+      const tool = new CompressImage();
+      tool.mount(document.querySelector("#tool"));
+      tool.decoder = new URLSearchParams(location.search).get("decoder") || "auto";
+      const checks = [];
+      const check = (ok, label) => {
+        if (!ok) throw new Error(label);
+        checks.push(label);
+      };
+      const set = (name, value) => {
+        tool.$(name).value = value;
+        tool.$(name).dispatchEvent(new Event("change", { bubbles: true }));
+      };
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = 600;
+        canvas.height = 400;
+        const ctx = canvas.getContext("2d");
+        const pixels = ctx.createImageData(600, 400);
+        let seed = 42;
+        for (let y = 0; y < 400; y++)
+          for (let x = 0; x < 600; x++) {
+            seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+            const i = (y * 600 + x) * 4;
+            pixels.data.set(
+              [Math.floor((x / 600) * 200) + ((seed >>> 24) % 16), Math.floor((y / 400) * 200) + ((seed >>> 24) % 16), 100, 255],
+              i,
+            );
+          }
+        ctx.putImageData(pixels, 0, 0);
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+        tool.addFiles([new File([blob], "first.png", { type: "image/png" }), new File([blob], "second.png", { type: "image/png" })]);
+        set("target-kb", "3");
+        set("png-quality-preset", "small");
+        await tool.processQueue();
+        await tool.offers;
+        const [first, second] = tool.items;
+        check(Object.keys(first.variants).length === 2, "Both real PNG results are retained");
+        check(first.variants.lossless.blob !== first.variants.lossy.blob, "Both columns show independently encoded sizes");
+        check(!first.result.lossy, "Default selection stays lossless");
+        first.row.querySelector('[data-variant="lossy"]').click();
+        check(first.result.lossy && !second.result.lossy, "Choices are independent per image");
+        check(
+          first.blob === first.variants.lossy.blob && first.after === first.variants.lossy.after,
+          "Preview and download use the chosen variant",
+        );
+        check(!first.row.querySelector(".ci-fit-target").hidden, "Missed lossy target offers explicit dimension fitting");
+        check(first.result.width === 600 && first.result.height === 400, "A missed target never silently changes dimensions");
+        const lossless = first.variants.lossless;
+        await tool.fitToTarget(first);
+        check(first.result.targetMet && first.blob.size < 3000, "Fitting produces a verified PNG below the target");
+        check(
+          first.result.width < 600 && Math.abs(first.result.width / 1.5 - first.result.height) <= 1,
+          "Fitting preserves aspect ratio and reduces dimensions",
+        );
+        check(first.variants.lossless === lossless, "Full-size lossless result stays available after fitting");
+        check(second.result.width === 600 && !second.result.lossy, "Fitting only changes the requested image");
+        const edge = Math.max(first.result.width, first.result.height) + 1;
+        const next = fitDimensions(600, 400, edge, edge);
+        const probe = await tool.encodeItem(
+          first,
+          {
+            ...first.settings,
+            resize: true,
+            ...next,
+            lossyPng: true,
+            pngQuality: { min: first.settings.pngQuality.min, target: first.settings.pngQuality.min },
+            fitSearch: true,
+          },
+          tool.generation,
+          new AbortController().signal,
+          () => {},
+          { before: first.before },
+        );
+        check(probe.selected.blob.size >= 3000, "The next larger dimensions exceed the target at the quality floor");
+        if (probe.selected.url !== first.before) URL.revokeObjectURL(probe.selected.url);
+        const fitted = first.blob;
+        first.row.querySelector('[data-variant="lossless"]').click();
+        check(first.blob === lossless.blob && first.result.width === 600, "Lossless choice restores full-size output");
+        first.row.querySelector('[data-variant="lossy"]').click();
+        check(first.blob === fitted && first.result.targetMet, "Lossy choice restores fitted output without re-encoding");
+        let downloaded;
+        tool.download = (blob) => {
+          downloaded = blob;
+        };
+        first.row.querySelector(".ci-download").click();
+        check(downloaded === fitted, "Individual download uses the selected fitted bytes");
+        await tool.downloadZip();
+        const zip = await JSZip.loadAsync(await downloaded.arrayBuffer());
+        const zipped = await zip.file("first.png").async("uint8array");
+        const expected = new Uint8Array(await fitted.arrayBuffer());
+        check(zipped.length === expected.length && zipped.every((byte, i) => byte === expected[i]), "ZIP uses each row's chosen bytes");
+        set("target-kb", "4");
+        await tool.fitToTarget(second);
+        check(tool.$("error").textContent.includes("Compress again"), "Fitting rejects stale settings");
+        tool.clear();
+        check(tool.pool.stats.alive === 0, "Clear releases variant workers and URLs");
+        tool.addFiles([
+          new File([await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 1))], "photo.jpg", { type: "image/jpeg" }),
+        ]);
+        set("target-kb", "1");
+        set("quality", "40");
+        await tool.processQueue();
+        await tool.offers;
+        const jpeg = tool.items[0];
+        check(
+          !jpeg.result.targetMet && !jpeg.row.querySelector(".ci-fit-target").hidden,
+          "JPEG also offers fitting after missing the target",
+        );
+        await tool.fitToTarget(jpeg);
+        check(
+          jpeg.result.targetMet && jpeg.blob.size < 1000 && jpeg.blob.type === "image/jpeg",
+          "JPEG dimension fitting preserves format and meets target",
+        );
+        check(jpeg.result.quality >= 40, "JPEG fitting respects the quality floor");
+
+        document.querySelector("#result").textContent = `PASS: ${checks.length} checks\n${checks.join("\n")}`;
+      } catch (error) {
+        document.querySelector("#result").textContent = `FAIL: ${error.message}\n${checks.join("\n")}`;
+        throw error;
+      }
+    </script>
+  </body>
+</html>

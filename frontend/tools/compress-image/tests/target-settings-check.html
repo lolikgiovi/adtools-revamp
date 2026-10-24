@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Target size verification</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body style="padding: 16px">
+    <pre id="result">Running…</pre>
+    <div id="tool"></div>
+    <script type="module">
+      import { CompressImage } from "../main.js";
+      import { UsageTracker } from "../../../core/UsageTracker.js";
+      UsageTracker.trackToolUse = () => {};
+      document.documentElement.classList.add("dark-grey");
+      const tool = new CompressImage();
+      tool.decoder = new URLSearchParams(location.search).get("decoder") || "auto";
+      tool.mount(document.querySelector("#tool"));
+      const checks = [];
+      const check = (ok, label) => {
+        if (!ok) throw new Error(label);
+        checks.push(label);
+      };
+      const set = (name, value) => {
+        tool.$(name).value = value;
+        tool.$(name).dispatchEvent(new Event("change", { bubbles: true }));
+      };
+      try {
+        check(tool.$("quality").type === "number", "Quality uses a number field");
+        check(!tool.$("resize").checked && !tool.readSettings().targetBytes, "Dimension and size limits are opt-in");
+        const canvas = document.createElement("canvas");
+        canvas.width = 360;
+        canvas.height = 240;
+        const ctx = canvas.getContext("2d");
+        const pixels = ctx.createImageData(360, 240);
+        let seed = 42;
+        for (let i = 0; i < pixels.data.length; i++) {
+          seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+          pixels.data[i] = i % 4 === 3 ? 255 : seed >>> 24;
+        }
+        ctx.putImageData(pixels, 0, 0);
+        const files = [];
+        for (const [type, ext] of [
+          ["image/jpeg", "jpg"],
+          ["image/png", "png"],
+          ["image/webp", "webp"],
+        ]) {
+          files.push(
+            new File([await new Promise((resolve) => canvas.toBlob(resolve, type, type === "image/webp" ? 0.95 : 1))], `noise.${ext}`, {
+              type,
+            }),
+          );
+        }
+        tool.addFiles(files);
+        set("target-kb", "-1");
+        await tool.processQueue();
+        check(
+          !tool.$("error").hidden && tool.$("target-kb").getAttribute("aria-invalid") === "true",
+          "Invalid target rejected before encoding",
+        );
+        set("target-kb", "90");
+        set("quality", "40");
+        check(tool.readSettings().targetBytes === 90000, "KB converts to decimal bytes");
+        await tool.processQueue();
+        await tool.offers;
+        check(
+          tool.items.every((item) => item.result),
+          "All three formats encode with a target",
+        );
+        for (const item of tool.items) {
+          check(item.result.width === 360 && item.result.height === 240, `${item.file.name}: no implicit resize`);
+          check(item.blob.type === item.file.type, `${item.file.name}: format preserved`);
+          check(item.result.targetMet === item.blob.size < 90000, `${item.file.name}: target outcome matches downloaded bytes`);
+          if (item.file.type !== "image/png") {
+            check(item.result.targetMet && item.result.quality >= 40, `${item.file.name}: target met within quality floor`);
+          }
+        }
+        check(!tool.items.find((item) => item.type === "image/png").result.lossy, "Lossless PNG stays lossless with a target");
+        set("target-kb", "1");
+        set("png-mode", "lossy");
+        tool.$("resize").click();
+        set("width", "180");
+        set("height", "180");
+        await tool.processQueue();
+        await tool.offers;
+        for (const item of tool.items) {
+          check(item.result.width === 180 && item.result.height === 120, `${item.file.name}: max dimensions preserve ratio`);
+          check(
+            !item.result.targetMet && item.row.textContent.includes("Target not met"),
+            `${item.file.name}: unreachable target disclosed`,
+          );
+        }
+        set("target-kb", "");
+        check(tool.isStale(), "Target changes invalidate results");
+        check(!tool.readSettings().targetBytes, "Blank target restores normal compression");
+        tool.clear();
+        for (let y = 0; y < 240; y++) {
+          for (let x = 0; x < 360; x++) {
+            const i = (y * 360 + x) * 4;
+            pixels.data[i] = Math.floor((x / 360) * 200) + (pixels.data[i] % 8);
+            pixels.data[i + 1] = Math.floor((y / 240) * 200) + (pixels.data[i + 1] % 8);
+            pixels.data[i + 2] = 100;
+          }
+        }
+        ctx.putImageData(pixels, 0, 0);
+        tool.addFiles([
+          new File([await new Promise((resolve) => canvas.toBlob(resolve, "image/png"))], "gradient.png", { type: "image/png" }),
+        ]);
+        tool.$("resize").click();
+        set("target-kb", "30");
+        set("png-mode", "lossy");
+        set("png-quality-preset", "small");
+        await tool.processQueue();
+        await tool.offers;
+        const png = tool.items[0];
+        check(png.result.lossy && png.result.targetMet, "Lossy PNG reaches the target with real quantization");
+        check(png.result.quantizationQuality >= 65 && png.blob.size < 30000, "PNG output respects quality floor and strict byte target");
+        tool.clear();
+        tool.addFiles([
+          new File([await new Promise((resolve) => canvas.toBlob(resolve, "image/webp", 1))], "lossless.webp", { type: "image/webp" }),
+        ]);
+        set("target-kb", "1");
+        await tool.processQueue();
+        await tool.offers;
+        check(!tool.items[0].result.lossy, "A target never converts lossless WebP to lossy");
+        check(document.documentElement.scrollWidth === innerWidth, "No horizontal page overflow");
+        document.querySelector("#result").textContent = `PASS: ${checks.length} checks\n${checks.join("\n")}`;
+      } catch (error) {
+        document.querySelector("#result").textContent = `FAIL: ${error.message}\n${checks.join("\n")}`;
+        throw error;
+      }
+    </script>
+  </body>
+</html>

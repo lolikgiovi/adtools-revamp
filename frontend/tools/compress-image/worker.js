@@ -1,4 +1,5 @@
 import { optimizePng, encodePng, estimateLosslessBytes } from "./png-codec.js";
+import { encodeForTarget } from "./target-encoding.js";
 import { PRESETS, WEBP_LOSSLESS, skipsLosslessPass } from "./config.js";
 import { validatePng, parsePng, makeChunk, fitDimensions } from "./service.js";
 import { inspectImage } from "./image-info.js";
@@ -139,7 +140,8 @@ self.onmessage = async ({ data }) => {
       self.postMessage({ needsPixels: true });
       return;
     }
-    const { type, image, resized, lossyPng, losslessWebp, preset, quality, pngQuality, source } = job;
+    const { type, image, resized, lossyPng, losslessWebp, preset, quality, pngQuality, source, targetBytes: requestedTargetBytes } = job;
+    const targetBytes = job.fitSearch ? 0 : requestedTargetBytes;
     const options = PRESETS[preset];
     if (!options) throw new Error("Unknown compression preset.");
     let result;
@@ -153,12 +155,25 @@ self.onmessage = async ({ data }) => {
       // Lossy first: when it is clearly smaller than the lossless size could be, the slow
       // lossless pass is skipped and the lossy result is compared with the original instead.
       const deep = input.chunks[0].data[8] === 16;
-      const quantized = lossyPng && !deep ? await quantize(image, { ...options.quantize, quality: pngQuality }) : null;
+      const quantized =
+        lossyPng && !deep
+          ? await encodeForTarget(
+              async (target) => {
+                const quantized = await quantize(image, { ...options.quantize, quality: { ...pngQuality, target } });
+                if (!quantized) return null;
+                const optimized = await optimizePng(quantized.bytes, options.png, report, parsePng(quantized.bytes));
+                return { ...optimized, quantizationQuality: quantized.quality };
+              },
+              targetBytes ? pngQuality.min : pngQuality.target,
+              targetBytes,
+              pngQuality.target,
+            )
+          : null;
       if (quantized) {
-        const lossy = await optimizePng(quantized.bytes, options.png, report, parsePng(quantized.bytes));
+        const lossy = quantized;
         const estimate = await estimateLosslessBytes(image);
-        const candidate = { ...lossy, lossy: true, codec: "libimagequant → Oxipng", quantizationQuality: quantized.quality };
-        if (skipsLosslessPass(lossy.bytes.length, estimate)) {
+        const candidate = { ...lossy, lossy: true, codec: "libimagequant → Oxipng", quantizationQuality: quantized.quantizationQuality };
+        if (!job.fitSearch && skipsLosslessPass(lossy.bytes.length, estimate)) {
           report("png.lossless-skipped", { lossyBytes: lossy.bytes.length, estimateBytes: estimate });
           result = { ...candidate, metadataRemovedBytes: 0 };
         } else {
@@ -187,8 +202,17 @@ self.onmessage = async ({ data }) => {
         ? { ...options.webp, ...WEBP_LOSSLESS }
         : { ...(type === "image/jpeg" ? options.jpeg : options.webp), quality };
       report("Encoding", { codec, ...settings, width: image.width, height: image.height });
-      const bytes = new Uint8Array(await encode(image, settings));
-      result = { bytes, width: image.width, height: image.height, codec, lossy: !lossless, metadataRemovedBytes: 0 };
+      const encoded = lossless
+        ? { bytes: new Uint8Array(await encode(image, settings)), quality: settings.quality }
+        : await encodeForTarget(
+            async (quality) => {
+              report("Encoding", { codec, quality, targetBytes: targetBytes || 0 });
+              return { bytes: new Uint8Array(await encode(image, { ...settings, quality })), quality };
+            },
+            quality,
+            targetBytes,
+          );
+      result = { ...encoded, width: image.width, height: image.height, codec, lossy: !lossless, metadataRemovedBytes: 0 };
     }
     result.type = type;
     if (job.decodedInWorker) {

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Compression settings review</title>
+    <style>
+      body {
+        margin: 0;
+        background: #27272a;
+      }
+      iframe {
+        width: 1440px;
+        height: 900px;
+        border: 0;
+        transform-origin: top left;
+      }
+    </style>
+  </head>
+  <body>
+    <iframe title="Compression settings" src="./layout.html?sample&processed"></iframe>
+    <script>
+      const frame = document.querySelector("iframe");
+      if (new URLSearchParams(location.search).has("mobile")) {
+        frame.style.width = "390px";
+        frame.src = "./layout.html?sample&processed";
+      } else {
+        const fit = () => {
+          frame.style.transform = `scale(${Math.min(1, innerWidth / 1440)})`;
+        };
+        fit();
+        addEventListener("resize", fit);
+      }
+    </script>
+  </body>
+</html>

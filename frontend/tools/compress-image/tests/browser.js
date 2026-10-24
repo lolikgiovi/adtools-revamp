@@ -219,7 +219,10 @@ try {
     check(Number(separator.getAttribute("aria-valuenow")) > start, "Pane separator supports keyboard resizing.");
     separator.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
   }
-  check(first.row.querySelector(".ci-method").textContent === "Lossless", "Table reports the actual compression method.");
+  check(
+    first.row.querySelector('[data-variant="lossless"]').getAttribute("aria-pressed") === "true",
+    "Table reports the actual compression method.",
+  );
   const leftHeader = root.querySelector(".ci-batch-header").getBoundingClientRect();
   const rightHeader = root.querySelector(".ci-inspector-header").getBoundingClientRect();
   check(Math.abs(leftHeader.height - rightHeader.height) < 1, "File and preview headers have the same height.");
@@ -1234,63 +1237,18 @@ try {
 
   tool.clear();
   change("resize", false);
-  change("png-quality-preset", "high");
-  select([new File([fixture(320, 320, "gentle")], "offer.png", { type: "image/png" })]);
-  await compress();
-  const offered = tool.items[0];
-  const logsBeforeOffer = offered.logs.length;
-  const losslessBlob = offered.blob;
-  await tool.offers;
-  const offerCard = control("advice-lossy");
-  check(
-    !!offered.alternative && offered.alternative.blob.size < losslessBlob.size,
-    "Idle workers precompute a smaller reduced-color version.",
-  );
-  check(
-    visible(offerCard) && !!offerCard.closest(".ci-batch-header") && !offerCard.closest(".ci-settings"),
-    "The lossy offer lives in the batch actions outside settings, without a color-reduction report.",
-  );
-  const offerSaved = losslessBlob.size - offered.alternative.blob.size;
-  check(
-    control("offer-savings").textContent === `reduce up to ${((offerSaved / losslessBlob.size) * 100).toFixed(1)}% size`,
-    "The lossy button reports the reduction percentage against current PNG output.",
-  );
-  check(offered.logs.length === logsBeforeOffer && offered.status === "Ready", "The offer pass leaves the item's log and status alone.");
-  offerCard.querySelector('[data-ci="use-smaller"]').click();
-  check(
-    offered.blob.size < losslessBlob.size &&
-      offered.result.lossy &&
-      control("png-mode").value === "lossy" &&
-      control("png-quality-preset").value === "balanced" &&
-      offered.row.querySelector(".ci-file-state").textContent === "Compressed" &&
-      !root.textContent.includes("Colors reduced"),
-    "Use smaller swaps in the reduced-color result and selects Lossy with Balanced quality.",
-  );
-  check(control("zip").classList.contains("btn-primary"), "Using the offer keeps results current.");
-  offerCard.querySelector('[data-ci="undo-smaller"]').click();
-  check(
-    offered.blob === losslessBlob && !offered.result.lossy && control("png-mode").value === "lossless",
-    "Undo restores the lossless result.",
-  );
-
-  change("png-mode", "lossy");
+  change("png-quality-preset", "balanced");
+  select([new File([fixture(320, 320, "gentle")], "variants.png", { type: "image/png" })]);
   await compress();
   await tool.offers;
-  check(!visible(control("advice-lossy")), "No offer when lossy PNG is already on.");
-  change("png-mode", "lossless");
-
-  tool.clear();
-  select([new File([fixture(320, 200)], "gradient-offer.png", { type: "image/png" })]);
-  await compress();
-  await tool.offers;
-  check(!visible(control("advice-lossy")) && !tool.items[0].alternative, "No offer when color reduction would not save enough.");
-
-  select([new File([fixture(640, 400, "gentle")], "cancel-offer.png", { type: "image/png" })]);
-  await compress();
-  const pendingOffer = tool.offers;
-  tool.clear();
-  await pendingOffer;
-  check(tool.pool.stats.alive === 0 && !visible(control("advice-lossy")), "Clear cancels the background offer pass.");
+  const variants = tool.items[0];
+  check(!!variants.variants.lossless && !!variants.variants.lossy, "Both PNG results are precomputed per image.");
+  const losslessBlob = variants.blob;
+  variants.row.querySelector('[data-variant="lossy"]').click();
+  check(variants.result.lossy && variants.blob === variants.variants.lossy.blob, "The lossy size selects that file's lossy download.");
+  variants.row.querySelector('[data-variant="lossless"]').click();
+  check(variants.blob === losslessBlob && !variants.result.lossy, "The lossless size restores its original computed result.");
+  check(!root.querySelector('[data-ci="advice-lossy"]'), "Per-image choices replace the batch lossy offer.");
 
   tool.clear();
   select([new File([fixture(320, 200, "gentle")], "settings.png", { type: "image/png" })]);

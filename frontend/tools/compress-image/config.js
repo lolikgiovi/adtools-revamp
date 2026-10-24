@@ -2,7 +2,7 @@
 // 0.17 points more than level 2 at three times the time, so every preset uses 2.
 const PNG_LEVEL = 2;
 
-// Lossless WebP input stays lossless. Here quality is effort, so it ignores the slider:
+// Lossless WebP input stays lossless. Here quality is effort, so it ignores the quality field:
 // on the benchmark pixels, q90/m5 was 1.8% smaller than libwebp's default q75/m4 at 1.8× the
 // time; q100/m6 saved another 1.3% but took 11× longer, up to 30 s for one image.
 export const WEBP_LOSSLESS = Object.freeze({ lossless: 1, exact: 1, quality: 90, method: 5 });
@@ -76,11 +76,12 @@ export function minimumSavings(bytes) {
 
 // A resized baseline always has the requested dimensions. The original does not.
 // Lossy PNG must justify its pixel changes against the best lossless alternative.
-export function selectCandidate({ original, baseline, candidate, resized = false }) {
+export function selectCandidate({ original, baseline, candidate, resized = false, targetBytes = 0 }) {
   const baselineSelected = baseline !== undefined && (resized || baseline < original);
   const reference = baselineSelected ? baseline : original;
   if (candidate !== undefined) {
     if (resized && baseline === undefined) return "candidate";
+    if (targetBytes && reference >= targetBytes && candidate < targetBytes) return "candidate";
     if (reference - candidate >= minimumSavings(reference)) return "candidate";
   }
   return baselineSelected ? "baseline" : "original";
