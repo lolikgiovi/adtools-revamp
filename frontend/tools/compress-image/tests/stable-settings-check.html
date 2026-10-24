@@ -54,23 +54,23 @@
           assert(control("bounds").getBoundingClientRect().height > 0, `${width}: resize fields remain visible`);
           assert(!control("png-quality-preset").disabled, `${width}: PNG quality stays available for precomputed lossy output`);
           assert(!doc.querySelector('input[type="radio"]'), `${width}: PNG uses a select instead of radio cards`);
-          const mode = control("png-mode");
+          assert(!control("png-mode"), `${width}: PNG mode is removed`);
           for (const resize of [true, false]) {
             control("resize").click();
-            for (const pngMode of ["lossy", "lossless"]) {
-              mode.value = pngMode;
-              mode.dispatchEvent(new Event("change", { bubbles: true }));
+            for (const quality of ["small", "high"]) {
+              control("png-quality-preset").value = quality;
+              control("png-quality-preset").dispatchEvent(new Event("change", { bubbles: true }));
               await tick();
               const current = panel.getBoundingClientRect();
               assert(
                 current.height === original.height && current.width === original.width,
-                `${width}: stable panel geometry, resize=${resize}, PNG=${pngMode}`,
+                `${width}: stable panel geometry, resize=${resize}, PNG quality=${quality}`,
               );
               assert(
                 control("width").disabled === !resize && control("height").disabled === !resize,
                 `${width}: resize fields follow the switch`,
               );
-              assert(!control("png-quality-preset").disabled, `${width}: PNG quality stays available for both modes`);
+              assert(!control("png-quality-preset").disabled, `${width}: PNG quality stays available with both resize states`);
             }
           }
           assert(doc.documentElement.scrollWidth === width, `${width}: no page overflow`);

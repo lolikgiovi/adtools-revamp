@@ -49,8 +49,39 @@
         tool.addFiles([new File([blob], "first.png", { type: "image/png" }), new File([blob], "second.png", { type: "image/png" })]);
         set("target-kb", "3");
         set("png-quality-preset", "small");
-        await tool.processQueue();
+        check(!tool.$("png-mode"), "PNG mode setting is removed");
+        const encodeItem = tool.encodeItem.bind(tool);
+        let releaseLossy;
+        const lossyGate = new Promise((resolve) => {
+          releaseLossy = resolve;
+        });
+        tool.encodeItem = async (...args) => {
+          if (args[1].comparePng) await lossyGate;
+          return encodeItem(...args);
+        };
+        const processing = tool.processQueue();
+        const losslessButton = tool.items[0].row.querySelector('[data-variant="lossless"]');
+        const lossyButton = tool.items[0].row.querySelector('[data-variant="lossy"]');
+        check(losslessButton.textContent === "Queued", "Lossless starts with a queued state");
+        const deadline = performance.now() + 15000;
+        while (losslessButton.getAttribute("aria-busy") !== "true") {
+          if (performance.now() > deadline) throw new Error("Lossless encoding did not start");
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+        check(
+          losslessButton.textContent === "Loading" && losslessButton.getAttribute("aria-busy") === "true",
+          "Lossless has a visible loading state",
+        );
+        check(lossyButton.textContent === "Queued", "Lossy shows queued while lossless runs");
+        await processing;
+        check(
+          lossyButton.textContent === "Loading" && lossyButton.getAttribute("aria-busy") === "true",
+          "Lossy has a visible background loading state",
+        );
+        check(losslessButton.dataset.state === "ready", "Completed lossless stays ready while lossy loads");
+        releaseLossy();
         await tool.offers;
+        tool.encodeItem = encodeItem;
         const [first, second] = tool.items;
         check(Object.keys(first.variants).length === 2, "Both real PNG results are retained");
         check(first.variants.lossless.blob !== first.variants.lossy.blob, "Both columns show independently encoded sizes");
@@ -115,6 +146,11 @@
         tool.addFiles([
           new File([await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 1))], "photo.jpg", { type: "image/jpeg" }),
         ]);
+        const jpegLossless = tool.items[0].row.querySelector('[data-variant="lossless"]');
+        check(
+          jpegLossless.textContent === "N/A" && jpegLossless.disabled && jpegLossless.dataset.state === "unavailable",
+          "JPEG lossless is unavailable from upload",
+        );
         set("target-kb", "1");
         set("quality", "40");
         await tool.processQueue();

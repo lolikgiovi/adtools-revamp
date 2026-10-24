@@ -78,7 +78,6 @@
         }
         check(!tool.items.find((item) => item.type === "image/png").result.lossy, "Lossless PNG stays lossless with a target");
         set("target-kb", "1");
-        set("png-mode", "lossy");
         tool.$("resize").click();
         set("width", "180");
         set("height", "180");
@@ -109,10 +108,10 @@
         ]);
         tool.$("resize").click();
         set("target-kb", "30");
-        set("png-mode", "lossy");
         set("png-quality-preset", "small");
         await tool.processQueue();
         await tool.offers;
+        tool.selectVariant(tool.items[0], "lossy");
         const png = tool.items[0];
         check(png.result.lossy && png.result.targetMet, "Lossy PNG reaches the target with real quantization");
         check(png.result.quantizationQuality >= 65 && png.blob.size < 30000, "PNG output respects quality floor and strict byte target");

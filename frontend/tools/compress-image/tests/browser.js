@@ -153,7 +153,15 @@ const tool = new CompressImage();
 tool.mount(document.querySelector("#tool"));
 const root = document.querySelector("#tool");
 const control = (name) => root.querySelector(`[data-ci="${name}"]`);
+let codecLossyPng = false;
+const readUiSettings = tool.readSettings.bind(tool);
+tool.readSettings = () => ({ ...readUiSettings(), lossyPng: codecLossyPng });
 function change(name, value) {
+  if (name === "png-mode") {
+    codecLossyPng = value === "lossy";
+    tool.updateSettings();
+    return;
+  }
   const input = control(name);
   if (input.type === "checkbox" || input.type === "radio") input.checked = value;
   else input.value = value;
@@ -165,9 +173,10 @@ async function compress() {
 }
 try {
   check(
-    control("preset").value === "balanced" && control("png-mode").value === "lossless" && !control("resize").checked,
+    control("preset").value === "balanced" && !codecLossyPng && !control("resize").checked,
     "Lossless with original dimensions is the default.",
   );
+  check(!control("png-mode"), "PNG mode is absent; both encodings are prepared.");
   // Flow failures (empty state): more than the drop target competing for attention.
   // Rendered and not visibility-hidden: hidden placeholder cells keep their space but are not shown.
   const visible = (element) =>
@@ -734,13 +743,13 @@ try {
   change("preset", "balanced");
   change("png-mode", "lossless");
   change("preset", "high");
-  check(control("png-mode").value === "lossless", "High Quality leaves PNG lossless.");
+  check(!codecLossyPng, "High Quality leaves PNG lossless.");
   change("preset", "small");
-  check(control("png-mode").value === "lossless", "JPEG/WebP presets leave PNG lossless.");
+  check(!codecLossyPng, "JPEG/WebP presets leave PNG lossless.");
   change("png-mode", "lossy");
   check(!control("png-quality-preset").disabled, "Lossy PNG enables its quality selector.");
   change("preset", "balanced");
-  check(control("png-mode").value === "lossy", "Switching away from Smaller File keeps lossy PNG on.");
+  check(codecLossyPng, "Switching away from Smaller File keeps lossy PNG on.");
   change("preset", "small");
   select([new File([fixture(320, 200, "gentle")], "smaller.png", { type: "image/png" })]);
   await compress();
@@ -1181,7 +1190,7 @@ try {
   );
   check(tool.selected === tool.items[0] && visible(root.querySelector(".ci-original-preview")), "Queued files open an original preview.");
   check(
-    tool.items[0].row.querySelector(".ci-download").disabled && tool.items[0].row.querySelector(".ci-after").textContent.includes("—"),
+    tool.items[0].row.querySelector(".ci-download").disabled && tool.items[0].row.querySelector(".ci-after").textContent.includes("Queued"),
     "Queued rows retain the result column and disable download until a result exists.",
   );
   tool.clear();

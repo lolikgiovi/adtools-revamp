@@ -7,7 +7,8 @@ Verified locally on 2026-10-24. Browser proof covers real codecs, Workers, image
 - Wide settings share one control row; narrower layouts wrap. Max dimensions uses the Quick Query toggle treatment and preserves aspect ratio without cropping or upscaling.
 - Target size is optional and uses decimal KB. Success means the downloaded file is strictly below `KB × 1000` bytes.
 - JPEG/WebP quality is a number. With a target, it is the quality floor. PNG presets retain their quantization quality floors.
-- PNG mode chooses the initial result. Both PNG encodings are prepared at the chosen quality settings, including lossy results that are larger than lossless output. An unavailable lossy result reports its quality/codec reason.
+- PNG starts on lossless with no mode setting. PNG Lossy Quality controls the precomputed lossy result. Both PNG encodings are prepared, including lossy results that are larger than lossless output. An unavailable lossy result reports its quality/codec reason.
+- Result cells show Queued, Loading with a spinner, completed sizes, or N/A/Failed. JPEG lossless is muted and unavailable immediately on upload. Loading exposes aria-busy and respects reduced motion.
 - The table shows file name, dimensions, original size, lossless size, and lossy size, plus the download action. Info icons explain the difference. Each size is a per-image selection; previews, individual downloads, and ZIP use the chosen bytes.
 - A missed target offers **Fit to target** when no existing lossy result meets it. Clicking is the explicit authorization to reduce dimensions for that image.
 - Dimension fitting searches the longest edge at the selected quality floor, compares permitted encodings, then re-encodes/verifies the final result within the quality limit. Aspect ratio is preserved. The search keeps the largest verified fit found by a bounded binary search; codec size is not mathematically monotonic across every dimension.

@@ -57,7 +57,7 @@
 }
 .ci-settings {
   display: grid;
-  grid-template-columns: minmax(320px, 2.2fr) minmax(120px, 0.8fr) minmax(260px, 1.8fr) minmax(300px, 2fr);
+  grid-template-columns: minmax(320px, 2.2fr) minmax(120px, 0.8fr) minmax(150px, 1fr) minmax(300px, 2fr);
   width: 100%;
   min-width: 0;
   flex: none;
@@ -120,8 +120,7 @@
 .ci-format-settings input[type="number"] {
   font-variant-numeric: tabular-nums;
 }
-.ci-photo-controls,
-.ci-png-controls {
+.ci-photo-controls {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: end;
@@ -912,4 +911,32 @@
 }
 .compress-image .ci-fit-target {
   margin-top: 6px;
+}
+
+.ci-variant[data-state="loading"],
+.ci-variant[data-state="queued"] {
+  opacity: 1;
+  color: hsl(var(--muted-foreground));
+}
+.ci-variant[data-state="loading"]::before {
+  border-top-color: transparent;
+  animation: ci-result-loading 800ms linear infinite;
+}
+.ci-variant[data-state="unavailable"] {
+  border-color: transparent;
+  background: hsl(var(--muted) / 0.5);
+  color: hsl(var(--muted-foreground));
+}
+.ci-variant[data-state="unavailable"]::before {
+  display: none;
+}
+@keyframes ci-result-loading {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ci-variant[data-state="loading"]::before {
+    animation: none;
+  }
 }

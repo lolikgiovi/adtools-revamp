@@ -1,4 +1,5 @@
 Lossless with original dimensions is the default.
+PNG mode is absent; both encodings are prepared.
 Empty state keeps settings and pane actions visible alongside the drop target.
 Multiple files queue before explicit compression.
 Real savings and verified results above 300 KB are downloadable.

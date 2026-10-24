@@ -75,8 +75,7 @@ export class CompressImage extends BaseTool {
         </fieldset>
         <fieldset class="ci-format-settings" data-ci="png-settings" disabled><legend class="sr-only">PNG compression</legend>
           <div class="ci-png-controls">
-            <label>PNG compression mode<select data-ci="png-mode" name="png-mode" title="Default PNG choice. Both results are prepared; choose lossless or lossy for each image in the table." aria-description="Default PNG choice. Both results are prepared; choose lossless or lossy for each image in the table." data-searchable-dropdown-ignore><option value="lossless">Lossless</option><option value="lossy">Lossy</option></select></label>
-            <label data-ci="png-quality" title="Minimum quantization quality: High 90, Balanced 80, Smaller file 65. Higher allows less quality loss.">PNG compression quality<select data-ci="png-quality-preset" name="png-quality" data-searchable-dropdown-ignore disabled><option value="high">High quality</option><option value="balanced" selected>Balanced</option><option value="small">Smaller file</option></select></label>
+            <label data-ci="png-quality" title="Minimum quantization quality: High 90, Balanced 80, Smaller file 65. Higher allows less quality loss.">PNG Lossy Quality<select data-ci="png-quality-preset" name="png-quality" data-searchable-dropdown-ignore disabled><option value="high">High quality</option><option value="balanced" selected>Balanced</option><option value="small">Smaller file</option></select></label>
           </div>
         </fieldset>
         <fieldset class="ci-format-settings" data-ci="photo-settings" disabled><legend class="sr-only">JPEG &amp; WebP compression</legend>
@@ -162,7 +161,7 @@ export class CompressImage extends BaseTool {
   readSettings() {
     return {
       preset: this.$("preset").value,
-      lossyPng: this.$("png-mode").value === "lossy",
+      lossyPng: false,
       pngQuality: { ...PRESETS[this.$("png-quality-preset").value]?.quantize.quality },
       resize: this.$("resize").checked,
       quality: Number(this.$("quality").value),
@@ -305,8 +304,7 @@ export class CompressImage extends BaseTool {
       !Number.isInteger(settings.quality) ||
       settings.quality < 1 ||
       settings.quality > 100 ||
-      (settings.lossyPng &&
-        this.items.some((item) => (item.type || item.file.type) === "image/png") &&
+      (this.items.some((item) => (item.type || item.file.type) === "image/png") &&
         (!Number.isInteger(settings.pngQuality.min) ||
           !Number.isInteger(settings.pngQuality.target) ||
           settings.pngQuality.min < 0 ||
@@ -338,6 +336,7 @@ export class CompressImage extends BaseTool {
     const pending = [...this.items];
     pending.forEach((item) => {
       item.status = "Queued";
+      item.primaryPending = (item.type || item.file.type) === "image/jpeg" ? "lossy" : settings.lossyPng ? "lossy" : "lossless";
       this.updateRow(item);
     });
     this.updateSummary();
@@ -453,6 +452,7 @@ export class CompressImage extends BaseTool {
     }
     const batch = (this.batch = new AbortController());
     this.running = true;
+    item.fitting = true;
     item.status = "Compressing…";
     this.error("");
     this.updateSummary();
@@ -520,6 +520,7 @@ export class CompressImage extends BaseTool {
     } finally {
       if (generation === this.generation) {
         this.running = false;
+        delete item.fitting;
         item.status = "Ready";
         this.updateRow(item);
         this.updateSummary();
@@ -792,20 +793,51 @@ export class CompressImage extends BaseTool {
     row.querySelectorAll("[data-variant]").forEach((button) => {
       const name = button.dataset.variant;
       const variant = variants[name];
-      button.textContent = variant ? size(variant.blob.size) : item.variantPending === name ? "…" : "—";
-      button.disabled = !variant || this.running || this.zipping || item.status === "Compressing…";
+      const type = item.type || item.file.type;
+      const unavailable = type === "image/jpeg" && name === "lossless";
+      const processing = item.status === "Compressing…";
+      const queued = item.status === "Queued";
+      const loading =
+        !unavailable &&
+        (item.variantPending === name || (processing && (item.fitting || type !== "image/png" || name === item.primaryPending)));
+      const waiting =
+        !unavailable &&
+        !loading &&
+        (queued ||
+          (processing && type === "image/png") ||
+          (!variant && type === "image/png" && item.status === "Ready" && !item.lossyUnavailable && !item.variantError));
+      const state = unavailable
+        ? "unavailable"
+        : loading
+          ? "loading"
+          : waiting
+            ? "queued"
+            : variant
+              ? "ready"
+              : item.status === "Error" || item.variantError
+                ? "error"
+                : "unavailable";
+      button.dataset.state = state;
+      button.setAttribute("aria-busy", String(loading));
+      button.textContent =
+        state === "ready" ? size(variant.blob.size) : { loading: "Loading", queued: "Queued", unavailable: "N/A", error: "Failed" }[state];
+      button.disabled = state !== "ready" || this.running || this.zipping || processing;
       button.setAttribute("aria-pressed", String(!!variant && variant.blob === item.blob));
       button.setAttribute(
         "aria-label",
-        `${name === "lossless" ? "Lossless" : "Lossy"} result for ${item.file.name}${variant ? `, ${size(variant.blob.size)}` : ", unavailable"}`,
+        `${name === "lossless" ? "Lossless" : "Lossy"} result for ${item.file.name}, ${state === "ready" ? size(variant.blob.size) : state}`,
       );
-      button.title = variant
-        ? `${variant.result.originalKept ? "Original kept · " : ""}${variant.result.width} × ${variant.result.height} · ${savings(item.file.size, variant.blob.size)}${variant.result.targetBytes ? ` · Target ${variant.result.targetMet ? "met" : "not met"}` : ""}`
-        : item.lossyUnavailable ||
-          item.variantError ||
-          (item.file.type === "image/jpeg" && name === "lossless"
-            ? "JPEG has no lossless re-encoding. The original is available in the preview."
-            : "No result available.");
+      button.title = loading
+        ? "Compressing this result…"
+        : waiting
+          ? "Waiting to compress this result."
+          : variant
+            ? `${variant.result.originalKept ? "Original kept · " : ""}${variant.result.width} × ${variant.result.height} · ${savings(item.file.size, variant.blob.size)}${variant.result.targetBytes ? ` · Target ${variant.result.targetMet ? "met" : "not met"}` : ""}`
+            : item.lossyUnavailable ||
+              item.variantError ||
+              (type === "image/jpeg" && name === "lossless"
+                ? "JPEG has no lossless re-encoding. The original is available in the preview."
+                : "No result available.");
       button.setAttribute("aria-description", button.title);
       button.closest("td").classList.toggle("ci-reduced", !!variant && variant.blob.size < item.file.size);
     });
@@ -992,7 +1024,7 @@ export class CompressImage extends BaseTool {
     this.items.forEach((item) => {
       item.row.querySelector(".ci-download").disabled = !item.result || this.running || this.zipping;
       item.row.querySelectorAll("[data-variant]").forEach((button) => {
-        button.disabled = !item.variants?.[button.dataset.variant] || this.running || this.zipping;
+        button.disabled = button.dataset.state !== "ready" || this.running || this.zipping;
       });
       item.row.querySelector(".ci-fit-target").disabled = this.running || this.zipping;
     });

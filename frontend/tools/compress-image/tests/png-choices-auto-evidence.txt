@@ -1,4 +1,10 @@
-PASS: 21 checks
+PASS: 28 checks
+PNG mode setting is removed
+Lossless starts with a queued state
+Lossless has a visible loading state
+Lossy shows queued while lossless runs
+Lossy has a visible background loading state
+Completed lossless stays ready while lossy loads
 Both real PNG results are retained
 Both columns show independently encoded sizes
 Default selection stays lossless
@@ -17,6 +23,7 @@ Individual download uses the selected fitted bytes
 ZIP uses each row's chosen bytes
 Fitting rejects stale settings
 Clear releases variant workers and URLs
+JPEG lossless is unavailable from upload
 JPEG also offers fitting after missing the target
 JPEG dimension fitting preserves format and meets target
 JPEG fitting respects the quality floor
