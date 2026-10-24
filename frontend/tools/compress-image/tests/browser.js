@@ -4,7 +4,7 @@ import { UsageTracker } from "../../../core/UsageTracker.js";
 
 // Fixture processing must not change real usage counts.
 UsageTracker.trackToolUse = () => {};
-import { CompressImage, formatSize } from "../main.js";
+import { CompressImage } from "../main.js";
 import { makeChunk } from "../service.js";
 import { inspectImage } from "../image-info.js";
 import encodeWebp, { init as initWebp } from "@jsquash/webp/encode.js";
@@ -192,7 +192,13 @@ try {
   check(invalid.status === "Error" && !!text.result, "An invalid image fails independently; later files still complete.");
   check(text.result.metadataRemovedBytes === 343421, "Lossless compression removes text comments and preserves rendering metadata.");
   check(text.row.textContent.includes("800 × 500"), "File rows show output dimensions.");
-  check(root.querySelector(".ci-summary").textContent.includes("saved"), "Batch totals report actual byte savings.");
+  check(!root.querySelector(".ci-status, .ci-summary, [data-ci=ready-count]"), "Batch header omits counts and aggregate savings.");
+  check(root.querySelectorAll("thead th").length === 6, "File table omits the Resize column.");
+  check(
+    first.row.querySelector(".ci-after").classList.contains("ci-reduced"),
+    "Smaller output size and percentage share the success color.",
+  );
+  check(first.row.querySelector(".ci-file-state").textContent === "Compressed", "Successful rows report Compressed.");
   const original = new Image();
   original.src = first.before;
   await original.decode();
@@ -1006,7 +1012,7 @@ try {
     change("resize", false);
     select(files);
     const progress = new Set();
-    const watcher = setInterval(() => progress.add(root.querySelector(".ci-summary").textContent), 5);
+    const watcher = setInterval(() => tool.items.forEach((item) => progress.add(item.row.querySelector(".ci-file-state").textContent)), 5);
     await compress();
     clearInterval(watcher);
     return { items: [...tool.items], progress: [...progress] };
@@ -1025,18 +1031,14 @@ try {
   check(tool.pool.size === 1 || peakOverlap(sixSpans) > 1, "Jobs run in parallel when the pool has more than one worker.");
   check(tool.pool.stats.created - createdBefore <= tool.pool.size, "A batch starts no more workers than the pool size.");
   check(
-    six.progress.some((text) => /Compressing/.test(text) && /\d+ of 6/.test(text)),
-    "The summary shows how many images are done while compressing.",
+    six.progress.some((text) => /…/.test(text)),
+    "File rows show processing stages while compressing.",
   );
   check(
-    root.querySelector('[data-ci="ready-count"]').textContent === "6 of 6 ready",
-    "The ready count is right after out-of-order finishes.",
+    six.items.every((item) => item.row.querySelector(".ci-file-state").textContent === "Compressed"),
+    "Every row reports completion after out-of-order finishes.",
   );
-  const expectedSaved = six.items.reduce((sum, item) => sum + item.file.size - item.blob.size, 0);
-  check(
-    expectedSaved > 0 && root.querySelector(".ci-summary").textContent.includes("saved"),
-    "The batch total is reported after out-of-order finishes.",
-  );
+  check(!root.querySelector(".ci-summary"), "Aggregate savings stay absent after out-of-order finishes.");
   await tool.downloadZip();
   const poolZip = await JSZip.loadAsync(await downloaded.blob.arrayBuffer());
   check(Object.keys(poolZip.files).length === 6, "The ZIP holds every image after out-of-order finishes.");
@@ -1174,7 +1176,7 @@ try {
   check(wide.result.width === 1440 && fits.result.width === 320, "The chosen size shrinks only images larger than it.");
   check(
     !/Optimized|Lossless result used|Lossy PNG accepted|px/.test(fits.row.querySelector(".ci-file-state").textContent) &&
-      wide.row.querySelector(".ci-file-state").textContent === "Resized" &&
+      wide.row.querySelector(".ci-file-state").textContent === "Compressed · Resized" &&
       wide.row.querySelector(".ci-dimensions").textContent.includes("1440 × 108"),
     "Row notes give dimensions in one format and only news, never engine terms.",
   );
@@ -1196,6 +1198,7 @@ try {
 
   tool.clear();
   change("resize", false);
+  change("png-quality-preset", "high");
   select([new File([fixture(320, 320, "gentle")], "offer.png", { type: "image/png" })]);
   await compress();
   const offered = tool.items[0];
@@ -1208,8 +1211,13 @@ try {
     "Idle workers precompute a smaller reduced-color version.",
   );
   check(
-    visible(offerCard) && offerCard.textContent.includes(`${formatSize(losslessBlob.size)} → ${formatSize(offered.alternative.blob.size)}`),
-    "The offer shows the real sizes before and after.",
+    visible(offerCard) && !!offerCard.closest(".ci-batch-header") && !offerCard.closest(".ci-settings"),
+    "The lossy offer lives in the batch actions outside settings, without a color-reduction report.",
+  );
+  const offerSaved = losslessBlob.size - offered.alternative.blob.size;
+  check(
+    control("offer-savings").textContent === `reduce up to ${((offerSaved / losslessBlob.size) * 100).toFixed(1)}% size`,
+    "The lossy button reports the reduction percentage against current PNG output.",
   );
   check(offered.logs.length === logsBeforeOffer && offered.status === "Ready", "The offer pass leaves the item's log and status alone.");
   offerCard.querySelector('[data-ci="use-smaller"]').click();
@@ -1217,8 +1225,10 @@ try {
     offered.blob.size < losslessBlob.size &&
       offered.result.lossy &&
       control("png-mode").value === "lossy" &&
-      offered.row.textContent.includes("Colors reduced"),
-    "Use smaller swaps in the reduced-color result and turns on lossy PNG.",
+      control("png-quality-preset").value === "balanced" &&
+      offered.row.querySelector(".ci-file-state").textContent === "Compressed" &&
+      !root.textContent.includes("Colors reduced"),
+    "Use smaller swaps in the reduced-color result and selects Lossy with Balanced quality.",
   );
   check(control("zip").classList.contains("btn-primary"), "Using the offer keeps results current.");
   offerCard.querySelector('[data-ci="undo-smaller"]').click();

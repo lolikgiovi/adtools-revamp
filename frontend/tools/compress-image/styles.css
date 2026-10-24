@@ -260,21 +260,11 @@
   flex-wrap: wrap;
   gap: 5px;
 }
-.ci-status {
-  flex-basis: 100%;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-  margin: 0;
-  line-height: 1.5;
-  font-variant-numeric: tabular-nums;
+.compress-image .ci-lossy-offer {
+  white-space: nowrap;
 }
-.ci-count {
-  font-weight: 600;
-}
-.ci-summary {
-  color: hsl(var(--muted-foreground));
-  font-size: 11px;
+.ci-offer-savings {
+  color: hsl(var(--success));
 }
 .ci-list {
   min-height: 0;
@@ -284,7 +274,7 @@
 }
 .ci-list table {
   width: 100%;
-  min-width: 680px;
+  min-width: 590px;
   border-collapse: collapse;
   font-variant-numeric: tabular-nums;
   font-size: 11px;
@@ -354,13 +344,14 @@
   margin-top: 5px;
   color: hsl(var(--muted-foreground));
 }
-.ci-reduced {
-  color: hsl(var(--foreground));
+.ci-after.ci-reduced,
+.ci-after.ci-reduced .ci-saved {
+  color: hsl(var(--success));
 }
 .ci-file-warning {
-  color: hsl(var(--foreground));
-  text-decoration: underline dotted;
-  text-underline-offset: 3px;
+  color: hsl(var(--muted-foreground));
+  font-size: 10px;
+  font-weight: 400;
 }
 .ci-error .ci-file-state,
 .ci-error-message {

@@ -1,0 +1,142 @@
+Lossless with original dimensions is the default.
+Empty state keeps settings and pane actions visible alongside the drop target.
+Multiple files queue before explicit compression.
+Real savings and verified results above 300 KB are downloadable.
+An invalid image fails independently; later files still complete.
+Lossless compression removes text comments and preserves rendering metadata.
+File rows show output dimensions.
+Batch header omits counts and aggregate savings.
+File table omits the Resize column.
+Smaller output size and percentage share the success color.
+Successful rows report Compressed.
+Lossless output has identical browser-rendered RGBA including transparency.
+Side by side opens first.
+Pane separator supports keyboard resizing.
+Table reports the actual compression method.
+Trackpad pinch wheel events zoom the linked preview.
+Two touch pointers pinch from fit to 2× zoom.
+Dragging pans both images by the same amount.
+Cancelled gestures cannot leave pan stuck.
+Zoom and keyboard pan stay linked between panes.
+Hover indicates matching positions in both panes.
+Slider changes the clipping boundary while image geometry stays aligned.
+Visible divider tracks the slider.
+The on-image divider has a keyboard alternative to dragging.
+Dragging the on-image divider updates both clipping and the range control.
+Original bytes remain directly downloadable alongside the comparison.
+JPEG output preserves the original jpeg extension.
+ZIP includes every successful image and excludes failures.
+Opt-in lossy PNG stays PNG and accepts a useful quantized result.
+Quantization reports a named stage.
+Lossy PNG that is clearly smaller skips the lossless pass.
+Warm workers are reused across files and runs.
+Invalid candidates preserve prior results and cannot hide behind size fallback.
+JPEG/WebP presets preserve PNG quality controls.
+EXIF-rotated JPEG retains displayed orientation and dimensions.
+WebP preserves the semi-transparent alpha sample.
+MozJPEG preserves JPEG format and extension.
+libwebp preserves WebP format.
+Real WASM codecs report their identities.
+Resize happens before optimization and fits bounds without stretching.
+JPEG resizing retains target dimensions and format.
+Resized output is never labeled identical to original pixels.
+Unattainable quantization quality falls back to lossless PNG at the target dimensions.
+Invalid PNG quality selections preserve previous results.
+Invalid resize bounds preserve existing results.
+Clear cancels in-flight work and removes stale results.
+Adam7 PNG remains pixel-identical after deinterlacing optimization.
+16-bit PNG stays on the lossless path even when color reduction is enabled.
+ZIP keeps duplicate filenames as separate files.
+Individual download uses the selected result with the matching extension.
+The tool does not overflow the viewport horizontally.
+File input has an accessible name.
+Batch download is grouped with results.
+Selected image is exposed to assistive technology.
+Invalid height is identified and focused.
+ZIP generation exposes a busy label.
+PNG with an embedded ICC profile compresses losslessly instead of failing.
+Lossless PNG output is identical across presets.
+The lossless WebP fixture is VP8L.
+Lossless WebP input stays lossless WebP.
+Lossless WebP reports libwebp lossless encoding.
+Lossless WebP output decodes to identical pixels.
+Lossless WebP detail text says lossless, not quality or PNG.
+The JPEG/WebP quality slider does not change lossless WebP output.
+Lossless WebP never comes back larger than the original.
+Resized lossless WebP uses lossy encoding at the target size.
+Lossless PNG keeps its dimensions without a main-thread decode.
+Lossless PNG is not decoded at all just to read its size.
+Adam7 PNG keeps its size without the decode.
+Resized PNG still decodes its pixels.
+Lossy PNG still decodes its pixels.
+PNG data is never decompressed on the main thread.
+Lossless PNG validates the source and the output once each.
+Lossy PNG that skips the lossless pass validates the source and its one output.
+Resized PNG validates the source and the output once each.
+High Quality leaves PNG lossless.
+JPEG/WebP presets leave PNG lossless.
+Lossy PNG enables its quality selector.
+Switching away from Smaller File keeps lossy PNG on.
+Smaller File compresses PNG with color reduction.
+A 12 MP JPEG compresses.
+Compressing a 12 MP JPEG never blocks the main thread for 50 ms (longest task 0 ms).
+The P3 fixture carries an ICC profile, so color conversion is exercised.
+JPEG, WebP and PNG all compress with decoding in the worker.
+Compression makes no image decode or getImageData call on the main thread (0 decodes, 0 reads).
+Each image reports that the worker decoded it.
+The worker applies EXIF orientation.
+The worker converts P3 to sRGB like the <img> path (132,101,73,255 vs 132,101,73,255).
+The forced fallback decodes on the main thread and says so.
+Worker resizing is as close to an ideal downscale as the main-thread path (translucent.webp worker 0.66 vs main 0.66, lossless.webp worker 9.99 vs main 9.99, p3.png worker 0.00 vs main 0.00, decoder-lossy.png worker 0.61 vs main 0.61).
+A shrunk JPEG stays within 8 per channel of the main-thread result after re-encoding (6).
+An EXIF-rotated JPEG at full size gives byte-identical results on both decoders.
+An image the worker cannot decode fails on its own; the next one still compresses.
+A clearly smaller lossy PNG is accepted without the lossless pass.
+A skipped lossless pass still requires the usual saving over the original.
+A smooth gradient keeps the lossless pass, and lossless wins.
+When both passes run, each output is validated once.
+Resized lossy PNG skips the lossless pass too.
+When the quality floor fails, the lossless pass runs and its result is used.
+A batch of 6 completes, and each image records when its worker started.
+No more jobs run at once than the pool has workers (3 of 3).
+Jobs run in parallel when the pool has more than one worker.
+A batch starts no more workers than the pool size.
+File rows show processing stages while compressing.
+Every row reports completion after out-of-order finishes.
+Aggregate savings stay absent after out-of-order finishes.
+The ZIP holds every image after out-of-order finishes.
+A second batch reuses the warm workers.
+With a tiny memory budget, jobs run one at a time and each over-budget job still finishes.
+A corrupt file and a timed-out file fail on their own; the rest finish.
+Results are byte-identical with one worker and with the full pool.
+Clear all during a batch stops every worker.
+Clear all during a batch leaves no object URL behind (0 left).
+A new batch works after cancelling.
+Images that fit a phone get no size card.
+Rows show each image's dimensions before compressing.
+Before compressing, Compress is the primary action and there is nothing to download.
+Settings remain visible after upload.
+Resize uses an accessible toggle.
+Irrelevant photo settings stay visible and disabled.
+Queued files open an original preview.
+Queued rows retain the result column and disable download until a result exists.
+One oversized image gets one size card.
+The size card starts on Keep original.
+Choosing phone full width sets the resize bounds to 1440 × 3200.
+Choosing a size does not start compressing.
+The chosen size shrinks only images larger than it.
+Row notes give dimensions in one format and only news, never engine terms.
+On narrow screens the comparison stacks Original above Result at the image's shape.
+After compressing, Download ZIP becomes the primary action.
+Changing a choice after compressing makes Compress primary again.
+Idle workers precompute a smaller reduced-color version.
+The lossy offer lives in the batch actions outside settings, without a color-reduction report.
+The lossy button reports additional byte and percentage savings against current PNG output.
+The offer pass leaves the item's log and status alone.
+Use smaller swaps in the reduced-color result and selects Lossy with Balanced quality.
+Using the offer keeps results current.
+Undo restores the lossless result.
+No offer when lossy PNG is already on.
+No offer when color reduction would not save enough.
+Clear cancels the background offer pass.
+A settings error opens the settings and focuses the field.
