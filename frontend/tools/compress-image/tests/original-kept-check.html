@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Original kept tooltip verification</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body style="padding: 24px">
+    <pre id="evidence">Running…</pre>
+    <div id="tool"></div>
+    <script type="module">
+      import { CompressImage } from "../main.js";
+      import { UsageTracker } from "../../../core/UsageTracker.js";
+      UsageTracker.trackToolUse = () => {};
+      document.documentElement.classList.add("dark-grey");
+      const evidence = document.querySelector("#evidence");
+      const checks = [];
+      const check = (condition, message) => {
+        if (!condition) throw new Error(message);
+        checks.push(message);
+      };
+      try {
+        const tool = new CompressImage();
+        tool.mount(document.querySelector("#tool"));
+        const canvas = document.createElement("canvas");
+        canvas.width = canvas.height = 32;
+        canvas.getContext("2d").fillRect(0, 0, 32, 32);
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.75));
+        check(blob.size < 1024, "JPEG fixture is below the minimum saving");
+        const input = document.querySelector("#ci-files");
+        const transfer = new DataTransfer();
+        transfer.items.add(new File([blob], "small-photo.jpeg", { type: "image/jpeg" }));
+        input.files = transfer.files;
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        await tool.processQueue();
+        const item = tool.items[0];
+        check(item.result.originalKept, "Real MozJPEG result retains original below saving threshold");
+        check(item.result.minimumSavingBytes === 1024, "Encoding records the file-specific saving requirement");
+        check(item.row.querySelector(".ci-method").textContent === "Unchanged", "Method shows Unchanged");
+        const info = item.row.querySelector(".ci-kept-info");
+        const tip = item.row.querySelector(".ci-kept-tooltip");
+        check(!info.hidden, "Circled information button is visible beside Original kept");
+        check(tip.textContent.includes("1% or 1,024 bytes, whichever is larger"), "Tooltip explains the threshold");
+        info.focus();
+        check(tip.matches(":popover-open"), "Keyboard focus opens the tooltip");
+        check(document.activeElement === info, "Tooltip preserves keyboard focus");
+        info.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+        check(!tip.matches(":popover-open"), "Escape dismisses the tooltip");
+        info.blur();
+        info.dispatchEvent(new PointerEvent("pointerenter"));
+        check(tip.matches(":popover-open"), "Hover opens the tooltip");
+        const box = tip.getBoundingClientRect();
+        check(
+          box.left >= 0 && box.right <= innerWidth && box.top >= 0 && box.bottom <= innerHeight,
+          "Tooltip fits the viewport without table clipping",
+        );
+        info.dispatchEvent(new PointerEvent("pointerleave"));
+        check(!tip.matches(":popover-open"), "Pointer leave dismisses the tooltip");
+        info.click();
+        check(tip.matches(":popover-open"), "Tap opens the tooltip");
+        evidence.textContent = `PASS: ${checks.length} checks\n${checks.join("\n")}`;
+      } catch (error) {
+        evidence.textContent = `FAIL: ${error.stack}`;
+      }
+    </script>
+  </body>
+</html>

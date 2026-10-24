@@ -250,7 +250,10 @@ export class CompressImage extends BaseTool {
   createRow(item) {
     const row = document.createElement("tr");
     row.className = "ci-file-row";
-    row.innerHTML = `<th scope="row"><button type="button" class="ci-select" aria-pressed="false"><span class="ci-filename"></span><span class="ci-file-state" role="status" aria-live="polite"></span><span class="ci-file-warning" hidden>Resize suggestion</span></button></th>
+    row.innerHTML = `<th scope="row"><button type="button" class="ci-select" aria-pressed="false"><span class="ci-filename"></span></button>
+      <div class="ci-file-outcome"><span class="ci-file-state" role="status" aria-live="polite"></span>
+      <button type="button" class="ci-kept-info" aria-label="Why the original was kept" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 7v4"/><circle cx="8" cy="4.8" r=".6" fill="currentColor" stroke="none"/></svg></button>
+      <span class="ci-kept-tooltip" role="tooltip" popover="manual"></span></div><span class="ci-file-warning" hidden>Resize suggestion</span></th>
       <td class="ci-dimensions">—</td><td class="ci-before"></td><td class="ci-after"><span class="ci-output-size">—</span><span class="ci-saved"></span></td><td class="ci-method">—</td>
       <td><button type="button" class="btn btn-ghost btn-sm ci-download" disabled><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 2v8m-3-3 3 3 3-3M3 11v3h10v-3"/></svg></button></td>`;
     row.querySelector(".ci-filename").textContent = item.file.name;
@@ -261,6 +264,28 @@ export class CompressImage extends BaseTool {
     });
     row.querySelector(".ci-download").addEventListener("click", () => this.download(item.blob, this.outputName(item)));
     row.querySelector(".ci-download").setAttribute("aria-label", `Download ${item.file.name}`);
+    const info = row.querySelector(".ci-kept-info");
+    const tooltip = row.querySelector(".ci-kept-tooltip");
+    tooltip.id = `ci-kept-${crypto.randomUUID()}`;
+    info.setAttribute("aria-describedby", tooltip.id);
+    const hideTip = () => tooltip.hidePopover();
+    const showTip = () => {
+      tooltip.showPopover();
+      const anchor = info.getBoundingClientRect();
+      const box = tooltip.getBoundingClientRect();
+      tooltip.style.left = `${Math.max(8, Math.min(anchor.left, innerWidth - box.width - 8))}px`;
+      tooltip.style.top = `${Math.max(8, Math.min(anchor.bottom + 6, innerHeight - box.height - 8))}px`;
+    };
+    info.addEventListener("pointerenter", showTip);
+    info.addEventListener("pointerleave", () => {
+      if (document.activeElement !== info) hideTip();
+    });
+    info.addEventListener("focus", showTip);
+    info.addEventListener("blur", hideTip);
+    info.addEventListener("click", showTip);
+    info.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") hideTip();
+    });
     item.row = row;
     this.container.querySelector(".ci-results").appendChild(row);
     this.updateRow(item);
@@ -528,6 +553,7 @@ export class CompressImage extends BaseTool {
           resized,
           lossy,
           originalKept,
+          minimumSavingBytes: result.lossy ? minimumSavings(item.file.size) : 0,
           outcome,
           codec: lossy ? result.codec : expected.type === "image/png" ? "Oxipng" : result.codec,
           quality: settings.quality,
@@ -619,7 +645,7 @@ export class CompressImage extends BaseTool {
       resized.textContent = `→ ${result.width} × ${result.height}`;
       dimensions.append(resized);
     }
-    row.querySelector(".ci-method").textContent = result ? (result.lossy ? "Lossy" : "Lossless") : "—";
+    row.querySelector(".ci-method").textContent = result ? (result.originalKept ? "Unchanged" : result.lossy ? "Lossy" : "Lossless") : "—";
     row.querySelector(".ci-download").disabled = !result || item.status === "Compressing…";
     row.classList.toggle("ci-error", item.status === "Error");
     // Dimensions, plus an outcome only when it is news; the Saved column already says the rest.
@@ -628,6 +654,14 @@ export class CompressImage extends BaseTool {
     const queued = "";
     row.querySelector(".ci-file-state").textContent =
       item.status === "Compressing…" ? `${item.stage || "Reading"}…` : item.status === "Queued" ? queued : note;
+    const info = row.querySelector(".ci-kept-info");
+    const tooltip = row.querySelector(".ci-kept-tooltip");
+    info.hidden = !result?.originalKept || item.status !== "Ready" || !!item.error;
+    if (info.hidden && tooltip.matches(":popover-open")) tooltip.hidePopover();
+    tooltip.textContent = result?.minimumSavingBytes
+      ? `The result did not meet the minimum saving of ${result.minimumSavingBytes.toLocaleString()} bytes for this file. ` +
+        "Lossy compression must save at least 1% or 1,024 bytes, whichever is larger. The original was kept unchanged."
+      : "Lossless optimization did not produce a smaller file. The original was kept unchanged.";
     if (result) {
       row.querySelector(".ci-output-size").textContent = size(item.blob.size);
       row.querySelector(".ci-saved").textContent = savings(item.file.size, item.blob.size);
@@ -684,7 +718,7 @@ export class CompressImage extends BaseTool {
   // One line of facts about a result: size change, encoding, and anything the codec reported.
   describe(item) {
     const result = item.result;
-    if (result.originalKept) return `${result.originalWidth} × ${result.originalHeight} · Lossless · original kept`;
+    if (result.originalKept) return `${result.originalWidth} × ${result.originalHeight} · Unchanged · original kept`;
     const dimensions = result.resized
       ? `${result.originalWidth} × ${result.originalHeight} → ${result.width} × ${result.height}`
       : `${result.width} × ${result.height}`;
