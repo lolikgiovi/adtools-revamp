@@ -1,0 +1,75 @@
+.qq-contained-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 31px;
+  padding: 0.3125rem 0.5rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.qq-contained-toggle:hover {
+  background: hsl(var(--muted));
+  border-color: hsl(var(--ring));
+}
+
+.qq-contained-toggle:focus-visible,
+.data-option-toggle:has(input:focus-visible) {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+.qq-contained-toggle.is-on,
+.data-option-toggle:has(input:checked) {
+  border-color: #22c55e;
+  background: rgb(74 222 128 / 0.12);
+}
+
+.qq-contained-toggle-track {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 16px;
+  padding: 2px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--muted));
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.qq-contained-toggle-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 5px;
+  background: hsl(var(--foreground));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.qq-contained-toggle.is-on .qq-contained-toggle-track,
+.data-option-toggle input:checked ~ .qq-contained-toggle-track {
+  background: #4ade80;
+  border-color: #4ade80;
+}
+
+.qq-contained-toggle.is-on .qq-contained-toggle-thumb,
+.data-option-toggle input:checked ~ .qq-contained-toggle-track .qq-contained-toggle-thumb {
+  background: #fff;
+  transform: translateX(14px);
+}

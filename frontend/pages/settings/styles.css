@@ -1,3 +1,5 @@
+@import "../../styles/contained-toggle.css";
+
 .main-content:has(> .settings-page) {
   /* Keep shell padding after the full page instead of overflowing a shrunken flex item. */
   flex: 1 0 auto;
@@ -1217,4 +1219,29 @@ body .settings-edit-dialog-wide {
   .integration-field {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+.settings-update-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 8px;
+}
+
+.settings-category-heading-with-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.settings-category-heading-with-actions > .settings-category-header {
+  width: auto;
+}
+
+.settings-category-heading-with-actions > .settings-category-actions {
+  margin: 0;
+  padding-block: 6px;
+  flex-wrap: wrap;
 }

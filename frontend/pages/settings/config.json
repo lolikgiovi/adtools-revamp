@@ -96,11 +96,12 @@
         {
           "key": "update.autoCheck",
           "storageKey": "update.autoCheck",
-          "label": "Check for Auto Update",
+          "label": "Check Auto Update",
           "type": "boolean",
           "default": true,
           "description": "When enabled, the app checks at startup and scheduled times.",
-          "requiresTauri": true
+          "requiresTauri": true,
+          "group": "updates"
         },
         {
           "key": "update.allowBeta",
@@ -109,7 +110,8 @@
           "type": "boolean",
           "default": false,
           "description": "Opt into beta channel updates (uses manifest/beta.json).",
-          "requiresTauri": true
+          "requiresTauri": true,
+          "group": "updates"
         },
         {
           "key": "update.check",
@@ -118,7 +120,8 @@
           "type": "action",
           "buttonLabel": "Check Now",
           "description": "Manually check for updates and show banner if available.",
-          "requiresTauri": true
+          "requiresTauri": true,
+          "group": "updates"
         }
       ]
     },
@@ -284,10 +287,9 @@
       ]
     },
     {
-      "id": "database",
-      "label": "Database",
+      "id": "connections",
+      "label": "Connections",
       "initiallyExpanded": true,
-      "requiresTauri": true,
       "categories": [
         {
           "id": "oracle",
@@ -375,20 +377,20 @@
               "description": "Optional Redis password. Stored securely in macOS Keychain and never exposed to the frontend. Save an empty value to clear it."
             }
           ]
-        }
-      ]
-    },
-    {
-      "id": "kafka",
-      "label": "Kafka Connections",
-      "initiallyExpanded": false,
-      "items": [
+        },
         {
-          "key": "kafka.brokers",
-          "storageKey": "tool:kafka:brokers",
-          "label": "Plaintext Brokers",
-          "type": "kafka-brokers",
-          "description": "Save named broker connections for the Kafka tool. Connections use PLAINTEXT."
+          "id": "kafka",
+          "label": "Kafka",
+          "initiallyExpanded": false,
+          "items": [
+            {
+              "key": "kafka.brokers",
+              "storageKey": "tool:kafka:brokers",
+              "label": "Plaintext Brokers",
+              "type": "kafka-brokers",
+              "description": "Save named broker connections for the Kafka tool. Connections use PLAINTEXT."
+            }
+          ]
         }
       ]
     },

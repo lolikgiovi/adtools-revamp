@@ -118,7 +118,6 @@ class SettingsPage {
 
     // Bind toolbar actions
     root.querySelector(".settings-load-defaults")?.addEventListener("click", () => this.openOtpModal());
-    root.querySelector(".settings-check-update")?.addEventListener("click", () => this.handleManualCheckUpdate());
     const publisherRoot = root.querySelector("#settings-publishing");
     root.querySelector(".settings-publish")?.addEventListener("click", (event) => {
       publisherRoot.hidden = !publisherRoot.hidden;
@@ -194,7 +193,14 @@ class SettingsPage {
 
     setting.classList.add("settings-focus-highlight");
     setting.scrollIntoView?.({ behavior: "smooth", block: "center" });
-    setting.querySelector(".setting-edit, .kafka-broker-add, .oracle-add-btn, .setting-input")?.focus();
+    const groupedControl = Array.from(setting.querySelectorAll("[data-setting-key]")).find(
+      (control) => control.dataset.settingKey === settingKey,
+    );
+    (
+      groupedControl ||
+      setting.querySelector(".setting-edit, .kafka-broker-add, .setting-input") ||
+      setting.closest(".settings-category")?.querySelector(".settings-category-actions button")
+    )?.focus();
     window.setTimeout(() => setting.classList.remove("settings-focus-highlight"), 3000);
   }
 
@@ -519,8 +525,18 @@ class SettingsPage {
     content.id = `settings-category-${catId}`;
 
     // Items
+    let updatesRendered = false;
     for (const item of cat.items || []) {
       if (!this.service.shouldShowItem(item)) continue;
+      if (item.group === "updates") {
+        if (!updatesRendered) {
+          content.appendChild(
+            this.renderUpdatesItem(cat.items.filter((entry) => entry.group === "updates" && this.service.shouldShowItem(entry))),
+          );
+          updatesRendered = true;
+        }
+        continue;
+      }
       content.appendChild(this.renderItem(item));
     }
 
@@ -530,8 +546,75 @@ class SettingsPage {
       content.appendChild(this.renderCategory(sub, headingLevel + 1));
     }
 
+    let actions = content.querySelector(":scope > .setting-item-oracle > .oracle-connections-header");
+    const kafkaHeader = content.querySelector(":scope > .setting-item-kafka-brokers > .kafka-brokers-header");
+    if (kafkaHeader) {
+      actions = kafkaHeader.querySelector(".setting-row-actions");
+      kafkaHeader.remove();
+    }
+    if (actions) {
+      actions.classList.add("settings-category-actions");
+      heading.classList.add("settings-category-heading-with-actions");
+      heading.setAttribute("aria-label", cat.label);
+      actions.addEventListener(
+        "click",
+        () => {
+          if (wrapper.getAttribute("aria-expanded") !== "true") header.click();
+        },
+        { capture: true },
+      );
+      heading.append(actions);
+    }
     wrapper.appendChild(heading);
     wrapper.appendChild(content);
+    return wrapper;
+  }
+
+  renderUpdatesItem(items) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "setting-item";
+    wrapper.dataset.setting = "update.check";
+    wrapper.dataset.settingKeys = items.map((item) => item.key).join(" ");
+    wrapper.dataset.searchText = items.map((item) => item.label).join(" ");
+    wrapper.innerHTML = '<div class="setting-row"><div class="setting-name">Update</div><div class="settings-update-controls"></div></div>';
+    const controls = wrapper.querySelector(".settings-update-controls");
+    const action = items.find((item) => item.type === "action");
+    if (action) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn btn-primary btn-sm settings-check-update";
+      button.textContent = action.buttonLabel;
+      button.dataset.settingKey = action.key;
+      button.addEventListener("click", () => this.handleManualCheckUpdate());
+      controls.append(button);
+    }
+    for (const item of items.filter((item) => item.type === "boolean")) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "qq-contained-toggle";
+      button.setAttribute("role", "switch");
+      button.dataset.settingKey = item.key;
+      const label = document.createElement("span");
+      label.textContent = item.label;
+      button.append(label);
+      button.insertAdjacentHTML(
+        "beforeend",
+        '<span class="qq-contained-toggle-track" aria-hidden="true"><span class="qq-contained-toggle-thumb"></span></span>',
+      );
+      const storageKey = item.storageKey || item.key;
+      let checked = !!this.service.getValue(storageKey, item.type, item.default);
+      const refresh = () => {
+        button.setAttribute("aria-checked", String(checked));
+        button.classList.toggle("is-on", checked);
+      };
+      refresh();
+      button.addEventListener("click", () => {
+        this.service.setValue(storageKey, item.type, !checked, item.apply);
+        checked = !checked;
+        refresh();
+      });
+      controls.append(button);
+    }
     return wrapper;
   }
 
@@ -540,15 +623,16 @@ class SettingsPage {
     wrapper.className = "setting-item setting-item-kafka-brokers";
     wrapper.dataset.setting = item.key;
     wrapper.dataset.type = item.type;
+    wrapper.dataset.searchText = item.label;
     wrapper.innerHTML = `
       <div class="kafka-brokers-header">
         <div>
           <div class="setting-name">${item.label}</div>
         </div>
-        <div class="setting-row-actions">
+        <span class="setting-row-actions">
           <button class="btn btn-secondary btn-sm kafka-broker-add" type="button">Add broker</button>
           <button class="btn btn-outline btn-sm settings-bulk-edit" type="button">Bulk Edit</button>
-        </div>
+        </span>
       </div>
       <div class="kafka-brokers-list"></div>
       <form class="kafka-broker-form" hidden>
@@ -571,14 +655,13 @@ class SettingsPage {
     const nameInput = wrapper.querySelector("#kafkaBrokerName");
     const addressesInput = wrapper.querySelector("#kafkaBrokerAddresses");
     const formStatus = wrapper.querySelector(".kafka-broker-form-status");
+    const addButton = wrapper.querySelector(".kafka-broker-add");
     let editingId = "";
     const modal = mountEditDialog({
       root: wrapper,
       form,
       onCancel: () => wrapper.querySelector(".kafka-broker-cancel").click(),
-      fallbackFocus: (trigger) =>
-        wrapper.querySelector(`.kafka-broker-edit[data-profile-id="${trigger?.dataset.profileId}"]`) ||
-        wrapper.querySelector(".kafka-broker-add"),
+      fallbackFocus: (trigger) => wrapper.querySelector(`.kafka-broker-edit[data-profile-id="${trigger?.dataset.profileId}"]`) || addButton,
     });
     this.settingDisposers.add(() => modal.dispose());
 
@@ -647,7 +730,7 @@ class SettingsPage {
       plan: (text) => buildKafkaPlan(text, readKafkaBrokerProfiles()),
       apply: (plan) => applyListPlan(plan, readKafkaBrokerProfiles, saveKafkaBrokerProfiles),
       onBusy: (busy) => {
-        wrapper.querySelector(".kafka-broker-add").disabled = busy;
+        addButton.disabled = busy;
         if (busy)
           list.querySelectorAll("button").forEach((button) => {
             button.disabled = true;
@@ -658,7 +741,7 @@ class SettingsPage {
     });
     this.settingDisposers.add(() => bulk.dispose());
 
-    wrapper.querySelector(".kafka-broker-add").addEventListener("click", () => showForm());
+    addButton.addEventListener("click", () => showForm());
     wrapper.querySelector(".kafka-broker-cancel").addEventListener("click", () => {
       form.hidden = true;
       modal.close();
@@ -1078,10 +1161,10 @@ class SettingsPage {
     if (item.type === "oracle-connections") {
       wrapper.className = "setting-item setting-item-oracle";
       wrapper.innerHTML = `
-        <div class="oracle-connections-header">
+        <span class="oracle-connections-header">
           <button type="button" class="btn btn-secondary btn-sm oracle-add-btn">Add Connection</button>
           <button type="button" class="btn btn-outline btn-sm settings-bulk-edit">Bulk Edit</button>
-        </div>
+        </span>
         <div class="oracle-connections-list"></div>
         <form class="oracle-connection-form" style="display:none">
           <h4 class="oracle-form-title">Add Connection</h4>
