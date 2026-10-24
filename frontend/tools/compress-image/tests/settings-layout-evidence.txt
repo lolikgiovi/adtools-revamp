@@ -1,0 +1,101 @@
+PASS: mobile fields fit, labels sit above inputs, and expanded PNG quality is visible.
+[
+  {
+    "selector": ".ci-settings",
+    "rect": {
+      "x": 24,
+      "y": 24,
+      "width": 342,
+      "height": 530.5,
+      "top": 24,
+      "right": 366,
+      "bottom": 554.5,
+      "left": 24
+    },
+    "columns": "308px"
+  },
+  {
+    "selector": "[data-ci=all-settings]",
+    "rect": {
+      "x": 41,
+      "y": 41,
+      "width": 308,
+      "height": 159,
+      "top": 41,
+      "right": 349,
+      "bottom": 200,
+      "left": 41
+    },
+    "columns": "none"
+  },
+  {
+    "selector": ".ci-toggle",
+    "rect": {
+      "x": 41,
+      "y": 41,
+      "width": 308,
+      "height": 30,
+      "top": 41,
+      "right": 349,
+      "bottom": 71,
+      "left": 41
+    },
+    "columns": "none"
+  },
+  {
+    "selector": "[data-ci=bounds]",
+    "rect": {
+      "x": 41,
+      "y": 79,
+      "width": 308,
+      "height": 62.5,
+      "top": 79,
+      "right": 349,
+      "bottom": 141.5,
+      "left": 41
+    },
+    "columns": "148px 148px"
+  },
+  {
+    "selector": "[data-ci=width]",
+    "rect": {
+      "x": 41,
+      "y": 104.5,
+      "width": 148,
+      "height": 37,
+      "top": 104.5,
+      "right": 189,
+      "bottom": 141.5,
+      "left": 41
+    },
+    "columns": "none"
+  },
+  {
+    "selector": "[data-ci=height]",
+    "rect": {
+      "x": 201,
+      "y": 104.5,
+      "width": 148,
+      "height": 37,
+      "top": 104.5,
+      "right": 349,
+      "bottom": 141.5,
+      "left": 201
+    },
+    "columns": "none"
+  },
+  {
+    "selector": ".ci-advice",
+    "rect": {
+      "x": 41,
+      "y": 149.5,
+      "width": 308,
+      "height": 50.5,
+      "top": 149.5,
+      "right": 349,
+      "bottom": 200,
+      "left": 41
+    },
+    "columns": "none"
+  }
+]

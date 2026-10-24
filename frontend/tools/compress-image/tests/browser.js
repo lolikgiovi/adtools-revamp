@@ -165,7 +165,7 @@ async function compress() {
 }
 try {
   check(
-    control("preset").value === "balanced" && !control("lossy-png").checked && !control("resize").checked,
+    control("preset").value === "balanced" && control("png-mode").value === "lossless" && !control("resize").checked,
     "Lossless with original dimensions is the default.",
   );
   // Flow failures (empty state): more than the drop target competing for attention.
@@ -318,7 +318,7 @@ try {
   // Settle the background offer pass first: cancelling it mid-job replaces that worker by design.
   await tool.offers;
   const workersBeforeRerun = tool.pool.stats.created;
-  change("lossy-png", true);
+  change("png-mode", "lossy");
   await compress();
   check(first.blob.type === "image/png" && first.result.lossy, "Opt-in lossy PNG stays PNG and accepts a useful quantized result.");
   check(
@@ -380,7 +380,7 @@ try {
   Object.defineProperty(drop, "dataTransfer", { value: transfer });
   root.querySelector(".ci-drop").dispatchEvent(drop);
   change("preset", "small");
-  check(control("quality").value === "75" && control("png-min").value === "80", "JPEG/WebP presets preserve PNG quality controls.");
+  check(control("quality").value === "75" && tool.readSettings().pngQuality.min === 80, "JPEG/WebP presets preserve PNG quality controls.");
   await compress();
   const jpegItem = tool.items.find((item) => item.file.name === "photo.jpeg"),
     webpItem = tool.items.find((item) => item.file.name === "asset.webp");
@@ -401,7 +401,7 @@ try {
     jpegItem.logs.some((entry) => entry.details.codec === "MozJPEG") && webpItem.logs.some((entry) => entry.details.codec === "libwebp"),
     "Real WASM codecs report their identities.",
   );
-  change("lossy-png", false);
+  change("png-mode", "lossless");
   change("resize", true);
   change("width", "160");
   change("height", "120");
@@ -415,23 +415,24 @@ try {
     "JPEG resizing retains target dimensions and format.",
   );
   check(text.row.textContent.includes("Resized"), "Resized output is never labeled identical to original pixels.");
-  change("lossy-png", true);
-  change("png-min", "100");
-  change("png-target", "100");
+  change("png-mode", "lossy");
+  change("png-quality-preset", "high");
+  // The UI offers named presets; exercise an unattainable floor at the codec boundary.
+  const readSettings = tool.readSettings.bind(tool);
+  tool.readSettings = () => ({ ...readSettings(), pngQuality: { min: 100, target: 100 } });
   await compress();
+  tool.readSettings = readSettings;
   check(
     !text.result.lossy && text.blob.type === "image/png",
     "Unattainable quantization quality falls back to lossless PNG at the target dimensions.",
   );
-  change("png-min", "99");
-  change("png-target", "80");
+  change("png-quality-preset", "");
   const previousQuality = first.blob;
   await compress();
-  check(first.blob === previousQuality && !tool.running, "Invalid PNG quality bounds preserve previous results.");
+  check(first.blob === previousQuality && !tool.running, "Invalid PNG quality selections preserve previous results.");
   change("preset", "balanced");
-  change("png-min", "80");
-  change("png-target", "95");
-  change("lossy-png", false);
+  change("png-quality-preset", "balanced");
+  change("png-mode", "lossless");
   change("width", "0");
   const previous = first.blob;
   await compress();
@@ -465,13 +466,13 @@ try {
     adamBefore.every((value, i) => value === adamAfter[i]),
     "Adam7 PNG remains pixel-identical after deinterlacing optimization.",
   );
-  change("lossy-png", true);
+  change("png-mode", "lossy");
   await compress();
   check(
     !tool.items[4].result.lossy && tool.items[4].logs.some((entry) => entry.stage === "png.lossless-fallback"),
     "16-bit PNG stays on the lossless path even when color reduction is enabled.",
   );
-  change("lossy-png", false);
+  change("png-mode", "lossless");
   await tool.downloadZip();
   const finalZip = await JSZip.loadAsync(await downloaded.blob.arrayBuffer());
   check(finalZip.files["sample.png"] && finalZip.files["sample (2).png"], "ZIP keeps duplicate filenames as separate files.");
@@ -525,7 +526,7 @@ try {
   select([new File([fixture(320, 320)], "levels.png", { type: "image/png" })]);
   const presetOutput = async (preset) => {
     change("preset", preset);
-    change("lossy-png", false);
+    change("png-mode", "lossless");
     await compress();
     return new Uint8Array(await tool.items[0].blob.arrayBuffer());
   };
@@ -612,7 +613,7 @@ try {
   };
   const sourceDecoded = async (file, { lossy = false, resize = false } = {}) => {
     tool.clear();
-    change("lossy-png", lossy);
+    change("png-mode", lossy ? "lossy" : "lossless");
     change("resize", resize);
     if (resize) {
       change("width", "100");
@@ -643,7 +644,7 @@ try {
     check(quantized.decoded && quantized.item.status === "Ready", "Lossy PNG still decodes its pixels.");
   } finally {
     HTMLImageElement.prototype.decode = nativeDecode;
-    change("lossy-png", false);
+    change("png-mode", "lossless");
     change("resize", false);
   }
   // Validation failures: the source decompressed more than once, a codec output that is
@@ -656,7 +657,7 @@ try {
   };
   const validatedRoles = async (file, { lossy = false, resize = false } = {}) => {
     tool.clear();
-    change("lossy-png", lossy);
+    change("png-mode", lossy ? "lossy" : "lossless");
     change("resize", resize);
     if (resize) {
       change("width", "100");
@@ -680,27 +681,27 @@ try {
     check(roles(resizedRoles) === "source, output", "Resized PNG validates the source and the output once each.");
   } finally {
     pako.Inflate = NativeInflate;
-    change("lossy-png", false);
+    change("png-mode", "lossless");
     change("resize", false);
   }
   // Presets must affect JPEG/WebP only; PNG mode and quality remain explicit choices.
   tool.clear();
   change("preset", "balanced");
-  change("lossy-png", false);
+  change("png-mode", "lossless");
   change("preset", "high");
-  check(!control("lossy-png").checked, "High Quality leaves PNG lossless.");
+  check(control("png-mode").value === "lossless", "High Quality leaves PNG lossless.");
   change("preset", "small");
-  check(!control("lossy-png").checked, "JPEG/WebP presets leave PNG lossless.");
-  change("lossy-png", true);
-  check(!control("png-quality").hidden, "Lossy PNG shows its quality fields.");
+  check(control("png-mode").value === "lossless", "JPEG/WebP presets leave PNG lossless.");
+  change("png-mode", "lossy");
+  check(!control("png-quality-preset").disabled, "Lossy PNG enables its quality selector.");
   change("preset", "balanced");
-  check(control("lossy-png").checked, "Switching away from Smaller File keeps lossy PNG on.");
+  check(control("png-mode").value === "lossy", "Switching away from Smaller File keeps lossy PNG on.");
   change("preset", "small");
   select([new File([fixture(320, 200, "gentle")], "smaller.png", { type: "image/png" })]);
   await compress();
   check(tool.items[0].result?.lossy && tool.items[0].blob.type === "image/png", "Smaller File compresses PNG with color reduction.");
   change("preset", "balanced");
-  change("lossy-png", false);
+  change("png-mode", "lossless");
 
   // Worker decoding failures: a large decode freezing the main thread; any decode or
   // getImageData left on the main thread; EXIF orientation, P3 color conversion or
@@ -786,7 +787,7 @@ try {
   const runDecoderBatch = async (decoder) => {
     tool.clear();
     tool.decoder = decoder;
-    change("lossy-png", true);
+    change("png-mode", "lossy");
     change("resize", true);
     change("width", "48");
     change("height", "48");
@@ -910,7 +911,7 @@ try {
   const fullSizeJpeg = async (decoder) => {
     tool.clear();
     tool.decoder = decoder;
-    change("lossy-png", false);
+    change("png-mode", "lossless");
     change("resize", false);
     select([rotatedJpeg]);
     await compress();
@@ -926,7 +927,7 @@ try {
   while (!(jpegBytes[scanStart] === 255 && jpegBytes[scanStart + 1] === 218)) scanStart++;
   const brokenJpeg = new File([join([jpegBytes.slice(0, scanStart), new Uint8Array([255, 217])])], "broken.jpg", { type: "image/jpeg" });
   tool.clear();
-  change("lossy-png", false);
+  change("png-mode", "lossless");
   change("resize", false);
   select([brokenJpeg, new File([jpeg], "after-broken.jpg", { type: "image/jpeg" })]);
   await compress();
@@ -938,19 +939,21 @@ try {
   // lossless wins (smooth gradient), the quality-floor fallback losing its lossless result,
   // a skipped result not beating the original by the usual minimum, resized PNG not skipping,
   // and the validation count when both passes run.
-  const lossyRun = async (file, { resize = false, minimum = "80", target = "95" } = {}) => {
+  const lossyRun = async (file, { resize = false, minimum = "80" } = {}) => {
     tool.clear();
     change("preset", "balanced");
-    change("lossy-png", true);
-    change("png-min", minimum);
-    change("png-target", target);
+    change("png-mode", "lossy");
+    change("png-quality-preset", minimum === "100" ? "high" : "balanced");
     change("resize", resize);
     if (resize) {
       change("width", "160");
       change("height", "160");
     }
     select([file]);
+    const readSettings = tool.readSettings.bind(tool);
+    if (minimum === "100") tool.readSettings = () => ({ ...readSettings(), pngQuality: { min: 100, target: 100 } });
     await compress();
+    tool.readSettings = readSettings;
     const item = tool.items[0];
     const stages = item.logs.map((entry) => entry.stage);
     return { item, skipped: stages.includes("png.lossless-skipped"), compared: stages.includes("png.candidates") };
@@ -975,15 +978,13 @@ try {
   check(resizedWin.skipped && resizedWin.item.result.resized, "Resized lossy PNG skips the lossless pass too.");
   const floorMissed = await lossyRun(new File([fixture(320, 200, "gentle")], "floor.png", { type: "image/png" }), {
     minimum: "100",
-    target: "100",
   });
   check(
     !floorMissed.skipped && !floorMissed.item.result.lossy && floorMissed.item.status === "Ready",
     "When the quality floor fails, the lossless pass runs and its result is used.",
   );
-  change("png-min", "80");
-  change("png-target", "95");
-  change("lossy-png", false);
+  change("png-quality-preset", "balanced");
+  change("png-mode", "lossless");
   // Pool failures: more jobs at once than workers, or no overlap on a multi-core machine; cold
   // workers every batch; the memory budget ignored or a lone over-budget job stuck; one corrupt
   // or timed-out image taking others down; results depending on pool size; Clear all leaving
@@ -1001,7 +1002,7 @@ try {
   const poolBatch = async (files) => {
     tool.clear();
     change("preset", "balanced");
-    change("lossy-png", false);
+    change("png-mode", "lossless");
     change("resize", false);
     select(files);
     const progress = new Set();
@@ -1121,7 +1122,7 @@ try {
   // hidden in closed settings.
   tool.clear();
   change("preset", "balanced");
-  change("lossy-png", false);
+  change("png-mode", "lossless");
   change("resize", false);
   select([new File([fixture(320, 200, "gentle")], "small.png", { type: "image/png" })]);
   await new Promise((resolve) => setTimeout(resolve, 50));
@@ -1215,19 +1216,22 @@ try {
   check(
     offered.blob.size < losslessBlob.size &&
       offered.result.lossy &&
-      control("lossy-png").checked &&
+      control("png-mode").value === "lossy" &&
       offered.row.textContent.includes("Colors reduced"),
     "Use smaller swaps in the reduced-color result and turns on lossy PNG.",
   );
   check(control("zip").classList.contains("btn-primary"), "Using the offer keeps results current.");
   offerCard.querySelector('[data-ci="undo-smaller"]').click();
-  check(offered.blob === losslessBlob && !offered.result.lossy && !control("lossy-png").checked, "Undo restores the lossless result.");
+  check(
+    offered.blob === losslessBlob && !offered.result.lossy && control("png-mode").value === "lossless",
+    "Undo restores the lossless result.",
+  );
 
-  change("lossy-png", true);
+  change("png-mode", "lossy");
   await compress();
   await tool.offers;
   check(!visible(control("advice-lossy")), "No offer when lossy PNG is already on.");
-  change("lossy-png", false);
+  change("png-mode", "lossless");
 
   tool.clear();
   select([new File([fixture(320, 200)], "gradient-offer.png", { type: "image/png" })]);

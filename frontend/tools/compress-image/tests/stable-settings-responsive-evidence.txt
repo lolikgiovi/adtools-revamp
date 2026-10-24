@@ -1,0 +1,116 @@
+PASS: 115 checks
+390: resize fields stay disabled when off
+390: resize fields remain visible
+390: lossless disables PNG quality
+390: PNG uses a select instead of radio cards
+390: stable panel geometry, resize=true, PNG=lossy
+390: resize fields follow the switch
+390: PNG quality follows mode
+390: stable panel geometry, resize=true, PNG=lossless
+390: resize fields follow the switch
+390: PNG quality follows mode
+390: stable panel geometry, resize=false, PNG=lossy
+390: resize fields follow the switch
+390: PNG quality follows mode
+390: stable panel geometry, resize=false, PNG=lossless
+390: resize fields follow the switch
+390: PNG quality follows mode
+390: no page overflow
+390: settings fill the tool width
+390: max-width fits within settings
+390: max-height fits within settings
+390: png-mode fits within settings
+390: png-quality fits within settings
+390: preset fits within settings
+768: resize fields stay disabled when off
+768: resize fields remain visible
+768: lossless disables PNG quality
+768: PNG uses a select instead of radio cards
+768: stable panel geometry, resize=true, PNG=lossy
+768: resize fields follow the switch
+768: PNG quality follows mode
+768: stable panel geometry, resize=true, PNG=lossless
+768: resize fields follow the switch
+768: PNG quality follows mode
+768: stable panel geometry, resize=false, PNG=lossy
+768: resize fields follow the switch
+768: PNG quality follows mode
+768: stable panel geometry, resize=false, PNG=lossless
+768: resize fields follow the switch
+768: PNG quality follows mode
+768: no page overflow
+768: settings fill the tool width
+768: max-width fits within settings
+768: max-height fits within settings
+768: png-mode fits within settings
+768: png-quality fits within settings
+768: preset fits within settings
+1024: resize fields stay disabled when off
+1024: resize fields remain visible
+1024: lossless disables PNG quality
+1024: PNG uses a select instead of radio cards
+1024: stable panel geometry, resize=true, PNG=lossy
+1024: resize fields follow the switch
+1024: PNG quality follows mode
+1024: stable panel geometry, resize=true, PNG=lossless
+1024: resize fields follow the switch
+1024: PNG quality follows mode
+1024: stable panel geometry, resize=false, PNG=lossy
+1024: resize fields follow the switch
+1024: PNG quality follows mode
+1024: stable panel geometry, resize=false, PNG=lossless
+1024: resize fields follow the switch
+1024: PNG quality follows mode
+1024: no page overflow
+1024: settings fill the tool width
+1024: max-width fits within settings
+1024: max-height fits within settings
+1024: png-mode fits within settings
+1024: png-quality fits within settings
+1024: preset fits within settings
+1440: resize fields stay disabled when off
+1440: resize fields remain visible
+1440: lossless disables PNG quality
+1440: PNG uses a select instead of radio cards
+1440: stable panel geometry, resize=true, PNG=lossy
+1440: resize fields follow the switch
+1440: PNG quality follows mode
+1440: stable panel geometry, resize=true, PNG=lossless
+1440: resize fields follow the switch
+1440: PNG quality follows mode
+1440: stable panel geometry, resize=false, PNG=lossy
+1440: resize fields follow the switch
+1440: PNG quality follows mode
+1440: stable panel geometry, resize=false, PNG=lossless
+1440: resize fields follow the switch
+1440: PNG quality follows mode
+1440: no page overflow
+1440: settings fill the tool width
+1440: max-width fits within settings
+1440: max-height fits within settings
+1440: png-mode fits within settings
+1440: png-quality fits within settings
+1440: preset fits within settings
+2390: resize fields stay disabled when off
+2390: resize fields remain visible
+2390: lossless disables PNG quality
+2390: PNG uses a select instead of radio cards
+2390: stable panel geometry, resize=true, PNG=lossy
+2390: resize fields follow the switch
+2390: PNG quality follows mode
+2390: stable panel geometry, resize=true, PNG=lossless
+2390: resize fields follow the switch
+2390: PNG quality follows mode
+2390: stable panel geometry, resize=false, PNG=lossy
+2390: resize fields follow the switch
+2390: PNG quality follows mode
+2390: stable panel geometry, resize=false, PNG=lossless
+2390: resize fields follow the switch
+2390: PNG quality follows mode
+2390: no page overflow
+2390: settings fill the tool width
+2390: max-width fits within settings
+2390: max-height fits within settings
+2390: png-mode fits within settings
+2390: png-quality fits within settings
+2390: preset fits within settings

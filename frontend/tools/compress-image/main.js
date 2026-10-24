@@ -59,34 +59,30 @@ export class CompressImage extends BaseTool {
     return `<section class="tool-container compress-image" aria-label="Compress Image">
       <input type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" multiple id="ci-files" data-ci="files" aria-label="Add images" tabindex="-1" class="sr-only">
       <div class="ci-settings" id="ci-settings" data-ci="settings-panel" role="group" aria-label="Compression settings">
-        <fieldset class="ci-format-settings" data-ci="all-settings"><legend>All</legend>
-          <label class="ci-toggle"><input data-ci="resize" type="checkbox" role="switch" name="resize"><span class="ci-switch" aria-hidden="true"></span>Resize</label>
-          <div class="ci-bounds" data-ci="bounds" hidden>
+        <fieldset class="ci-format-settings" data-ci="all-settings"><legend class="sr-only">Resize</legend>
+          <label class="ci-toggle" title="Fits without cropping. Changes pixels."><input data-ci="resize" type="checkbox" role="switch" name="resize" aria-description="Fits without cropping. Changes pixels."><span class="ci-switch" aria-hidden="true"></span>Resize</label>
+          <div class="ci-bounds" data-ci="bounds">
             <label>Max width<input data-ci="width" name="max-width" type="number" min="1" max="16384" step="1" value="1440"></label>
             <label>Max height<input data-ci="height" name="max-height" type="number" min="1" max="16384" step="1" value="3200"></label>
-            <span class="ci-mode-impact">Fits without cropping. Changes pixels.</span>
           </div>
           <div class="ci-advice" data-ci="advice-size" hidden><p data-ci="advice-size-title"></p>
             <div class="ci-choices" role="group" aria-label="Image size">${choice("full", "Portrait", "1440 × 3200")}${choice("square", "Square", "2670 × 2670")}${choice("original", "Original")}</div>
           </div>
         </fieldset>
-        <fieldset class="ci-format-settings" data-ci="png-settings" disabled><legend>PNG Only</legend>
-          <div class="ci-png-modes">
-            <label><input type="radio" name="png-mode" data-ci="lossless-png" checked><span>Lossless<small>Exact pixel colors</small></span></label>
-            <label><input type="radio" name="png-mode" data-ci="lossy-png"><span>Lossy<small>Visually similar</small></span></label>
-          </div>
-          <div class="ci-bounds" data-ci="png-quality" hidden>
-            <label>Minimum quality<input data-ci="png-min" name="png-min" type="number" min="0" max="100" step="1" value="80"></label>
-            <label>Target quality<input data-ci="png-target" name="png-target" type="number" min="0" max="100" step="1" value="95"></label>
+        <fieldset class="ci-format-settings" data-ci="png-settings" disabled><legend class="sr-only">PNG Only</legend>
+          <span class="ci-settings-heading" aria-hidden="true">PNG Only</span>
+          <div class="ci-png-controls">
+            <label>Mode<select data-ci="png-mode" name="png-mode" title="Lossless keeps exact pixel colors. Lossy reduces colors for smaller files." aria-description="Lossless keeps exact pixel colors. Lossy reduces colors for smaller files." data-searchable-dropdown-ignore><option value="lossless">Lossless</option><option value="lossy">Lossy</option></select></label>
+            <label data-ci="png-quality">Quality<select data-ci="png-quality-preset" name="png-quality" data-searchable-dropdown-ignore disabled><option value="high">High quality</option><option value="balanced" selected>Balanced</option><option value="small">Smaller file</option></select></label>
           </div>
           <div class="ci-advice" data-ci="advice-lossy" hidden><p data-ci="advice-lossy-title"></p>
             <button type="button" class="btn btn-ghost btn-sm" data-ci="use-smaller">Use lossy PNG</button><button type="button" class="btn btn-ghost btn-sm" data-ci="undo-smaller" hidden>Undo</button>
           </div>
         </fieldset>
-        <fieldset class="ci-format-settings" data-ci="photo-settings" disabled><legend>JPEG &amp; WebP Only</legend>
+        <fieldset class="ci-format-settings" data-ci="photo-settings" disabled><legend class="sr-only">JPEG &amp; WebP Only</legend>
+          <span class="ci-settings-heading" aria-hidden="true">JPEG &amp; WebP Only</span>
           <div class="ci-photo-controls"><label>Preset<select data-ci="preset" name="preset" data-searchable-dropdown-ignore><option value="high">High quality</option><option value="balanced" selected>Balanced</option><option value="small">Smaller file</option></select></label>
-          <label class="ci-quality"><span>Lossy quality <output data-ci="quality-value">85</output></span><input data-ci="quality" name="quality" type="range" min="1" max="100" value="85"></label></div>
-          <p class="ci-mode-impact">Lossless WebP stays lossless.</p>
+          <label class="ci-quality" title="Lossless WebP stays lossless."><span>Lossy quality <output data-ci="quality-value">85</output></span><input data-ci="quality" name="quality" type="range" min="1" max="100" value="85" aria-description="Lossless WebP stays lossless."></label></div>
         </fieldset>
       </div>
       <p id="ci-error" class="ci-error-message" data-ci="error" role="alert" hidden></p>
@@ -153,8 +149,8 @@ export class CompressImage extends BaseTool {
   readSettings() {
     return {
       preset: this.$("preset").value,
-      lossyPng: this.$("lossy-png").checked,
-      pngQuality: { min: Number(this.$("png-min").value), target: Number(this.$("png-target").value) },
+      lossyPng: this.$("png-mode").value === "lossy",
+      pngQuality: { ...PRESETS[this.$("png-quality-preset").value]?.quantize.quality },
       resize: this.$("resize").checked,
       quality: Number(this.$("quality").value),
       width: Number(this.$("width").value),
@@ -166,10 +162,6 @@ export class CompressImage extends BaseTool {
     return this.items.some((item) => item.result) && this.appliedSettings !== JSON.stringify(this.readSettings());
   }
   updateSettings() {
-    const lossy = this.$("lossy-png").checked;
-    this.$("png-quality").hidden = !lossy;
-    this.$("lossless-png").checked = !lossy;
-    this.$("bounds").hidden = !this.$("resize").checked;
     this.$("quality-value").textContent = this.$("quality").value;
     this.updateAdvice();
     this.updateSummary();
@@ -287,14 +279,8 @@ export class CompressImage extends BaseTool {
           settings.pngQuality.target > 100 ||
           settings.pngQuality.min > settings.pngQuality.target))
     ) {
-      const invalid = !PRESETS[settings.preset]
-        ? "preset"
-        : !this.$("quality").validity.valid
-          ? "quality"
-          : !this.$("png-min").validity.valid
-            ? "png-min"
-            : "png-target";
-      this.error("Choose quality values between 0 and 100, with PNG minimum no higher than its target.", invalid);
+      const invalid = !PRESETS[settings.preset] ? "preset" : !this.$("quality").validity.valid ? "quality" : "png-quality-preset";
+      this.error("Choose a valid quality setting.", invalid);
       return;
     }
     if (settings.resize) {
@@ -405,7 +391,7 @@ export class CompressImage extends BaseTool {
       }
       this.updateRow(item);
     }
-    this.$("lossy-png").checked = apply;
+    this.$("png-mode").value = apply ? "lossy" : "lossless";
     this.appliedSettings = JSON.stringify(this.readSettings());
     this.updateSettings();
     if (this.selected?.result) this.selectItem(this.selected);
@@ -836,6 +822,8 @@ export class CompressImage extends BaseTool {
     this.container.querySelectorAll(".ci-settings input, .ci-settings select, .ci-choice").forEach((input) => {
       input.disabled = this.running || this.zipping;
     });
+    this.$("width").disabled = this.$("height").disabled = this.running || this.zipping || !this.$("resize").checked;
+    this.$("png-quality-preset").disabled = this.running || this.zipping || this.$("png-mode").value !== "lossy";
     this.$("choose").disabled = this.$("add").disabled = this.$("clear").disabled = this.running || this.zipping;
     this.items.forEach((item) => {
       item.row.querySelector(".ci-download").disabled = !item.result || this.running || this.zipping;

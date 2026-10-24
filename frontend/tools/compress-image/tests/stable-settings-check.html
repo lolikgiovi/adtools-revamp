@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stable compression settings verification</title>
+    <style>
+      body {
+        margin: 0;
+        font: 14px system-ui;
+        background: #18181b;
+        color: #fafafa;
+      }
+      pre {
+        padding: 16px;
+        white-space: pre-wrap;
+      }
+      iframe {
+        display: block;
+        border: 0;
+        height: 900px;
+      }
+    </style>
+  </head>
+  <body>
+    <pre id="result">Running responsive settings checks…</pre>
+    <script type="module">
+      const results = [];
+      const assert = (condition, message) => {
+        if (!condition) throw new Error(message);
+        results.push(message);
+      };
+      try {
+        const previewWidth = Number(new URLSearchParams(location.search).get("width"));
+        for (const width of previewWidth ? [previewWidth] : [390, 768, 1024, 1440, 2390]) {
+          const frame = document.createElement("iframe");
+          frame.title = `${width}px settings`;
+          frame.style.width = `${width}px`;
+          frame.src = "./layout.html?sample";
+          const loaded = new Promise((resolve) => frame.addEventListener("load", resolve, { once: true }));
+          document.body.append(frame);
+          await loaded;
+          const doc = frame.contentDocument;
+          const control = (name) => doc.querySelector(`[data-ci="${name}"]`);
+          const tick = () => new Promise((resolve) => frame.contentWindow.requestAnimationFrame(resolve));
+          const deadline = performance.now() + 15000;
+          while (control("png-settings")?.disabled || control("photo-settings")?.disabled || control("advice-size")?.hidden) {
+            if (performance.now() > deadline) throw new Error("Sample images did not become ready");
+            await tick();
+          }
+          const panel = control("settings-panel");
+          const original = panel.getBoundingClientRect();
+          assert(control("width").disabled && control("height").disabled, `${width}: resize fields stay disabled when off`);
+          assert(control("bounds").getBoundingClientRect().height > 0, `${width}: resize fields remain visible`);
+          assert(control("png-quality-preset").disabled, `${width}: lossless disables PNG quality`);
+          assert(!doc.querySelector('input[type="radio"]'), `${width}: PNG uses a select instead of radio cards`);
+          const mode = control("png-mode");
+          for (const resize of [true, false]) {
+            control("resize").click();
+            for (const pngMode of ["lossy", "lossless"]) {
+              mode.value = pngMode;
+              mode.dispatchEvent(new Event("change", { bubbles: true }));
+              await tick();
+              const current = panel.getBoundingClientRect();
+              assert(
+                current.height === original.height && current.width === original.width,
+                `${width}: stable panel geometry, resize=${resize}, PNG=${pngMode}`,
+              );
+              assert(
+                control("width").disabled === !resize && control("height").disabled === !resize,
+                `${width}: resize fields follow the switch`,
+              );
+              assert(control("png-quality-preset").disabled === (pngMode === "lossless"), `${width}: PNG quality follows mode`);
+            }
+          }
+          assert(doc.documentElement.scrollWidth === width, `${width}: no page overflow`);
+          assert(
+            Math.abs(original.width - doc.querySelector(".compress-image").getBoundingClientRect().width) < 1,
+            `${width}: settings fill the tool width`,
+          );
+          for (const field of doc.querySelectorAll('.ci-settings select, .ci-settings input[type="number"]')) {
+            const rect = field.getBoundingClientRect();
+            assert(
+              rect.width > 50 && rect.right <= original.right && rect.left >= original.left,
+              `${width}: ${field.name} fits within settings`,
+            );
+          }
+          if (!previewWidth) frame.remove();
+        }
+        document.querySelector("#result").textContent = `PASS: ${results.length} checks\n${results.join("\n")}`;
+        if (previewWidth) document.querySelector("#result").hidden = true;
+      } catch (error) {
+        document.querySelector("#result").textContent = `FAIL: ${error.message}\n${results.join("\n")}`;
+        throw error;
+      }
+    </script>
+  </body>
+</html>
