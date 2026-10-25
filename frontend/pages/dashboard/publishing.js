@@ -31,8 +31,8 @@ export class SettingsPublisher {
   mount(root) {
     this.root = root;
     this.disposed = false;
-    this.root.innerHTML = `<div class="publish-heading"><h3>Publish settings</h3>
-      <button type="button" class="btn btn-secondary btn-sm" data-action="lock" hidden>Lock</button></div>
+    this.root.innerHTML = `<div class="publish-session-actions" data-dashboard-session-actions hidden>
+      <button type="button" class="btn btn-secondary btn-sm" data-action="refresh">Refresh</button></div>
       <form class="publish-auth">
         <label for="publish-password">Dashboard password</label>
         <div class="publish-actions"><input id="publish-password" type="password" autocomplete="current-password" required>
@@ -63,11 +63,12 @@ export class SettingsPublisher {
           <button type="submit" class="btn btn-secondary">Preview publication</button>
         </form>
         <section class="publish-preview" hidden aria-label="Publication preview"></section>
-        <section class="publish-history"><div class="publish-heading"><h3>Publication history</h3>
-          <button type="button" class="btn btn-secondary btn-sm" data-action="refresh">Refresh</button></div>
+        <section class="publish-history"><div class="publish-heading"><h3>Publication history</h3></div>
           <div class="publish-history-list"></div></section>
       </div>
       <p class="publish-message" role="status" aria-live="polite"></p>`;
+    this.sessionActions = this.root.querySelector("[data-dashboard-session-actions]");
+    this.sessionActions.querySelector('[data-action="refresh"]').addEventListener("click", () => void this.history());
     this.root.querySelector(".publish-auth").addEventListener("submit", (event) => {
       event.preventDefault();
       void this.unlock();
@@ -89,10 +90,8 @@ export class SettingsPublisher {
       const action = event.target.closest("[data-action]");
       if (!action) return;
       if (action.dataset.action === "publish") void this.publish();
-      if (action.dataset.action === "refresh") void this.history();
       if (action.dataset.action === "revoke") void this.revoke(Number(action.dataset.id));
       if (action.dataset.action === "reuse") this.reuse(Number(action.dataset.id));
-      if (action.dataset.action === "lock") this.lock();
     });
     this.token = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
     if (this.token) {
@@ -150,7 +149,7 @@ export class SettingsPublisher {
   showWorkspace() {
     this.root.querySelector(".publish-auth").hidden = true;
     this.root.querySelector(".publish-workspace").hidden = false;
-    this.root.querySelector('[data-action="lock"]').hidden = false;
+    this.sessionActions.hidden = false;
   }
 
   lock() {
@@ -160,7 +159,7 @@ export class SettingsPublisher {
     sessionStorage.removeItem(TOKEN_KEY);
     this.root.querySelector(".publish-auth").hidden = false;
     this.root.querySelector(".publish-workspace").hidden = true;
-    this.root.querySelector('[data-action="lock"]').hidden = true;
+    this.sessionActions.hidden = true;
   }
 
   editSetting(checkbox, value = undefined) {

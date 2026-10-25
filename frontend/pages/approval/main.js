@@ -16,6 +16,7 @@ export class ApprovalPage {
   mount(root) {
     root.innerHTML = ApprovalTemplate;
     this.root = root.querySelector(".approval-dashboard");
+    this.sessionActions = this.root.querySelector("[data-dashboard-session-actions]");
     this.restoreSession();
     this.bindEvents();
   }
@@ -86,11 +87,13 @@ export class ApprovalPage {
   }
 
   showContent() {
+    this.sessionActions.hidden = false;
     this.root.querySelector("#approval-auth").hidden = true;
     this.root.querySelector("#approval-content").hidden = false;
   }
 
   logout() {
+    this.sessionActions.hidden = true;
     this.token = null;
     this.requests = [];
     localStorage.removeItem(TOKEN_KEY);

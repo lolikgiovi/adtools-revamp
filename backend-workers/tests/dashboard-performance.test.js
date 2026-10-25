@@ -103,13 +103,13 @@ describe("dashboard query performance boundaries", () => {
     const sqlite = new DatabaseSync(":memory:");
     sqlite.exec(`
       CREATE TABLE device (device_id TEXT PRIMARY KEY, platform TEXT, app_version TEXT);
-      CREATE TABLE usage_log (user_email TEXT, device_id TEXT, tool_id TEXT, action TEXT, created_time TEXT);
+      CREATE TABLE usage_log (id INTEGER PRIMARY KEY, user_email TEXT, device_id TEXT, tool_id TEXT, action TEXT, created_time TEXT);
       CREATE TABLE tool_usage (
         event_id TEXT UNIQUE, user_email TEXT, device_id TEXT, tool_id TEXT,
         action TEXT, properties TEXT, source TEXT, created_time TEXT
       );
       INSERT INTO device VALUES ('fixture-device', 'Desktop (Tauri)', '1.3.7');
-      INSERT INTO usage_log VALUES
+      INSERT INTO usage_log (user_email, device_id, tool_id, action, created_time) VALUES
         ('fixture@example.com', 'fixture-device', 'quick-query', 'open', datetime('now', '+7 hours', '-1 minute')),
         ('fixture@example.com', 'fixture-device', 'quick-query', 'merge', datetime('now', '+7 hours', '-2 days'));
       INSERT INTO tool_usage VALUES

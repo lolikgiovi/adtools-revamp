@@ -68,3 +68,24 @@
     padding: 24px 16px;
   }
 }
+
+.dashboard-navigation [data-dashboard-session-actions] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.dashboard-navigation [data-dashboard-session-actions][hidden] {
+  display: none;
+}
+.dashboard-navigation {
+  align-items: center;
+  margin-bottom: 16px;
+}
+@media (max-width: 540px) {
+  .dashboard-navigation [data-dashboard-session-actions] {
+    flex-basis: 100%;
+    justify-content: flex-end;
+    padding-top: 8px;
+  }
+}

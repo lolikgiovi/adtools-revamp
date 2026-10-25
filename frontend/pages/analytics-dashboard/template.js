@@ -9,8 +9,6 @@ export const AnalyticsDashboardTemplate = /*html*/ `
             <path d="M7 11V7a5 5 0 0110 0v4"/>
           </svg>
         </div>
-        <h2>Analytics Dashboard</h2>
-        <p class="auth-description">Enter the dashboard password to continue</p>
         <form id="dashboard-auth-form" class="auth-form">
           <div class="form-group">
             <input type="password" id="dashboard-password" class="form-input" name="dashboard-password" aria-label="Dashboard password" placeholder="Password" autocomplete="current-password" required>
@@ -23,13 +21,10 @@ export const AnalyticsDashboardTemplate = /*html*/ `
 
     <!-- Dashboard Content (hidden until authenticated) -->
     <div class="dashboard-content" id="dashboard-content" style="display: none;">
-      <header class="dashboard-heading">
-        <div><h1>Usage &amp; Adoption</h1><p>Understand who uses AD Tools and what they do.</p></div>
-        <div class="dashboard-session-actions">
-          <button type="button" class="btn btn-secondary btn-sm" id="dashboard-refresh">Refresh</button>
-          <button type="button" class="btn btn-outline btn-sm" id="dashboard-logout">Logout</button>
-        </div>
-      </header>
+      <div class="dashboard-session-actions" data-dashboard-session-actions hidden>
+        <button type="button" class="btn btn-secondary btn-sm" id="dashboard-refresh">Refresh</button>
+        <button type="button" class="btn btn-outline btn-sm" id="dashboard-logout">Logout</button>
+      </div>
       <!-- Primary views -->
       <div class="tabs-container">
         <div class="tabs-left" id="dynamic-tabs">

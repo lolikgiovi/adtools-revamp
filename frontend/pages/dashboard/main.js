@@ -32,6 +32,8 @@ export class DashboardPage {
           ? new ApprovalPage()
           : new SettingsPublisher();
     this.child.mount(content);
+    const actions = content.querySelector("[data-dashboard-session-actions]");
+    if (actions) root.querySelector(".dashboard-navigation").append(actions);
   }
 
   unmount() {

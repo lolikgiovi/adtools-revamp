@@ -22,9 +22,15 @@ import {
 } from "../utils/analyticsSchema.js";
 import { clearRateLimit, consumeRateLimit } from "../utils/rateLimit.js";
 
-const RECENT_ACTIVITY_SOURCE_SQL = `SELECT user_email, device_id, tool_id, action, created_time FROM usage_log
+// Legacy client timestamps are Jakarta wall time; explicit offsets already identify an instant.
+function dashboardTimestamp(column) {
+  return `CASE WHEN substr(${column}, -6, 1) IN ('+', '-') OR upper(substr(${column}, -1)) = 'Z'
+    THEN ${column} ELSE ${column} || '+07:00' END`;
+}
+
+const RECENT_ACTIVITY_SOURCE_SQL = `SELECT user_email, device_id, tool_id, action, created_time, 'usage:' || id AS activity_id FROM usage_log
   UNION ALL
-  SELECT user_email, device_id, tool_id, action, created_time FROM tool_usage WHERE source = 'client'`;
+  SELECT user_email, device_id, tool_id, action, created_time, 'tool:' || event_id AS activity_id FROM tool_usage WHERE source = 'client'`;
 
 // Default tab configurations (fallback when KV is empty)
 const DEFAULT_TABS = [
@@ -212,7 +218,7 @@ LIMIT 100`,
     id: "daily",
     name: "Recent Activity",
     query: `WITH activity AS (${RECENT_ACTIVITY_SOURCE_SQL})
-      SELECT STRFTIME('%m-%d / %H:%M', u.created_time) AS time,
+      SELECT STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("u.created_time")}, '+7 hours') AS time,
       SUBSTR(u.user_email, 1, INSTR(u.user_email, '@') - 1) AS user,
       COALESCE(d.platform, 'unknown') AS platform,
       COALESCE(d.app_version, '-') AS app_version,
@@ -221,7 +227,7 @@ LIMIT 100`,
       FROM activity u
       LEFT JOIN device d ON u.device_id = d.device_id
       WHERE u.user_email != 'fashalli.bilhaq@bankmandiri.co.id'
-      ORDER BY u.created_time DESC`,
+      ORDER BY julianday(${dashboardTimestamp("u.created_time")}) DESC, u.activity_id DESC`,
   },
   {
     id: "devices",
@@ -241,13 +247,13 @@ LIMIT 100`,
   {
     id: "events",
     name: "Events",
-    query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time, 
+    query: `SELECT STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("e.created_time")}, '+7 hours') AS time,
       u.email, d.platform, e.feature_id, e.action, e.properties
       FROM events e
       JOIN device d ON e.device_id = d.device_id
       JOIN users u ON d.user_id = u.id
       WHERE u.email != 'fashalli.bilhaq@bankmandiri.co.id'
-      ORDER BY e.created_time DESC`,
+      ORDER BY julianday(${dashboardTimestamp("e.created_time")}) DESC, e.id DESC`,
   },
   {
     id: "friction",
@@ -296,19 +302,19 @@ LIMIT 150`,
   {
     id: "improvement-notes",
     name: "Improvement Notes",
-    query: `SELECT STRFTIME('%m-%d / %H:%M', created_time) AS time,
+    query: `SELECT STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("created_time")}, '+7 hours') AS time,
       SUBSTR(user_email, 1, INSTR(user_email, '@') - 1) AS user,
       COALESCE(tool_id, 'Any tool') AS tool,
       message,
       created_time
       FROM improvement_feedback
-      ORDER BY created_time DESC
+      ORDER BY julianday(${dashboardTimestamp("created_time")}) DESC, id DESC
       LIMIT 200`,
   },
   {
     id: "errors",
     name: "Error Details",
-    query: `SELECT STRFTIME('%m-%d / %H:%M', created_time) AS time,
+    query: `SELECT STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("created_time")}, '+7 hours') AS time,
       SUBSTR(COALESCE(user_email, ''), 1, INSTR(COALESCE(user_email, ''), '@') - 1) AS user,
       runtime,
       app_version,
@@ -323,7 +329,7 @@ LIMIT 150`,
       colno,
       metadata
       FROM error_events
-      ORDER BY created_time DESC
+      ORDER BY julianday(${dashboardTimestamp("created_time")}) DESC, id DESC
       LIMIT 200`,
   },
   {
@@ -383,7 +389,7 @@ ORDER BY errors_30d DESC, last_seen DESC`,
   {
     id: "quick-query",
     name: "Quick Query",
-    query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
+    query: `SELECT STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("e.created_time")}, '+7 hours') AS time,
       SUBSTR(u.email, 1, INSTR(u.email, '@') - 1) AS user,
       d.platform,
       COALESCE(json_extract(e.properties, '$.query_type'), json_extract(e.properties, '$.queryType')) AS type,
@@ -405,7 +411,7 @@ ORDER BY errors_30d DESC, last_seen DESC`,
       JOIN users u ON d.user_id = u.id
       WHERE e.feature_id = 'quick-query' AND e.action = 'query_generated'
         AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
-      ORDER BY e.created_time DESC
+      ORDER BY julianday(${dashboardTimestamp("e.created_time")}) DESC, e.id DESC
       LIMIT 100`,
   },
   {
@@ -448,7 +454,7 @@ LIMIT 150`,
   {
     id: "quick-query-errors",
     name: "QQ Errors",
-    query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
+    query: `SELECT STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("e.created_time")}, '+7 hours') AS time,
       SUBSTR(u.email, 1, INSTR(u.email, '@') - 1) AS user,
       d.platform,
       e.action,
@@ -477,13 +483,13 @@ LIMIT 150`,
           'split_complete'
         )
         AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
-      ORDER BY e.created_time DESC
+      ORDER BY julianday(${dashboardTimestamp("e.created_time")}) DESC, e.id DESC
       LIMIT 100`,
   },
   {
     id: "qq-insights",
     name: "QQ Workflow",
-    query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
+    query: `SELECT STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("e.created_time")}, '+7 hours') AS time,
       SUBSTR(u.email, 1, INSTR(u.email, '@') - 1) AS user,
       e.action,
       json_extract(e.properties, '$.source') AS source,
@@ -514,13 +520,13 @@ LIMIT 150`,
           'download_sql_as'
         )
         AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
-      ORDER BY e.created_time DESC
+      ORDER BY julianday(${dashboardTimestamp("e.created_time")}) DESC, e.id DESC
       LIMIT 100`,
   },
   {
     id: "qq-splits",
     name: "QQ Splits",
-    query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
+    query: `SELECT STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("e.created_time")}, '+7 hours') AS time,
       SUBSTR(u.email, 1, INSTR(u.email, '@') - 1) AS user,
       json_extract(e.properties, '$.mode') AS mode,
       json_extract(e.properties, '$.chunk_count') AS chunks,
@@ -531,7 +537,7 @@ LIMIT 150`,
       JOIN users u ON d.user_id = u.id
       WHERE e.feature_id = 'quick-query' AND e.action = 'split_complete'
         AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
-      ORDER BY e.created_time DESC
+      ORDER BY julianday(${dashboardTimestamp("e.created_time")}) DESC, e.id DESC
       LIMIT 100`,
   },
   {
@@ -573,7 +579,7 @@ LIMIT 20`,
   {
     id: "compare-config",
     name: "Compare Config",
-    query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
+    query: `SELECT STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("e.created_time")}, '+7 hours') AS time,
       SUBSTR(u.email, 1, INSTR(u.email, '@') - 1) AS user,
       d.platform,
       COALESCE(json_extract(e.properties, '$.mode'), '-') AS mode,
@@ -598,7 +604,7 @@ LIMIT 20`,
       WHERE e.feature_id = 'compare-config'
         AND e.action = 'comparison_success'
         AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
-      ORDER BY e.created_time DESC
+      ORDER BY julianday(${dashboardTimestamp("e.created_time")}) DESC, e.id DESC
       LIMIT 150`,
   },
   {
@@ -644,7 +650,7 @@ LIMIT 150`,
   {
     id: "run-query",
     name: "Run Query",
-    query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
+    query: `SELECT STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("e.created_time")}, '+7 hours') AS time,
       SUBSTR(u.email, 1, INSTR(u.email, '@') - 1) AS user,
       e.action,
       json_extract(e.properties, '$.template_name') AS template,
@@ -655,7 +661,7 @@ LIMIT 150`,
       JOIN users u ON d.user_id = u.id
       WHERE e.feature_id = 'run-query'
         AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
-      ORDER BY e.created_time DESC
+      ORDER BY julianday(${dashboardTimestamp("e.created_time")}) DESC, e.id DESC
       LIMIT 100`,
   },
   {
@@ -703,7 +709,7 @@ LIMIT 150`,
   {
     id: "run-batch",
     name: "Run Batch",
-    query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
+    query: `SELECT STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("e.created_time")}, '+7 hours') AS time,
       SUBSTR(u.email, 1, INSTR(u.email, '@') - 1) AS user,
       e.action,
       COALESCE(json_extract(e.properties, '$.env'), '-') AS env,
@@ -716,7 +722,7 @@ LIMIT 150`,
       JOIN users u ON d.user_id = u.id
       WHERE e.feature_id = 'run-batch'
         AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
-      ORDER BY e.created_time DESC
+      ORDER BY julianday(${dashboardTimestamp("e.created_time")}) DESC, e.id DESC
       LIMIT 100`,
   },
   {
@@ -751,7 +757,7 @@ LIMIT 100`,
   {
     id: "json-tools",
     name: "JSON Tools",
-    query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
+    query: `SELECT STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("e.created_time")}, '+7 hours') AS time,
       SUBSTR(u.email, 1, INSTR(u.email, '@') - 1) AS user,
       e.action,
       json_extract(e.properties, '$.from_tab') AS from_tab,
@@ -763,7 +769,7 @@ LIMIT 100`,
       JOIN users u ON d.user_id = u.id
       WHERE e.feature_id = 'json-tools'
         AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
-      ORDER BY e.created_time DESC
+      ORDER BY julianday(${dashboardTimestamp("e.created_time")}) DESC, e.id DESC
       LIMIT 100`,
   },
   {
@@ -857,7 +863,7 @@ LIMIT 150`,
   {
     id: "base64-tools",
     name: "Base64 Tools",
-    query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
+    query: `SELECT STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("e.created_time")}, '+7 hours') AS time,
       SUBSTR(u.email, 1, INSTR(u.email, '@') - 1) AS user,
       e.action,
       json_extract(e.properties, '$.mode') AS mode,
@@ -869,7 +875,7 @@ LIMIT 150`,
       JOIN users u ON d.user_id = u.id
       WHERE e.feature_id = 'base64-tools'
         AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
-      ORDER BY e.created_time DESC
+      ORDER BY julianday(${dashboardTimestamp("e.created_time")}) DESC, e.id DESC
       LIMIT 100`,
   },
   {
@@ -911,7 +917,7 @@ LIMIT 150`,
   {
     id: "qr-tools",
     name: "QR Tools",
-    query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
+    query: `SELECT STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("e.created_time")}, '+7 hours') AS time,
       SUBSTR(u.email, 1, INSTR(u.email, '@') - 1) AS user,
       e.action,
       json_extract(e.properties, '$.mode') AS mode,
@@ -924,7 +930,7 @@ LIMIT 150`,
       JOIN users u ON d.user_id = u.id
       WHERE e.feature_id = 'qr-tools'
         AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
-      ORDER BY e.created_time DESC
+      ORDER BY julianday(${dashboardTimestamp("e.created_time")}) DESC, e.id DESC
       LIMIT 100`,
   },
   {
@@ -960,7 +966,7 @@ LIMIT 100`,
   {
     id: "tlv-viewer",
     name: "TLV Viewer",
-    query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
+    query: `SELECT STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("e.created_time")}, '+7 hours') AS time,
       SUBSTR(u.email, 1, INSTR(u.email, '@') - 1) AS user,
       e.action,
       COALESCE(json_extract(e.properties, '$.format'), '-') AS format,
@@ -975,7 +981,7 @@ LIMIT 100`,
       JOIN users u ON d.user_id = u.id
       WHERE e.feature_id = 'tlv-viewer'
         AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
-      ORDER BY e.created_time DESC
+      ORDER BY julianday(${dashboardTimestamp("e.created_time")}) DESC, e.id DESC
       LIMIT 100`,
   },
   {
@@ -1014,7 +1020,7 @@ LIMIT 100`,
   {
     id: "image-checker",
     name: "Image Checker",
-    query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
+    query: `SELECT STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("e.created_time")}, '+7 hours') AS time,
       SUBSTR(u.email, 1, INSTR(u.email, '@') - 1) AS user,
       e.action,
       json_extract(e.properties, '$.image_count') AS images,
@@ -1027,7 +1033,7 @@ LIMIT 100`,
       JOIN users u ON d.user_id = u.id
       WHERE e.feature_id = 'check-image'
         AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
-      ORDER BY e.created_time DESC
+      ORDER BY julianday(${dashboardTimestamp("e.created_time")}) DESC, e.id DESC
       LIMIT 100`,
   },
   {
@@ -1067,7 +1073,7 @@ LIMIT 100`,
   {
     id: "html-splunk",
     name: "HTML & Splunk",
-    query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
+    query: `SELECT STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("e.created_time")}, '+7 hours') AS time,
       SUBSTR(u.email, 1, INSTR(u.email, '@') - 1) AS user,
       e.feature_id AS tool,
       e.action,
@@ -1077,7 +1083,7 @@ LIMIT 100`,
       JOIN users u ON d.user_id = u.id
       WHERE e.feature_id IN ('html-template', 'splunk-template')
         AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
-      ORDER BY e.created_time DESC
+      ORDER BY julianday(${dashboardTimestamp("e.created_time")}) DESC, e.id DESC
       LIMIT 100`,
   },
   {
@@ -1168,7 +1174,7 @@ LIMIT 150`,
   {
     id: "uuid-sql",
     name: "UUID & SQL IN",
-    query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
+    query: `SELECT STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("e.created_time")}, '+7 hours') AS time,
       SUBSTR(u.email, 1, INSTR(u.email, '@') - 1) AS user,
       e.feature_id AS tool,
       e.action,
@@ -1180,7 +1186,7 @@ LIMIT 150`,
       JOIN users u ON d.user_id = u.id
       WHERE e.feature_id IN ('uuid-generator', 'sql-in-clause')
         AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
-      ORDER BY e.created_time DESC
+      ORDER BY julianday(${dashboardTimestamp("e.created_time")}) DESC, e.id DESC
       LIMIT 100`,
   },
   {
@@ -1220,7 +1226,7 @@ LIMIT 150`,
   {
     id: "merge-sql",
     name: "Merge SQL",
-    query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
+    query: `SELECT STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("e.created_time")}, '+7 hours') AS time,
       SUBSTR(u.email, 1, INSTR(u.email, '@') - 1) AS user,
       e.action,
       COALESCE(json_extract(e.properties, '$.input_mode'), '-') AS input_mode,
@@ -1236,7 +1242,7 @@ LIMIT 150`,
       JOIN users u ON d.user_id = u.id
       WHERE e.feature_id = 'merge-sql'
         AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
-      ORDER BY e.created_time DESC
+      ORDER BY julianday(${dashboardTimestamp("e.created_time")}) DESC, e.id DESC
       LIMIT 100`,
   },
   {
@@ -1277,7 +1283,7 @@ LIMIT 100`,
   {
     id: "master-lockey",
     name: "Master Lockey",
-    query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
+    query: `SELECT STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("e.created_time")}, '+7 hours') AS time,
       SUBSTR(u.email, 1, INSTR(u.email, '@') - 1) AS user,
       e.action,
       COALESCE(json_extract(e.properties, '$.tab'), '-') AS tab,
@@ -1291,7 +1297,7 @@ LIMIT 100`,
       JOIN users u ON d.user_id = u.id
       WHERE e.feature_id = 'master-lockey'
         AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
-      ORDER BY e.created_time DESC
+      ORDER BY julianday(${dashboardTimestamp("e.created_time")}) DESC, e.id DESC
       LIMIT 100`,
   },
   {
@@ -2168,7 +2174,10 @@ ORDER BY tool_total DESC, tool_id, row_type, total_count DESC`;
       data: result.results || [],
       mode: "computed-tools",
       ...(env.dashboardDeviceScope && env.dashboardDeviceScope !== "[]"
-        ? { warning: "Legacy lifetime totals have no device attribution and may still include excluded devices. Recent device-level usage is filtered." }
+        ? {
+            warning:
+              "Legacy lifetime totals have no device attribution and may still include excluded devices. Recent device-level usage is filtered.",
+          }
         : {}),
     });
     setCachedDashboardQueryBody(env, cacheKey, body);
@@ -2541,18 +2550,20 @@ function normalizeDashboardPagination(body = {}) {
     .trim()
     .toLowerCase()
     .slice(0, 120);
-  return { page, pageSize, search };
+  const sort = body.sort === "asc" ? "asc" : "desc";
+  return { page, pageSize, search, sort };
 }
 
 function buildPaginatedDashboardQuery(tabId, pagination, rangeConfig) {
-  const { page, pageSize, search } = pagination;
+  const { page, pageSize, search, sort } = pagination;
+  const direction = sort === "asc" ? "ASC" : "DESC";
   const offset = (page - 1) * pageSize;
   const searchPattern = `%${search}%`;
   const limit = pageSize + 1;
 
   if (tabId === "daily") {
     const query = `WITH activity AS (${RECENT_ACTIVITY_SOURCE_SQL})
-      SELECT STRFTIME('%m-%d / %H:%M', u.created_time) AS time,
+      SELECT STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("u.created_time")}, '+7 hours') AS time,
       SUBSTR(u.user_email, 1, INSTR(u.user_email, '@') - 1) AS user,
       COALESCE(d.platform, 'unknown') AS platform,
       COALESCE(d.app_version, '-') AS app_version,
@@ -2564,14 +2575,14 @@ function buildPaginatedDashboardQuery(tabId, pagination, rangeConfig) {
         ${rangeConfig.where("u.created_time")}
         AND (
           ? = ''
-          OR LOWER(STRFTIME('%m-%d / %H:%M', u.created_time)) LIKE ?
+          OR LOWER(STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("u.created_time")}, '+7 hours')) LIKE ?
           OR LOWER(SUBSTR(u.user_email, 1, INSTR(u.user_email, '@') - 1)) LIKE ?
           OR LOWER(COALESCE(d.platform, 'unknown')) LIKE ?
           OR LOWER(COALESCE(d.app_version, '-')) LIKE ?
           OR LOWER(COALESCE(u.tool_id, '')) LIKE ?
           OR LOWER(COALESCE(u.action, '')) LIKE ?
         )
-      ORDER BY u.created_time DESC
+      ORDER BY julianday(${dashboardTimestamp("u.created_time")}) ${direction}, u.activity_id ${direction}
       LIMIT ? OFFSET ?`;
     return {
       query,
@@ -2579,7 +2590,7 @@ function buildPaginatedDashboardQuery(tabId, pagination, rangeConfig) {
     };
   }
 
-  const query = `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
+  const query = `SELECT STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("e.created_time")}, '+7 hours') AS time,
       u.email, d.platform, e.feature_id, e.action, e.properties
       FROM events e
       JOIN device d ON e.device_id = d.device_id
@@ -2587,14 +2598,14 @@ function buildPaginatedDashboardQuery(tabId, pagination, rangeConfig) {
       WHERE u.email != '${EXCLUDED_ANALYTICS_EMAIL}'
         AND (
           ? = ''
-          OR LOWER(STRFTIME('%m-%d / %H:%M', e.created_time)) LIKE ?
+          OR LOWER(STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("e.created_time")}, '+7 hours')) LIKE ?
           OR LOWER(COALESCE(u.email, '')) LIKE ?
           OR LOWER(COALESCE(d.platform, '')) LIKE ?
           OR LOWER(COALESCE(e.feature_id, '')) LIKE ?
           OR LOWER(COALESCE(e.action, '')) LIKE ?
           OR LOWER(COALESCE(e.properties, '')) LIKE ?
         )
-      ORDER BY e.created_time DESC
+      ORDER BY julianday(${dashboardTimestamp("e.created_time")}) ${direction}, e.id ${direction}
       LIMIT ? OFFSET ?`;
   return {
     query,
@@ -2607,7 +2618,7 @@ async function executePaginatedDashboardQuery(env, tabId, pagination, range) {
 
   const rangeConfig = getDashboardRangeConfig(range);
   const { query, args } = buildPaginatedDashboardQuery(tabId, pagination, rangeConfig);
-  const cacheKey = `tab:${tabId}:range:${rangeConfig.id}:page:${pagination.page}:size:${pagination.pageSize}:search:${pagination.search}`;
+  const cacheKey = `tab:${tabId}:range:${rangeConfig.id}:page:${pagination.page}:size:${pagination.pageSize}:search:${pagination.search}:sort:${pagination.sort}`;
   try {
     const body = await coalesceDashboardQuery(env, cacheKey, async () => {
       await prepareDashboardSchema(env, query);

@@ -9,7 +9,7 @@ import "./styles.css";
 const API_BASE = String(import.meta.env.VITE_WORKER_BASE || (import.meta.env.DEV ? "http://localhost:8787" : "")).replace(/\/$/, "");
 const TOKEN_KEY = "analytics.dashboard.token";
 const PRIMARY_VIEWS = [
-  { id: "overview", label: "Overview" },
+  { id: "overview", label: "Summary" },
   { id: "opportunities", label: "Tools" },
   { id: "who", label: "People" },
   { id: "daily", label: "Activity" },
@@ -56,6 +56,8 @@ class AnalyticsDashboardPage {
     this.tabsRequestId = 0;
     this.authRequestId = 0;
     this.documentKeydownListener = null;
+    this.sortColumn = null;
+    this.sortDirection = "desc";
     this.pagination = {
       daily: { page: 0, pageSize: 100, hasMore: false, search: "", rows: [], loading: false },
       events: { page: 0, pageSize: 100, hasMore: false, search: "", rows: [], loading: false },
@@ -66,6 +68,8 @@ class AnalyticsDashboardPage {
     if (!root) return;
     root.innerHTML = AnalyticsDashboardTemplate;
     this.container = root.querySelector(".analytics-dashboard");
+
+    this.sessionActions = this.container.querySelector("[data-dashboard-session-actions]");
 
     // Check for existing token
     try {
@@ -194,11 +198,13 @@ class AnalyticsDashboardPage {
 
   showDashboard() {
     if (!this.container) return;
+    this.sessionActions.hidden = false;
     this.container.querySelector("#dashboard-auth").style.display = "none";
     this.container.querySelector("#dashboard-content").style.display = "flex";
   }
 
   logout() {
+    this.sessionActions.hidden = true;
     this.invalidateDataRequests();
     this.tabsRequestId += 1;
     this.authRequestId += 1;
@@ -262,7 +268,7 @@ class AnalyticsDashboardPage {
         }
         // Auto-select first tab
         if (this.tabs.length > 0) {
-          this.switchTab(this.tabs[0].id);
+          this.switchTab(this.tabs.some((tab) => tab.id === "overview") ? "overview" : this.tabs[0].id);
         }
       } else {
         tabsContainer.innerHTML = `<span style="color: hsl(var(--destructive));">${data.error || "Failed to load tabs"}</span>`;
@@ -282,7 +288,7 @@ class AnalyticsDashboardPage {
     tabsContainer.innerHTML =
       PRIMARY_VIEWS.filter((view) => this.tabs.some((tab) => tab.id === view.id))
         .map((view) => `<button type="button" class="tab-button" data-tab="${view.id}">${view.label}</button>`)
-        .join("") + '<button type="button" class="tab-button" data-library>Reports</button>';
+        .join("") + '<button type="button" class="tab-button" data-library>Detailed reports</button>';
     tabsContainer.querySelectorAll("[data-tab]").forEach((button) => {
       button.addEventListener("click", () => this.switchTab(button.dataset.tab));
     });
@@ -315,6 +321,7 @@ class AnalyticsDashboardPage {
         : primary?.label || this.tabs.find((tab) => tab.id === this.currentTab)?.name || "Overview";
     const ranged = RANGED_REPORTS.has(this.currentTab);
     const scope = this.container.querySelector("#dashboard-scope");
+    if (scope) scope.hidden = true;
     if (scope)
       scope.textContent = library
         ? "Browse by tool or search all reports."
@@ -396,6 +403,8 @@ class AnalyticsDashboardPage {
   switchTab(tabId) {
     if (!this.container) return;
     this.selectedPerson = null;
+    this.sortColumn = null;
+    this.sortDirection = "desc";
     this.currentTab = tabId;
     this.filterText = "";
     const searchInput = this.container.querySelector("#dashboard-search");
@@ -489,6 +498,17 @@ class AnalyticsDashboardPage {
     if (!append) content.innerHTML = "";
 
     try {
+      const rankingRequest =
+        tabId === "overview" && this.tabs.some((tab) => tab.id === "opportunities")
+          ? fetch(`${API_BASE}/dashboard/query`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.token}` },
+              body: JSON.stringify({ tabId: "opportunities", range: this.selectedRange }),
+              signal,
+            })
+              .then((response) => (response.ok ? response.json() : null))
+              .catch(() => null)
+          : Promise.resolve(null);
       const res = await fetch(`${API_BASE}/dashboard/query`, {
         method: "POST",
         headers: {
@@ -497,7 +517,7 @@ class AnalyticsDashboardPage {
         },
         body: JSON.stringify(
           paginated
-            ? { tabId, range: this.selectedRange, page, pageSize: paginationState.pageSize, search }
+            ? { tabId, range: this.selectedRange, page, pageSize: paginationState.pageSize, search, sort: this.sortDirection }
             : { tabId, range: this.selectedRange },
         ),
         signal,
@@ -509,7 +529,9 @@ class AnalyticsDashboardPage {
       }
 
       const data = await res.json();
+      const ranking = await rankingRequest;
       if (!this.isDataRequestCurrent(requestId, tabId, content)) return;
+      if (ranking?.ok && Array.isArray(ranking.data)) this.cache[this.getCacheKey("opportunities")] = ranking.data;
 
       if (data.ok && Array.isArray(data.data)) {
         this.reportWarnings[tabId] = typeof data.warning === "string" ? data.warning : "";
@@ -609,7 +631,35 @@ class AnalyticsDashboardPage {
       return;
     }
 
-    const headerCells = columns.map((col) => `<th>${this.formatHeader(col)}</th>`).join("");
+    const dateColumns = columns.filter((col) =>
+      /^(time|date|day|created_time|created_at|last_seen|last_activity|last_updated|requested_at|approved_at)$/.test(col),
+    );
+    const sortColumn = this.sortColumn || dateColumns.find((col) => ["time", "date", "day", "created_time", "created_at"].includes(col));
+    if (sortColumn && !this.isPaginatedTab(this.currentTab)) {
+      const timestamp = (value) => {
+        let raw = String(value || "").replace(" / ", " ");
+        if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) raw += "T00:00:00";
+        if (!/^\d{4}-\d{2}-\d{2}/.test(raw)) return null;
+        const parsed = Date.parse(/(?:Z|[+-]\d{2}:\d{2})$/.test(raw) ? raw : `${raw.replace(" ", "T")}+07:00`);
+        return Number.isFinite(parsed) ? parsed : null;
+      };
+      data = [...data].sort((a, b) => {
+        const left = timestamp(a[sortColumn]);
+        const right = timestamp(b[sortColumn]);
+        if (left === null) return right === null ? 0 : 1;
+        if (right === null) return -1;
+        return (left - right) * (this.sortDirection === "asc" ? 1 : -1);
+      });
+    }
+    const headerCells = columns
+      .map((col) =>
+        dateColumns.includes(col)
+          ? `<th aria-sort="${col === sortColumn ? (this.sortDirection === "asc" ? "ascending" : "descending") : "none"}">
+          <button type="button" class="table-sort" data-sort-column="${col}">${this.formatHeader(col)}
+          ${col === sortColumn ? (this.sortDirection === "asc" ? "↑" : "↓") : ""}</button></th>`
+          : `<th>${this.formatHeader(col)}</th>`,
+      )
+      .join("");
     const rows = data
       .map((row) => {
         const cells = columns
@@ -624,7 +674,7 @@ class AnalyticsDashboardPage {
       .join("");
 
     container.innerHTML = `
-      <div class="table-info">${this.formatTableInfo(data.length)} - click a row for details</div>
+      <div class="table-info">${this.formatTableInfo(data.length)}${dateColumns.length ? " · Asia/Jakarta" : ""}</div>
       <div class="table-wrapper">
         <table class="dashboard-table">
           <thead><tr>${headerCells}</tr></thead>
@@ -632,6 +682,18 @@ class AnalyticsDashboardPage {
         </table>
       </div>
     `;
+
+    container.querySelectorAll("[data-sort-column]").forEach((button) => {
+      button.addEventListener("click", () => {
+        this.sortDirection = sortColumn === button.dataset.sortColumn && this.sortDirection === "desc" ? "asc" : "desc";
+        this.sortColumn = button.dataset.sortColumn;
+        if (this.isPaginatedTab(this.currentTab)) {
+          this.resetPagination(this.currentTab, this.filterText);
+          this.invalidateDataRequests();
+          this.loadCurrentTabData();
+        } else this.renderTable(container, this.lastRenderedData);
+      });
+    });
 
     // Bind row click events
     container.querySelectorAll(".dashboard-table tbody tr").forEach((tr, idx) => {
@@ -650,17 +712,19 @@ class AnalyticsDashboardPage {
   renderToolInsights(container, data) {
     const number = (value) => new Intl.NumberFormat().format(Number(value) || 0);
     const total = this.lastRenderedData.reduce((sum, row) => sum + (Number(row.successful_uses) || 0), 0);
-    container.innerHTML = `<div class="tools-summary"><span>${number(data.length)} ${this.filterText ? "matching " : ""}tools</span>
+    container.innerHTML = `<div class="tools-summary"><span>${number(data.length)} ${this.filterText ? "matching " : ""}tools · ${number(total)} successful uses</span>
       <details class="counting-help"><summary>How counts work</summary><p>Successful uses are completed tool actions.
       Repeat users have at least two successful uses in the selected period; this does not measure returning on another day.</p></details></div>
       <div class="table-wrapper"><table class="dashboard-table tool-insights-table">
-      <thead><tr><th>Tool</th><th>Users</th><th>Successful Uses</th><th>Repeat Users</th><th>Most Used Action</th><th>Details</th></tr></thead>
+      <thead><tr><th>Tool</th><th>Users</th><th>Successful Uses</th><th>Share of Uses</th><th>Repeat Users</th><th>Most Used Action</th><th>Details</th></tr></thead>
       <tbody>${data
         .map((row, index) => {
           const share = total ? Math.max(0, Math.min(100, (Number(row.successful_uses) / total) * 100)) : 0;
           return `<tr><td>${this.escapeHtml(this.formatToolName(row.tool_id))}
           <span class="tool-usage-bar" style="--usage-share:${share}%" aria-hidden="true"></span></td>
           <td>${number(row.users)}</td><td>${number(row.successful_uses)}</td>
+          <td><span class="usage-share"><span class="usage-share-track" aria-hidden="true"><span style="width:${share}%"></span></span>
+          ${new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(share)}%</span></td>
           <td>${number(row.repeat_users)} of ${number(row.users)}</td>
           <td>${this.escapeHtml(this.formatTitleValue(row.top_action))}</td>
           <td><button type="button" class="btn btn-outline btn-sm" data-tool-detail="${index}"
@@ -668,7 +732,47 @@ class AnalyticsDashboardPage {
         })
         .join("")}</tbody></table></div>`;
     container.querySelectorAll("[data-tool-detail]").forEach((button) => {
-      button.addEventListener("click", () => this.showRowDetail(data[Number(button.dataset.toolDetail)]));
+      button.addEventListener("click", () => this.renderToolDetail(container, data[Number(button.dataset.toolDetail)]));
+    });
+  }
+
+  renderToolDetail(container, row) {
+    const tool = this.formatToolName(row.tool_id);
+    const number = (value) => new Intl.NumberFormat().format(Number(value) || 0);
+    const reports = this.tabs.filter(
+      (tab) =>
+        tab.id === row.tool_id || REPORT_GROUPS.some(([name, ids]) => name.toLowerCase() === tool.toLowerCase() && ids.includes(tab.id)),
+    );
+    container.innerHTML = `<section class="tool-detail">
+      <button type="button" class="btn btn-outline btn-sm" data-tools-back>Back to tools</button>
+      <h2>${this.escapeHtml(tool)}</h2>
+      <dl class="overview-stats">
+        <div><dt>People</dt><dd>${number(row.users)}</dd></div>
+        <div><dt>Successful uses</dt><dd>${number(row.successful_uses)}</dd></div>
+        <div><dt>Repeat users</dt><dd>${number(row.repeat_users)} / ${number(row.users)}</dd></div>
+        <div><dt>Most used action</dt><dd>${this.escapeHtml(this.formatTitleValue(row.top_action))}</dd></div>
+      </dl>
+      <div class="tool-detail-reports">
+        ${reports
+          .map(
+            (tab) => `<button type="button" class="btn btn-secondary btn-sm" data-tool-report="${this.escapeHtml(tab.id)}">
+          ${this.escapeHtml(tab.name)}</button>`,
+          )
+          .join("")}
+        ${this.tabs.some((tab) => tab.id === "daily") ? '<button type="button" class="btn btn-secondary btn-sm" data-tool-activity>View activity</button>' : ""}
+      </div>
+      <details class="counting-help"><summary>How counts work</summary><p>Repeat users have at least two successful uses in the selected period.
+        Detailed reports use their own date windows; activity follows the selected range.</p></details>
+    </section>`;
+    container.querySelector("[data-tools-back]").addEventListener("click", () => this.renderTable(container, this.lastRenderedData));
+    container.querySelectorAll("[data-tool-report]").forEach((button) => {
+      button.addEventListener("click", () => this.switchTab(button.dataset.toolReport));
+    });
+    container.querySelector("[data-tool-activity]")?.addEventListener("click", () => {
+      this.switchTab("daily");
+      const input = this.container.querySelector("#dashboard-search");
+      input.value = row.tool_id;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
     });
   }
 
@@ -1033,16 +1137,17 @@ class AnalyticsDashboardPage {
     const rawError = String(metrics.get("Noisiest error") || "—");
     const errorParts = rawError.match(/^(.*?) \/ (.*?) \(([\d,]+)\)$/);
     const topError = errorParts ? `${this.formatToolName(errorParts[1])} · ${errorParts[2]} · ${errorParts[3]} reports` : rawError;
+    const rankedTools = (this.cache[this.getCacheKey("opportunities")] || []).filter((row) => Number(row.successful_uses) > 0).slice(0, 5);
     const stats = [
-      ["Active People", count("Active users")],
-      ["Successful Uses", count("Successful tool uses")],
-      ["Tool Opens", count("Tool opens")],
-      ["People with Errors", count("Affected users")],
+      ["Active People", count("Active users"), "who"],
+      ["Successful Uses", count("Successful tool uses"), "opportunities"],
+      ["Tool Opens", count("Tool opens"), "daily"],
+      ["People with Errors", count("Affected users"), "errors"],
     ];
     container.innerHTML = `<div class="owner-overview"><dl class="overview-stats">${stats
       .map(
-        ([label, value]) =>
-          `<div><dt>${label}</dt><dd>${value}</dd>${label === "People with Errors" ? `<small>${count("Uncaught errors")} uncaught reports</small>` : ""}</div>`,
+        ([label, value, view]) =>
+          `<div><dt>${label}</dt><dd><button type="button" data-overview-view="${view}" aria-label="Inspect ${label.toLowerCase()}">${value}</button></dd>${label === "People with Errors" ? `<small>${count("Uncaught errors")} uncaught reports</small>` : ""}</div>`,
       )
       .join("")}</dl>
       <section class="overview-observation"><div><h2>Where Usage Concentrates</h2><p><strong>${this.escapeHtml(toolName)}</strong>
@@ -1052,18 +1157,51 @@ class AnalyticsDashboardPage {
             : top
               ? `has ${new Intl.NumberFormat().format(Number(top[2].replaceAll(",", "")))} successful uses.`
               : ""
-        }</p></div>
+        }</p>${
+          total !== null && numeric("Active users") > 0
+            ? `<p class="overview-derived">${new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(total / numeric("Active users"))} successful uses per active person.</p>`
+            : ""
+        }</div>
         <button type="button" class="btn btn-secondary btn-sm" data-overview-view="opportunities">Explore Tools</button></section>
+      ${
+        rankedTools.length
+          ? `<section class="overview-ranking"><h2>Most used tools</h2><ol>
+        ${rankedTools
+          .map((row) => {
+            const percent = total > 0 ? Math.max(0, Math.min(100, (Number(row.successful_uses) / total) * 100)) : 0;
+            return `<li><button type="button" data-overview-tool="${this.escapeHtml(row.tool_id)}">
+            <span>${this.escapeHtml(this.formatToolName(row.tool_id))}</span>
+            <span class="overview-ranking-track" aria-hidden="true"><span style="width:${percent}%"></span></span>
+            <strong>${new Intl.NumberFormat().format(Number(row.successful_uses))}</strong>
+            <span>${new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(percent)}%</span>
+          </button></li>`;
+          })
+          .join("")}</ol></section>`
+          : ""
+      }
       <section class="overview-observation"><div><h2>Most Reported Error</h2><p>${this.escapeHtml(topError)}</p>
         <small>Error reports are counted separately from successful uses.</small></div>
         <button type="button" class="btn btn-outline btn-sm" data-overview-view="errors"
           title="Error Details uses its own report-defined time period">Inspect Errors</button></section>
+      <div class="overview-investigate">
+        ${this.tabs.some((tab) => tab.id === "who") ? '<button type="button" class="btn btn-outline btn-sm" data-overview-view="who">Explore people</button>' : ""}
+        ${this.tabs.some((tab) => tab.id === "daily") ? '<button type="button" class="btn btn-outline btn-sm" data-overview-view="daily">Recent activity</button>' : ""}
+        <button type="button" class="btn btn-outline btn-sm" data-overview-view="__reports">All detailed reports</button>
+      </div>
       <details class="counting-help"><summary>About these metrics</summary><p>Active people have recorded tool usage.
         Successful uses count completed actions; tool opens count navigation. Multiple uses can follow one open.
         People with errors are counted from uncaught reports and may differ from the active-people population.</p></details></div>`;
+    container.querySelectorAll("[data-overview-tool]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const row = rankedTools.find((item) => item.tool_id === button.dataset.overviewTool);
+        this.switchTab("opportunities");
+        this.renderToolDetail(container, row);
+      });
+    });
     container.querySelectorAll("[data-overview-view]").forEach((button) =>
       button.addEventListener("click", () => {
-        if (button.dataset.overviewView === "errors" && !this.tabs.some((tab) => tab.id === "errors")) this.showReportLibrary();
+        if (button.dataset.overviewView === "__reports") this.showReportLibrary();
+        else if (button.dataset.overviewView === "errors" && !this.tabs.some((tab) => tab.id === "errors")) this.showReportLibrary();
         else this.switchTab(button.dataset.overviewView);
       }),
     );
@@ -1211,7 +1349,7 @@ class AnalyticsDashboardPage {
     if (this.isPaginatedTab(tabId)) {
       const state = this.pagination[tabId];
       const requestedPage = page || state?.page || 1;
-      return `${tabId}:${tabId === "daily" ? this.selectedRange : "all"}:${requestedPage}:${state?.pageSize || 100}:${state?.search || ""}`;
+      return `${tabId}:${tabId === "daily" ? this.selectedRange : "all"}:${requestedPage}:${state?.pageSize || 100}:${state?.search || ""}:${this.sortDirection}`;
     }
     return RANGED_REPORTS.has(tabId) ? `${tabId}:${this.selectedRange}` : tabId;
   }

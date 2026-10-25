@@ -2,9 +2,6 @@ export const ApprovalTemplate = /* html */ `
   <section class="approval-dashboard">
     <div class="approval-auth" id="approval-auth">
       <div class="approval-auth-card">
-        <div class="approval-auth-mark" aria-hidden="true">A</div>
-        <h1>Account Approval</h1>
-        <p>Use the analytics dashboard password to review registration requests.</p>
         <form id="approval-auth-form">
           <label for="approval-password">Dashboard password</label>
           <input type="password" id="approval-password" class="approval-input" autocomplete="current-password" required>
@@ -15,17 +12,10 @@ export const ApprovalTemplate = /* html */ `
     </div>
 
     <div class="approval-content" id="approval-content" hidden>
-      <header class="approval-header">
-        <div>
-          <span class="approval-eyebrow">Registration control</span>
-          <h1>Account approvals</h1>
-          <p>Review the device identity before granting access.</p>
-        </div>
-        <div class="approval-header-actions">
-          <button type="button" class="btn btn-secondary" id="approval-refresh">Refresh</button>
-          <button type="button" class="btn btn-secondary" id="approval-logout">Log out</button>
-        </div>
-      </header>
+      <div class="approval-header-actions" data-dashboard-session-actions hidden>
+        <button type="button" class="btn btn-secondary btn-sm" id="approval-refresh">Refresh</button>
+        <button type="button" class="btn btn-secondary btn-sm" id="approval-logout">Logout</button>
+      </div>
 
       <div class="approval-toolbar">
         <div class="approval-tabs" role="tablist" aria-label="Approval status">

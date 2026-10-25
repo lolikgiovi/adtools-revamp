@@ -1186,3 +1186,156 @@
     gap: 0.75rem;
   }
 }
+
+.analytics-dashboard .tabs-container {
+  padding: 0;
+}
+.table-sort {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.table-sort:focus-visible,
+.overview-stats dd button:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 4px;
+}
+.overview-stats dd button {
+  color: hsl(var(--foreground));
+  font: inherit;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+.overview-stats dd button:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.overview-investigate,
+.tool-detail-reports {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.overview-observation .overview-derived {
+  margin-top: 8px;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.8125rem;
+}
+.tool-detail {
+  display: grid;
+  gap: 20px;
+}
+.tool-detail > button {
+  justify-self: start;
+}
+.tool-detail h2 {
+  font-size: 1.125rem;
+  margin: 0;
+}
+.tool-detail .overview-stats dd {
+  font-size: 1.125rem;
+}
+.usage-share {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.usage-share-track {
+  width: 72px;
+  height: 5px;
+  background: hsl(var(--muted));
+  overflow: hidden;
+}
+.usage-share-track > span {
+  display: block;
+  height: 100%;
+  background: hsl(var(--foreground));
+}
+.tool-insights-table .tool-usage-bar {
+  display: none;
+}
+@media (max-width: 540px) {
+  .overview-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 24px;
+  }
+  .overview-observation {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .tools-summary {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .tools-summary .counting-help {
+    text-align: left;
+  }
+  .tools-summary .counting-help summary {
+    margin-left: 0;
+  }
+}
+.overview-ranking {
+  border-bottom: 1px solid hsl(var(--border));
+  padding-bottom: 20px;
+}
+.overview-ranking h2 {
+  font-size: 0.875rem;
+  margin: 0 0 12px;
+}
+.overview-ranking ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.overview-ranking button {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) minmax(60px, 2fr) 60px 52px;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 0;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--foreground));
+  font: inherit;
+  font-size: 0.8125rem;
+  text-align: left;
+  cursor: pointer;
+}
+.overview-ranking button:hover {
+  background: hsl(var(--accent));
+}
+.overview-ranking button:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+.overview-ranking button > :nth-last-child(-n + 2) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.overview-ranking-track {
+  height: 6px;
+  background: hsl(var(--muted));
+}
+.overview-ranking-track > span {
+  display: block;
+  height: 100%;
+  background: hsl(var(--foreground));
+}
+@media (max-width: 420px) {
+  .overview-ranking button {
+    grid-template-columns: minmax(90px, 1fr) minmax(30px, 1fr) 45px 45px;
+    gap: 8px;
+  }
+}
