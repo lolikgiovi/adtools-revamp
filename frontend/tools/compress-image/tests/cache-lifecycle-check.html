@@ -10,9 +10,35 @@
       if (location.port !== "1235") throw new Error("Use the disposable localhost:1235 test origin.");
       const bytes = new Uint8Array(7 * 1024 * 1024);
       for (let i = 0; i < bytes.length; i++) bytes[i] = i % 251;
-      await saveWorkspace({
-        items: [{ file: new File([bytes], "cache.png", { type: "image/png" }), blob: new Blob([bytes], { type: "image/png" }) }],
+      // Seed the previous Blob-based format to verify existing caches still load.
+      await new Promise((resolve, reject) => {
+        const request = indexedDB.open("adtools-compress-image", 1);
+        request.onsuccess = () => {
+          const db = request.result;
+          const transaction = db.transaction("workspace", "readwrite");
+          transaction.objectStore("workspace").put(
+            {
+              items: [{ file: new File([bytes], "cache.png", { type: "image/png" }), blob: new Blob([bytes], { type: "image/png" }) }],
+            },
+            "current",
+          );
+          transaction.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          transaction.onabort = () => {
+            db.close();
+            reject(transaction.error);
+          };
+        };
+        request.onupgradeneeded = () => request.result.createObjectStore("workspace");
+        request.onerror = () => reject(request.error);
       });
+      const legacy = await loadWorkspace();
+      if (!(legacy.items[0].file instanceof File) || (await legacy.items[0].blob.arrayBuffer()).byteLength !== bytes.length) {
+        throw new Error("Legacy Blob cache failed to hydrate");
+      }
+      checks.push("Legacy Blob cache hydrates into independent image data");
       for (let cycle = 0; cycle < 12; cycle++) {
         const snapshot = await loadWorkspace();
         const item = snapshot.items[0];

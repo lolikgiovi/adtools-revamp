@@ -1,8 +1,18 @@
 {
-  "status": "FAIL",
+  "status": "PASS",
   "checks": [
-    "7 MB original/result survive cache overwrite 1"
-  ],
-  "error": "Error: Corrupt cache at cycle 1\n    at http://localhost:1235/tools/compress-image/tests/cache-lifecycle-check.html?html-proxy&index=0.js:24:19",
-  "name": "Error"
+    "Legacy Blob cache hydrates into independent image data",
+    "7 MB original/result survive cache overwrite 1",
+    "7 MB original/result survive cache overwrite 2",
+    "7 MB original/result survive cache overwrite 3",
+    "7 MB original/result survive cache overwrite 4",
+    "7 MB original/result survive cache overwrite 5",
+    "7 MB original/result survive cache overwrite 6",
+    "7 MB original/result survive cache overwrite 7",
+    "7 MB original/result survive cache overwrite 8",
+    "7 MB original/result survive cache overwrite 9",
+    "7 MB original/result survive cache overwrite 10",
+    "7 MB original/result survive cache overwrite 11",
+    "7 MB original/result survive cache overwrite 12"
+  ]
 }

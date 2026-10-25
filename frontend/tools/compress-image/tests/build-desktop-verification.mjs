@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
+const cachePreview = process.argv.includes("--cache-preview");
 const root = fileURLToPath(new URL("../../../../", import.meta.url));
 const output = resolve(root, "tauri/target/image-optimizer-verification");
 const config = resolve(root, "tauri/target/image-optimizer-verification.json");
@@ -21,7 +22,7 @@ writeFileSync(
             title: "AD Tools — Image optimizer verification",
             width: 1200,
             height: 900,
-            url: "tools/compress-image/tests/browser.html",
+            url: cachePreview ? "tools/compress-image/tests/cache-preview-roundtrip.html?large" : "tools/compress-image/tests/browser.html",
           },
         ],
       },

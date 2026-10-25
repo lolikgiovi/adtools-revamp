@@ -1,0 +1,178 @@
+Window: "AD Tools — Image optimizer verification", App: AD Tools Image Optimizer Verification.
+0 standard window AD Tools — Image optimizer verification, Secondary Actions: Raise
+	1 scroll area
+		2 HTML content Description: Cached image preview round trip, URL: tauri://localhost/tools/compress-image/tests/cache-preview-roundtrip.html?large
+			3 text {
+  "status": "PASS",
+  "sizes": [
+    6628207,
+    6628459,
+    6628510
+  ],
+  "checks": [
+    "Quick Query imports three distinct PNGs",
+    "All three images compressed",
+    "Each PNG has real Lossless and Lossy variants",
+    "Persisted originals and results contain image bytes, independent of browser Blob backing",
+    "Stored bytes restore into usable files and result blobs",
+    "Cached three images survive alongside three compressed attachments imported again",
+    "After append round trip: row 1 o
+			4 container Compress Image
+				5 file upload button Add images
+				6 container Compression settings
+					7 container Max dimensions
+						8 text Max dimensions
+						9 container Fit within max width and height. Preserves aspect ratio; never crops or upscales.
+							10 switch (settable, boolean) Fit within max width and height. Preserves aspect ratio; never crops or upscales., Value: off
+							11 text Max dimensions
+						12 container
+							13 text Max width
+							14 number field (disabled, settable) Max width, Value: 1440
+								15 stepper 0
+									16 unknown
+									17 unknown
+						18 container
+							19 text Max height
+							20 number field (disabled, settable) Max height, Value: 3200
+								21 stepper 0
+									22 unknown
+									23 unknown
+					24 container Target file size
+						25 text Target file size
+						26 container Blank means no limit. Searches within your quality settings; reports when the target cannot be met.
+							27 text Target size (KB)
+							28 number field (settable) Blank means no limit. Searches within your quality settings; reports when the target cannot be met., Placeholder: No limit
+								29 stepper 0
+									30 unknown
+									31 unknown
+					32 container PNG compression
+						33 text PNG compression
+						34 container Minimum quantization quality: High 90, Balanced 80, Smaller file 65. Higher allows less quality loss.
+							35 text PNG Lossy Quality
+							36 pop up button Value: Smaller file, Minimum quantization quality: High 90, Balanced 80, Smaller file 65. Higher allows less quality loss.
+					37 container JPEG & WebP compression
+						38 text JPEG & WebP compression
+						39 container
+							40 text JPEG & WebP preset
+							41 pop up button (disabled) JPEG & WebP preset, Value: Balanced
+						42 container Retained quality, 1–100. Higher allows less quality loss. With a target, this is the minimum. Lossless WebP stays lossless.
+							43 text JPEG & WebP quality
+							44 number field (disabled, settable) Value: 85, Retained quality, 1–100. Higher allows less quality loss. With a target, this is the minimum. Lossless WebP stays lossless.
+								45 stepper 0
+									46 unknown
+									47 unknown
+				48 container Image files
+					49 container
+						50 button Add images
+						51 button Clear
+						52 button Download ZIP
+						53 button Add to Quick Query
+						54 button Compress again
+					55 container Images
+						56 table
+							57 row (selectable) About lossless compression
+About lossy compression, Value: File name
+Dimensions (px)
+Original size
+Lossless size
+Lossy size
+Download
+							58 row (selectable)
+								59 cell (selectable) roundtrip-1.png, Value: Compressed
+									60 toggle button roundtrip-1.png, Value: off
+								61 cell (selectable) 2440 × 1530
+								62 cell (selectable) 6.63 MB
+								63 cell (selectable) Lossless result for roundtrip-1.png, 5.16 MB
+									64 toggle button Lossless result for roundtrip-1.png, 5.16 MB, Help: 2440 × 1530 · 22.1% smaller, Value: off
+								65 cell (selectable) Lossy result for roundtrip-1.png, 1.26 MB
+									66 toggle button Lossy result for roundtrip-1.png, 1.26 MB, Help: 2440 × 1530 · 81.0% smaller, Value: on
+								67 cell (selectable) Download roundtrip-1.png
+							68 row (selectable)
+								69 cell (selectable) roundtrip-2.png, Value: Compressed
+									70 toggle button roundtrip-2.png, Value: off
+								71 cell (selectable) 2440 × 1530
+								72 cell (selectable) 6.63 MB
+								73 cell (selectable) Lossless result for roundtrip-2.png, 5.14 MB
+									74 toggle button Lossless result for roundtrip-2.png, 5.14 MB, Help: 2440 × 1530 · 22.5% smaller, Value: off
+								75 cell (selectable) Lossy result for roundtrip-2.png, 1.26 MB
+									76 toggle button Lossy result for roundtrip-2.png, 1.26 MB, Help: 2440 × 1530 · 81.0% smaller, Value: on
+								77 cell (selectable) Download roundtrip-2.png
+							78 row (selectable)
+								79 cell (selectable) roundtrip-3.png, Value: Compressed
+									80 toggle button roundtrip-3.png, Value: on
+								81 cell (selectable) 2440 × 1530
+								82 cell (selectable) 6.63 MB
+								83 cell (selectable) Lossless result for roundtrip-3.png, 5.16 MB
+									84 toggle button Lossless result for roundtrip-3.png, 5.16 MB, Help: 2440 × 1530 · 22.1% smaller, Value: off
+								85 cell (selectable) Lossy result for roundtrip-3.png, 1.25 MB
+									86 toggle button Lossy result for roundtrip-3.png, 1.25 MB, Help: 2440 × 1530 · 81.1% smaller, Value: on
+								87 cell (selectable) Download roundtrip-3.png
+							88 row (selectable)
+								89 cell (selectable) roundtrip-1 (2).png
+									90 toggle button roundtrip-1 (2).png, Value: off
+								91 cell (selectable) 2440 × 1530
+								92 cell (selectable) 1.26 MB
+								93 cell (selectable) Lossless result for roundtrip-1 (2).png, queued
+									94 toggle button (disabled) Lossless result for roundtrip-1 (2).png, queued, Help: Waiting to compress this result., Value: off
+								95 cell (selectable) Lossy result for roundtrip-1 (2).png, queued
+									96 toggle button (disabled) Lossy result for roundtrip-1 (2).png, queued, Help: Waiting to compress this result., Value: off
+								97 cell (selectable) Download roundtrip-1 (2).png
+							98 row (selectable)
+								99 cell (selectable) roundtrip-2 (2).png
+									100 toggle button roundtrip-2 (2).png, Value: off
+								101 cell (selectable) 2440 × 1530
+								102 cell (selectable) 1.26 MB
+								103 cell (selectable) Lossless result for roundtrip-2 (2).png, queued
+									104 toggle button (disabled) Lossless result for roundtrip-2 (2).png, queued, Help: Waiting to compress this result., Value: off
+								105 cell (selectable) Lossy result for roundtrip-2 (2).png, queued
+									106 toggle button (disabled) Lossy result for roundtrip-2 (2).png, queued, Help: Waiting to compress this result., Value: off
+								107 cell (selectable) Download roundtrip-2 (2).png
+							108 row (selectable)
+								109 cell (selectable) roundtrip-3 (2).png
+									110 toggle button roundtrip-3 (2).png, Value: off
+								111 cell (selectable) 2440 × 1530
+								112 cell (selectable) 1.25 MB
+								113 cell (selectable) Lossless result for roundtrip-3 (2).png, queued
+									114 toggle button (disabled) Lossless result for roundtrip-3 (2).png, queued, Help: Waiting to compress this result., Value: off
+								115 cell (selectable) Lossy result for roundtrip-3 (2).png, queued
+									116 toggle button (disabled) Lossy result for roundtrip-3 (2).png, queued, Help: Waiting to compress this result., Value: off
+								117 cell (selectable) Download roundtrip-3 (2).png
+				118 splitter Resize file list and comparison panes, Value: 600
+				119 container Image comparison
+					120 container
+						121 heading roundtrip-3.png, Value: 3
+							122 text roundtrip-3.png
+						123 text Zoom
+						124 slider (settable, float) Zoom Fit, Value: 1
+							125 value indicator 1
+						126 container Zoom 1
+							127 text Fit
+						128 button Reset zoom
+						129 container Comparison view
+							130 toggle button Side by side, Value: on
+							131 toggle button Slider, Value: off
+					132 text 2440 × 1530 · Lossy
+					133 container
+						134 text Original 6.63 MB
+						135 container Original image. Arrow keys pan; plus and minus zoom.
+							136 image Original image
+					137 container
+						138 text Result 1.25 MB
+						139 container Result image. Arrow keys pan; plus and minus zoom.
+							140 image Compressed result
+					141 button Download original
+					142 button Download result
+					143 summary Log, Value: off
+						144 text Log
+		145 scroll bar (settable, float) 0
+	146 close button
+	147 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	148 minimize button
+	149 text AD Tools — Image optimizer verification
+150 menu bar
+	151 AD Tools Image Optimizer Verification
+	152 Edit
+	153 View
+	154 Window
+
+The focused UI element is 55 container Images

@@ -12,6 +12,7 @@ export default defineConfig(({ mode }) =>
         input: {
           app: fileURLToPath(new URL("../../../index.html", import.meta.url)),
           verification: fileURLToPath(new URL("./browser.html", import.meta.url)),
+          cachePreview: fileURLToPath(new URL("./cache-preview-roundtrip.html", import.meta.url)),
         },
       },
     },
