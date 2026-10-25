@@ -305,7 +305,7 @@ export class SettingsPublisher {
             .map(
               (row) =>
                 `<article class="publish-history-row"><div><strong>${escape(row.title)}</strong>
-          <p>${escape(new Date(row.createdAt).toLocaleString())} · ${row.recipientCount} user${row.recipientCount === 1 ? "" : "s"} · ${row.appliedDevices} device${row.appliedDevices === 1 ? "" : "s"} applied${row.revokedAt ? " · Stopped" : ""}</p>
+          <p>${escape(new Date(row.createdAt).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }))} · ${row.recipientCount} user${row.recipientCount === 1 ? "" : "s"} · ${row.appliedDevices} device${row.appliedDevices === 1 ? "" : "s"} applied${row.revokedAt ? " · Stopped" : ""}</p>
           <p>${escape(row.target.values.join(", "))}</p></div><div class="publish-actions">
           <button type="button" class="btn btn-secondary btn-sm" data-action="reuse" data-id="${row.id}">Use as draft</button>
           ${row.revokedAt ? "" : `<button type="button" class="btn btn-secondary btn-sm" data-action="revoke" data-id="${row.id}">Stop delivery</button>`}</div></article>`,

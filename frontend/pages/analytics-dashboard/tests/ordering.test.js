@@ -32,3 +32,11 @@ it("preserves count-ranked reports without date columns", () => {
   ]);
   expect(content.querySelector("tbody tr").textContent).toContain("First");
 });
+
+it("displays abbreviated months while retaining the raw sortable dates", () => {
+  page = new AnalyticsDashboardPage();
+  expect(page.formatCellValue("2026-10-25 / 16:30:00")).toBe("25 Oct 2026 / 16:30:00");
+  expect(page.formatCellValue("10-25 / 16:30")).toBe("25 Oct / 16:30");
+  expect(page.formatCellValue("2026-01-05")).toBe("05 Jan 2026");
+  expect(page.formatCellValue("not a date")).toBe("not a date");
+});

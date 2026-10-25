@@ -1288,7 +1288,7 @@ class AnalyticsDashboardPage {
     const rows = Object.entries(row)
       .filter(([key]) => !["section_order", "active_users_total", "events_total", "errors_total"].includes(key))
       .map(([key, value]) => {
-        let displayValue = this.parseJsonString(value);
+        let displayValue = this.parseJsonString(this.formatDateValue(value));
         // Pretty print objects/arrays
         if (typeof displayValue === "object" && displayValue !== null) {
           try {
@@ -1381,8 +1381,17 @@ class AnalyticsDashboardPage {
     });
   }
 
+  formatDateValue(value) {
+    if (typeof value !== "string") return value;
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return value.replace(/^(?:(\d{4})-)?(\d{2})-(\d{2})(?=$|[T /])/, (date, year, month, day) => {
+      const label = months[Number(month) - 1];
+      return label ? `${day} ${label}${year ? ` ${year}` : ""}` : date;
+    });
+  }
+
   formatCellValue(value) {
-    let displayValue = value;
+    let displayValue = this.formatDateValue(value);
     if (typeof displayValue === "object" && displayValue !== null) {
       displayValue = JSON.stringify(displayValue);
     }
