@@ -45,6 +45,7 @@ class AnalyticsDashboardPage {
     this.tabs = [];
     this.currentTab = null;
     this.cache = {};
+    this.reportWarnings = {};
     this.filterText = "";
     this.selectedRange = "30d";
     this.currentWhoSection = "users";
@@ -347,6 +348,8 @@ class AnalyticsDashboardPage {
     this.currentTab = "__reports";
     this.updateNavigation();
     const panel = this.container.querySelector("#dashboard-panel");
+    const warning = panel.querySelector(".dashboard-report-warning");
+    if (warning) warning.hidden = true;
     panel.querySelector(".panel-loading").style.display = "none";
     const content = panel.querySelector(".panel-content");
     content.innerHTML = `<div class="report-library">
@@ -453,6 +456,11 @@ class AnalyticsDashboardPage {
     if (!panel || !content) return;
 
     const tabId = this.currentTab;
+    const warning = panel.querySelector(".dashboard-report-warning");
+    if (warning) {
+      warning.textContent = this.reportWarnings[tabId] || "";
+      warning.hidden = !warning.textContent;
+    }
     const paginated = this.isPaginatedTab(tabId);
     const paginationState = paginated ? this.pagination[tabId] : null;
     if (append && paginationState?.loading) return;
@@ -504,6 +512,11 @@ class AnalyticsDashboardPage {
       if (!this.isDataRequestCurrent(requestId, tabId, content)) return;
 
       if (data.ok && Array.isArray(data.data)) {
+        this.reportWarnings[tabId] = typeof data.warning === "string" ? data.warning : "";
+        if (warning) {
+          warning.textContent = this.reportWarnings[tabId];
+          warning.hidden = !warning.textContent;
+        }
         if (paginated) {
           const pageResult = {
             data: data.data,

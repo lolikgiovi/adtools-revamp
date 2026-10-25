@@ -95,6 +95,41 @@ try {
     await page.locator(".settings-categories").waitFor();
     assert.equal(await page.locator(".settings-publish, #settings-publishing").count(), 0);
     checks.push(`${width}: legacy bookmarks, Settings has no publishing entry`);
+    await context.route(
+      (url) => url.hostname === "adtools.lolik.workers.dev" && url.pathname.startsWith("/dashboard/"),
+      async (route) => {
+        const url = new URL(route.request().url());
+        const query = route.request().postDataJSON();
+        const payload = url.pathname.endsWith("/tabs")
+          ? {
+              ok: true,
+              tabs: [
+                { id: "overview", name: "Overview" },
+                { id: "tools", name: "Lifetime usage" },
+              ],
+            }
+          : query?.tabId === "tools"
+            ? {
+                ok: true,
+                data: [{ tool_id: "json-tools", action: "TOTAL", total_count: 1 }],
+                warning:
+                  "Legacy lifetime totals have no device attribution and may still include excluded devices. Recent device-level usage is filtered.",
+              }
+            : { ok: true, data: [{ metric: "Successful tool uses", value: "1", context: "Filtered fixture" }] };
+        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) });
+      },
+    );
+    await page.evaluate(() => localStorage.setItem("analytics.dashboard.token", btoa(JSON.stringify({ exp: Date.now() + 60000 }))));
+    await page.goto(`${base}/#dashboard`);
+    await page.locator("[data-library]").click();
+    await page.locator('[data-report="tools"]').click();
+    await page.locator(".dashboard-report-warning").waitFor({ state: "visible" });
+    assert.match(await page.locator(".dashboard-report-warning").innerText(), /Legacy lifetime totals/);
+    await page.screenshot({ path: resolve(output, `${width}-lifetime-exclusion-note.png`), fullPage: true });
+    await page.locator("[data-library]").click();
+    assert.equal(await page.locator(".dashboard-report-warning").isVisible(), false);
+    checks.push(`${width}: lifetime device-attribution limitation stays visible only on the affected report`);
+
     await context.close();
   }
   assert.deepEqual(errors, []);

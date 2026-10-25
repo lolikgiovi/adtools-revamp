@@ -61,3 +61,30 @@ DASHBOARD_TEST_URL=http://localhost:1246 EXPECT_PRODUCTION_API=true \
 The browser script intercepts API calls, exercises all three password gates, section navigation, legacy bookmarks, Settings entry removal,
 and horizontal overflow at 1440px and 390px. It records API request URLs, screenshots, and `result.json` in `docs/verification/dashboard/`.
 It uses Chrome and does not establish native Tauri/WebKit runtime behavior or authenticated production correctness.
+
+## Excluding the development device from Dashboard history
+
+`ANALYTICS_EXCLUDED_DEVICE_IDS` in `wrangler.toml` lists exact, comma-separated device IDs excluded from the admin Dashboard. The default and
+production configurations include `6028654b-b517-4d2f-8239-3f466f77f123`. Deploy the Worker configuration and code for this to affect production.
+No database migration or record deletion is required.
+
+The exclusion applies to device-attributed source rows before built-in report aggregation, person views, search, and pagination. Other devices
+belonging to the same email remain visible. Cached and in-flight results are separated by exclusion policy, so changing the configured IDs
+cannot reuse an unfiltered report. Stored telemetry remains intact. This filter is scoped to the admin Dashboard; it does not change registration
+or the Home usage overview.
+
+The frozen `lifetime_usage_baseline` table stores totals by email/tool/action, without device IDs. Those legacy totals cannot be split reliably
+by device. The lifetime report displays a note that its old baseline may still contain excluded-device usage; identifiable ledger rows are
+filtered. Date-ranged reports use device-attributed rows and exclude the configured device normally.
+
+Verification:
+
+```bash
+./node_modules/.bin/vitest run backend-workers/tests/dashboard-device-exclusions.test.js \
+  backend-workers/tests/dashboard-tabs-smoke.test.js backend-workers/tests/dashboard-performance.test.js \
+  backend-workers/tests/dashboard-person.test.js
+```
+
+The Worker integration test uses a migrated in-memory database and the real authenticated report handlers. It verifies before/after totals,
+all built-in reports, pagination, the person view, preservation of another device for the same email, cache separation, and unchanged raw rows.
+The browser script also checks that dev telemetry is neither collected nor sent, and captures the lifetime-report note at desktop and mobile widths.

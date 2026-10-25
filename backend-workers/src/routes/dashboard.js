@@ -2163,7 +2163,14 @@ FROM (
 )
 ORDER BY tool_total DESC, tool_id, row_type, total_count DESC`;
     const result = await env.DB.prepare(query).all();
-    const body = JSON.stringify({ ok: true, data: result.results || [], mode: "computed-tools" });
+    const body = JSON.stringify({
+      ok: true,
+      data: result.results || [],
+      mode: "computed-tools",
+      ...(env.dashboardDeviceScope && env.dashboardDeviceScope !== "[]"
+        ? { warning: "Legacy lifetime totals have no device attribution and may still include excluded devices. Recent device-level usage is filtered." }
+        : {}),
+    });
     setCachedDashboardQueryBody(env, cacheKey, body);
 
     return new Response(body, {

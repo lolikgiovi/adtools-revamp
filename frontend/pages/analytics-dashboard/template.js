@@ -59,6 +59,7 @@ export const AnalyticsDashboardTemplate = /*html*/ `
       <!-- Single Panel for dynamic content -->
       <div class="dashboard-panels">
         <div class="dashboard-panel active" id="dashboard-panel">
+          <p class="table-info dashboard-report-warning" role="status" hidden></p>
           <div class="panel-loading" role="status">Loading…</div>
           <div class="panel-content"></div>
         </div>
