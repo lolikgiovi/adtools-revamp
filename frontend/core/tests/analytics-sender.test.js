@@ -1,13 +1,26 @@
 // @vitest-environment node
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AnalyticsSender } from "../AnalyticsSender.js";
 
 describe("AnalyticsSender", () => {
   beforeEach(() => {
+    vi.stubEnv("DEV", false);
     localStorage.clear();
     AnalyticsSender._debug = false;
     global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 });
+  });
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  // Failure cases: development calls reach production, one send path bypasses the guard, queued data appears acknowledged.
+  it("does not send batches, live logs, or errors from development sessions", async () => {
+    vi.stubEnv("DEV", true);
+    vi.stubEnv("VITE_WORKER_BASE", "https://adtools.lolik.workers.dev");
+    expect(await AnalyticsSender.sendBatch({ device_id: "dev-device" })).toBe(false);
+    expect(await AnalyticsSender.sendLog({ device_id: "dev-device" })).toBe(false);
+    expect(await AnalyticsSender.sendError({ device_id: "dev-device" })).toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("sends batches with POST only", async () => {

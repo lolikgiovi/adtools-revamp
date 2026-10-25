@@ -1,3 +1,4 @@
+import { scopeDashboardDevices } from "../utils/dashboardDevices.js";
 import { buildCapabilityAdoptionQuery, buildImportSourcesQuery } from "../utils/capabilityAdoption.js";
 /**
  * Dashboard route handlers for analytics dashboard
@@ -1442,7 +1443,7 @@ function withAuth(handler) {
         headers: { "Content-Type": "application/json", ...corsHeaders() },
       });
     }
-    return handler(request, env);
+    return handler(request, scopeDashboardDevices(env));
   };
 }
 
@@ -1639,7 +1640,8 @@ export const handleStatsQuickQueryErrors = withAuth(async (request, env) => {
 /**
  * Helper to execute a query and return response
  */
-function getCachedDashboardQueryBody(cacheKey) {
+function getCachedDashboardQueryBody(env, cacheKey) {
+  cacheKey = `${env.dashboardDeviceScope || "[]"}:${cacheKey}`;
   const now = Date.now();
   for (const [key, cachedEntry] of dashboardQueryCache) {
     if (cachedEntry.expiresAt <= now) dashboardQueryCache.delete(key);
@@ -1652,7 +1654,8 @@ function getCachedDashboardQueryBody(cacheKey) {
   return cached.body;
 }
 
-function setCachedDashboardQueryBody(cacheKey, body) {
+function setCachedDashboardQueryBody(env, cacheKey, body) {
+  cacheKey = `${env.dashboardDeviceScope || "[]"}:${cacheKey}`;
   for (const [key, cachedEntry] of dashboardQueryCache) {
     if (cachedEntry.expiresAt <= Date.now()) dashboardQueryCache.delete(key);
   }
@@ -1667,21 +1670,22 @@ function setCachedDashboardQueryBody(cacheKey, body) {
   }
 }
 
-async function coalesceDashboardQuery(cacheKey, compute) {
-  const cachedBody = getCachedDashboardQueryBody(cacheKey);
+async function coalesceDashboardQuery(env, cacheKey, compute) {
+  const inFlightKey = `${env.dashboardDeviceScope || "[]"}:${cacheKey}`;
+  const cachedBody = getCachedDashboardQueryBody(env, cacheKey);
   if (cachedBody) return cachedBody;
 
-  const inFlight = dashboardQueryInFlight.get(cacheKey);
+  const inFlight = dashboardQueryInFlight.get(inFlightKey);
   if (inFlight) return inFlight;
 
   const computation = Promise.resolve().then(compute);
-  dashboardQueryInFlight.set(cacheKey, computation);
+  dashboardQueryInFlight.set(inFlightKey, computation);
   try {
     const body = await computation;
-    if (typeof body === "string") setCachedDashboardQueryBody(cacheKey, body);
+    if (typeof body === "string") setCachedDashboardQueryBody(env, cacheKey, body);
     return body;
   } finally {
-    if (dashboardQueryInFlight.get(cacheKey) === computation) dashboardQueryInFlight.delete(cacheKey);
+    if (dashboardQueryInFlight.get(inFlightKey) === computation) dashboardQueryInFlight.delete(inFlightKey);
   }
 }
 
@@ -1698,7 +1702,7 @@ async function executeOverviewQuery(env, cacheKey, rangeConfig) {
       return dashboardJson({ ok: false, error: "Database not available", tabId: "overview" }, 200);
     }
 
-    const body = await coalesceDashboardQuery(cacheKey, async () => {
+    const body = await coalesceDashboardQuery(env, cacheKey, async () => {
       const tables = await getDashboardTables(env);
       const rangePhrase = rangeConfig.phrase || rangeConfig.label;
       const deduplicatedUsage = buildDeduplicatedUsageLogQuery(rangeConfig);
@@ -1891,7 +1895,7 @@ async function executeWhoQuery(env, cacheKey, rangeConfig) {
       return dashboardJson({ ok: false, error: "Database not available", tabId: "who" }, 200);
     }
 
-    const cachedBody = getCachedDashboardQueryBody(cacheKey);
+    const cachedBody = getCachedDashboardQueryBody(env, cacheKey);
     if (cachedBody) {
       return new Response(cachedBody, {
         headers: { "Content-Type": "application/json", ...corsHeaders() },
@@ -1904,7 +1908,7 @@ async function executeWhoQuery(env, cacheKey, rangeConfig) {
 
     if (!activityBranches.length) {
       const body = JSON.stringify({ ok: true, data: [], mode: "computed-who", range: rangeConfig.id, rangeLabel: rangeConfig.label });
-      setCachedDashboardQueryBody(cacheKey, body);
+      setCachedDashboardQueryBody(env, cacheKey, body);
       return new Response(body, {
         headers: { "Content-Type": "application/json", ...corsHeaders() },
       });
@@ -2104,7 +2108,7 @@ ORDER BY section_order, rank`;
       range: rangeConfig.id,
       rangeLabel: rangeConfig.label,
     });
-    setCachedDashboardQueryBody(cacheKey, body);
+    setCachedDashboardQueryBody(env, cacheKey, body);
 
     return new Response(body, {
       headers: { "Content-Type": "application/json", ...corsHeaders() },
@@ -2120,7 +2124,7 @@ async function executeToolsQuery(env, cacheKey, fallbackQuery) {
       return dashboardJson({ ok: false, error: "Database not available", tabId: "tools" }, 200);
     }
 
-    const cachedBody = getCachedDashboardQueryBody(cacheKey);
+    const cachedBody = getCachedDashboardQueryBody(env, cacheKey);
     if (cachedBody) {
       return new Response(cachedBody, {
         headers: { "Content-Type": "application/json", ...corsHeaders() },
@@ -2160,7 +2164,7 @@ FROM (
 ORDER BY tool_total DESC, tool_id, row_type, total_count DESC`;
     const result = await env.DB.prepare(query).all();
     const body = JSON.stringify({ ok: true, data: result.results || [], mode: "computed-tools" });
-    setCachedDashboardQueryBody(cacheKey, body);
+    setCachedDashboardQueryBody(env, cacheKey, body);
 
     return new Response(body, {
       headers: { "Content-Type": "application/json", ...corsHeaders() },
@@ -2176,7 +2180,7 @@ async function executeToolAdoptionQuery(env, cacheKey, fallbackQuery) {
       return dashboardJson({ ok: false, error: "Database not available", tabId: "tool-adoption" }, 200);
     }
 
-    const cachedBody = getCachedDashboardQueryBody(cacheKey);
+    const cachedBody = getCachedDashboardQueryBody(env, cacheKey);
     if (cachedBody) {
       return new Response(cachedBody, {
         headers: { "Content-Type": "application/json", ...corsHeaders() },
@@ -2241,7 +2245,7 @@ ORDER BY totals.total_actions DESC, totals.users DESC
 LIMIT 100`;
     const result = await env.DB.prepare(query).all();
     const body = JSON.stringify({ ok: true, data: result.results || [], mode: "computed-tool-adoption" });
-    setCachedDashboardQueryBody(cacheKey, body);
+    setCachedDashboardQueryBody(env, cacheKey, body);
 
     return new Response(body, {
       headers: { "Content-Type": "application/json", ...corsHeaders() },
@@ -2257,7 +2261,7 @@ async function executeOpportunitiesQuery(env, cacheKey, rangeConfig, fallbackQue
       return dashboardJson({ ok: false, error: "Database not available", tabId: "opportunities" }, 200);
     }
 
-    const cachedBody = getCachedDashboardQueryBody(cacheKey);
+    const cachedBody = getCachedDashboardQueryBody(env, cacheKey);
     if (cachedBody) {
       return new Response(cachedBody, {
         headers: { "Content-Type": "application/json", ...corsHeaders() },
@@ -2396,7 +2400,7 @@ LIMIT 100`;
       range: rangeConfig.id,
       rangeLabel: rangeConfig.label,
     });
-    setCachedDashboardQueryBody(cacheKey, body);
+    setCachedDashboardQueryBody(env, cacheKey, body);
 
     return new Response(body, {
       headers: { "Content-Type": "application/json", ...corsHeaders() },
@@ -2507,7 +2511,7 @@ async function executeQuery(env, cacheKey, query) {
       });
     }
 
-    const body = await coalesceDashboardQuery(cacheKey, async () => {
+    const body = await coalesceDashboardQuery(env, cacheKey, async () => {
       await prepareDashboardSchema(env, query);
       const result = await env.DB.prepare(query).all();
       return JSON.stringify({ ok: true, data: result.results || [] });
@@ -2598,7 +2602,7 @@ async function executePaginatedDashboardQuery(env, tabId, pagination, range) {
   const { query, args } = buildPaginatedDashboardQuery(tabId, pagination, rangeConfig);
   const cacheKey = `tab:${tabId}:range:${rangeConfig.id}:page:${pagination.page}:size:${pagination.pageSize}:search:${pagination.search}`;
   try {
-    const body = await coalesceDashboardQuery(cacheKey, async () => {
+    const body = await coalesceDashboardQuery(env, cacheKey, async () => {
       await prepareDashboardSchema(env, query);
       const statement = env.DB.prepare(query);
       const result = await (typeof statement.bind === "function" ? statement.bind(...args) : statement).all();

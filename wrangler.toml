@@ -9,6 +9,7 @@ assets = { directory = "./dist", binding = "ASSETS" }
 # Environment variables
 [vars]
 DEV_MODE = "false"
+ANALYTICS_EXCLUDED_DEVICE_IDS = "6028654b-b517-4d2f-8239-3f466f77f123"
 SECRET_SALT = "change-me-in-production"
 MAIL_FROM = "otp-adtools@lolik.cloud"
 MAIL_SUBJECT_PREFIX = "[AD Tools]"
@@ -28,6 +29,7 @@ bucket_name = "adtools-updates"
 [env.production]
 [env.production.vars]
 DEV_MODE = "false"
+ANALYTICS_EXCLUDED_DEVICE_IDS = "6028654b-b517-4d2f-8239-3f466f77f123"
 MAIL_FROM = "otp-adtools@lolik.cloud"
 MAIL_SUBJECT_PREFIX = "[AD Tools]"
 REGISTRATION_AUTH_MODE = "otp"

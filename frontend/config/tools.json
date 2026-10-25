@@ -6,6 +6,11 @@
       "order": 10
     },
     {
+      "id": "image",
+      "name": "Image",
+      "order": 11
+    },
+    {
       "id": "lockey",
       "name": "Lockey",
       "order": 12
@@ -66,7 +71,7 @@
     {
       "id": "compress-image",
       "name": "Compress Image",
-      "category": "general",
+      "category": "image",
       "icon": "compress-image",
       "order": 45
     },
@@ -168,7 +173,7 @@
     {
       "id": "check-image",
       "name": "Check Image",
-      "category": "config",
+      "category": "image",
       "icon": "image-check",
       "order": 90
     },

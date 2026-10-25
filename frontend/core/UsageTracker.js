@@ -40,7 +40,7 @@ class UsageTracker {
     // Set sane defaults before reading storage (prevents backup fallback in dev)
     const isDev = !!(import.meta && import.meta.env && import.meta.env.DEV);
     this._backupEnabled = isDev ? false : true;
-    this._enabled = true;
+    this._enabled = !isDev;
     // Respect persisted flags if present
     try {
       const be = localStorage.getItem(this.BACKUP_ENABLED_KEY);

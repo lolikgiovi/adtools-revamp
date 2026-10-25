@@ -25,6 +25,9 @@ have separate browser storage, so development may require registration even if t
 Approving accounts and publishing settings in this mode change production data. Use an explicitly selected test recipient for publication.
 Viewing reports and listing requests/publications do not approve or publish anything.
 
+Development sessions do not collect or send analytics usage, interaction events, or error telemetry, even while reading the production API.
+Packaged builds keep their existing tracking behavior. This does not erase telemetry that was already stored.
+
 ## Backend availability
 
 Switching API targets does not deploy the current backend source. Read-only checks on 2026-10-24 found:

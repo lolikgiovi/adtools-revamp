@@ -45,6 +45,27 @@ try {
     await page.locator(".dashboard-navigation").waitFor();
     assert.equal(await page.locator('[data-page="dashboard"]').count(), 1);
     assert.equal(await page.locator('[data-page="analytics-dashboard"], [data-page="approval"]').count(), 0);
+    const telemetry = await page.evaluate(async () => {
+      const { UsageTracker } = await import("/core/UsageTracker.js");
+      const { AnalyticsSender } = await import("/core/AnalyticsSender.js");
+      const before = JSON.stringify(UsageTracker._state);
+      UsageTracker.trackFeature("json-tools", "open");
+      UsageTracker.trackEvent("json-tools", "tab_switch");
+      const use = UsageTracker.trackToolUse("json-tools", "prettify");
+      await UsageTracker.flushBatchNow();
+      return {
+        unchanged: before === JSON.stringify(UsageTracker._state),
+        use,
+        results: await Promise.all([AnalyticsSender.sendBatch({}), AnalyticsSender.sendLog({}), AnalyticsSender.sendError({})]),
+      };
+    });
+    assert.deepEqual(telemetry, { unchanged: true, use: null, results: [false, false, false] });
+    assert.equal(
+      apiRequests.some((url) => /\/analytics\/(batch|log|error)$/.test(url)),
+      false,
+    );
+    checks.push(`${width}: development usage is not collected or sent to production`);
+
     for (const [label, selector] of [
       ["Analytics", "#dashboard-auth-form"],
       ["Approvals", "#approval-auth-form"],

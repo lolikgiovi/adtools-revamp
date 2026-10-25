@@ -52,6 +52,7 @@ class AnalyticsSender {
   }
 
   static async _postJson(path, payload = {}, extraHeaders = {}) {
+    if (import.meta.env.DEV) return false;
     const urls = this._resolveUrls(path);
     const headers = { "Content-Type": "application/json", ...SessionTokenStore.getAuthHeader() };
     Object.entries(extraHeaders || {}).forEach(([key, value]) => {
@@ -81,6 +82,7 @@ class AnalyticsSender {
   }
 
   static async _postJsonResult(path, payload = {}, extraHeaders = {}) {
+    if (import.meta.env.DEV) return false;
     const urls = this._resolveUrls(path);
     const headers = { "Content-Type": "application/json", ...SessionTokenStore.getAuthHeader() };
     Object.entries(extraHeaders || {}).forEach(([key, value]) => {

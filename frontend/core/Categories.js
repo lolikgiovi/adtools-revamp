@@ -2,6 +2,7 @@
 export const CATEGORIES = {
   GENERAL: "general",
   CONFIG: "config",
+  IMAGE: "image",
   TEMPLATE: "template",
   EXECUTE: "execute",
   JIRA: "jira",
@@ -15,6 +16,8 @@ export function normalizeCategory(value) {
 
   const configAliases = ["config", "configuration", "settings", "admin", "setup"];
   if (configAliases.includes(v)) return CATEGORIES.CONFIG;
+
+  if (v === "image") return CATEGORIES.IMAGE;
 
   const templateAliases = ["template", "templates"];
   if (templateAliases.includes(v)) return CATEGORIES.TEMPLATE;
@@ -36,6 +39,7 @@ export function categorizeTool(tool) {
   if (!tool) return CATEGORIES.GENERAL;
   const base = normalizeCategory(tool.category);
   if (base === CATEGORIES.CONFIG) return CATEGORIES.CONFIG;
+  if (base === CATEGORIES.IMAGE) return CATEGORIES.IMAGE;
   if (base === CATEGORIES.TEMPLATE) return CATEGORIES.TEMPLATE;
   if (base === CATEGORIES.EXECUTE) return CATEGORIES.EXECUTE;
   if (base === CATEGORIES.JIRA) return CATEGORIES.JIRA;
