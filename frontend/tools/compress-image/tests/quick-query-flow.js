@@ -159,11 +159,16 @@ try {
   const ui = qq.ui;
   await ui.createNewTab();
   const imageTab = ui.activeTabId;
+  ui.elements.tableNameInput.value = "CONTENT.IMAGE";
+  await ui.saveActiveTabDraft();
   await ui.handleAttachmentsInput({
     target: { files: [new File([blob], "fixture.png"), jpeg, webp, new File(["keep"], "keep.txt", { type: "text/plain" })] },
   });
   assert(!ui.elements.compressImagesButton.hidden, "Image attachments reveal Compress Image action");
   await ui.createNewTab();
+  const emptyTab = ui.activeTabId;
+  ui.elements.tableNameInput.value = "LOCALIZATION.LANGUAGE_PACK_VERSION";
+  await ui.saveActiveTabDraft();
   assert(ui.elements.compressImagesButton.hidden, "No images hides Compress Image action");
   await ui.handleCompressImages();
   await routeTask;
@@ -181,10 +186,34 @@ try {
     ci.items.every((item) => item.result),
     "Real workers compress PNG, JPEG and WebP",
   );
+  window.app.router.navigate("quick-query");
+  await ui.switchTab(emptyTab);
+  window.app.router.navigate("compress-image");
+  await ci.ready;
   ci.addToQuickQuery();
   await wait(() => document.querySelector("dialog[open]"));
-  const options = [...document.querySelectorAll("dialog select option")];
+  const options = [...document.querySelectorAll('dialog input[name="tab"]')];
+  assert(
+    options.length === ui.tabs.length + 1 && !document.querySelector("dialog select"),
+    "Every destination is visible as a selectable list row",
+  );
   assert(options[0].value === imageTab, "Tabs with attachments appear first");
+  assert(options.find((option) => option.value === emptyTab).checked, "Active query tab is preselected");
+  assert(
+    options
+      .find((option) => option.value === imageTab)
+      .closest("label")
+      .textContent.includes("CONTENT.IMAGE"),
+    "Destination uses the same table-name fallback as the tab strip",
+  );
+  assert(
+    options
+      .find((option) => option.value === emptyTab)
+      .closest("label")
+      .textContent.includes("LOCALIZATION.LANGUAGE_PACK_VERSION"),
+    "Tabs without attachments also show their table names",
+  );
+  options.find((option) => option.value === imageTab).click();
   await choose("attach");
   await routeTask;
   assert(ui.activeTabId === imageTab && ui.processedFiles.some((f) => f.name === "keep.txt"), "Return preserves unrelated attachments");
@@ -208,10 +237,31 @@ try {
   await ci.ready;
   ci.addToQuickQuery();
   await wait(() => document.querySelector("dialog[open]"));
-  document.querySelector("dialog select").value = "new";
+  document.querySelector('dialog input[name="tab"][value="new"]').click();
   await choose("attach");
   await routeTask;
   assert(ui.activeTabId !== imageTab && ui.processedFiles.length === 3, "Create query adds all compressed images to a new tab");
+  ui.handleDeleteAllAttachments();
+  await ui.saveActiveTabDraft();
+  await ui.switchTab(imageTab);
+  ui.handleDeleteAllAttachments();
+  await ui.saveActiveTabDraft();
+  window.app.router.navigate("compress-image");
+  await ci.ready;
+  assert(
+    ci.items.length === 3 && ci.items.every((item) => item.result),
+    "Deleting Quick Query attachments preserves cached compression results",
+  );
+  for (const item of ci.items) {
+    assert((await item.file.arrayBuffer()).byteLength === item.file.size, `Cached original remains readable: ${item.file.name}`);
+    assert((await item.blob.arrayBuffer()).byteLength === item.blob.size, `Cached result remains readable: ${item.file.name}`);
+  }
+  await ci.processQueue();
+  await ci.offers;
+  assert(
+    ci.items.every((item) => item.status === "Ready" && !item.error),
+    "Cached images recompress after Quick Query attachments are deleted",
+  );
   if (!new URLSearchParams(location.search).has("review")) {
     window.app.router.navigate("compress-image");
     await ci.ready;

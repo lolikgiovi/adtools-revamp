@@ -45,3 +45,16 @@ and creating a new query tab. Workflow dialogs are also checked for viewport cen
 Browser notifications say “Download started” because the browser does not expose final disk-write
 completion. Desktop exports use the existing Tauri save dialog and filesystem plugins, reporting
 “Saved” after writeFile resolves; that native path still requires a packaged-app check.
+
+## Destination list update
+
+The picker now shows radio rows, uses the same `getTabTitle()` fallback as the tab strip,
+and initially selects the active query tab. Tabs with attachments retain their order ahead of
+empty tabs; counts use singular/plural correctly. The new-tab row remains available below them.
+
+- [Updated integration report](./destination-list-result.json): 35 browser checks passed,
+  including list visibility, active selection, table-name fallback, transfer and cache-deletion checks.
+- [Destination list screenshot](./destination-list.png).
+- Targeted Quick Query regressions: 20 tests across tab management, created queries and BLOB choices passed.
+- Formatting, ESLint for the shared dialog and browser harness, and the production Vite build passed.
+- Reproduce using the same port 1235 harness above.

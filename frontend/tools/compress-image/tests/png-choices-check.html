@@ -95,9 +95,11 @@
         const [first, second] = tool.items;
         check(Object.keys(first.variants).length === 2, "Both real PNG results are retained");
         check(first.variants.lossless.blob !== first.variants.lossy.blob, "Both columns show independently encoded sizes");
-        check(!first.result.lossy, "Default selection stays lossless");
+        check(first.result.lossy && second.result.lossy, "PNG defaults to the lossy result");
+        first.row.querySelector('[data-variant="lossless"]').click();
+        check(!first.result.lossy && second.result.lossy, "Choosing lossless only changes the selected image");
         first.row.querySelector('[data-variant="lossy"]').click();
-        check(first.result.lossy && !second.result.lossy, "Choices are independent per image");
+        check(first.result.lossy && second.result.lossy, "The lossy result can be selected again");
         check(
           first.blob === first.variants.lossy.blob && first.after === first.variants.lossy.after,
           "Preview and download use the chosen variant",
@@ -105,6 +107,7 @@
         check(!first.row.querySelector(".ci-fit-target").hidden, "Missed lossy target offers explicit dimension fitting");
         check(first.result.width === 600 && first.result.height === 400, "A missed target never silently changes dimensions");
         const lossless = first.variants.lossless;
+        const secondResult = second.result;
         await tool.fitToTarget(first);
         check(first.result.targetMet && first.blob.size < 3000, "Fitting produces a verified PNG below the target");
         check(
@@ -112,7 +115,7 @@
           "Fitting preserves aspect ratio and reduces dimensions",
         );
         check(first.variants.lossless === lossless, "Full-size lossless result stays available after fitting");
-        check(second.result.width === 600 && !second.result.lossy, "Fitting only changes the requested image");
+        check(second.result === secondResult && second.result.width === 600, "Fitting only changes the requested image");
         const edge = Math.max(first.result.width, first.result.height) + 1;
         const next = fitDimensions(600, 400, edge, edge);
         const probe = await tool.encodeItem(

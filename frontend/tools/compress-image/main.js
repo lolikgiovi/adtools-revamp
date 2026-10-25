@@ -710,7 +710,7 @@ export class CompressImage extends BaseTool {
     item.urls.forEach((url) => kept.has(url) || URL.revokeObjectURL(url));
     item.variants = {};
     item.settings = structuredClone(settings);
-    item.selectedVariant = item.file.type === "image/png" ? (settings.lossyPng ? "lossy" : "lossless") : undefined;
+    item.selectedVariant = (item.type || item.file.type) === "image/png" ? "lossy" : undefined;
     delete item.lossyUnavailable;
     delete item.variantError;
     item.before = outcome.before;

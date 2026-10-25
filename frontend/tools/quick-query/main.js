@@ -5734,10 +5734,16 @@ export class QuickQueryUI {
           {
             name: "tab",
             label: "Query tab",
+            type: "radio-list",
+            value: this.activeTabId,
             options: [
-              ...withAttachments.map((tab) => ({ value: tab.id, label: `${tab.title} · ${tab.attachments.length} attachments` })),
-              ...withoutAttachments.map((tab) => ({ value: tab.id, label: tab.title })),
-              ...(tabs.length < 15 ? [{ value: "new", label: "Create new query tab" }] : []),
+              ...withAttachments.map((tab) => ({
+                value: tab.id,
+                label: this.getTabTitle(tab),
+                detail: `${tab.attachments.length} attachment${tab.attachments.length === 1 ? "" : "s"}`,
+              })),
+              ...withoutAttachments.map((tab) => ({ value: tab.id, label: this.getTabTitle(tab) })),
+              ...(tabs.length < 15 ? [{ value: "new", label: "Create new query tab", separate: true }] : []),
             ],
           },
         ],

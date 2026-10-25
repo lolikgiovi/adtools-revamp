@@ -1,0 +1,8 @@
+{
+  "status": "FAIL",
+  "checks": [
+    "7 MB original/result survive cache overwrite 1"
+  ],
+  "error": "Error: Corrupt cache at cycle 1\n    at http://localhost:1235/tools/compress-image/tests/cache-lifecycle-check.html?html-proxy&index=0.js:24:19",
+  "name": "Error"
+}

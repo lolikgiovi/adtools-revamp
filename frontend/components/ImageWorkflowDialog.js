@@ -18,6 +18,37 @@ export function imageWorkflowDialog({ title, description, fields = [], actions, 
     form.append(text);
   }
   for (const field of fields) {
+    if (field.type === "radio-list") {
+      const list = document.createElement("fieldset");
+      list.className = "image-workflow-options";
+      const legend = document.createElement("legend");
+      legend.className = "sr-only";
+      legend.textContent = field.label;
+      list.append(legend);
+      for (const option of field.options) {
+        const row = document.createElement("label");
+        row.className = `image-workflow-option${option.separate ? " image-workflow-option-new" : ""}`;
+        const radio = document.createElement("input");
+        radio.type = "radio";
+        radio.name = field.name;
+        radio.value = option.value;
+        radio.required = true;
+        radio.checked = option.value === (field.value ?? field.options[0]?.value);
+        const name = document.createElement("span");
+        name.className = "image-workflow-option-title";
+        name.textContent = option.label;
+        row.append(radio, name);
+        if (option.detail) {
+          const detail = document.createElement("span");
+          detail.className = "image-workflow-option-detail";
+          detail.textContent = option.detail;
+          row.append(detail);
+        }
+        list.append(row);
+      }
+      form.append(list);
+      continue;
+    }
     const label = document.createElement("label");
     label.textContent = field.label;
     const input = document.createElement(field.options ? "select" : "input");
@@ -79,5 +110,6 @@ export function imageWorkflowDialog({ title, description, fields = [], actions, 
     dialog.addEventListener("close", () => finish(null));
     signal?.addEventListener("abort", onAbort, { once: true });
     dialog.showModal();
+    form.querySelector('input[type="radio"]:checked')?.focus({ preventScroll: true });
   });
 }

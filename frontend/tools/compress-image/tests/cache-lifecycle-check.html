@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><title>Compress Image cache lifecycle</title>
+  <pre id="result">Running…</pre>
+  <script type="module">
+    import { loadWorkspace, saveWorkspace } from "../workspace-store.js";
+    const output = document.querySelector("#result");
+    const checks = [];
+    try {
+      if (location.port !== "1235") throw new Error("Use the disposable localhost:1235 test origin.");
+      const bytes = new Uint8Array(7 * 1024 * 1024);
+      for (let i = 0; i < bytes.length; i++) bytes[i] = i % 251;
+      await saveWorkspace({
+        items: [{ file: new File([bytes], "cache.png", { type: "image/png" }), blob: new Blob([bytes], { type: "image/png" }) }],
+      });
+      for (let cycle = 0; cycle < 12; cycle++) {
+        const snapshot = await loadWorkspace();
+        const item = snapshot.items[0];
+        const original = new File([item.file], "cache.png", { type: "image/png" });
+        const url = URL.createObjectURL(original);
+        const pending = saveWorkspace({ items: [{ ...item, file: original }] });
+        URL.revokeObjectURL(url);
+        await pending;
+        const restored = (await loadWorkspace()).items[0];
+        for (const value of [original, item.file, item.blob, restored.file, restored.blob]) {
+          const actual = new Uint8Array(await value.arrayBuffer());
+          if (actual.length !== bytes.length || !actual.every((byte, index) => byte === bytes[index]))
+            throw new Error(`Corrupt cache at cycle ${cycle}`);
+        }
+        checks.push(`7 MB original/result survive cache overwrite ${cycle + 1}`);
+      }
+      output.textContent = JSON.stringify({ status: "PASS", checks }, null, 2);
+    } catch (error) {
+      output.textContent = JSON.stringify({ status: "FAIL", checks, error: error.stack, name: error.name }, null, 2);
+    }
+  </script>
+</html>
