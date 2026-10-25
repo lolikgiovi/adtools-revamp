@@ -50,6 +50,7 @@ export class AttachmentProcessorService {
         switch (extension) {
           case "jpg":
           case "jpeg":
+          case "webp":
           case "png":
           case "pdf":
             await this.handleMediaFile(file, processedFile);

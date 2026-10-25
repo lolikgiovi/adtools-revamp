@@ -40,6 +40,8 @@ import {
   getOracleImportMeta,
   summarizeQuickQueryAttachments,
 } from "./services/QuickQueryAnalyticsService.js";
+import { imageWorkflowDialog } from "../../components/ImageWorkflowDialog.js";
+import { imageAttachmentType, attachmentToImage, uniqueImageName } from "../compress-image/image-transfer.js";
 import "./styles.css";
 
 let jsZipPromise = null;
@@ -108,6 +110,7 @@ export class QuickQuery extends BaseTool {
   }
 
   onSoftDeactivate() {
+    this.ui?.imageWorkflow?.abort();
     this.ui?.pauseHiddenWork?.();
   }
 
@@ -123,7 +126,8 @@ export class QuickQuery extends BaseTool {
     return this.ui?.createNewTab();
   }
 
-  onRouteData({ tableName, createQuery } = {}) {
+  onRouteData({ tableName, createQuery, compressedImages } = {}) {
+    if (compressedImages?.length) return this.ui?.receiveCompressedImages(compressedImages);
     if (createQuery?.sql || (Array.isArray(createQuery?.schemaData) && Array.isArray(createQuery?.inputData))) {
       void this.ui?.openCreatedQuery(createQuery);
     } else if (tableName) void this.ui?.openTableTab(tableName);
@@ -346,6 +350,7 @@ export class QuickQueryUI {
       filesContainer: document.getElementById("files-container"),
       fileItemsContainer: document.getElementById("file-items"),
       attachmentsControls: document.getElementById("attachments-controls"),
+      compressImagesButton: document.getElementById("compressImagesButton"),
       minifyButton: document.getElementById("minifyButton"),
       deleteAllButton: document.getElementById("deleteAllButton"),
       filesEmpty: document.getElementById("files-empty"),
@@ -579,6 +584,7 @@ export class QuickQueryUI {
         click: () => this.handleAddFilesClick(),
         keydown: (e) => this.handleEmptyStateKeydown(e),
       },
+      compressImagesButton: { click: () => this.handleCompressImages() },
       attachmentsInput: {
         change: (e) => this.handleAttachmentsInput(e),
       },
@@ -2199,6 +2205,7 @@ export class QuickQueryUI {
     this.elements.dataContainer?.removeEventListener("wheel", this._handleDataWorkspaceWheel);
     this.elements.dataContainer?.removeEventListener("paste", this._handleDataTablePasteCapture, true);
     this._pendingDataTableClipboard = null;
+    this.imageWorkflow?.abort();
     this._closeBlobAttachmentChoice?.();
     this.pauseHiddenWork();
     this.closeTabContextMenu();
@@ -5477,7 +5484,7 @@ export class QuickQueryUI {
         filters: [
           {
             name: "Supported Files",
-            extensions: ["txt", "jpg", "jpeg", "png", "html", "pdf", "json"],
+            extensions: ["txt", "jpg", "jpeg", "png", "webp", "html", "pdf", "json"],
           },
         ],
         title: "Select Files to Attach",
@@ -5520,6 +5527,7 @@ export class QuickQueryUI {
           jpg: "image/jpeg",
           jpeg: "image/jpeg",
           png: "image/png",
+          webp: "image/webp",
           html: "text/html",
           pdf: "application/pdf",
           json: "application/json",
@@ -5693,8 +5701,86 @@ export class QuickQueryUI {
     }
   }
 
+  async handleCompressImages() {
+    const images = this.processedFiles.filter(imageAttachmentType);
+    if (!images.length) return;
+    try {
+      const files = images.map(attachmentToImage);
+      await this.flushPendingDataAutosave();
+      if (!(await this.saveActiveTabDraft())) throw new Error("Save the query tab before opening Compress Image.");
+      window.app.router.navigate("compress-image", { imageFiles: files });
+    } catch (error) {
+      this.showError(error.message);
+    }
+  }
+
+  async receiveCompressedImages(files) {
+    if (this._receivingImages) return;
+    this._receivingImages = true;
+    this.imageWorkflow = new AbortController();
+    const signal = this.imageWorkflow.signal;
+    try {
+      await this.ready;
+      if (signal.aborted || !this._tabsInitialized) return;
+      await this.flushPendingDataAutosave();
+      if (!(await this.saveActiveTabDraft())) throw new Error("The current query tab could not be saved.");
+      const tabs = await Promise.all(this.tabs.map((tab) => this.loadTabDraft(tab)));
+      if (signal.aborted) return;
+      const withAttachments = tabs.filter((tab) => tab.attachments.length);
+      const withoutAttachments = tabs.filter((tab) => !tab.attachments.length);
+      const choice = await imageWorkflowDialog({
+        title: "Add to Quick Query",
+        fields: [
+          {
+            name: "tab",
+            label: "Query tab",
+            options: [
+              ...withAttachments.map((tab) => ({ value: tab.id, label: `${tab.title} · ${tab.attachments.length} attachments` })),
+              ...withoutAttachments.map((tab) => ({ value: tab.id, label: tab.title })),
+              ...(tabs.length < 15 ? [{ value: "new", label: "Create new query tab" }] : []),
+            ],
+          },
+        ],
+        actions: [{ value: "attach", label: "Add images", primary: true }],
+        signal,
+      });
+      if (!choice) return;
+      const target = tabs.find((tab) => tab.id === choice.tab);
+      const added = await this.attachmentProcessorService.processAttachments(files, target?.tableName || "");
+      if (signal.aborted) return;
+      if (added.length !== files.length) throw new Error("Some images could not be read. Your attachments were kept.");
+      if (choice.tab === "new") {
+        const tab = await this.createNewTab();
+        if (!tab) throw new Error("A new query tab could not be created.");
+      } else {
+        await this.switchTab(choice.tab);
+        if (this.activeTabId !== choice.tab) throw new Error("The selected query tab could not be opened.");
+      }
+      if (signal.aborted) return;
+      const names = new Set(this.processedFiles.map((file) => file.name.toLowerCase()));
+      for (const file of added) file.name = uniqueImageName(file.name, names);
+      this.processedFiles.push(...added);
+      this._renderAttachmentsList();
+      this.updateAttachmentControlsState();
+      if (!(await this.saveActiveTabDraft())) {
+        this.scheduleActiveTabDraftSave();
+        throw new Error("Images were added, but the query tab could not be saved. Keep Quick Query open and try again.");
+      }
+      this.eventBus?.emit("notification:success", {
+        message: `Added ${added.length} image${added.length === 1 ? "" : "s"} to Quick Query.`,
+      });
+    } catch (error) {
+      this.showError(error.message);
+    } finally {
+      this._receivingImages = false;
+    }
+  }
+
   updateAttachmentControlsState() {
     const hasFiles = this.processedFiles.length > 0;
+    if (this.elements.compressImagesButton) {
+      this.elements.compressImagesButton.hidden = !this.processedFiles.some(imageAttachmentType);
+    }
     const hasHtmlFile = this.processedFiles.some((file) => {
       const ext = (file.name.split(".").pop() || "").toLowerCase();
       const t = (file.type || "").toLowerCase();

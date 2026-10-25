@@ -1,0 +1,51 @@
+body .image-workflow-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: 24px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  box-shadow: 0 20px 60px #0004;
+}
+.image-workflow-dialog::backdrop {
+  background: #0007;
+}
+.image-workflow-dialog form {
+  display: grid;
+  gap: 20px;
+}
+.image-workflow-dialog h2 {
+  margin: 0;
+  font-size: 20px;
+}
+.image-workflow-dialog p {
+  margin: 0;
+  font-size: 14px;
+}
+.image-workflow-dialog label {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+}
+.image-workflow-dialog input,
+.image-workflow-dialog select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  background: hsl(var(--background));
+  color: inherit;
+  font: inherit;
+}
+.image-workflow-dialog footer {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}

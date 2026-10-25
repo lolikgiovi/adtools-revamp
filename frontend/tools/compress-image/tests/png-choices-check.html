@@ -17,7 +17,17 @@
       UsageTracker.trackToolUse = () => {};
       document.documentElement.classList.add("dark-grey");
       const tool = new CompressImage();
+      // Keep codec checks independent of the persisted workspace, covered by quick-query-flow.
+      tool.restoreWorkspace = async () => {
+        tool.restoring = false;
+        tool.updateSummary();
+      };
+      tool.persistWorkspace = () => {};
+      tool.flushWorkspace = async () => {};
       tool.mount(document.querySelector("#tool"));
+      await tool.ready;
+      // This codec harness captures exports directly; quick-query-flow covers the export dialog.
+      tool.exportOptions = async (filename) => ({ filename, format: "image" });
       tool.decoder = new URLSearchParams(location.search).get("decoder") || "auto";
       const checks = [];
       const check = (ok, label) => {
@@ -131,6 +141,7 @@
         tool.download = (blob) => {
           downloaded = blob;
         };
+        tool.saveDownload = tool.download;
         first.row.querySelector(".ci-download").click();
         check(downloaded === fitted, "Individual download uses the selected fitted bytes");
         await tool.downloadZip();

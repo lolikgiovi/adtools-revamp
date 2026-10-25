@@ -1,0 +1,33 @@
+PNG/JPEG variants
+PASS: 28 checks
+PNG mode setting is removed
+Lossless starts with a queued state
+Lossless has a visible loading state
+Lossy shows queued while lossless runs
+Lossy has a visible background loading state
+Completed lossless stays ready while lossy loads
+Both real PNG results are retained
+Both columns show independently encoded sizes
+Default selection stays lossless
+Choices are independent per image
+Preview and download use the chosen variant
+Missed lossy target offers explicit dimension fitting
+A missed target never silently changes dimensions
+Fitting produces a verified PNG below the target
+Fitting preserves aspect ratio and reduces dimensions
+Full-size lossless result stays available after fitting
+Fitting only changes the requested image
+The next larger dimensions exceed the target at the quality floor
+Lossless choice restores full-size output
+Lossy choice restores fitted output without re-encoding
+Individual download uses the selected fitted bytes
+ZIP uses each row's chosen bytes
+Fitting rejects stale settings
+Clear releases variant workers and URLs
+JPEG lossless is unavailable from upload
+JPEG also offers fitting after missing the target
+JPEG dimension fitting preserves format and meets target
+JPEG fitting respects the quality floor
+
+Compressor browser suite
+PASS: 143 browser checks. Open details for the repeatable evidence.

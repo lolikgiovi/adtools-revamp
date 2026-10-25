@@ -150,7 +150,17 @@ function pixels(image) {
 // lossy fallback must not masquerade as WebP; resizing must be opt-in;
 // linked transforms, slider endpoints, unique ZIP filenames and clearing in flight.
 const tool = new CompressImage();
+// Keep codec checks independent of the persisted workspace, covered by quick-query-flow.
+tool.restoreWorkspace = async () => {
+  tool.restoring = false;
+  tool.updateSummary();
+};
+tool.persistWorkspace = () => {};
+tool.flushWorkspace = async () => {};
 tool.mount(document.querySelector("#tool"));
+await tool.ready;
+// This codec harness captures exports directly; quick-query-flow covers the export dialog.
+tool.exportOptions = async (filename) => ({ filename, format: "image" });
 const root = document.querySelector("#tool");
 const control = (name) => root.querySelector(`[data-ci="${name}"]`);
 let codecLossyPng = false;
@@ -354,6 +364,7 @@ try {
   tool.download = (blob, name) => {
     downloaded = { blob, name };
   };
+  tool.saveDownload = tool.download;
   control("original").click();
   check(
     downloaded.blob === tool.selected.file && downloaded.name === tool.selected.file.name,
@@ -558,6 +569,7 @@ try {
   change("height", "1920");
   tool.error("");
   const zipTask = tool.downloadZip();
+  await Promise.resolve();
   check(control("zip").textContent === "Creating ZIP…", "ZIP generation exposes a busy label.");
   await zipTask;
   tool.clear();

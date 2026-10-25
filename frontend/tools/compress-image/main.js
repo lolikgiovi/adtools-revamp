@@ -1,3 +1,4 @@
+import { isTauri } from "../../core/Runtime.js";
 import { BaseTool } from "../../core/BaseTool.js";
 import JSZip from "jszip";
 import { UsageTracker } from "../../core/UsageTracker.js";
@@ -19,6 +20,9 @@ import { getIconSvg } from "./icon.js";
 import { findLargestFit } from "./target-dimensions.js";
 import { attachPaneResizer } from "./pane-resizer.js";
 import { attachPreviewControls } from "./preview-controls.js";
+import { imageWorkflowDialog } from "../../components/ImageWorkflowDialog.js";
+import { loadWorkspace, saveWorkspace } from "./workspace-store.js";
+import { blobDataUrl, uniqueImageName } from "./image-transfer.js";
 import "./styles.css";
 
 export const formatSize = (bytes) =>
@@ -87,7 +91,7 @@ export class CompressImage extends BaseTool {
       <div class="ci-batch"><div class="ci-workspace" data-ci="workspace">
         <section class="ci-file-pane" aria-label="Image files"><header class="ci-batch-header">
           <div class="ci-actions"><button type="button" class="btn btn-secondary btn-sm" data-ci="add">Add images</button><button type="button" class="btn btn-ghost btn-sm" data-ci="clear">Clear</button></div>
-          <div class="ci-actions"><button type="button" class="btn btn-secondary btn-sm" data-ci="zip" hidden>Download ZIP</button><button type="button" class="btn btn-primary btn-sm" data-ci="compress">Compress images</button></div>
+          <div class="ci-actions"><button type="button" class="btn btn-secondary btn-sm" data-ci="zip" hidden>Download ZIP</button><button type="button" class="btn btn-secondary btn-sm" data-ci="quick-query" hidden>Add to Quick Query</button><button type="button" class="btn btn-primary btn-sm" data-ci="compress">Compress images</button></div>
         </header>
         <div class="ci-list" role="region" aria-label="Images" tabindex="0">
           <div class="ci-drop"><p>Drop images here</p><button type="button" class="btn btn-ghost btn-sm" data-ci="choose">Choose images</button></div>
@@ -100,6 +104,8 @@ export class CompressImage extends BaseTool {
   }
 
   onMount() {
+    this.workflow = new AbortController();
+    this.restoring = true;
     const input = this.container.querySelector("#ci-files");
     const pick = () => input.click();
     this.$("choose").addEventListener("click", pick);
@@ -123,6 +129,7 @@ export class CompressImage extends BaseTool {
       this.addFiles(event.dataTransfer.files);
     });
     this.$("clear").addEventListener("click", () => this.clear());
+    this.$("quick-query").addEventListener("click", () => this.addToQuickQuery());
     this.$("zip").addEventListener("click", () => this.downloadZip());
     this.$("compress").addEventListener("click", () => this.processQueue());
     this.container.querySelectorAll(".ci-settings input, .ci-settings select").forEach((input) => {
@@ -156,6 +163,152 @@ export class CompressImage extends BaseTool {
     this.headerObserver = new ResizeObserver(syncHeader);
     this.headerObserver.observe(header);
     syncHeader();
+    this.ready = this.restoreWorkspace();
+    this._saveOnPageHide = () => void this.flushWorkspace();
+    window.addEventListener("pagehide", this._saveOnPageHide);
+  }
+  async restoreWorkspace() {
+    const lifecycle = this.workflow;
+    try {
+      const saved = await loadWorkspace();
+      if (lifecycle.signal.aborted || !saved) return;
+      for (const [name, value] of Object.entries(saved.controls || {})) {
+        const input = this.$(name);
+        if (input) {
+          if (input.type === "checkbox") input.checked = value;
+          else input.value = value;
+        }
+      }
+      this.view = saved.view === "overlay" ? "overlay" : "pair";
+      this.appliedSettings = saved.appliedSettings;
+      for (const record of saved.items || []) {
+        const file = new File([record.file], record.name, { type: record.file.type, lastModified: record.lastModified });
+        const item = {
+          ...record,
+          file,
+          urls: [],
+          logs: [],
+          startedAt: performance.now(),
+          status: record.result ? "Ready" : "Queued",
+          logId: this.items.length + 1,
+        };
+        if (item.result) {
+          item.before = URL.createObjectURL(file);
+          item.after = URL.createObjectURL(item.blob);
+          item.urls.push(item.before, item.after);
+          for (const variant of Object.values(item.variants || {})) {
+            variant.after = URL.createObjectURL(variant.blob);
+            item.urls.push(variant.after);
+          }
+        }
+        this.items.push(item);
+        this.createRow(item);
+        void this.readDimensions(item);
+      }
+      const selected = this.items[saved.selected || 0];
+      if (selected) this.selectItem(selected);
+    } catch (_) {
+      if (!lifecycle.signal.aborted) this.showError("Unable to restore the image cache. You can still add images.");
+    } finally {
+      if (!lifecycle.signal.aborted) {
+        this.restoring = false;
+        this.updateAdvice();
+        this.updateSummary();
+      }
+    }
+  }
+  workspaceSnapshot() {
+    const controls = {};
+    for (const name of ["preset", "png-quality-preset", "quality", "resize", "width", "height", "target-kb"]) {
+      const input = this.$(name);
+      controls[name] = input.type === "checkbox" ? input.checked : input.value;
+    }
+    return {
+      controls,
+      appliedSettings: this.appliedSettings,
+      selected: this.items.indexOf(this.selected),
+      view: this.view,
+      items: this.items.map((item) => ({
+        file: item.file,
+        name: item.file.name,
+        lastModified: item.file.lastModified,
+        blob: item.blob,
+        result: item.result,
+        type: item.type,
+        dimensions: item.dimensions,
+        settings: item.settings,
+        selectedVariant: item.selectedVariant,
+        lossyUnavailable: item.lossyUnavailable,
+        variants: Object.fromEntries(
+          Object.entries(item.variants || {}).map(([name, variant]) => [name, { blob: variant.blob, result: variant.result }]),
+        ),
+      })),
+    };
+  }
+  persistWorkspace() {
+    if (this.restoring || !this.container) return;
+    clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => void this.flushWorkspace(), 250);
+  }
+  async flushWorkspace() {
+    clearTimeout(this.saveTimer);
+    if (this.restoring || !this.container) return;
+    try {
+      await saveWorkspace(this.workspaceSnapshot());
+      this.cacheErrorShown = false;
+    } catch (_) {
+      if (!this.cacheErrorShown) this.showError("Image cache could not be saved. Keep this tab open to retain your images.");
+      this.cacheErrorShown = true;
+    }
+  }
+  onSoftDeactivate() {
+    this.workflow?.abort();
+    void this.flushWorkspace();
+  }
+  onWarmResume() {
+    if (this.workflow?.signal.aborted) this.workflow = new AbortController();
+  }
+  async onRouteData({ imageFiles } = {}) {
+    if (!imageFiles?.length) return;
+    const lifecycle = this.workflow;
+    await this.ready;
+    if (lifecycle.signal.aborted) return;
+    if (this.running || this.zipping) return this.showError("Wait for the current batch to finish before importing images.");
+    let action = "append";
+    if (this.items.length) {
+      const choice = await imageWorkflowDialog({
+        title: "Images from Quick Query",
+        description: `${this.items.length} image${this.items.length === 1 ? " is" : "s are"} already in Compress Image.`,
+        actions: [
+          { value: "append", label: "Add to existing", primary: true },
+          { value: "replace", label: "Replace existing" },
+        ],
+        signal: this.workflow.signal,
+      });
+      if (!choice) return;
+      action = choice.action;
+    }
+    const count = action === "replace" ? 0 : this.items.length;
+    const bytes = action === "replace" ? 0 : this.items.reduce((sum, item) => sum + item.file.size, 0);
+    if (count + imageFiles.length > 20 || bytes + imageFiles.reduce((sum, file) => sum + file.size, 0) > 128 * 1024 * 1024) {
+      return this.showError("This transfer exceeds the 20-image or 128 MB batch limit. Your existing images were kept.");
+    }
+    if (action === "replace") this.clear();
+    this.addFiles(imageFiles);
+    await this.flushWorkspace();
+  }
+  addToQuickQuery() {
+    if (this.running || this.zipping || this.isStale()) return;
+    const items = this.items.filter((item) => item.result && item.status === "Ready");
+    if (!items.length) return;
+    const names = new Set();
+    const compressedImages = items.map(
+      (item) =>
+        new File([item.blob], uniqueImageName(this.outputName(item), names), {
+          type: item.blob.type,
+        }),
+    );
+    window.app.router.navigate("quick-query", { compressedImages });
   }
   // The settings controls are the single source of truth; cards and presets only write to them.
   readSettings() {
@@ -175,6 +328,7 @@ export class CompressImage extends BaseTool {
     return this.items.some((item) => item.result) && this.appliedSettings !== JSON.stringify(this.readSettings());
   }
   updateSettings() {
+    this.persistWorkspace();
     this.updateAdvice();
     this.updateSummary();
   }
@@ -215,6 +369,13 @@ export class CompressImage extends BaseTool {
     this.$("error").textContent = message;
   }
   addFiles(files) {
+    if (this.restoring) {
+      const pending = Array.from(files);
+      void this.ready.then(() => {
+        if (this.container) this.addFiles(pending);
+      });
+      return;
+    }
     if (this.running || this.zipping) return this.error("Wait for this batch to finish before adding more images.");
     let total = this.items.reduce((sum, item) => sum + item.file.size, 0);
     for (const file of files) {
@@ -229,6 +390,7 @@ export class CompressImage extends BaseTool {
       this.readDimensions(item);
     }
     this.updateSummary();
+    this.persistWorkspace();
   }
   isOversized(item) {
     return largerThan(item.dimensions, PHONE_SIZES.full) && largerThan(item.dimensions, PHONE_SIZES.square);
@@ -372,6 +534,7 @@ export class CompressImage extends BaseTool {
       if (generation === this.generation) {
         this.running = false;
         this.updateSummary();
+        this.persistWorkspace();
         this.offers = this.prepareOffers(settings, generation);
       }
     }
@@ -424,6 +587,7 @@ export class CompressImage extends BaseTool {
         }
       }),
     );
+    if (generation === this.generation) this.persistWorkspace();
   }
   cancelOffers() {
     this.offerBatch?.abort();
@@ -435,6 +599,7 @@ export class CompressImage extends BaseTool {
     this.updateRow(item);
     this.selectItem(item);
     this.updateSummary();
+    this.persistWorkspace();
   }
   async fitToTarget(item) {
     if (this.running || this.zipping || !item.result) return;
@@ -525,6 +690,7 @@ export class CompressImage extends BaseTool {
         this.updateRow(item);
         this.updateSummary();
         this.selectItem(item);
+        this.persistWorkspace();
       }
     }
   }
@@ -848,6 +1014,7 @@ export class CompressImage extends BaseTool {
     fit.title = "Reduce dimensions to the largest image that fits the target, preserving aspect ratio and your quality limit.";
   }
   selectItem(item) {
+    this.persistWorkspace();
     this.previewCleanup?.();
     this.selected = item;
     this.items.forEach((entry) => {
@@ -886,10 +1053,12 @@ export class CompressImage extends BaseTool {
     );
     this.$("pair").addEventListener("click", () => {
       this.view = "pair";
+      this.persistWorkspace();
       this.showPreview(item);
     });
     this.$("overlay").addEventListener("click", () => {
       this.view = "overlay";
+      this.persistWorkspace();
       this.showPreview(item);
     });
     this.showPreview(item);
@@ -1000,7 +1169,7 @@ export class CompressImage extends BaseTool {
     compress.hidden = !pending && !this.running;
     compress.classList.toggle("btn-primary", pending);
     compress.classList.toggle("btn-secondary", !pending);
-    compress.disabled = !this.items.length || this.running || this.zipping;
+    compress.disabled = !this.items.length || this.running || this.zipping || this.restoring;
     compress.textContent = this.running
       ? "Compressing…"
       : ready.length
@@ -1008,19 +1177,22 @@ export class CompressImage extends BaseTool {
         : this.items.length === 1
           ? "Compress image"
           : `Compress ${this.items.length} images`;
+    const query = this.$("quick-query");
+    query.hidden = !ready.length;
+    query.disabled = !ready.length || this.running || this.zipping || stale || this.restoring;
     const zip = this.$("zip");
     zip.hidden = !ready.length;
     zip.textContent = this.zipping ? "Creating ZIP…" : "Download ZIP";
     zip.classList.toggle("btn-primary", !pending);
     zip.classList.toggle("btn-secondary", pending);
-    zip.disabled = !ready.length || this.running || this.zipping;
+    zip.disabled = !ready.length || this.running || this.zipping || this.restoring;
     if (this.$("result")) this.$("result").disabled = this.running || this.zipping;
     this.container.querySelectorAll(".ci-settings input, .ci-settings select, .ci-choice").forEach((input) => {
-      input.disabled = this.running || this.zipping;
+      input.disabled = this.running || this.zipping || this.restoring;
     });
-    this.$("width").disabled = this.$("height").disabled = this.running || this.zipping || !this.$("resize").checked;
-    this.$("png-quality-preset").disabled = this.running || this.zipping;
-    this.$("choose").disabled = this.$("add").disabled = this.$("clear").disabled = this.running || this.zipping;
+    this.$("width").disabled = this.$("height").disabled = this.running || this.zipping || this.restoring || !this.$("resize").checked;
+    this.$("png-quality-preset").disabled = this.running || this.zipping || this.restoring;
+    this.$("choose").disabled = this.$("add").disabled = this.$("clear").disabled = this.running || this.zipping || this.restoring;
     this.items.forEach((item) => {
       item.row.querySelector(".ci-download").disabled = !item.result || this.running || this.zipping;
       item.row.querySelectorAll("[data-variant]").forEach((button) => {
@@ -1034,35 +1206,81 @@ export class CompressImage extends BaseTool {
     const ext = item.blob.type === "image/jpeg" && sourceExtension === "jpeg" ? "jpeg" : extension(item.blob.type);
     return `${item.file.name.replace(/\.[^.]+$/, "") || "image"}.${ext}`;
   }
-  download(blob, name) {
-    const url = URL.createObjectURL(blob),
-      link = document.createElement("a");
+  async exportOptions(name, zip = false) {
+    return imageWorkflowDialog({
+      title: zip ? "Download ZIP" : "Download image",
+      fields: [
+        { name: "filename", label: "File name", value: name },
+        {
+          name: "format",
+          label: zip ? "Files in ZIP" : "Format",
+          options: [
+            { value: "image", label: "Image" },
+            { value: "base64", label: "Base64 (data URL)" },
+          ],
+        },
+      ],
+      actions: [{ value: "download", label: "Download", primary: true }],
+      signal: this.workflow.signal,
+    });
+  }
+  async download(blob, name) {
+    if (this.running || this.zipping) return;
+    const options = await this.exportOptions(name);
+    if (!options) return;
+    try {
+      const base64 = options.format === "base64";
+      const output = base64 ? new Blob([await blobDataUrl(blob)], { type: "text/plain;charset=utf-8" }) : blob;
+      const ext = base64 ? "txt" : name.split(".").at(-1);
+      const filename = this.exportName(options.filename, ext);
+      if (!this.workflow.signal.aborted) await this.saveDownload(output, filename);
+    } catch (_) {
+      this.showError("Unable to download this image. Try again.");
+    }
+  }
+  exportName(name, ext) {
+    const safe = name.trim().replace(/[\\/\p{Cc}]/gu, "_") || "image";
+    return `${safe.replace(/\.[^.]+$/, "") || "image"}.${ext}`;
+  }
+  async saveDownload(blob, name) {
+    if (isTauri()) {
+      const { save } = await import("@tauri-apps/plugin-dialog");
+      const { writeFile } = await import("@tauri-apps/plugin-fs");
+      const path = await save({ defaultPath: name, filters: [{ name: "Export", extensions: [name.split(".").at(-1)] }] });
+      if (!path) return;
+      await writeFile(path, new Uint8Array(await blob.arrayBuffer()));
+      this.showSuccess(`Saved ${name}`);
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
     link.href = url;
     link.download = name;
     document.body.appendChild(link);
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+    this.showSuccess(`Download started: ${name}`);
   }
   async downloadZip() {
     if (this.running || this.zipping || !this.items.some((item) => item.result)) return;
+    const options = await this.exportOptions("compressed-images.zip", true);
+    if (!options || this.running || this.zipping) return;
     const generation = this.generation;
     this.zipping = true;
     this.updateSummary();
     try {
-      const zip = new JSZip(),
-        names = new Set();
+      const zip = new JSZip();
+      const names = new Set();
       for (const item of this.items.filter((entry) => entry.result)) {
-        const ext = this.outputName(item).split(".").at(-1);
-        const base = item.file.name.replace(/\.[^.]+$/, "").replace(/[\\/\p{Cc}]/gu, "_") || "image";
-        let name = `${base}.${ext}`,
-          suffix = 2;
-        while (names.has(name.toLowerCase())) name = `${base} (${suffix++}).${ext}`;
-        names.add(name.toLowerCase());
-        zip.file(name, await item.blob.arrayBuffer());
+        const base64 = options.format === "base64";
+        const name = uniqueImageName(base64 ? this.exportName(this.outputName(item), "txt") : this.outputName(item), names);
+        zip.file(name, base64 ? await blobDataUrl(item.blob) : await item.blob.arrayBuffer());
       }
       const blob = await zip.generateAsync({ type: "blob" });
-      if (generation === this.generation) this.download(blob, "compressed-images.zip");
+      if (generation === this.generation && !this.workflow.signal.aborted) {
+        await this.saveDownload(blob, this.exportName(options.filename, "zip"));
+      }
     } catch (_) {
       if (generation === this.generation) this.error("Unable to create ZIP. Download the images individually.");
     } finally {
@@ -1070,7 +1288,7 @@ export class CompressImage extends BaseTool {
       this.updateSummary();
     }
   }
-  clear() {
+  clear({ persist = true } = {}) {
     this.previewCleanup?.();
     this.previewCleanup = null;
     this.generation++;
@@ -1094,13 +1312,17 @@ export class CompressImage extends BaseTool {
       this.updateAdvice();
     }
     this.updateSummary();
+    if (persist) this.persistWorkspace();
   }
   hasActiveBackgroundWork() {
     return this.running || this.zipping;
   }
   onUnmount() {
+    this.workflow?.abort();
+    void this.flushWorkspace();
+    window.removeEventListener("pagehide", this._saveOnPageHide);
     this.headerObserver?.disconnect();
     this.resizerCleanup?.();
-    this.clear();
+    this.clear({ persist: false });
   }
 }

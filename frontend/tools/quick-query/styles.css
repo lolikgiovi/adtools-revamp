@@ -1859,6 +1859,7 @@
 /* Attachments controls: compact slim buttons */
 .quick-query-attachments-controls.button-group {
   gap: 4px;
+  width: 100%;
 }
 
 .quick-query-tool-container .btn-xs {
@@ -2767,4 +2768,11 @@
 
 .qq-oracle-table-item + .qq-oracle-table-item {
   border-top: 1px solid hsl(var(--border));
+}
+
+.quick-query-attachments-controls #compressImagesButton {
+  margin-left: auto;
+}
+.quick-query-attachments-controls #compressImagesButton[hidden] {
+  display: none;
 }
