@@ -1,7 +1,13 @@
 #!/bin/bash
-# Build the Oracle sidecar executable for both architectures (macOS)
+# Build the native Oracle sidecar, optionally followed by the Intel sidecar.
 set -e
 cd "$(dirname "$0")"
+
+BUILD_MODE="${1:-both}"
+case "$BUILD_MODE" in
+  native|both) ;;
+  *) echo "Usage: $0 [native|both]" >&2; exit 1 ;;
+esac
 
 # Build for native architecture (arm64 on Apple Silicon)
 echo "=== Building sidecar for native architecture ==="
@@ -16,13 +22,12 @@ if [[ ! -x "$PYTHON_BIN" ]]; then
 fi
 "$PYTHON_BIN" build_sidecar.py
 
-# Build for x86_64 using Rosetta (only on macOS ARM)
-if [[ "$(uname)" == "Darwin" && "$(uname -m)" == "arm64" ]]; then
+# Production builds explicitly include Intel via the prepared Rosetta environment.
+if [[ "$BUILD_MODE" == "both" ]]; then
   echo ""
   echo "=== Building sidecar for x86_64 (via Rosetta) ==="
   
-  # Check if x86_64 venv exists, create if not
-  if [[ ! -d "venv-x64" ]]; then
+  if [[ ! -x "venv-x64/bin/python" ]]; then
     echo "Missing x86_64 sidecar Python environment. Prepare tauri/sidecar/venv-x64 manually before building." >&2
     exit 1
   fi

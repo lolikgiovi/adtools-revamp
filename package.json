@@ -32,9 +32,10 @@
     "db:migrate:remote": "npx wrangler d1 migrations apply adtools --remote",
     "release:build": "bash tauri/scripts/build_release.sh",
     "release:upload": "bash tauri/scripts/upload_to_r2.sh",
-    "sidecar:build": "bash tauri/sidecar/build.sh",
-    "tauri:dev": "npm run sidecar:build && ./node_modules/.bin/tauri dev",
-    "tauri:dev:oracle-ic": "npm run sidecar:build && OCI_LIB_DIR=$HOME/Documents/adtools_library/oracle_instantclient ./node_modules/.bin/tauri dev --features oracle",
+    "sidecar:build": "bash tauri/sidecar/build.sh both",
+    "sidecar:build:native": "bash tauri/sidecar/build.sh native",
+    "tauri:dev": "npm run sidecar:build:native && ./node_modules/.bin/tauri dev",
+    "tauri:dev:oracle-ic": "npm run sidecar:build:native && OCI_LIB_DIR=$HOME/Documents/adtools_library/oracle_instantclient ./node_modules/.bin/tauri dev --features oracle",
     "tauri:build": "npm run sidecar:build && node tauri/scripts/build_with_sidecar.cjs",
     "tauri:build:oracle-ic": "npm run sidecar:build && OCI_LIB_DIR=$HOME/Documents/adtools_library/oracle_instantclient node tauri/scripts/build_with_sidecar.cjs --oracle-feature"
   },
