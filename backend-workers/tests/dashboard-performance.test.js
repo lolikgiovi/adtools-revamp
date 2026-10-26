@@ -33,6 +33,9 @@ function createStatement(db, sql, rows, options = {}) {
 function createDb({ tableNames = [], rows = [], onAll, onFirst } = {}) {
   const db = { executed: [], prepare: null };
   db.prepare = vi.fn((sql) => {
+    if (sql === "SELECT device_id FROM device WHERE is_development=1 ORDER BY device_id") {
+      return createStatement(db, sql, []);
+    }
     if (sql === "SELECT name FROM sqlite_master WHERE type = 'table'") {
       return createStatement(
         db,
@@ -102,13 +105,13 @@ describe("dashboard query performance boundaries", () => {
   it("shows recent client tool uses alongside legacy logs without historical projections", async () => {
     const sqlite = new DatabaseSync(":memory:");
     sqlite.exec(`
-      CREATE TABLE device (device_id TEXT PRIMARY KEY, platform TEXT, app_version TEXT);
+      CREATE TABLE device (device_id TEXT PRIMARY KEY, platform TEXT, app_version TEXT, is_development INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE usage_log (id INTEGER PRIMARY KEY, user_email TEXT, device_id TEXT, tool_id TEXT, action TEXT, created_time TEXT);
       CREATE TABLE tool_usage (
         event_id TEXT UNIQUE, user_email TEXT, device_id TEXT, tool_id TEXT,
         action TEXT, properties TEXT, source TEXT, created_time TEXT
       );
-      INSERT INTO device VALUES ('fixture-device', 'Desktop (Tauri)', '1.3.7');
+      INSERT INTO device (device_id, platform, app_version) VALUES ('fixture-device', 'Desktop (Tauri)', '1.3.7');
       INSERT INTO usage_log (user_email, device_id, tool_id, action, created_time) VALUES
         ('fixture@example.com', 'fixture-device', 'quick-query', 'open', datetime('now', '+7 hours', '-1 minute')),
         ('fixture@example.com', 'fixture-device', 'quick-query', 'merge', datetime('now', '+7 hours', '-2 days'));

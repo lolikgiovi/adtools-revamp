@@ -23,7 +23,7 @@ function database(sqlite) {
 }
 
 describe("Dashboard device exclusions", () => {
-  it("filters every built-in report before aggregation without dropping the user's other device", async () => {
+  it.each(["config", "flag"])("filters every built-in report using %s without dropping the user's other device", async (mode) => {
     const sqlite = new DatabaseSync(":memory:");
     const migrations = new URL("../migrations/", import.meta.url);
     for (const name of readdirSync(migrations)
@@ -72,7 +72,11 @@ describe("Dashboard device exclusions", () => {
         ).json();
       const unfiltered = await query(env, "overview");
       expect(unfiltered.data.find((row) => row.metric === "Successful tool uses").value).toBe("2");
-      const filteredEnv = { ...env, ANALYTICS_EXCLUDED_DEVICE_IDS: devId };
+      if (mode === "flag") {
+        sqlite.exec(`INSERT INTO users (id,email,created_time,last_seen) VALUES ('same','same@example.test','now','now');
+          INSERT INTO device (device_id,user_id,created_time,last_seen,is_development) VALUES ('${devId}','same','now','now',1);`);
+      }
+      const filteredEnv = { ...env, ANALYTICS_EXCLUDED_DEVICE_IDS: mode === "config" ? devId : "" };
       const overview = await query(filteredEnv, "overview");
       expect(overview.data.find((row) => row.metric === "Successful tool uses").value).toBe("1");
       const lifetime = await query(filteredEnv, "tools");
@@ -90,6 +94,7 @@ describe("Dashboard device exclusions", () => {
         expect(result.ok, `${tab.id}: ${result.error}`).toBe(true);
       }
       expect(sqlite.prepare("SELECT COUNT(*) AS count FROM tool_usage").get().count).toBe(2);
+      if (mode === "flag") sqlite.exec("UPDATE device SET is_development=0");
       const again = await query(env, "overview");
       expect(again.data.find((row) => row.metric === "Successful tool uses").value).toBe("2");
     } finally {

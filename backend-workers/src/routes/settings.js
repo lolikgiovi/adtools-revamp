@@ -149,19 +149,24 @@ export async function handleSettings(request, env) {
       }
     } else if (path === "enroll" && method === "POST") {
       const session = await getSession(request, env);
-      const registration = session || (await readBody(request));
+      const data = request.body ? await readBody(request) : {};
+      const registration = session || data;
       const email = typeof registration?.email === "string" ? registration.email.trim().toLowerCase() : "";
       const deviceId = typeof registration?.deviceId === "string" ? registration.deviceId.trim() : "";
       if (!email || !deviceId || email.length > 254 || deviceId.length > 255) {
         return json({ ok: false, error: "Registered device not found." }, 401);
       }
       const user = await env.DB.prepare(
-        `SELECT u.id, u.email FROM users u JOIN device d ON d.user_id=u.id
+        `SELECT u.id, u.email, d.is_development FROM users u JOIN device d ON d.user_id=u.id
         WHERE LOWER(u.email)=? AND d.device_id=?`,
       )
         .bind(email, deviceId)
         .first();
       if (!user) return json({ ok: false, error: "Registered device not found." }, 401);
+      if (data?.isDevelopment === true && !user.is_development) {
+        await env.DB.prepare("UPDATE device SET is_development=1 WHERE device_id=? AND user_id=?").bind(deviceId, user.id).run();
+        user.is_development = 1;
+      }
       const credential = `${crypto.randomUUID()}${crypto.randomUUID()}`;
       const expiresAt = Date.now() + DEVICE_TTL_MS;
       await env.DB.prepare(
@@ -170,7 +175,15 @@ export async function handleSettings(request, env) {
       )
         .bind(await digest(credential), user.id, deviceId, expiresAt)
         .run();
-      return json({ ok: true, credential, userId: user.id, email: user.email, deviceId, expiresAt });
+      return json({
+        ok: true,
+        credential,
+        userId: user.id,
+        email: user.email,
+        deviceId,
+        expiresAt,
+        isDevelopment: user.is_development === 1,
+      });
     } else if ((path === "sync" && method === "GET") || (path === "ack" && method === "POST")) {
       const user = await identity(request, env);
       if (!user) return json({ ok: false, error: "Verify your account to receive settings." }, 401);

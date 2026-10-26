@@ -66,7 +66,8 @@ It uses Chrome and does not establish native Tauri/WebKit runtime behavior or au
 
 `ANALYTICS_EXCLUDED_DEVICE_IDS` in `wrangler.toml` lists exact, comma-separated device IDs excluded from the admin Dashboard. The default and
 production configurations include `6028654b-b517-4d2f-8239-3f466f77f123`. Deploy the Worker configuration and code for this to affect production.
-No database migration or record deletion is required.
+The configured exclusion requires no record deletion. The persistent `device.is_development` flag additionally requires migration
+`0029_development_devices.sql`; marked device IDs join the configured exclusion list for every Dashboard request.
 
 The exclusion applies to device-attributed source rows before built-in report aggregation, person views, search, and pagination. Other devices
 belonging to the same email remain visible. Cached and in-flight results are separated by exclusion policy, so changing the configured IDs

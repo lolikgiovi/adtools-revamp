@@ -111,6 +111,22 @@ describe("settings publishing API", () => {
     expect(identity.userId).toBe("one");
     expect((await (await call("sync", undefined, identity.credential)).json()).publications).toHaveLength(1);
   });
+  it("marks a registered development device without restricting settings or clearing the mark on normal enrollment", async () => {
+    await publish();
+    const body = { email: session.email, deviceId: session.deviceId, isDevelopment: true };
+    const response = await call("enroll", body, null);
+    expect(response.status).toBe(200);
+    const identity = await response.json();
+    expect(identity.isDevelopment).toBe(true);
+    expect(sqlite.prepare("SELECT is_development FROM device WHERE device_id=?").get(session.deviceId).is_development).toBe(1);
+    expect((await (await call("sync", undefined, identity.credential)).json()).publications).toHaveLength(1);
+    expect((await call("ack", { ids: [1] }, identity.credential)).status).toBe(200);
+    const renewed = await (await call("enroll", { ...body, isDevelopment: false }, null)).json();
+    expect(renewed.isDevelopment).toBe(true);
+    expect((await call("enroll", { ...body, deviceId: "unknown" }, null)).status).toBe(401);
+    expect((await call("enroll", { ...body, email: "two@bankmandiri.co.id" }, null)).status).toBe(401);
+    expect(sqlite.prepare("SELECT COUNT(*) AS count FROM device").get().count).toBe(3);
+  });
   it.each([
     { email: "one@bankmandiri.co.id" },
     { email: "one@bankmandiri.co.id", deviceId: "unknown" },

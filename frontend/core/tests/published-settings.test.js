@@ -65,7 +65,7 @@ describe("published settings client", () => {
       );
     const fetcher = vi.fn(async (url, options) => {
       if (url.endsWith("enroll")) {
-        expect(JSON.parse(options.body)).toEqual({ email: "one@bankmandiri.co.id", deviceId: "d-one" });
+        expect(JSON.parse(options.body)).toEqual({ email: "one@bankmandiri.co.id", deviceId: "d-one", isDevelopment: true });
         return new Response(
           JSON.stringify({
             ok: true,
@@ -73,6 +73,7 @@ describe("published settings client", () => {
             email: "one@bankmandiri.co.id",
             userId: "one",
             deviceId: "d-one",
+            isDevelopment: true,
             expiresAt: Date.now() + 60000,
           }),
         );
@@ -108,6 +109,7 @@ describe("published settings client", () => {
             email: "one@bankmandiri.co.id",
             userId: "one",
             deviceId: "d-one",
+            isDevelopment: true,
             expiresAt: Date.now() + 60000,
           }),
         );

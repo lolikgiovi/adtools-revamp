@@ -116,3 +116,33 @@ email and department audiences still isolate delivery; no Settings visit is need
 - Repeat the browser verification with the command above. Machine-readable results, screenshots, fixture SQL, and command logs:
   `.wrangler/settings-publishing-verification/2026-10-26T02-57-36-392Z/`.
 - No production deployment or native Desktop verification performed. Updated frontend and Worker are both required; no new migration is needed.
+
+## Development device failure cases — 2026-10-26
+
+Verify before implementation: dev enrollment marks only an existing matched device; unknown/mismatched pairs cannot mark or create devices;
+normal enrollment never clears the flag; marked devices still enroll, sync, and acknowledge publications; cached client credentials
+are renewed to mark a dev installation; Dashboard filters historical device rows and separates cached results when flags change; other
+devices on the same account remain visible; legacy configured exclusions still work; stored records remain intact.
+
+## Development device flag
+
+Migration `0029_development_devices.sql` adds `device.is_development` (default `0`). Development frontend builds send
+`isDevelopment: true` during settings enrollment, including renewing an existing credential that predates the flag. Only a successfully
+matched registered email/device pair can mark that device. Released builds never clear an existing development mark.
+
+The flag affects Dashboard analytics only. Registration, settings enrollment/delivery, publishing audiences, and normal feature permissions
+continue to use the real device/account records. Development builds already skip telemetry uploads. Stored device-attributed history is
+filtered from Dashboard reports; other devices belonging to the same user remain visible. Legacy lifetime baselines without device IDs
+cannot be separated, and the existing Dashboard warning still applies. `ANALYTICS_EXCLUDED_DEVICE_IDS` remains supported.
+
+A development mark does not register a missing device or bypass OTP. Complete registration once if enrollment reports an unknown device.
+To deliberately return a device to analytics, set `is_development=0` on its record and use a released build; a dev build will mark it again.
+
+Migration `0029_development_devices.sql` was applied to production D1 `adtools` on 26 October 2026; the migration record, column,
+and index were verified by readback. The updated Worker still needs deployment before the development flag is used by enrollment and
+Dashboard reports. Restarting the frontend alone does not deploy the Worker.
+
+Development flag verification (26 October 2026): 21 focused test files / 104 tests passed, including the complete built-in Dashboard report
+set with both configured exclusions and persisted flags. Production Vite build passed. Existing browser-to-local-Worker verification
+passed all 11 checks with no browser errors; reproduce using the command above. Evidence and command logs:
+`.wrangler/settings-publishing-verification/2026-10-26T06-59-13-321Z/result.json`.

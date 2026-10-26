@@ -1449,7 +1449,7 @@ function withAuth(handler) {
         headers: { "Content-Type": "application/json", ...corsHeaders() },
       });
     }
-    return handler(request, scopeDashboardDevices(env));
+    return handler(request, await scopeDashboardDevices(env));
   };
 }
 

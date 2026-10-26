@@ -10,7 +10,7 @@ const DEVICE_TABLES = [
 ];
 const scopedDatabases = new WeakMap();
 
-export function scopeDashboardDevices(env) {
+export async function scopeDashboardDevices(env) {
   const ids = [
     ...new Set(
       String(env.ANALYTICS_EXCLUDED_DEVICE_IDS || "")
@@ -22,15 +22,20 @@ export function scopeDashboardDevices(env) {
   if (ids.length > 100 || ids.some((id) => id.length > 120 || Array.from(id).some((character) => character.charCodeAt(0) < 32))) {
     throw new Error("Invalid ANALYTICS_EXCLUDED_DEVICE_IDS configuration");
   }
-  const scope = JSON.stringify(ids);
-  if (!ids.length || !env.DB) return { ...env, dashboardDeviceScope: scope };
+  if (env.DB) {
+    const marked = await env.DB.prepare("SELECT device_id FROM device WHERE is_development=1 ORDER BY device_id").all();
+    ids.push(...marked.results.map((row) => row.device_id));
+  }
+  const deviceIds = [...new Set(ids)].sort();
+  const scope = JSON.stringify(deviceIds);
+  if (!deviceIds.length || !env.DB) return { ...env, dashboardDeviceScope: scope };
   let scopes = scopedDatabases.get(env.DB);
   if (!scopes) {
     scopes = new Map();
     scopedDatabases.set(env.DB, scopes);
   }
   if (!scopes.has(scope)) {
-    const excluded = ids.map((id) => `'${id.replaceAll("'", "''")}'`).join(", ");
+    const excluded = deviceIds.map((id) => `'${id.replaceAll("'", "''")}'`).join(", ");
     const DB = new Proxy(env.DB, {
       get(target, property) {
         if (property !== "prepare") {

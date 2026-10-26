@@ -150,8 +150,14 @@ export class PublishedSettingsSync {
       (localStorage.getItem("user.email") || "").trim().toLowerCase() === email &&
       UsageTracker.getDeviceId() === deviceId;
     let identity = read(CREDENTIAL_KEY);
-    if (!identity || identity.email.toLowerCase() !== email || identity.deviceId !== deviceId || identity.expiresAt < Date.now()) {
-      identity = await this.request("enroll", null, { email, deviceId });
+    if (
+      !identity ||
+      identity.email.toLowerCase() !== email ||
+      identity.deviceId !== deviceId ||
+      identity.expiresAt < Date.now() ||
+      (import.meta.env.DEV && identity.isDevelopment !== true)
+    ) {
+      identity = await this.request("enroll", null, { email, deviceId, isDevelopment: import.meta.env.DEV });
       if (!current() || identity.email.toLowerCase() !== email) return;
       localStorage.setItem(CREDENTIAL_KEY, JSON.stringify(identity));
     }
