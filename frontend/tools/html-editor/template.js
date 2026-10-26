@@ -43,7 +43,7 @@ export const HTMLTemplateToolTemplate = /* html */ `
                 title="Check for characters that may change in Windows text imports">Encoding</button>
             </div>
             <button id="btnSaveAsHtml" class="btn btn-secondary btn-sm" type="button">Export</button>
-            <button id="btnCreateHtmlQuery" class="btn btn-primary btn-sm" type="button" disabled
+            <button id="btnCreateHtmlQuery" class="btn btn-primary btn-sm" type="button" disabled hidden style="display: none;"
               title="Import this template from SQL before creating an update query">Create Query</button>
           </div>
           </div>
