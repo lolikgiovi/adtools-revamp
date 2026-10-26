@@ -2773,6 +2773,7 @@
 .quick-query-attachments-controls #compressImagesButton {
   margin-left: auto;
 }
-.quick-query-attachments-controls #compressImagesButton[hidden] {
+.quick-query-attachments-controls #compressImagesButton[hidden],
+#executeInJenkinsRunner[hidden] {
   display: none;
 }

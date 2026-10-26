@@ -1,0 +1,27 @@
+[
+  {
+    "department": "(missing)",
+    "allowed": false,
+    "status": "PASS"
+  },
+  {
+    "department": "SME",
+    "allowed": false,
+    "status": "PASS"
+  },
+  {
+    "department": "RETAIL",
+    "allowed": true,
+    "status": "PASS"
+  },
+  {
+    "department": " retail ",
+    "allowed": true,
+    "status": "PASS"
+  },
+  {
+    "department": "WHOLESALE",
+    "allowed": false,
+    "status": "PASS"
+  }
+]

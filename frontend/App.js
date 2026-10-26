@@ -19,6 +19,7 @@ import { UsageOverviewService } from "./core/UsageOverviewService.js";
 import { getUsageAccessState, normalizeUsageScope } from "./core/UsageOverviewModel.js";
 import { ErrorMonitor } from "./core/ErrorMonitor.js";
 import { isTauri } from "./core/Runtime.js";
+import { isToolVisibleToUser } from "./core/ToolVisibility.js";
 import WebUpdateChecker from "./core/WebUpdateChecker.js";
 import { publishedSettingsSync } from "./core/PublishedSettings.js";
 import { ReleaseTips, ReleaseTour, takePendingRelease } from "./core/ReleaseTour.js";
@@ -466,6 +467,11 @@ class App {
       return;
     }
 
+    if (!isToolVisibleToUser(toolId)) {
+      this.router.navigate("home");
+      return;
+    }
+
     // Runtime gate: respect requiresTauri
     if (definition.requiresTauri && !isTauri()) {
       this.eventBus.emit("notification:error", {
@@ -748,6 +754,8 @@ class App {
       const greeting = document.querySelector(".home-greeting");
       if (greeting) greeting.textContent = this.getHomeGreeting(data?.username);
       this.sidebar?.renderMenuGroups?.();
+      this.sidebar?.renderTools?.();
+      this.updateGlobalSearchIndex();
       this.syncDeviceVersion();
     });
 
@@ -1341,6 +1349,7 @@ class App {
     return this.getToolDefinitions()
       .filter((definition) => {
         if (!definition.enabled) return false;
+        if (!isToolVisibleToUser(definition.id)) return false;
         if (forHome && !definition.showOnHome) return false;
         if (!forHome && !definition.showInSidebar) return false;
         if (definition.requiresTauri && !runtimeIsTauri) return false;
@@ -1830,6 +1839,7 @@ class App {
 
   #renderFeedbackOptions() {
     return this.getToolDefinitions()
+      .filter((definition) => isToolVisibleToUser(definition.id))
       .slice()
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((definition) => `<option value="${this.#escapeHtml(definition.id)}">${this.#escapeHtml(definition.name)}</option>`)

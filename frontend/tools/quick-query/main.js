@@ -31,6 +31,7 @@ import { splitSqlStatementsSafely, calcUtf8Bytes, groupBySize, groupByQueryCount
 import { QueryExecutionService } from "./services/QueryExecutionService.js";
 import { SplitWorkerService } from "./services/SplitWorkerService.js";
 import { analyzeJenkinsSql, convertJenkinsUnsafeLiterals } from "./services/JenkinsSqlSafetyService.js";
+import { isToolVisibleToUser } from "../../core/ToolVisibility.js";
 import { TableAutosaveService } from "./services/TableAutosaveService.js";
 import { isTabDraftContentEmpty, mergeDraftSchema } from "./services/TabDraftStateService.js";
 import {
@@ -115,6 +116,7 @@ export class QuickQuery extends BaseTool {
   }
 
   onWarmResume() {
+    this.ui?.syncRunQueryButton();
     this.ui?.refreshLayouts?.();
   }
 
@@ -239,16 +241,7 @@ export class QuickQueryUI {
       this.syncAuditUserMode();
       if (isTauri()) this.elements.importOracleDataButton.hidden = false;
 
-      // Desktop-only: show button but disable it in web, with native tooltip
-      try {
-        const execBtn = document.getElementById("executeInJenkinsRunner");
-        if (execBtn) {
-          const isDesktop = isTauri();
-          execBtn.disabled = !isDesktop;
-          execBtn.title = isDesktop ? "" : "Only available on AD Tools Desktop";
-          execBtn.setAttribute("aria-disabled", (!isDesktop).toString());
-        }
-      } catch (_) {}
+      this.syncRunQueryButton();
 
       // Hide default schema import everywhere; Tauri can import schemas from Oracle Env instead.
       try {
@@ -3222,7 +3215,18 @@ export class QuickQueryUI {
     this.elements.downloadAsOverlay.classList.add("hidden");
   }
 
+  syncRunQueryButton() {
+    const button = this.container?.querySelector("#executeInJenkinsRunner");
+    if (!button) return;
+    const desktop = isTauri();
+    button.hidden = !isToolVisibleToUser("run-query");
+    button.disabled = !desktop;
+    button.title = desktop ? "" : "Only available on AD Tools Desktop";
+    button.setAttribute("aria-disabled", String(!desktop));
+  }
+
   async handleExecuteInJenkinsRunner() {
+    if (!isToolVisibleToUser("run-query")) return;
     try {
       const sql = (this.editor?.getValue() || "").trim();
       if (!sql) {

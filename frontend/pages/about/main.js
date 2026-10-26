@@ -1,6 +1,7 @@
 import appPackage from "../../../package.json";
 import { buildToolDefinitions } from "../../config/toolDefinitions.js";
 import toolsConfig from "../../config/tools.json";
+import { isToolVisibleToUser } from "../../core/ToolVisibility.js";
 import { toolGuides } from "./content.js";
 import { AboutTemplate } from "./template.js";
 import "./styles.css";
@@ -27,6 +28,7 @@ function escapeHtml(value) {
 
 function getToolCatalog() {
   return (toolsConfig?.tools || [])
+    .filter((config) => isToolVisibleToUser(config.id))
     .map((config) => {
       const definition = TOOL_DEFINITIONS.get(config.id);
       return {
