@@ -29,7 +29,7 @@ export const HTMLTemplateToolTemplate = /* html */ `
             <div class="toolbar-left html-source-actions">
             <input type="file" id="htmlFileInput" accept=".html,.htm,.vtl,.vm,.txt" hidden />
             <details class="html-toolbar-menu">
-              <summary class="btn btn-primary btn-sm">Import
+              <summary class="btn btn-secondary btn-sm">Import
                 <svg class="html-toolbar-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
               </summary>
               <div class="html-toolbar-menu-content">
@@ -42,21 +42,9 @@ export const HTMLTemplateToolTemplate = /* html */ `
               <button id="htmlModeEncoding" type="button" aria-pressed="false"
                 title="Check for characters that may change in Windows text imports">Encoding</button>
             </div>
-            <button id="btnSaveAsHtml" class="btn btn-primary btn-sm" type="button">Export</button>
+            <button id="btnSaveAsHtml" class="btn btn-secondary btn-sm" type="button">Export</button>
             <button id="btnCreateHtmlQuery" class="btn btn-primary btn-sm" type="button" disabled
               title="Import this template from SQL before creating an update query">Create Query</button>
-            <details class="html-toolbar-menu html-edit-action">
-              <summary class="btn btn-secondary btn-sm" aria-label="More template actions">More
-                <svg class="html-toolbar-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
-              </summary>
-              <div class="html-toolbar-menu-content">
-                <button id="btnFormatHtml" type="button">Format HTML</button>
-                <button id="btnMinifyHtml" type="button">Minify HTML</button>
-                <button id="btnCopyHtml" type="button">Copy</button>
-                <button id="btnPasteHtml" type="button">Paste</button>
-                <button id="btnClearHtml" type="button">Clear</button>
-              </div>
-            </details>
           </div>
           </div>
           <div id="htmlTemplateBody" class="html-template-body">

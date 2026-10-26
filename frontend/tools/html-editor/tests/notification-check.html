@@ -46,6 +46,7 @@
     <div class="fixture-header" aria-hidden="true"></div>
     <main class="main-content"><div class="tool-root"></div></main>
     <script type="module">
+      import "../../velocity-template/styles.css";
       import { HTMLTemplateTool } from "../main.js";
       import { OracleConnectionService } from "../../../core/OracleConnectionService.js";
       import { UsageTracker } from "../../../core/UsageTracker.js";
@@ -114,6 +115,42 @@
           find("#htmlVelocityContext").getBoundingClientRect().top > find("#htmlEditor").getBoundingClientRect().top,
           "Velocity Context sits below HTML Template",
         );
+        const reference = document.createElement("div");
+        reference.className = "velocity-template-tool";
+        reference.hidden = true;
+        reference.innerHTML =
+          '<div class="pane-header vtl-compact-header"><h3>Reference</h3><button class="btn btn-secondary btn-sm">Reference</button></div>';
+        document.body.append(reference);
+        const compareStyles = (actual, expected, properties) =>
+          properties.every(
+            (property) => getComputedStyle(actual).getPropertyValue(property) === getComputedStyle(expected).getPropertyValue(property),
+          );
+        check(
+          compareStyles(find(".html-source-pane > .pane-header"), reference.querySelector(".pane-header"), [
+            "padding-top",
+            "padding-left",
+            "min-height",
+            "column-gap",
+          ]),
+          "Header spacing matches Velocity Template",
+        );
+        check(
+          compareStyles(find("#btnSaveAsHtml"), reference.querySelector("button"), [
+            "padding-top",
+            "padding-left",
+            "min-height",
+            "font-size",
+            "line-height",
+            "background-color",
+            "border-radius",
+          ]),
+          "Button density and styling match Velocity Template",
+        );
+        check(
+          compareStyles(find("#htmlTemplateTitle"), reference.querySelector("h3"), ["font-size", "line-height"]),
+          "Header typography matches Velocity Template",
+        );
+        reference.remove();
         const source = tool.editor.getValue();
         check(
           !find("#btnHtmlValidatorSettings") && find("#btnValidateHtmlVelocity").textContent === "Validate",
@@ -233,6 +270,10 @@
           find("#htmlRenderer").srcdoc === "<h1>API: Rp60.000</h1>" && tool.editor.getValue() === "<h1>$format.currency($amount)</h1>",
           "API result previews without replacing source",
         );
+        check(
+          find("#htmlValidationOutput").hidden && !find("#htmlValidationOutput").open,
+          "Successful API HTML gets the preview without a raw response panel",
+        );
         failNext = true;
         find("#btnValidateHtmlVelocity").click();
         await settle();
@@ -325,6 +366,7 @@
           if (priorQueries === null) localStorage.removeItem(queryKey);
           else localStorage.setItem(queryKey, priorQueries);
         }
+        await tool.notificationValidation.validate();
         document.title = "PASS: HTML notification validation";
       } catch (error) {
         const row = document.createElement("li");

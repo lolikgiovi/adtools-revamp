@@ -41,6 +41,7 @@ describe("HTML notification validation", () => {
   };
   it("sends the notification JSON request with functions always enabled and renders the API result", async () => {
     inputContext('{"amount":60000}');
+    root.querySelector("#htmlValidationOutput").open = true;
     await validation.validate();
     expect(requestVelocityValidation).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -51,8 +52,9 @@ describe("HTML notification validation", () => {
       }),
     );
     expect(root.querySelector("#htmlRenderer").srcdoc).toBe("<h1>60,000</h1>");
-    expect(root.querySelector("#htmlValidationResponse").textContent).toBe("<h1>60,000</h1>");
-    expect(root.querySelector("#htmlValidationResponse h1")).toBeNull();
+    expect(root.querySelector("#htmlValidationOutput").hidden).toBe(true);
+    expect(root.querySelector("#htmlValidationOutput").open).toBe(false);
+    expect(root.querySelector("#htmlValidationResponse").textContent).toBe("");
   });
   it.each(["{", "[]", "null", '"text"'])("blocks invalid context %s and saves the draft", async (text) => {
     inputContext(text);
@@ -65,7 +67,21 @@ describe("HTML notification validation", () => {
     localStorage.removeItem("config.velocityValidator.notificationUrl");
     await validation.validate();
     expect(requestVelocityValidation).not.toHaveBeenCalled();
-    expect(root.querySelector("#htmlValidationStatus").textContent).toMatch(/Notification Template Endpoint/);
+    const status = root.querySelector("#htmlValidationStatus");
+    expect(status.textContent).toBe("Set the Notification Template Endpoint in Settings first.");
+    const link = status.querySelector("a");
+    expect(link?.textContent).toBe("Notification Template Endpoint");
+    expect(link?.getAttribute("href")).toBe("#settings");
+    const previousApp = window.app;
+    const navigate = vi.fn();
+    window.app = { router: { navigate } };
+    try {
+      link.click();
+      expect(localStorage.getItem("settings.focus")).toBe("config.velocityValidator.notificationUrl");
+      expect(navigate).toHaveBeenCalledWith("settings");
+    } finally {
+      window.app = previousApp;
+    }
   });
   it.each(["edit", "tab", "settings", "dispose"])("rejects late responses after %s", async (change) => {
     let resolve;

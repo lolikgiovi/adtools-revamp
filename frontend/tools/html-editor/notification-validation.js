@@ -150,7 +150,23 @@ export class NotificationValidation {
     const snapshot = this.snapshot();
     let context;
     try {
-      if (!snapshot.url) throw new Error("Set the Notification Template Endpoint in Settings → Velocity API Validator first.");
+      if (!snapshot.url) {
+        this.status();
+        const status = this.element("htmlValidationStatus");
+        const link = document.createElement("a");
+        link.href = "#settings";
+        link.textContent = "Notification Template Endpoint";
+        link.addEventListener("click", (event) => {
+          localStorage.setItem("settings.focus", ENDPOINT_KEY);
+          if (window.app?.router) {
+            event.preventDefault();
+            window.app.router.navigate("settings");
+          }
+        });
+        status.append("Set the ", link, " in Settings first.");
+        status.hidden = false;
+        return;
+      }
       if (!snapshot.template.trim()) throw new Error("Enter an HTML template before validating.");
       try {
         context = this.readContext();
@@ -187,9 +203,11 @@ export class NotificationValidation {
         return;
       }
       this.result = true;
-      this.element("htmlValidationResponse").textContent = response.body;
-      this.element("htmlValidationOutput").hidden = false;
       const success = response.status >= 200 && response.status < 300;
+      const diagnostics = this.element("htmlValidationOutput");
+      diagnostics.hidden = success;
+      diagnostics.open = !success;
+      this.element("htmlValidationResponse").textContent = success ? "" : response.body;
       this.status(`Notification API · HTTP ${response.status}${success ? "" : " · request failed"}`);
       if (success) {
         let html = response.body;
