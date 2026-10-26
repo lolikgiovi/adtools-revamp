@@ -1,0 +1,30 @@
+{
+  "verifiedAt": "2026-10-26T06:31:26.029Z",
+  "releaseDir": "/Users/ddl/projects/ad-tools-revamp/tauri/releases/2026-10-26_13-22",
+  "version": "1.3.12",
+  "minVersion": "0.0.0",
+  "platforms": [
+    {
+      "platform": "darwin-aarch64",
+      "architecture": "arm64",
+      "version": "1.3.12",
+      "updaterSignature": "verified against configured public key",
+      "codeSignature": "valid ad-hoc signature",
+      "installerSha256": "f70b3579314d855e2dbf909de1b15bdf1b90d68731b0dd48bd327083f7fc64b2",
+      "tarBytes": 31869771,
+      "installerBytes": 36897853,
+      "oracleSupport": true
+    },
+    {
+      "platform": "darwin-x86_64",
+      "architecture": "x86_64",
+      "version": "1.3.12",
+      "updaterSignature": "verified against configured public key",
+      "codeSignature": "valid ad-hoc signature",
+      "installerSha256": "e1308dfb64ab35aa7e765f79e9f5787d89bff83efd2c3b64b4a1b63b031fee70",
+      "tarBytes": 33860027,
+      "installerBytes": 39145423,
+      "oracleSupport": true
+    }
+  ]
+}

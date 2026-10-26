@@ -67,3 +67,44 @@ Full local command logs and screenshots are under `.wrangler/settings-publishing
 
 Fixture API and Oracle responses do not verify corporate endpoints, actual Oracle data, or native save dialogs.
 A real installed-app upgrade/relaunch has not been exercised in this release run.
+
+## Desktop artifacts
+
+Both Apple Silicon and Intel builds completed with Cargo offline. The packaged apps report 1.3.12 and contain
+Oracle sidecar support files. Deep code-signature checks pass (ad-hoc signing), updater signatures verify against
+the public key configured in the app, both DMGs pass `hdiutil verify`, and their SHA-256 values match the stable manifest.
+The copied DMGs also match the exact 1.3.12 files in the build output, even with older versions present beside them.
+
+Repeat the artifact check against the generated release directory:
+
+```sh
+node docs/verification/release-1.3.12/verify-artifacts.mjs tauri/releases/2026-10-26_13-22
+```
+
+Recorded result: [desktop-artifacts.json](./desktop-artifacts.json).
+
+## Published Desktop
+
+Published the six Apple Silicon/Intel artifacts to R2, then published `update/stable.json` last.
+Both `/update/stable.json` and the app's `/update/manifest.json` endpoint return exactly the generated 1.3.12 manifest.
+All six artifact URLs return 200, with the expected lengths and matching MD5 ETags. The Web version matches Desktop.
+The release remains optional (`minVersion: 0.0.0`); the beta channel was not changed.
+
+- Live readback: [production-desktop.json](./production-desktop.json).
+- Repeat without downloading installers or updater archives:
+
+```sh
+node docs/verification/release-1.3.12/verify-production.mjs tauri/releases/2026-10-26_13-22
+```
+
+## Source synchronization
+
+Release source is committed locally. GitLab SSH fetch and push timed out connecting to `gitlab.com:22`;
+HTTPS access required authentication unavailable to this session. Direct Cloudflare publication succeeded independently.
+Once GitLab SSH access is available, synchronize the source and annotated release tag:
+
+```sh
+git push origin main --follow-tags
+```
+
+Build, test, deployment, and verification command outputs are retained locally under `.wrangler/release-1.3.12-logs/`.

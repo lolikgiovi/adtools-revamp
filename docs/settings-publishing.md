@@ -49,7 +49,8 @@ Publication requests have an idempotency ID, and database publication/recipient 
 
 ## Deployment
 
-The production Worker and clients have not been deployed. Before deploying the new Worker, apply the additive migration to its D1 database:
+The production Worker and Web client were deployed in 1.3.12 on 26 October 2026 after applying the additive migration.
+For a database that has not received this migration, apply it before deploying the Worker:
 
 ```sh
 ./node_modules/.bin/wrangler d1 migrations apply adtools --remote

@@ -1,0 +1,63 @@
+{
+  "verifiedAt": "2026-10-26T06:33:34.771Z",
+  "version": "1.3.12",
+  "minVersion": "0.0.0",
+  "manifests": [
+    {
+      "path": "/update/stable.json",
+      "status": 200,
+      "version": "1.3.12"
+    },
+    {
+      "path": "/update/manifest.json",
+      "status": 200,
+      "version": "1.3.12"
+    }
+  ],
+  "artifacts": [
+    {
+      "url": "https://adtools.lolik.workers.dev/releases/1.3.12/stable/darwin-aarch64/ADTools-1.3.12-mac-arm64.app.tar.gz",
+      "status": 200,
+      "bytes": 31869771,
+      "etag": "a5b7ff080acc5448b96f1ae45dc03ef4",
+      "md5Compared": true
+    },
+    {
+      "url": "https://adtools.lolik.workers.dev/releases/1.3.12/stable/darwin-aarch64/ADTools-1.3.12-mac-arm64.app.tar.gz.sig",
+      "status": 200,
+      "bytes": 429,
+      "etag": "1e07524fefa87d155f47db3963c5ceea",
+      "md5Compared": true
+    },
+    {
+      "url": "https://adtools.lolik.workers.dev/releases/1.3.12/stable/darwin-aarch64/ADTools-1.3.12-mac-arm64.dmg",
+      "status": 200,
+      "bytes": 36897853,
+      "etag": "eb52becbd12f03753c0ca2d528363fd4",
+      "md5Compared": true
+    },
+    {
+      "url": "https://adtools.lolik.workers.dev/releases/1.3.12/stable/darwin-x86_64/ADTools-1.3.12-mac-intel.app.tar.gz",
+      "status": 200,
+      "bytes": 33860027,
+      "etag": "f1bda8d14d27df40afc89194fe2f0629",
+      "md5Compared": true
+    },
+    {
+      "url": "https://adtools.lolik.workers.dev/releases/1.3.12/stable/darwin-x86_64/ADTools-1.3.12-mac-intel.app.tar.gz.sig",
+      "status": 200,
+      "bytes": 429,
+      "etag": "f9ffab9f14c176f9195c94863c81510d",
+      "md5Compared": true
+    },
+    {
+      "url": "https://adtools.lolik.workers.dev/releases/1.3.12/stable/darwin-x86_64/ADTools-1.3.12-mac-intel.dmg",
+      "status": 200,
+      "bytes": 39145423,
+      "etag": "54577537364176a4649f5ae916dec21c",
+      "md5Compared": true
+    }
+  ],
+  "webVersion": "1.3.12",
+  "webBuild": "20261026062214"
+}
