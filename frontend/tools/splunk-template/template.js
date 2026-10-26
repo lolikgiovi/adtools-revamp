@@ -49,12 +49,21 @@ const valueFunctions = [
 
 export const SplunkVTLEditorTemplate = /* html */ `
   <div class="tool-container splunk-vtl-editor">
+    <div class="splunk-document-bar" aria-label="Splunk documents">
+      <div id="splunkDocumentTabs" class="splunk-document-tabs" role="tablist" aria-label="Splunk documents"></div>
+      <button id="btnNewSplunkDocument" class="splunk-document-add" type="button" title="New Splunk document" aria-label="New Splunk document">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+      </button>
+    </div>
     <div class="vtl-layout">
       <div class="pane editor-pane vtl-editor-pane">
         <div class="pane-header vtl-compact-header vtl-editor-header">
           <div class="vtl-editor-heading">
             <div class="vtl-title-group">
-              <h3>Template Editor</h3>
+              <button class="vtl-collapse-button" data-collapse-splunk="template" type="button" aria-label="Collapse Splunk Template" aria-expanded="true">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg>
+              </button>
+              <h3>Splunk Template</h3>
             </div>
             <div class="vtl-view-switch" role="tablist" aria-label="Template editor view" aria-orientation="horizontal">
               <button id="btnTextView" class="vtl-view-button is-active" type="button" role="tab" aria-selected="true" aria-controls="textEditorPanel" tabindex="0">Text</button>
@@ -64,7 +73,7 @@ export const SplunkVTLEditorTemplate = /* html */ `
           <div id="textEditorActions" class="vtl-panel-actions">
             <button id="btnFunctions" class="btn btn-secondary btn-sm" type="button" aria-expanded="false" aria-controls="functionLibraryPanel" title="Browse functions; type $format. or $date. for autocomplete">Functions</button>
             <button id="btnFormatVtl" class="btn btn-primary btn-sm" type="button" title="Format template">Format</button>
-            <button id="btnCopyVtl" class="btn btn-secondary btn-sm" type="button" title="Copy template">Copy</button>
+            <button id="btnCopyVtl" class="btn btn-secondary btn-sm" type="button" title="Copy template">Copy template</button>
             <details id="editorMoreActions" class="vtl-actions-menu">
               <summary class="btn btn-secondary btn-sm">More</summary>
               <div class="vtl-actions-menu-popover app-popover-surface">
@@ -146,7 +155,10 @@ export const SplunkVTLEditorTemplate = /* html */ `
       <div class="pane vtl-parameters-pane">
         <div class="pane-header vtl-compact-header vtl-context-header">
           <div class="vtl-title-group">
-            <h3>Context Data</h3>
+            <button class="vtl-collapse-button" data-collapse-splunk="context" type="button" aria-label="Collapse Context Data" aria-expanded="true">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg>
+              </button>
+              <h3>Context Data</h3>
           </div>
           <div class="vtl-panel-actions">
             <button id="btnGenerateParameters" class="btn btn-secondary btn-sm" type="button" title="Add fields required by the template">Sync fields</button>
@@ -165,7 +177,7 @@ export const SplunkVTLEditorTemplate = /* html */ `
           </div>
           <div class="vtl-panel-actions">
             <button id="btnTogglePreviewWrap" class="btn btn-secondary btn-sm" type="button" aria-pressed="true">Wrap</button>
-            <button id="btnCopyPreview" class="btn btn-secondary btn-sm" type="button" title="Copy rendered preview">Copy</button>
+            <button id="btnCopyPreview" class="btn btn-primary btn-sm" type="button" title="Copy rendered preview">Copy output</button>
           </div>
         </div>
         <pre id="splunkPreview" class="vtl-preview-output" aria-label="Rendered Splunk template"></pre>

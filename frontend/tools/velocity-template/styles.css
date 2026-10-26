@@ -1,5 +1,5 @@
 @import "../../components/template-sql-import.css";
-@import "../splunk-template/styles.css";
+@import "../../components/template-workspace.css";
 
 .main-content:has(.velocity-template-tool) {
   display: flex;
@@ -21,114 +21,6 @@
   height: 100%;
   min-height: 0;
   overflow: hidden;
-}
-
-.velocity-template-tool .velocity-document-bar {
-  display: flex;
-  align-items: center;
-  flex: 0 0 auto;
-  min-height: 38px;
-  margin-bottom: 0.5rem;
-  border-bottom: 1px solid hsl(var(--border));
-}
-
-.velocity-template-tool .velocity-document-tabs {
-  display: flex;
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: thin;
-}
-
-.velocity-template-tool .velocity-document-tab {
-  display: inline-flex;
-  align-items: center;
-  flex: 0 0 auto;
-  min-width: 86px;
-  max-width: 500px;
-  height: 38px;
-  border-right: 1px solid hsl(var(--border));
-  border-bottom: 2px solid transparent;
-  color: hsl(var(--muted-foreground));
-}
-
-.velocity-template-tool .velocity-document-tab:hover {
-  background: hsl(var(--muted) / 0.35);
-  color: hsl(var(--foreground));
-}
-
-.velocity-template-tool .velocity-document-tab.active {
-  border-bottom-color: hsl(var(--primary));
-  color: hsl(var(--foreground));
-}
-
-.velocity-template-tool .velocity-document-tab-select {
-  min-width: 0;
-  height: 100%;
-  padding: 0 0.55rem 0 0.75rem;
-  overflow: hidden;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 0.8rem;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.velocity-template-tool .velocity-document-tab-close,
-.velocity-template-tool .velocity-document-add {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: hsl(var(--muted-foreground));
-  cursor: pointer;
-}
-
-.velocity-template-tool .velocity-document-tab-close {
-  margin-right: 0.25rem;
-}
-
-.velocity-template-tool .velocity-document-tab-close svg,
-.velocity-template-tool .velocity-document-add svg {
-  width: 15px;
-  height: 15px;
-}
-
-.velocity-template-tool .velocity-document-tab-close:hover,
-.velocity-template-tool .velocity-document-add:hover {
-  background: hsl(var(--muted));
-  color: hsl(var(--foreground));
-}
-
-.velocity-template-tool .velocity-document-name {
-  width: 100%;
-  min-width: 0;
-  height: 28px;
-  margin-left: 0.4rem;
-  padding: 0 0.35rem;
-  border: 1px solid hsl(var(--ring));
-  border-radius: 4px;
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
-  font: inherit;
-  font-size: 0.8rem;
-}
-
-.velocity-template-tool .velocity-document-tab-select:focus-visible,
-.velocity-template-tool .velocity-document-tab-close:focus-visible,
-.velocity-template-tool .velocity-document-add:focus-visible,
-.velocity-template-tool .velocity-document-name:focus-visible {
-  outline: 2px solid hsl(var(--ring));
-  outline-offset: -2px;
 }
 
 .velocity-template-tool .vtl-layout {
@@ -292,76 +184,10 @@
   content: "✓";
 }
 
-.velocity-template-tool .vtl-collapse-button {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  place-items: center;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: hsl(var(--muted-foreground));
-  cursor: pointer;
-}
-
-.velocity-template-tool .vtl-collapse-button:hover {
-  background: hsl(var(--muted) / 0.55);
-  color: hsl(var(--foreground));
-}
-
-.velocity-template-tool .vtl-collapse-button:focus-visible {
-  outline: 2px solid hsl(var(--ring));
-  outline-offset: 2px;
-}
-
-.velocity-template-tool .vtl-collapse-button svg {
-  width: 16px;
-  height: 16px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.75;
-  transform: rotate(90deg);
-  transition: transform 160ms ease-out;
-}
-
-.velocity-template-tool .vtl-collapse-button[aria-expanded="false"] svg {
-  transform: rotate(0deg);
-}
-
-.velocity-template-tool .vtl-layout.is-template-collapsed {
-  grid-template-rows: min-content minmax(0, 1fr);
-}
-
-.velocity-template-tool .vtl-layout.is-context-collapsed {
-  grid-template-rows: minmax(0, 1fr) min-content;
-}
-
-.velocity-template-tool .vtl-layout.is-template-collapsed .vtl-editor-pane,
-.velocity-template-tool .vtl-layout.is-context-collapsed .vtl-parameters-pane {
-  align-self: start;
-}
-
-.velocity-template-tool .vtl-layout.is-template-collapsed .vtl-editor-pane > .monaco-editor-container,
-.velocity-template-tool .vtl-layout.is-context-collapsed .vtl-parameters-pane > :not(.pane-header) {
-  display: none;
-}
-
-
 @media (max-width: 940px) {
   .velocity-template-tool .vtl-layout {
     grid-template-columns: minmax(0, 1fr) !important;
     grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
-  }
-
-  .velocity-template-tool .vtl-layout.is-template-collapsed {
-    grid-template-rows: min-content minmax(0, 1fr) minmax(0, 1fr);
-  }
-
-  .velocity-template-tool .vtl-layout.is-context-collapsed {
-    grid-template-rows: minmax(0, 1fr) min-content minmax(0, 1fr);
   }
 }
 

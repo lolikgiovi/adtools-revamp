@@ -1,3 +1,4 @@
+import { TemplateDocumentStore } from "../../components/template-document-store.js";
 import { BaseTool } from "../../core/BaseTool.js";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.main.js";
 import "monaco-editor/esm/vs/language/json/monaco.contribution.js";
@@ -77,6 +78,9 @@ class SplunkVTLEditor extends BaseTool {
     this._suppressTableEdit = false;
     this._languageDisposables = [];
     this._clearedTemplate = null;
+    this.documents = [];
+    this.activeDocumentId = null;
+    this._documentWriteQueue = Promise.resolve();
   }
 
   getIconSvg() {
@@ -100,6 +104,7 @@ class SplunkVTLEditor extends BaseTool {
     await this.initializeMonacoEditor();
     this.initializeFieldsTable();
     this.initializeParameters();
+    await this.initializeDocuments();
     this.initializeResizer();
     this.bindUIEvents();
     this.updateFieldsTable();
@@ -108,11 +113,18 @@ class SplunkVTLEditor extends BaseTool {
   }
 
   onUnmount() {
+    void this.persistDocuments().catch(() => {});
+    const store = this.documentStore;
+    this._documentWriteQueue.finally(() => store?.close());
+    this.documents.forEach((item) => {
+      item.templateModel.dispose();
+      item.contextModel.dispose();
+    });
+    this.documents = [];
     this.cleanupResizer();
     clearTimeout(this._persistTimer);
     clearTimeout(this._fieldsUpdateTimer);
     clearTimeout(this._previewTimer);
-    clearTimeout(this._parametersPersistTimer);
     clearTimeout(this._undoTimer);
     this._languageDisposables.forEach((disposable) => disposable.dispose());
     this._languageDisposables = [];
@@ -137,6 +149,221 @@ class SplunkVTLEditor extends BaseTool {
       this.table?.refreshDimensions?.();
       this.table?.render?.();
     } catch (_) {}
+  }
+
+  get activeDocument() {
+    return this.documents.find((item) => item.id === this.activeDocumentId);
+  }
+
+  createDocument(record) {
+    return {
+      ...record,
+      templateModel: monaco.editor.createModel(record.template, "vtl-splunk"),
+      contextModel: monaco.editor.createModel(record.context, "json"),
+    };
+  }
+
+  async initializeDocuments() {
+    this.documentStore = new TemplateDocumentStore(globalThis.indexedDB, globalThis.localStorage, {
+      dbName: "SplunkTemplateDocuments",
+      legacyTemplateKey: this._storageKey,
+      legacyContextKey: this._parametersStorageKey,
+    });
+    let saved;
+    try {
+      await this.documentStore.open();
+      saved = await this.documentStore.load(this.editor.getValue(), this.parametersEditor.getValue(), () => crypto.randomUUID());
+    } catch (_error) {
+      this.documentStore.close();
+      this.documentStore = null;
+      this.showError("Splunk drafts could not be saved. Keep this page open until storage is available.");
+      saved = {
+        documents: [
+          {
+            id: crypto.randomUUID(),
+            name: "Untitled 1",
+            template: this.editor.getValue(),
+            context: this.parametersEditor.getValue(),
+            createdAt: Date.now(),
+          },
+        ],
+      };
+    }
+    const initialModels = [this.editor.getModel(), this.parametersEditor.getModel()];
+    this.documents = saved.documents.map((record) => this.createDocument(record));
+    this.activeDocumentId = saved.activeId || this.documents[0].id;
+    this._switchingDocument = true;
+    this.editor.setModel(this.activeDocument.templateModel);
+    this.parametersEditor.setModel(this.activeDocument.contextModel);
+    this._switchingDocument = false;
+    initialModels.forEach((model) => model.dispose());
+    this.renderDocumentTabs();
+    let pane = "expanded";
+    try {
+      pane = localStorage.getItem("tool:splunk-template:pane-state");
+    } catch (_) {}
+    this.setPaneState(pane);
+  }
+
+  persistDocuments() {
+    clearTimeout(this._persistTimer);
+    if (!this.documentStore || !this.documents.length) return Promise.resolve();
+    const records = this.documents.map((item) => ({
+      id: item.id,
+      name: item.name,
+      template: item.templateModel.getValue(),
+      context: item.contextModel.getValue(),
+      createdAt: item.createdAt,
+      updatedAt: Date.now(),
+    }));
+    const activeId = this.activeDocumentId;
+    const store = this.documentStore;
+    const task = this._documentWriteQueue.then(() =>
+      store.updateDocuments({
+        documents: records,
+        order: records.map((item) => item.id),
+        activeId,
+      }),
+    );
+    this._documentWriteQueue = task.catch(() => this.showError("Splunk drafts were not saved. Check available storage."));
+    return task;
+  }
+
+  scheduleDocumentSave() {
+    clearTimeout(this._persistTimer);
+    this._persistTimer = setTimeout(() => void this.persistDocuments().catch(() => {}), 250);
+  }
+
+  renderDocumentTabs() {
+    const strip = this.container?.querySelector("#splunkDocumentTabs");
+    if (!strip) return;
+    strip.replaceChildren();
+    for (const item of this.documents) {
+      const tab = document.createElement("div");
+      tab.className = `splunk-document-tab${item.id === this.activeDocumentId ? " active" : ""}`;
+      tab.dataset.documentId = item.id;
+      const select = document.createElement("button");
+      select.type = "button";
+      select.className = "splunk-document-tab-select";
+      select.role = "tab";
+      select.setAttribute("aria-selected", String(item.id === this.activeDocumentId));
+      select.tabIndex = item.id === this.activeDocumentId ? 0 : -1;
+      select.title = `${item.name} · Double-click to rename`;
+      select.textContent = item.name;
+      const close = document.createElement("button");
+      close.type = "button";
+      close.className = "splunk-document-tab-close";
+      close.setAttribute("aria-label", `Close ${item.name}`);
+      close.disabled = this.documents.length === 1;
+      close.innerHTML =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 6 12 12M18 6 6 18" /></svg>';
+      tab.append(select, close);
+      strip.append(tab);
+    }
+  }
+
+  switchDocument(id, focusTab = false) {
+    const next = this.documents.find((item) => item.id === id);
+    if (!next || id === this.activeDocumentId) return;
+    clearTimeout(this._fieldsUpdateTimer);
+    clearTimeout(this._previewTimer);
+    this.activeDocument.templateViewState = this.editor.saveViewState();
+    this.activeDocument.contextViewState = this.parametersEditor.saveViewState();
+    this.hideUndoClear();
+    this._clearedTemplate = null;
+    this._switchingDocument = true;
+    this.activeDocumentId = id;
+    this.editor.setModel(next.templateModel);
+    this.parametersEditor.setModel(next.contextModel);
+    if (next.templateViewState) this.editor.restoreViewState(next.templateViewState);
+    if (next.contextViewState) this.parametersEditor.restoreViewState(next.contextViewState);
+    this._switchingDocument = false;
+    this.renderDocumentTabs();
+    this.updateFieldsTable();
+    this.updatePreview();
+    void this.persistDocuments().catch(() => {});
+    if (focusTab) this.container?.querySelector('[role="tab"][aria-selected="true"].splunk-document-tab-select')?.focus();
+  }
+
+  createNewTab() {
+    const numbers = this.documents.map((item) => Number(/^Untitled (\d+)$/.exec(item.name)?.[1] || 0));
+    const item = this.createDocument({
+      id: crypto.randomUUID(),
+      name: `Untitled ${Math.max(0, ...numbers) + 1}`,
+      template: "",
+      context: "{}",
+      createdAt: Date.now(),
+    });
+    this.documents.push(item);
+    this.switchDocument(item.id);
+    this.editor.focus();
+  }
+
+  closeActiveTab() {
+    this.closeDocument(this.activeDocumentId);
+  }
+
+  closeDocument(id) {
+    if (this.documents.length <= 1) return;
+    const index = this.documents.findIndex((item) => item.id === id);
+    if (index < 0) return;
+    const closing = this.documents[index];
+    if (id === this.activeDocumentId) this.switchDocument(this.documents[index + 1]?.id || this.documents[index - 1].id, true);
+    this.documents.splice(index, 1);
+    closing.templateModel.dispose();
+    closing.contextModel.dispose();
+    this.renderDocumentTabs();
+    // The deleted record and remaining tab order commit in one transaction.
+    const activeId = this.activeDocumentId;
+    const order = this.documents.map((item) => item.id);
+    if (this.documentStore) {
+      const store = this.documentStore;
+      const task = this._documentWriteQueue.then(() => store.updateDocuments({ deleteIds: [id], order, activeId }));
+      this._documentWriteQueue = task.catch(() => this.showError("Splunk tab could not be closed in storage."));
+    }
+  }
+
+  renameDocument(id) {
+    const item = this.documents.find((entry) => entry.id === id);
+    const tab = [...this.container.querySelectorAll(".splunk-document-tab")].find((entry) => entry.dataset.documentId === id);
+    const select = tab?.querySelector(".splunk-document-tab-select");
+    if (!item || !select) return;
+    const input = document.createElement("input");
+    input.className = "splunk-document-name";
+    input.value = item.name;
+    input.setAttribute("aria-label", "Document name");
+    select.replaceWith(input);
+    input.focus();
+    input.select();
+    let finished = false;
+    const finish = (save) => {
+      if (finished) return;
+      finished = true;
+      if (save && input.value.trim()) item.name = input.value.trim().slice(0, 120);
+      this.renderDocumentTabs();
+      void this.persistDocuments().catch(() => {});
+    };
+    input.addEventListener("blur", () => finish(true));
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === "Escape") {
+        event.preventDefault();
+        finish(event.key === "Enter");
+      }
+    });
+  }
+
+  setPaneState(pane) {
+    const layout = this.container?.querySelector(".vtl-layout");
+    if (!layout) return;
+    for (const name of ["template", "context"]) {
+      const collapsed = pane === name;
+      layout.classList.toggle(`is-${name}-collapsed`, collapsed);
+      this.container.querySelector(`[data-collapse-splunk="${name}"]`)?.setAttribute("aria-expanded", String(!collapsed));
+    }
+    try {
+      localStorage.setItem("tool:splunk-template:pane-state", pane || "expanded");
+    } catch (_) {}
+    requestAnimationFrame(() => this.onWarmResume());
   }
 
   async registerVtlLanguage() {
@@ -282,23 +509,14 @@ class SplunkVTLEditor extends BaseTool {
       fontSize: 12,
       tabSize: 2,
       insertSpaces: true,
-      ariaLabel: "Velocity template editor",
+      ariaLabel: "Splunk template editor",
     });
 
     this._persistTimer = null;
     this._fieldsUpdateTimer = null;
     this.editor.onDidChangeModelContent(() => {
-      clearTimeout(this._persistTimer);
-      const v = this.editor.getValue();
-      this.setSaveStatus("templateSaveStatus", "Saving…", true);
-      this._persistTimer = setTimeout(() => {
-        try {
-          localStorage.setItem(this._storageKey, v);
-          this.setSaveStatus("templateSaveStatus", "Saved locally");
-        } catch (_) {
-          this.setSaveStatus("templateSaveStatus", "Not saved");
-        }
-      }, 250);
+      if (this._switchingDocument) return;
+      this.scheduleDocumentSave();
       clearTimeout(this._fieldsUpdateTimer);
       this._fieldsUpdateTimer = setTimeout(() => {
         this.updateFieldsTable();
@@ -359,13 +577,6 @@ class SplunkVTLEditor extends BaseTool {
   schedulePreview() {
     clearTimeout(this._previewTimer);
     this._previewTimer = setTimeout(() => this.updatePreview(), 250);
-  }
-
-  setSaveStatus(id, text, saving = false) {
-    const status = document.getElementById(id);
-    if (!status) return;
-    status.textContent = text;
-    status.classList.toggle("is-saving", saving);
   }
 
   setContextError(message = "") {
@@ -622,6 +833,42 @@ class SplunkVTLEditor extends BaseTool {
   }
 
   bindUIEvents() {
+    this.container.querySelector("#btnNewSplunkDocument")?.addEventListener("click", () => this.createNewTab());
+    const tabs = this.container.querySelector("#splunkDocumentTabs");
+    tabs?.addEventListener("click", (event) => {
+      const tab = event.target.closest("[data-document-id]");
+      if (!tab) return;
+      if (event.target.closest(".splunk-document-tab-close")) this.closeDocument(tab.dataset.documentId);
+      else if (event.target.closest(".splunk-document-tab-select")) this.switchDocument(tab.dataset.documentId, true);
+    });
+    tabs?.addEventListener("dblclick", (event) => {
+      const tab = event.target.closest("[data-document-id]");
+      if (event.target.closest(".splunk-document-tab-select")) this.renameDocument(tab.dataset.documentId);
+    });
+    tabs?.addEventListener("keydown", (event) => {
+      if (!event.target.matches("[role=tab]")) return;
+      const index = this.documents.findIndex((item) => item.id === this.activeDocumentId);
+      let next;
+      if (event.key === "ArrowRight") next = (index + 1) % this.documents.length;
+      if (event.key === "ArrowLeft") next = (index - 1 + this.documents.length) % this.documents.length;
+      if (event.key === "Home") next = 0;
+      if (event.key === "End") next = this.documents.length - 1;
+      if (next !== undefined) {
+        event.preventDefault();
+        this.switchDocument(this.documents[next].id, true);
+      }
+      if (event.key === "Delete") {
+        event.preventDefault();
+        this.closeActiveTab();
+      }
+    });
+    for (const pane of ["template", "context"]) {
+      this.container.querySelector(`[data-collapse-splunk="${pane}"]`)?.addEventListener("click", () => {
+        const layout = this.container.querySelector(".vtl-layout");
+        this.setPaneState(layout.classList.contains(`is-${pane}-collapsed`) ? "expanded" : pane);
+      });
+    }
+
     const btnFormat = document.getElementById("btnFormatVtl");
     const btnMinify = document.getElementById("btnMinifyVtl");
     const btnCopy = document.getElementById("btnCopyVtl");
@@ -644,7 +891,7 @@ class SplunkVTLEditor extends BaseTool {
 
     btnTextView?.addEventListener("click", () => this.activateEditorView("text"));
     btnTableView?.addEventListener("click", () => this.activateEditorView("table"));
-    document.querySelector(".vtl-view-switch")?.addEventListener("keydown", (event) => {
+    this.container?.querySelector(".vtl-view-switch")?.addEventListener("keydown", (event) => {
       if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
       event.preventDefault();
       const currentIsText = btnTextView?.getAttribute("aria-selected") === "true";
@@ -682,16 +929,8 @@ class SplunkVTLEditor extends BaseTool {
     });
 
     this.parametersEditor?.onDidChangeModelContent(() => {
-      clearTimeout(this._parametersPersistTimer);
-      this.setSaveStatus("contextSaveStatus", "Saving…", true);
-      this._parametersPersistTimer = setTimeout(() => {
-        try {
-          localStorage.setItem(this._parametersStorageKey, this.parametersEditor?.getValue() || "");
-          this.setSaveStatus("contextSaveStatus", "Saved locally");
-        } catch (_) {
-          this.setSaveStatus("contextSaveStatus", "Not saved");
-        }
-      }, 250);
+      if (this._switchingDocument) return;
+      this.scheduleDocumentSave();
       this.schedulePreview();
     });
 
@@ -900,7 +1139,7 @@ class SplunkVTLEditor extends BaseTool {
   }
 
   initializeResizer() {
-    const layout = document.querySelector(".vtl-layout");
+    const layout = this.container?.querySelector(".vtl-layout");
     const resizer = document.getElementById("vtlResizer");
     if (!layout || !resizer) return;
 
@@ -910,7 +1149,7 @@ class SplunkVTLEditor extends BaseTool {
     let dragging = false;
 
     const applyWidth = (left, rect = layout.getBoundingClientRect()) => {
-      const total = rect.width - RESIZER_W;
+      const total = rect.width - RESIZER_W - 2 * parseFloat(getComputedStyle(layout).columnGap || "0");
       const clamped = Math.max(MIN_LEFT, Math.min(left, total - MIN_RIGHT));
       layout.style.gridTemplateColumns = `${clamped}px ${RESIZER_W}px ${total - clamped}px`;
       resizer.setAttribute("aria-valuenow", String(total > 0 ? Math.round((clamped / total) * 100) : 50));
@@ -951,7 +1190,7 @@ class SplunkVTLEditor extends BaseTool {
       if (window.innerWidth <= 940 || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
       event.preventDefault();
       const rect = layout.getBoundingClientRect();
-      const total = rect.width - RESIZER_W;
+      const total = rect.width - RESIZER_W - 2 * parseFloat(getComputedStyle(layout).columnGap || "0");
       const current = (total * (Number(resizer.getAttribute("aria-valuenow")) || 60)) / 100;
       if (event.key === "Home") applyWidth(MIN_LEFT, rect);
       else if (event.key === "End") applyWidth(total - MIN_RIGHT, rect);
