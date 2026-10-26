@@ -116,7 +116,7 @@
           "Velocity Context sits below HTML Template",
         );
         const reference = document.createElement("div");
-        reference.className = "velocity-template-tool";
+        reference.className = "splunk-vtl-editor velocity-template-tool";
         reference.hidden = true;
         reference.innerHTML =
           '<div class="pane-header vtl-compact-header"><h3>Reference</h3><button class="btn btn-secondary btn-sm">Reference</button></div>';
@@ -163,8 +163,8 @@
             sourceActions[0].querySelector("#btnImportHtml") &&
             sourceActions[1].classList.contains("html-workspace-tabs") &&
             sourceActions[2].id === "btnSaveAsHtml" &&
-            sourceActions[3].id === "btnCreateHtmlQuery",
-          "Source toolbar keeps Import, mode, Export, Create Query order",
+            find("#btnCreateHtmlQuery").hidden,
+          "Source toolbar keeps Import, mode, Export order and hides Create Query",
         );
         const originalPicker = window.showSaveFilePicker;
         let exported;
@@ -316,8 +316,8 @@
           find("#btnApplyVelocitySqlImport").click();
           await settle();
           check(
-            tool.editor.getValue() === "<h1>$name</h1>" && !find("#btnCreateHtmlQuery").disabled,
-            "SQL import selects HTML field and enables Create Query",
+            tool.editor.getValue() === "<h1>$name</h1>" && find("#btnCreateHtmlQuery").hidden,
+            "SQL import selects HTML field and keeps Create Query hidden",
           );
           check(
             records.get(tool.activeDocumentId).sourceIdentity.templateColumn === "HTML_CONTENT",

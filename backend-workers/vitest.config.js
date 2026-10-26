@@ -28,6 +28,8 @@ export default defineConfig({
       "backend-workers/tests/capability-adoption.test.js",
       "backend-workers/tests/canonical-tool-usage-migration.test.js",
       "backend-workers/tests/dashboard-performance.test.js",
+      "backend-workers/tests/dashboard-device-exclusions.test.js",
+      "backend-workers/tests/dashboard-ordering.test.js",
       "backend-workers/tests/dashboard-person.test.js",
       "backend-workers/tests/dashboard-tabs-smoke.test.js",
       "backend-workers/tests/lifetime-usage-baseline.test.js",

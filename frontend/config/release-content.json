@@ -1,111 +1,81 @@
 {
   "$schema": "./release-content.schema.json",
-  "releaseId": "release-1.3.11",
-  "version": "1.3.11",
-  "title": "Create templates and localization updates",
-  "summary": "Work with Velocity templates, generate checked localization SQL across releases, and bring more reliable validation to Quick Query imports.",
+  "releaseId": "release-1.3.12",
+  "version": "1.3.12",
+  "title": "Prepare images and templates in one workspace",
+  "summary": "Compress images, bring them into Quick Query, and validate notification templates with their Velocity Context.",
   "notes": [
-    "Velocity Template renders Text or JSON from editable Context Data, reports syntax and runtime errors, and can validate against the configured API.",
-    "On Desktop, import a Velocity template from Oracle and create a Quick Query update draft from its source fields.",
-    "Lockey Update validates localization rows and generates Oracle INSERT SQL for up to four release targets, with post-update inspection queries.",
-    "Load localization history from Oracle, filter by key or release, and see which English or Indonesian values changed.",
-    "Quick Query preserves typed and BLOB import values and CONFIG_IDs, improves Oracle import errors, and warns about attachments over 300 KB.",
-    "HTML Template preserves unusual line separators through text import and export, and names them in encoding review.",
-    "Registration adds Bank Mandiri profile details and OTP-first verification with manual-approval fallback; analytics, mobile, and Desktop workflows also improved."
+    "Compress PNG, JPEG, and WebP images with target file sizes, maximum dimensions, and side-by-side previews.",
+    "Compare available lossless and lossy results, download a batch as ZIP, or add selected images to Quick Query.",
+    "Send image attachments from Quick Query to Compress Image and restore saved image workspaces when you return.",
+    "HTML Template adds editable Velocity Context and notification API validation, with rendered results in the preview.",
+    "Search Settings and global search for configuration entries; manage testing environments and Oracle connections in grouped dialogs.",
+    "Administrators can publish selected settings to registered recipients from Dashboard; registered devices receive them automatically.",
+    "QR generation and TLV viewing now share one tool, and Image tools have their own sidebar group."
   ],
   "slides": [
     {
-      "title": "Preview and validate Velocity templates",
-      "body": "Edit a Velocity template and its JSON Context Data side by side. The local preview updates as you work; Validate sends the inputs to your configured Velocity API.",
+      "title": "Choose the image result that fits",
+      "body": "Add PNG, JPEG, or WebP images, set size limits, and compare available lossless and lossy results before choosing what to use.",
       "bullets": [
-        "Switch the rendered result between Text and JSON.",
-        "Review syntax and runtime diagnostics with source locations, or use Add missing fields to review suggested context changes before applying them.",
-        "Desktop can import a template from Oracle and create a Quick Query update draft from its fields."
+        "Set a target file size and optional maximum dimensions.",
+        "Inspect images side by side with linked zoom and pan.",
+        "Download selected results individually or as a ZIP."
       ],
       "action": {
-        "label": "Open Velocity Template",
-        "route": "velocity-template"
+        "label": "Open Compress Image",
+        "route": "compress-image"
       }
     },
     {
-      "title": "Build localization update SQL",
-      "body": "Lockey Update checks localization rows and release targets, then creates an Oracle script for review and use in your existing database workflow.",
-      "bullets": [
-        "Add up to four release targets and enter the English and Indonesian values for each localization key.",
-        "Resolve validation messages and inspect the generated INSERT statements before copying or downloading the script.",
-        "Load history from Oracle to filter saved versions and review changed language values; the script also includes post-update inspection queries."
-      ],
-      "action": {
-        "label": "Open Lockey Update",
-        "route": "lockey-update"
-      }
-    },
-    {
-      "title": "Keep imported data intact in Quick Query",
-      "body": "Recent Quick Query changes make import and update workflows easier to review while preserving important source values.",
-      "bullets": [
-        "Excel imports align with schema fields and preserve typed spreadsheet values.",
-        "Oracle import errors now include clearer messages and details; BLOB imports retain their placeholders.",
-        "Attachments larger than 300 KB show a warning before query generation."
-      ],
+      "title": "Move images into Quick Query",
+      "body": "Send image attachments to Compress Image, then add the selected results to the Quick Query destination you choose.",
+      "bullets": ["Choose an existing query tab or create a new one.", "Image workspaces are saved so you can return to them later."],
       "action": {
         "label": "Open Quick Query",
         "route": "quick-query"
+      }
+    },
+    {
+      "title": "Validate notification templates with context",
+      "body": "Edit HTML and Velocity Context in separate panels, then validate through your configured notification endpoint and review the rendered response.",
+      "bullets": [
+        "Keep context drafts with each document.",
+        "Review suggested missing fields before adding them.",
+        "Configure the notification endpoint in Settings."
+      ],
+      "action": {
+        "label": "Open HTML Template",
+        "route": "html-template"
       }
     }
   ],
   "tour": [],
   "tips": [
     {
-      "id": "lockey-update-sidebar",
-      "route": "*",
-      "target": "[data-tool=\"lockey-update\"] .sidebar-menu-button",
-      "placement": "right",
-      "title": "New Feature: Lockey Update",
-      "body": "Add release targets and localization values, then copy the validated Oracle update script.",
-      "guided": false,
-      "completeOn": {
-        "event": "click",
-        "target": "[data-tool=\"lockey-update\"] .sidebar-menu-button"
-      }
-    },
-    {
-      "id": "velocity-template-sidebar",
-      "route": "*",
-      "target": "[data-tool=\"velocity-template\"] .sidebar-menu-button",
-      "placement": "right",
-      "title": "New Feature: Velocity Template",
-      "body": "Edit VTL with JSON Context Data, preview locally, then validate against your configured API.",
-      "guided": false,
-      "completeOn": {
-        "event": "click",
-        "target": "[data-tool=\"velocity-template\"] .sidebar-menu-button"
-      }
-    },
-    {
-      "id": "velocity-template-validation",
-      "route": "velocity-template",
-      "target": "#btnValidateVelocity",
-      "placement": "left",
-      "title": "Validate with your configured API",
-      "body": "The preview updates as you edit; choose Validate to send the template and Context Data to the configured Velocity API.",
-      "guided": true,
-      "completeOn": {
-        "event": "click",
-        "target": "#btnValidateVelocity"
-      }
-    },
-    {
-      "id": "lockey-update-script",
-      "route": "lockey-update",
-      "target": "#lu-release-id",
+      "id": "compress-image-start",
+      "route": "compress-image",
+      "target": "[data-ci=\"add\"]",
       "placement": "bottom",
-      "title": "Generate a localization update script",
-      "body": "Add release targets and localization values, then use Copy after validation passes to take the generated SQL into your Oracle review workflow.",
-      "guided": true,
+      "title": "Add images to compress",
+      "body": "Choose PNG, JPEG, or WebP files, then set a target size or compress at the current settings.",
+      "guided": false,
       "completeOn": {
-        "event": "click",
-        "target": "#lu-copy-sql"
+        "event": "change",
+        "target": "#ci-files"
+      }
+    },
+    {
+      "id": "settings-search",
+      "route": "settings",
+      "target": "#settings-search",
+      "placement": "bottom",
+      "title": "Find a setting",
+      "body": "Search for an environment, connection, or integration to jump to its settings.",
+      "guided": false,
+      "completeOn": {
+        "event": "change",
+        "target": "#settings-search"
       }
     }
   ]

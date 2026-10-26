@@ -1,0 +1,18 @@
+{
+  "passed": true,
+  "checks": [
+    "Old registered devices enroll without sessions or visiting Settings",
+    "Admin password gate",
+    "Preview selects a department and excludes personal and credential fields",
+    "Any draft edit invalidates the preview",
+    "Publish, synchronize target, and leave the non-target unchanged",
+    "Visible Settings refresh keeps the page usable",
+    "Replay preserves later local edits, including after reload",
+    "Email targeting updates only the selected email",
+    "History shows acknowledgements and supports reusing and stopping delivery",
+    "Offline clients recover automatically on reconnect",
+    "Narrow layout and final scroll position"
+  ],
+  "errors": [],
+  "completedAt": "2026-10-26T06:19:43.611Z"
+}

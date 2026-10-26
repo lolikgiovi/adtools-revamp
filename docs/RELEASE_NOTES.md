@@ -1,4 +1,15 @@
-# AD Tools 1.3.11
+# AD Tools 1.3.12
+
+- **Compress Image** — Compress PNG, JPEG, and WebP images with target file sizes, maximum dimensions, lossless/lossy result selection, linked comparison previews, and ZIP downloads.
+- **Quick Query images** — Send image attachments to Compress Image and add selected results to an existing or new query tab. Image workspaces persist between visits.
+- **HTML Template** — Edit per-document Velocity Context, review missing fields, validate through the configured notification endpoint, and preview the rendered response.
+- **Settings** — Search configuration entries from Settings or global search, manage testing environments, and edit integrations and connections in grouped dialogs.
+- **Dashboard** — Publish selected settings to registered email or department recipients, with automatic delivery to registered devices. Analytics gains sortable activity and clearer date formatting.
+- **Navigation** — Image tools have their own group; QR generation and TLV viewing share QR & TLV.
+
+## Earlier release notes
+
+### AD Tools 1.3.11
 
 - **Velocity Template** — Edit Velocity templates with JSON Context Data, live Text/JSON previews, source-located diagnostics, and validation through the configured API. Desktop can import templates from Oracle and create Quick Query drafts.
 - **Lockey Update** — Validate localization batches for up to four release targets, generate Oracle INSERT SQL with post-update inspection queries, and inspect/filter localization history loaded from Oracle.
@@ -6,8 +17,6 @@
 - **HTML Template** — Preserve unusual line separators through text import and export, and identify them in encoding review.
 - **Registration** — Collect Bank Mandiri department and role details, verify by OTP first, and offer manual approval when email delivery fails.
 - **App experience** — Refresh the analytics dashboard, improve mobile sidebar behavior and installed-web-app metadata, and add a Desktop title bar, tab shortcuts, and macOS window lifecycle handling.
-
-## Earlier release notes
 
 ### AD Tools 1.3.10
 

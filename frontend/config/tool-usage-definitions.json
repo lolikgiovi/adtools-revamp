@@ -28,7 +28,6 @@
   "sql-in-clause": { "actions": ["copy"], "boundary": "generated output is copied successfully" },
   "merge-sql": { "actions": ["merge", "report_from_sql"], "boundary": "SQL result is generated and saved" },
   "check-image": { "actions": ["check"], "boundary": "the requested image-check batch completes" },
-  "monitoring-query": { "actions": ["load"], "boundary": "complete schema-checked Oracle configuration loads successfully" },
   "lockey-update": {
     "actions": ["copy", "download"],
     "boundary": "validated INSERT SQL is copied or downloaded"

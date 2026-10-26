@@ -144,8 +144,8 @@ ensure_prereqs() {
     echo "       Create repo-root/keys/passphrase.key containing your key's passphrase." >&2
     exit 1
   fi
-  if ! command -v npx >/dev/null 2>&1; then
-    echo "ERROR: npx not found; install Node.js/npm" >&2
+  if [[ ! -x "$ROOT_DIR/node_modules/.bin/tauri" ]]; then
+    echo "ERROR: Missing project-local Tauri CLI. Run npm ci manually before building." >&2
     exit 1
   fi
   if ! command -v tar >/dev/null 2>&1; then
@@ -207,15 +207,20 @@ build_tauri_targets() {
 find_artifacts() {
   local target="$1"
   local base="$SRC_TAURI_DIR/target/$target/release/bundle"
-  local app_path dmg_path
-  app_path="$(find "$base/macos" -maxdepth 1 -name '*.app' -type d | head -n1 || true)"
-  dmg_path="$(find "$base/dmg" -maxdepth 1 -name '*.dmg' -type f | head -n1 || true)"
-  if [[ -z "$app_path" ]]; then
+  local app_path dmg_path product version suffix
+  product="$(jq -r '.productName' "$TAURI_CONF")"
+  version="$(read_version_from_conf "$TAURI_CONF")"
+  suffix="aarch64"
+  [[ "$target" == "x86_64-apple-darwin" ]] && suffix="x64"
+  app_path="$base/macos/$product.app"
+  dmg_path="$base/dmg/${product}_${version}_${suffix}.dmg"
+  if [[ ! -d "$app_path" ]]; then
     echo "ERROR: .app not found for $target under $base/macos" >&2
     exit 1
   fi
-  if [[ -z "$dmg_path" ]]; then
-    echo "WARN: .dmg not found for $target under $base/dmg; continuing" >&2
+  if [[ ! -f "$dmg_path" ]]; then
+    echo "ERROR: Current release DMG not found: $dmg_path" >&2
+    exit 1
   fi
   echo "$app_path|$dmg_path"
 }
@@ -235,7 +240,7 @@ sign_file() {
   # Capture signer output and extract only the base64 public signature.
   # Some versions print human-friendly text; we need just the base64 token.
   local out sig
-  out="$(npx tauri signer sign -f "$key" -p "$passphrase" "$file")"
+  out="$("$ROOT_DIR/node_modules/.bin/tauri" signer sign -f "$key" -p "$passphrase" "$file")"
     if echo "$out" | grep -q "Public signature:"; then
       # Extract the base64 signature line after the marker without using sed
       sig="$(printf "%s" "$out" | awk 'BEGIN{found=0} /Public signature:/ {found=1; next} found && /^[A-Za-z0-9+\/=]+$/ {print; exit}')"
