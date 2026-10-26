@@ -14,7 +14,7 @@ try {
     localStorage.setItem("user.registered", "true");
     localStorage.setItem("user.email", "fixture@bankmandiri.co.id");
     localStorage.setItem("user.username", "Fixture");
-    localStorage.setItem("sidebar.pinnedTools.v1", '["run-query"]');
+    localStorage.setItem("sidebar.pinnedTools.v1", '["run-query","run-batch"]');
   });
   await page.goto("http://127.0.0.1:1235");
   await page.waitForFunction(() => window.app?.globalSearch);
@@ -29,17 +29,20 @@ try {
         sidebar: !!document.querySelector('[data-tool="run-query"]'),
         search: window.app.globalSearch.index.some((x) => x.id === "run-query"),
         batch: !!document.querySelector('[data-tool="run-batch"]'),
+        batchSearch: window.app.globalSearch.index.some((x) => x.id === "run-batch"),
       };
       delete window.__TAURI__;
       return result;
     }, department);
-    assert.deepEqual(visibility, { sidebar: allowed, search: allowed, batch: true });
+    assert.deepEqual(visibility, { sidebar: allowed, search: allowed, batch: allowed, batchSearch: allowed });
     await page.evaluate(() => window.app.router.navigate("quick-query"));
     await page.locator("#executeInJenkinsRunner").waitFor({ state: "attached" });
     assert.equal(await page.locator("#executeInJenkinsRunner").isVisible(), allowed);
     if (!allowed) {
-      await page.evaluate(() => window.app.router.navigate("run-query"));
-      await page.waitForFunction(() => window.app.router.getCurrentRoute() === "home");
+      for (const toolId of ["run-query", "run-batch"]) {
+        await page.evaluate((toolId) => window.app.router.navigate(toolId), toolId);
+        await page.waitForFunction(() => window.app.router.getCurrentRoute() === "home");
+      }
     }
     results.push({ department: department || "(missing)", allowed, status: "PASS" });
     await page.screenshot({

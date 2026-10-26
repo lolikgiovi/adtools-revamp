@@ -1,5 +1,5 @@
 export function isToolVisibleToUser(toolId) {
-  if (toolId !== "run-query") return true;
+  if (toolId !== "run-query" && toolId !== "run-batch") return true;
   try {
     return (
       String(localStorage.getItem("user.department") || "")
