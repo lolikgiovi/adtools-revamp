@@ -55,6 +55,11 @@ describe("Velocity API validator transport", () => {
     expect(JSON.parse(options.body)).toEqual({ context, template });
   });
 
+  it("includes notification helper functions only when explicitly enabled", async () => {
+    await requestVelocityValidation({ url, template, context, isAddFunction: true });
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ context, template, isAddFunction: true });
+  });
+
   it.each([400, 422, 503])("preserves HTTP %i and the API error body without claiming template validity", async (status) => {
     fetch.mockResolvedValue({ status, text: async () => "API diagnostic" });
     expect(await requestVelocityValidation({ url, template, context })).toEqual({ status, body: "API diagnostic" });

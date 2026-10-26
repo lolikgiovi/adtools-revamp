@@ -720,3 +720,44 @@ body.is-resizing * {
     display: none;
   }
 }
+
+.html-section-title {
+  padding: 0.45rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.html-context-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 32%;
+  min-height: 140px;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.html-context-pane .pane-header { justify-content: space-between; }
+.html-context-pane h3 { margin: 0; font-size: 0.85rem; }
+.html-context-pane textarea {
+  flex: 1;
+  min-height: 70px;
+  width: 100%;
+  box-sizing: border-box;
+  resize: none;
+  border: 0;
+  padding: 0.75rem;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font: 13px/1.5 var(--font-mono, monospace);
+  tab-size: 2;
+}
+.html-context-pane textarea:focus-visible { outline: 1px solid hsl(var(--ring)); outline-offset: -1px; }
+.html-validation-status { padding: 0.5rem 0.75rem; font-size: 0.8rem; overflow-wrap: anywhere; }
+.html-validation-status[hidden], .html-validation-output[hidden] { display: none; }
+.html-validation-output { padding: 0.5rem 0.75rem; border-bottom: 1px solid hsl(var(--border)); }
+.html-validation-output summary { cursor: pointer; font-size: 0.8rem; }
+.html-validation-output pre { max-height: 180px; overflow: auto; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.html-template.is-encoding-mode .html-context-pane,
+.html-template.is-encoding-mode .html-section-title,
+.html-template.is-encoding-mode .html-validation-status,
+.html-template.is-encoding-mode .html-validation-output { display: none; }

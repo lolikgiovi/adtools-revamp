@@ -7,6 +7,7 @@ import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import { readEnvironments } from "../../core/Environments.js";
 import { HTMLTemplateToolTemplate } from "./template.js";
+import { NotificationValidation } from "./notification-validation.js";
 import { HtmlDocumentStore } from "./documentStore.js";
 import { analyzeHtmlEncoding, convertHtmlForToad, decodeHtmlBytes, listEncodingCharacters, markEncodingPreview, simulateWindows1252Import, visibleTextOffsets } from "./encoding.js";
 import { withEncodingPreviewBridge } from "./previewBridge.js";
@@ -229,6 +230,8 @@ class HTMLTemplateTool extends BaseTool {
     } catch (_) {}
     this.initializeWorker();
     this.bindDocumentEvents();
+    this.notificationValidation = new NotificationValidation(this);
+    this.notificationValidation.bind();
     this.bindToolEvents();
     window.addEventListener("pagehide", this._handlePageHide);
     window.addEventListener("message", this._handlePreviewScrollMessage);
@@ -245,6 +248,8 @@ class HTMLTemplateTool extends BaseTool {
   }
 
   onUnmount() {
+    this.notificationValidation?.dispose();
+    this.notificationValidation = null;
     this._mountSequence += 1;
     window.removeEventListener("pagehide", this._handlePageHide);
     window.removeEventListener("message", this._handlePreviewScrollMessage);
@@ -285,6 +290,7 @@ class HTMLTemplateTool extends BaseTool {
   }
 
   onSoftDeactivate() {
+    this.notificationValidation?.invalidate();
     this.cleanupResizer();
   }
 
@@ -314,6 +320,7 @@ class HTMLTemplateTool extends BaseTool {
       name: document.name,
       html: document.model?.getValue() ?? document.html,
       vtlValues: structuredClone(document.vtlValues || {}),
+      contextText: document.contextText,
       createdAt: document.createdAt,
       updatedAt: Date.now(),
     };
@@ -543,7 +550,7 @@ class HTMLTemplateTool extends BaseTool {
   duplicateDocument(id) {
     const document = this.documents.find((item) => item.id === id);
     if (!document) return;
-    return this.newDocument(`${document.name} copy`, document.model.getValue(), structuredClone(document.vtlValues));
+    return this.newDocument(`${document.name} copy`, document.model.getValue(), structuredClone(document.vtlValues), document.contextText);
   }
 
   async switchDocument(id, focusTab = false) {
@@ -582,7 +589,7 @@ class HTMLTemplateTool extends BaseTool {
     }
   }
 
-  async newDocument(name = null, html = "", vtlValues = {}) {
+  async newDocument(name = null, html = "", vtlValues = {}, contextText = undefined) {
     if (this._tabTransition) return;
     this._tabTransition = true;
     let document = null;
@@ -599,6 +606,7 @@ class HTMLTemplateTool extends BaseTool {
         name: name || `Untitled ${nextNumber}`,
         html,
         vtlValues,
+        contextText,
         createdAt: now,
         updatedAt: now,
       });
@@ -868,6 +876,7 @@ class HTMLTemplateTool extends BaseTool {
     this._encodingDecorations = this.editor.createDecorationsCollection();
     this._encodingActiveDecoration = this.editor.createDecorationsCollection();
     this.editor.onDidChangeModel(() => {
+      this.notificationValidation?.invalidate();
       if (this.workspaceMode === "encoding") this.showEncodingReport();
       else {
         this.clearEncodingReview();
@@ -1344,6 +1353,7 @@ class HTMLTemplateTool extends BaseTool {
 
     // Render and autosave only the active document.
     this.editor.onDidChangeModelContent(() => {
+      this.notificationValidation?.invalidate();
       this.clearEncodingReview();
       const value = this.editor.getValue();
       if (!this.programmaticEditorChange) this.inputSource = "manual";
@@ -1514,6 +1524,8 @@ class HTMLTemplateTool extends BaseTool {
   }
 
   renderPreview(html, force = false) {
+    this.notificationValidation?.syncContext();
+    this.notificationValidation?.invalidate();
     const iframe = document.getElementById("htmlRenderer");
     const afterIframe = document.getElementById("htmlRendererAfter");
     const afterPane = document.getElementById("htmlPreviewAfterPane");
@@ -1678,6 +1690,7 @@ class HTMLTemplateTool extends BaseTool {
 
   setWorkspaceMode(mode) {
     if (!["edit", "encoding"].includes(mode) || !this.editor || mode === this.workspaceMode) return;
+    this.notificationValidation?.invalidate();
     this.workspaceMode = mode;
     const root = this.container.matches(".html-template") ? this.container : this.container.querySelector(".html-template");
     root?.classList.toggle("is-encoding-mode", mode === "encoding");

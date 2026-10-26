@@ -7,7 +7,7 @@ export function readVelocityValidatorSettings() {
   };
 }
 
-export async function requestVelocityValidation({ url, template, context, signal }) {
+export async function requestVelocityValidation({ url, template, context, isAddFunction = false, signal }) {
   if (!url?.trim()) throw new Error("Set the endpoint in Settings → Velocity API Validator first.");
   let endpoint;
   try {
@@ -19,7 +19,7 @@ export async function requestVelocityValidation({ url, template, context, signal
     throw new Error("Velocity API Validator URL must use HTTP or HTTPS without embedded credentials.");
   }
   const contentType = "application/json";
-  const body = JSON.stringify({ context, template });
+  const body = JSON.stringify({ context, template, ...(isAddFunction ? { isAddFunction: true } : {}) });
   const controller = new AbortController();
   const abort = () => controller.abort();
   signal?.addEventListener("abort", abort, { once: true });

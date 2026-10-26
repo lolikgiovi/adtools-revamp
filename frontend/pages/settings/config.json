@@ -440,10 +440,20 @@
             {
               "key": "config.velocityValidator.url",
               "storageKey": "config.velocityValidator.url",
-              "label": "Validator API URL",
+              "label": "Velocity Template Endpoint",
               "type": "string",
               "default": "",
               "description": "Full endpoint URL, e.g. http://sandbox.everest.supporting.devmandiri.co.id/api-migration/v1/velocity/template. Called only when you choose Validate. Desktop uses your machine's network and hosts mapping; web requires browser-compatible CORS and HTTP/HTTPS access.",
+              "validation": {
+                "pattern": "^(https?://[^\\s]+)?$"
+              }
+            },
+            {
+              "key": "config.velocityValidator.notificationUrl",
+              "storageKey": "config.velocityValidator.notificationUrl",
+              "label": "Notification Template Endpoint",
+              "type": "string",
+              "default": "",
               "validation": {
                 "pattern": "^(https?://[^\\s]+)?$"
               }

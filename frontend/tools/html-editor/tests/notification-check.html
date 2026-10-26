@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en" class="dark" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HTML notification validation checks</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        background: hsl(var(--background));
+        color: hsl(var(--foreground));
+      }
+      #results {
+        font: 13px/1.5 system-ui;
+      }
+      .pass {
+        color: #58c894;
+      }
+      .fail {
+        color: #f77;
+      }
+      main {
+        height: calc(100vh - 150px);
+      }
+      main .html-template {
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <details>
+      <summary>Browser verification results</summary>
+      <ol id="results"></ol>
+    </details>
+    <main></main>
+    <script type="module">
+      import { HTMLTemplateTool } from "../main.js";
+      import { UsageTracker } from "../../../core/UsageTracker.js";
+      for (const key of ["trackEvent", "trackToolUse", "trackFeature"]) UsageTracker[key] = () => {};
+      const results = document.querySelector("#results");
+      const check = (condition, label) => {
+        const row = document.createElement("li");
+        row.className = condition ? "pass" : "fail";
+        row.textContent = `${condition ? "PASS" : "FAIL"}: ${label}`;
+        results.append(row);
+        if (!condition) throw new Error(label);
+      };
+      const settle = () => new Promise((resolve) => setTimeout(resolve, 400));
+      const key = "config.velocityValidator.notificationUrl";
+      const previous = localStorage.getItem(key);
+      const originalFetch = window.fetch;
+      const requests = [];
+      let failNext = false;
+      let release;
+      window.fetch = async (url, options) => {
+        if (String(url) !== "http://localhost/notification-fixture") return originalFetch(url, options);
+        requests.push(JSON.parse(options.body));
+        if (release === "hold")
+          return new Promise((resolve) => {
+            release = resolve;
+          });
+        const status = failNext ? 503 : 200;
+        return new Response(status === 200 ? "<h1>API: Rp60.000</h1>" : "API unavailable", { status });
+      };
+      localStorage.setItem(key, "http://localhost/notification-fixture");
+      try {
+        const tool = new HTMLTemplateTool();
+        const records = new Map();
+        tool.initializeDocuments = async () => {
+          tool.documentStore = {
+            saveDocument: async (record) => records.set(record.id, structuredClone(record)),
+            saveWorkspace: async () => {},
+            saveWorkspaceAndDocument: async (record) => records.set(record.id, structuredClone(record)),
+            close: () => {},
+          };
+          tool.documents = [
+            tool.createDocumentModel({
+              id: "notification-one",
+              name: "Notification",
+              html: "<h1>$format.currency($amount)</h1>",
+              vtlValues: { amount: 60000 },
+              createdAt: Date.now(),
+            }),
+          ];
+          tool.activeDocumentId = tool.documents[0].id;
+          tool.vtlValues = tool.activeDocument.vtlValues;
+          tool.renderDocumentTabs();
+          return tool.documents;
+        };
+        tool.container = document.querySelector("main");
+        tool.container.innerHTML = tool.render();
+        await tool.onMount();
+        const find = (selector) => tool.container.querySelector(selector);
+        const input = (text) => {
+          find("#htmlVelocityContext").value = text;
+          find("#htmlVelocityContext").dispatchEvent(new Event("input", { bubbles: true }));
+        };
+        check(
+          find("#htmlVelocityContext").getBoundingClientRect().top > find("#htmlEditor").getBoundingClientRect().top,
+          "Velocity Context sits below HTML Template",
+        );
+        input('{"amount":');
+        find("#btnValidateHtmlVelocity").click();
+        await settle();
+        check(requests.length === 0 && !find("#htmlVelocityContextError").hidden, "Invalid JSON stays local");
+        await tool.duplicateDocument("notification-one");
+        check(find("#htmlVelocityContext").value === '{"amount":', "Duplicate preserves unfinished context");
+        await tool.switchDocument("notification-one");
+        check(find("#htmlVelocityContext").value === '{"amount":', "Tab switch restores unfinished context");
+        check(records.get("notification-one").contextText === '{"amount":', "Document save retains context draft");
+        input('{"amount":60000}');
+        find("#btnFormatHtmlContext").click();
+        check(find("#htmlVelocityContext").value.includes("\n"), "Format JSON works");
+        find("#btnValidateHtmlVelocity").click();
+        await settle();
+        check(
+          requests[0].isAddFunction === true &&
+            requests[0].context.amount === 60000 &&
+            requests[0].template === "<h1>$format.currency($amount)</h1>",
+          "Notification JSON payload includes isAddFunction=true",
+        );
+        check(
+          find("#htmlRenderer").srcdoc === "<h1>API: Rp60.000</h1>" && tool.editor.getValue() === "<h1>$format.currency($amount)</h1>",
+          "API result previews without replacing source",
+        );
+        failNext = true;
+        find("#btnValidateHtmlVelocity").click();
+        await settle();
+        check(
+          find("#htmlValidationStatus").textContent.includes("503") && find("#htmlValidationResponse").textContent === "API unavailable",
+          "HTTP failures retain API diagnostics",
+        );
+        failNext = false;
+        release = "hold";
+        find("#btnValidateHtmlVelocity").click();
+        find("#btnValidateHtmlVelocity").click();
+        check(requests.length === 3, "Repeated click makes one pending request");
+        input('{"amount":10}');
+        release(new Response("stale", { status: 200 }));
+        release = null;
+        await settle();
+        check(find("#htmlRenderer").srcdoc !== "stale", "Edited inputs reject late responses");
+        input('{"amount":60000}');
+        find("#btnValidateHtmlVelocity").click();
+        await settle();
+        document.title = "PASS: HTML notification validation";
+      } catch (error) {
+        const row = document.createElement("li");
+        row.className = "fail";
+        row.textContent = error.stack;
+        results.append(row);
+        document.title = "FAIL: HTML notification validation";
+      } finally {
+        if (previous === null) localStorage.removeItem(key);
+        else localStorage.setItem(key, previous);
+        window.fetch = originalFetch;
+      }
+    </script>
+  </body>
+</html>

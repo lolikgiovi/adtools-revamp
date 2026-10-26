@@ -53,8 +53,19 @@ export const HTMLTemplateToolTemplate = /* html */ `
           </div>
         </div>
         <div id="htmlEncodingReport" class="html-encoding-report" role="status" aria-live="polite" hidden></div>
-        <div id="htmlEditor" class="monaco-editor-container"></div>
+        <div class="html-section-title" id="htmlTemplateTitle">HTML Template</div>
+        <div id="htmlEditor" class="monaco-editor-container" aria-labelledby="htmlTemplateTitle"></div>
         <div id="htmlEncodingDiff" class="html-encoding-diff" aria-label="Original and ASCII-safe HTML source diff" hidden></div>
+
+        <section class="html-context-pane" aria-labelledby="htmlContextTitle">
+          <div class="pane-header">
+            <h3 id="htmlContextTitle">Velocity Context</h3>
+            <button id="btnFormatHtmlContext" class="btn btn-secondary btn-sm" type="button">Format JSON</button>
+          </div>
+          <div id="htmlVelocityContextError" class="html-validation-status" role="alert" hidden></div>
+          <textarea id="htmlVelocityContext" spellcheck="false" aria-labelledby="htmlContextTitle"
+            aria-describedby="htmlVelocityContextError" wrap="off"></textarea>
+        </section>
 
         <!-- Modeless VTL modal positioned over the editor (bottom-left) -->
         <div
@@ -90,6 +101,9 @@ export const HTMLTemplateToolTemplate = /* html */ `
       <div class="pane renderer-pane">
         <div class="pane-header">
           <div class="renderer-actions">
+            <button id="btnValidateHtmlVelocity" class="btn btn-primary btn-sm html-edit-action" type="button">Validate Velocity</button>
+            <button id="btnHtmlValidatorSettings" class="btn btn-secondary btn-sm html-edit-action" type="button"
+              title="Notification Template Endpoint settings">Settings</button>
             <div id="htmlEncodingPreviewModes" class="html-encoding-preview-modes" role="group" aria-label="Encoding preview" hidden>
               <button type="button" data-encoding-preview="original" aria-pressed="true">Original</button>
               <button type="button" data-encoding-preview="windows" aria-pressed="false">Windows example</button>
@@ -155,6 +169,11 @@ export const HTMLTemplateToolTemplate = /* html */ `
             </button>
           </div>
         </div>
+        <div id="htmlValidationStatus" class="html-validation-status" role="status" aria-live="polite" hidden></div>
+        <details id="htmlValidationOutput" class="html-validation-output" hidden>
+          <summary>API response</summary>
+          <pre id="htmlValidationResponse"></pre>
+        </details>
         <div id="rendererSurface" class="renderer-surface">
           <div class="renderer-preview-pane">
             <div id="htmlPreviewBeforeLabel" class="renderer-preview-label" hidden>Windows example</div>
