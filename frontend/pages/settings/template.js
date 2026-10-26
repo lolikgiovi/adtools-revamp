@@ -20,7 +20,6 @@ export const SettingsTemplate = /*html*/ `
     </header>
     <div class="settings-sync-row">
       <span class="settings-sync-status" role="status" aria-live="polite"></span>
-      <button type="button" class="btn btn-secondary btn-sm settings-sync-verify" hidden>Verify account</button>
       <button type="button" class="btn btn-secondary btn-sm settings-sync-refresh" hidden>Refresh settings</button>
     </div>
     <span id="settings-search-status" class="sr-only" role="status" aria-live="polite"></span>

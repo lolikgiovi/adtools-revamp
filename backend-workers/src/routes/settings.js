@@ -149,12 +149,17 @@ export async function handleSettings(request, env) {
       }
     } else if (path === "enroll" && method === "POST") {
       const session = await getSession(request, env);
-      if (!session?.email || !session.deviceId) return json({ ok: false, error: "Verify your account to receive settings." }, 401);
+      const registration = session || (await readBody(request));
+      const email = typeof registration?.email === "string" ? registration.email.trim().toLowerCase() : "";
+      const deviceId = typeof registration?.deviceId === "string" ? registration.deviceId.trim() : "";
+      if (!email || !deviceId || email.length > 254 || deviceId.length > 255) {
+        return json({ ok: false, error: "Registered device not found." }, 401);
+      }
       const user = await env.DB.prepare(
         `SELECT u.id, u.email FROM users u JOIN device d ON d.user_id=u.id
         WHERE LOWER(u.email)=? AND d.device_id=?`,
       )
-        .bind(session.email.toLowerCase(), session.deviceId)
+        .bind(email, deviceId)
         .first();
       if (!user) return json({ ok: false, error: "Registered device not found." }, 401);
       const credential = `${crypto.randomUUID()}${crypto.randomUUID()}`;
@@ -163,9 +168,9 @@ export async function handleSettings(request, env) {
         `INSERT INTO settings_devices (token_hash,user_id,device_id,expires_at) VALUES (?,?,?,?)
         ON CONFLICT(user_id,device_id) DO UPDATE SET token_hash=excluded.token_hash, expires_at=excluded.expires_at`,
       )
-        .bind(await digest(credential), user.id, session.deviceId, expiresAt)
+        .bind(await digest(credential), user.id, deviceId, expiresAt)
         .run();
-      return json({ ok: true, credential, userId: user.id, email: user.email, deviceId: session.deviceId, expiresAt });
+      return json({ ok: true, credential, userId: user.id, email: user.email, deviceId, expiresAt });
     } else if ((path === "sync" && method === "GET") || (path === "ack" && method === "POST")) {
       const user = await identity(request, env);
       if (!user) return json({ ok: false, error: "Verify your account to receive settings." }, 401);

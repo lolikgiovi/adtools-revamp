@@ -4,7 +4,7 @@ import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { once } from "node:events";
 
-// Uses only installed tooling. Fixtures and sessions are local; no OTP or remote service is exercised.
+// Uses only installed tooling. Registered devices enroll without sessions, OTP, or a Settings visit.
 const root = resolve(import.meta.dirname, "../..");
 const output = resolve(root, ".wrangler/settings-publishing-verification", new Date().toISOString().replace(/[:.]/g, "-"));
 mkdirSync(output, { recursive: true });
@@ -65,22 +65,6 @@ try {
     .join("\n");
   writeFileSync(resolve(output, "fixtures.sql"), seed);
   await run("wrangler", ["d1", "execute", "adtools", "--local", "--persist-to", persist, "--file", resolve(output, "fixtures.sql")]);
-  for (const [index, user] of users.entries()) {
-    await run("wrangler", [
-      "kv",
-      "key",
-      "put",
-      `session:publishing-session-${index}`,
-      JSON.stringify(user),
-      "--binding",
-      "adtools",
-      "--preview",
-      "false",
-      "--local",
-      "--persist-to",
-      persist,
-    ]);
-  }
   processes.push(
     start("wrangler", [
       "dev",
@@ -108,15 +92,14 @@ try {
       return ["localhost", "127.0.0.1"].includes(url.hostname) ? route.continue() : route.abort();
     });
     await context.addInitScript(
-      ({ user, index, releaseId, tipIds }) => {
+      ({ user, releaseId, tipIds }) => {
         if (localStorage.getItem("publishing-fixture")) return;
         localStorage.setItem("publishing-fixture", "1");
         localStorage.setItem("user.email", user.email);
         localStorage.setItem("user.username", "Publishing fixture");
         localStorage.setItem("user.registered", "true");
         localStorage.setItem("user.department", user.department);
-        localStorage.setItem("adtools.sessionToken", `publishing-session-${index}`);
-        localStorage.setItem("adtools.sessionTokenTs", String(Date.now()));
+        localStorage.setItem("adtools.deviceId", user.deviceId);
         localStorage.setItem(`releaseTour.seen.${encodeURIComponent(releaseId)}`, "true");
         for (const id of tipIds)
           localStorage.setItem(`releaseTip.opened.${encodeURIComponent(releaseId)}.${encodeURIComponent(id)}`, "true");
@@ -130,18 +113,26 @@ try {
           JSON.stringify([{ id: "personal", name: "Personal", cdnPublicUrl: "https://personal.test" }]),
         );
       },
-      { user: users[index], index, releaseId: release.releaseId, tipIds: release.tips.map((tip) => tip.id) },
+      { user: users[index], releaseId: release.releaseId, tipIds: release.tips.map((tip) => tip.id) },
     );
     const page = await context.newPage();
     page.on("pageerror", (error) => failures.push(error.message));
-    await page.goto("http://127.0.0.1:1244/#settings");
-    await page.locator('[data-page="settings"] .sidebar-menu-button').click();
-    await page.locator(".settings-categories").waitFor();
+    await page.goto("http://127.0.0.1:1244/#home");
     await page.waitForFunction(() => Boolean(localStorage.getItem("settings.sync.credential")));
     return page;
   }
   const one = await client(0);
   const two = await client(1);
+  await check("Old registered devices enroll without sessions or visiting Settings", async () => {
+    for (const page of [one, two]) {
+      assert.equal(await page.evaluate(() => localStorage.getItem("adtools.sessionToken")), null);
+      assert.equal(await page.locator(".settings-sync-verify").count(), 0);
+      assert.equal(
+        await page.evaluate(() => JSON.parse(localStorage.getItem("settings.sync.credential")).deviceId),
+        users[page === one ? 0 : 1].deviceId,
+      );
+    }
+  });
   await check("Admin password gate", async () => {
     await one.goto("http://127.0.0.1:1244/#dashboard/publish-settings");
     await one.locator("#publish-password").fill("local-settings-test");
@@ -186,11 +177,8 @@ try {
   await check("Publish, synchronize target, and leave the non-target unchanged", async () => {
     await one.getByRole("button", { name: "Publish to 1 user", exact: true }).click();
     await one.locator(".publish-message").filter({ hasText: "Published to 1 user" }).waitFor();
-    for (const page of [one, two])
-      await page.evaluate(async () => {
-        const { publishedSettingsSync } = await import("/core/PublishedSettings.js");
-        await publishedSettingsSync.check();
-      });
+    for (const page of [one, two]) await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await one.waitForFunction(() => localStorage.getItem("config.redis.port") === "6380");
     assert.equal(await one.evaluate(() => localStorage.getItem("config.redis.port")), "6380");
     assert.equal(await two.evaluate(() => localStorage.getItem("config.redis.port")), "6379");
     assert.equal(await two.evaluate(() => JSON.parse(localStorage.getItem("config.environments"))[0].name), "Personal");
@@ -243,11 +231,8 @@ try {
     await one.getByRole("button", { name: "Preview publication" }).click();
     await one.getByRole("button", { name: "Publish to 1 user", exact: true }).click();
     await one.locator(".publish-message").filter({ hasText: "Published to 1 user" }).waitFor();
-    for (const page of [one, two])
-      await page.evaluate(async () => {
-        const { publishedSettingsSync } = await import("/core/PublishedSettings.js");
-        await publishedSettingsSync.check();
-      });
+    for (const page of [one, two]) await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await two.waitForFunction(() => localStorage.getItem("config.redis.port") === "6382");
     assert.equal(await one.evaluate(() => localStorage.getItem("config.redis.port")), "6390");
     assert.equal(await two.evaluate(() => localStorage.getItem("config.redis.port")), "6382");
   });
@@ -260,6 +245,11 @@ try {
     await one.locator(".publish-history-row").first().filter({ hasText: "Stopped" }).waitFor();
   });
   await check("Offline clients recover automatically on reconnect", async () => {
+    await two.evaluate(() => {
+      const identity = JSON.parse(localStorage.getItem("settings.sync.credential"));
+      identity.expiresAt = 1;
+      localStorage.setItem("settings.sync.credential", JSON.stringify(identity));
+    });
     await two.context().setOffline(true);
     await two.evaluate(async () => {
       const { publishedSettingsSync } = await import("/core/PublishedSettings.js");
@@ -278,11 +268,14 @@ try {
   await check("Narrow layout and final scroll position", async () => {
     await one.setViewportSize({ width: 390, height: 844 });
     await one.locator('.sidebar[data-mobile="true"][data-state="closed"]').waitFor({ state: "attached" });
-    await one.locator(".settings-header").scrollIntoViewIfNeeded();
+    await one.locator(".publish-form").scrollIntoViewIfNeeded();
     await one.screenshot({ path: resolve(output, "narrow-publishing.png"), animations: "disabled" });
     assert.equal(await one.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await one.locator(".publish-history").scrollIntoViewIfNeeded();
     await one.screenshot({ path: resolve(output, "narrow-history.png"), animations: "disabled" });
+    await one.goto("http://127.0.0.1:1244/#settings");
+    await one.locator(".settings-categories").waitFor();
+    assert.equal(await one.locator(".settings-sync-verify").count(), 0);
     await one.locator(".settings-category").last().scrollIntoViewIfNeeded();
     await one.screenshot({ path: resolve(output, "narrow-bottom.png"), animations: "disabled" });
     await one.evaluate(() => window.app.themeManager.setTheme("light"));

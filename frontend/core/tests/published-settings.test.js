@@ -50,9 +50,81 @@ describe("published settings client", () => {
     set("config.redis.port", "6379");
     expect(applyPublication(publication, "one")).toBe(true);
   });
+  it.each([false, true])("enrolls automatically without a session (expired credential: %s)", async (expired) => {
+    localStorage.setItem("user.email", "one@bankmandiri.co.id");
+    localStorage.setItem("adtools.deviceId", "d-one");
+    if (expired)
+      localStorage.setItem(
+        "settings.sync.credential",
+        JSON.stringify({
+          credential: "expired",
+          email: "one@bankmandiri.co.id",
+          userId: "one",
+          expiresAt: 1,
+        }),
+      );
+    const fetcher = vi.fn(async (url, options) => {
+      if (url.endsWith("enroll")) {
+        expect(JSON.parse(options.body)).toEqual({ email: "one@bankmandiri.co.id", deviceId: "d-one" });
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            credential: "renewed",
+            email: "one@bankmandiri.co.id",
+            userId: "one",
+            deviceId: "d-one",
+            expiresAt: Date.now() + 60000,
+          }),
+        );
+      }
+      return new Response(JSON.stringify({ ok: true, publications: [publication] }));
+    });
+    const sync = new PublishedSettingsSync({ fetcher, apiBase: "http://localhost" });
+    await sync.check();
+    expect(sync.status).toBe("synced");
+    expect(localStorage.getItem("config.redis.port")).toBe("6380");
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+  it("renews a server-rejected credential in the same background check", async () => {
+    localStorage.setItem("user.email", "one@bankmandiri.co.id");
+    localStorage.setItem("adtools.deviceId", "d-one");
+    localStorage.setItem(
+      "settings.sync.credential",
+      JSON.stringify({
+        credential: "stale",
+        email: "one@bankmandiri.co.id",
+        userId: "one",
+        deviceId: "d-one",
+        expiresAt: Date.now() + 60000,
+      }),
+    );
+    const fetcher = vi.fn(async (url, options) => {
+      if (options.headers.Authorization === "Bearer stale") return new Response(JSON.stringify({ ok: false }), { status: 401 });
+      if (url.endsWith("enroll"))
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            credential: "renewed",
+            email: "one@bankmandiri.co.id",
+            userId: "one",
+            deviceId: "d-one",
+            expiresAt: Date.now() + 60000,
+          }),
+        );
+      return new Response(JSON.stringify({ ok: true, publications: [publication] }));
+    });
+    const sync = new PublishedSettingsSync({ fetcher, apiBase: "http://localhost" });
+    await sync.check();
+    expect(sync.status).toBe("synced");
+    expect(localStorage.getItem("config.redis.port")).toBe("6380");
+  });
   it("discards in-flight responses after the signed-in identity changes", async () => {
     localStorage.setItem("user.email", "one@bankmandiri.co.id");
     localStorage.setItem("settings.sync.credential", JSON.stringify({ credential: "test", email: "one@bankmandiri.co.id", userId: "one" }));
+    localStorage.setItem("adtools.deviceId", "d-one");
+    const identity = JSON.parse(localStorage.getItem("settings.sync.credential"));
+    identity.deviceId = "d-one";
+    localStorage.setItem("settings.sync.credential", JSON.stringify(identity));
     let resolve;
     const fetcher = vi.fn(
       () =>

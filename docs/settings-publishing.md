@@ -36,10 +36,12 @@ installation and registered account. Subsequent local edits survive retries and 
 or settings. Environment changes update the legacy CDN view too. Oracle and Kafka addresses can be published; usernames, passwords, tokens,
 and Keychain entries remain local. A newly published Oracle connection still needs credentials on that device.
 
-An existing verified session enrolls a device for settings synchronization. The server issues a random, settings-only bearer credential,
-stores only its SHA-256 hash in D1, and binds it to the registered account and device. It expires after 90 days and stops working if the device
-is reassigned. It cannot authorize publishing, analytics, or general KV access. If the session/credential has expired, Settings offers **Verify
-account**; no unattended OTP prompt appears. Client-supplied target fields and device IDs never authorize a read or acknowledgement.
+Registered devices enroll automatically using the locally saved email and device ID matched against the server's registration record.
+No recent session, OTP, or Settings visit is required. The server issues a settings-only bearer credential, stores its SHA-256 hash in D1,
+and binds it to that account and device. Clients renew it automatically after 90 days or server rejection. Existing verified sessions
+remain supported for older clients. Enrollment trusts possession of the registered email/device pair; this is not fresh proof of email
+ownership. Email alone, a department, unknown devices, and mismatched pairs cannot enroll. The settings credential cannot authorize
+publishing, analytics, or general KV access, and stops working if the device is reassigned. Publishing still requires dashboard authentication.
 
 Client application uses a rollback journal for interrupted storage writes and per-publication markers to avoid replaying changes. Failed
 acknowledgements retry without reapplying values. Settings already open offer **Refresh settings**, preserving unsaved form edits until clicked.
@@ -76,7 +78,7 @@ PLAYWRIGHT_MODULE=/Users/ddl/.cache/codex-runtimes/codex-primary-runtime/depende
   node backend-workers/scripts/verify-settings-publishing.mjs
 ```
 
-These fixtures seed verified sessions; they do not test OTP delivery. No native Keychain or packaged Tauri execution, live department data,
+These fixtures seed old registered devices without sessions or settings credentials; they do not test OTP delivery. No native Keychain or packaged Tauri execution, live department data,
 or deployed API is covered by the local web verification.
 
 In this worktree, installed dependencies were temporarily linked from the main checkout; nothing was installed. The ordinary build precheck
@@ -94,3 +96,22 @@ Vite build and the Worker suite were checked independently. Final focused result
 - Production Vite build, release-content check, Prettier, and `git diff --check` passed.
 - Browser evidence: `.wrangler/settings-publishing-verification/2026-10-23T06-54-26-902Z/result.json`, screenshots, and `commands.log`.
 - Temporary verification servers stopped. No deployment, remote migration, or native Desktop execution performed.
+
+## Automatic enrollment failure cases — 2026-10-26
+
+Before implementation, verify: old registered devices without sessions or settings credentials can enroll; email-only, unknown-device,
+and mismatched email/device enrollment fails; expired settings credentials renew automatically; valid legacy sessions still enroll;
+reassigned devices cannot use old credentials; failed enrollment retries without OTP; account/device changes discard in-flight results;
+email and department audiences still isolate delivery; no Settings visit is needed for enrollment or application.
+
+## Verified result — 2026-10-26
+
+- Focused settings/API regression suite: 16 files, 93 tests passed.
+- Browser-to-local-Worker verification: 11 checks passed, no browser errors. Both devices started on Home with only their old registration,
+  no session, and no settings credential. Department/email delivery used the foreground event; the recipient never opened Settings.
+  Reconnection renewed an expired credential and delivered the pending publication automatically.
+- Production Vite build passed; responsive screenshots inspected; `git diff --check` passed.
+- Broader Worker run: 87 tests passed; two existing Node SQLite suites failed to load in workerd. Both passed when run in the root Node suite.
+- Repeat the browser verification with the command above. Machine-readable results, screenshots, fixture SQL, and command logs:
+  `.wrangler/settings-publishing-verification/2026-10-26T02-57-36-392Z/`.
+- No production deployment or native Desktop verification performed. Updated frontend and Worker are both required; no new migration is needed.

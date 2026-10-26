@@ -11,7 +11,7 @@ describe("settings publishing API", () => {
   const payload = {
     title: "Retail setup",
     target: { type: "departments", values: ["RETAIL"] },
-    settings: { "config.redis.port": 6380, "config.jira.projectKey": "RETAIL" },
+    settings: { "config.redis.port": 6380, "config.jira.projectKeys": ["RETAIL"] },
   };
   async function call(path, body, token = admin) {
     return worker.fetch(
@@ -101,6 +101,23 @@ describe("settings publishing API", () => {
     expect((await call("admin/publications", payload, "session")).status).toBe(401);
     expect((await call("enroll", {}, "d-one")).status).toBe(401);
     expect((await call("sync", undefined, "d-one")).status).toBe(401);
+  });
+  it("automatically enrolls an old registered device without a session", async () => {
+    await publish();
+    env.identity = null;
+    const response = await call("enroll", { email: " ONE@bankmandiri.co.id ", deviceId: "d-one" }, null);
+    expect(response.status).toBe(200);
+    const identity = await response.json();
+    expect(identity.userId).toBe("one");
+    expect((await (await call("sync", undefined, identity.credential)).json()).publications).toHaveLength(1);
+  });
+  it.each([
+    { email: "one@bankmandiri.co.id" },
+    { email: "one@bankmandiri.co.id", deviceId: "unknown" },
+    { email: "two@bankmandiri.co.id", deviceId: "d-one" },
+    { deviceId: "d-one" },
+  ])("rejects unregistered email/device pairs %j", async (body) => {
+    expect((await call("enroll", body, null)).status).toBe(401);
   });
   it("denies publishing when the dashboard password has not been configured", async () => {
     delete env.ANALYTICS_DASHBOARD_PASSWORD;

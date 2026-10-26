@@ -120,8 +120,7 @@ class SettingsPage {
     root.querySelector(".settings-load-defaults")?.addEventListener("click", () => this.openOtpModal());
     const showSyncStatus = () => {
       const status = root.querySelector(".settings-sync-status");
-      status.textContent = ["auth", "error"].includes(publishedSettingsSync.status) ? publishedSettingsSync.message : "";
-      root.querySelector(".settings-sync-verify").hidden = publishedSettingsSync.status !== "auth";
+      status.textContent = publishedSettingsSync.status === "error" ? publishedSettingsSync.message : "";
     };
     const showPublished = () => {
       root.querySelector(".settings-sync-status").textContent = "Published settings applied.";
@@ -138,14 +137,6 @@ class SettingsPage {
       await this.reloadConfig();
       button.hidden = true;
       showSyncStatus();
-    });
-    root.querySelector(".settings-sync-verify").addEventListener("click", async () => {
-      try {
-        await openOtpOverlay({ email: localStorage.getItem("user.email") || "", preferCachedToken: false });
-        await publishedSettingsSync.check();
-      } catch (error) {
-        if (error.message !== "Closed") this.eventBus?.emit?.("notification:error", { message: "Could not verify account." });
-      }
     });
     showSyncStatus();
 

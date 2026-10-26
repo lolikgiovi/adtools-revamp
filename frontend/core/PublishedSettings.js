@@ -1,7 +1,7 @@
 import { validateSettings } from "../../shared/published-settings.js";
 import { writeEnvironments } from "./Environments.js";
 import { saveKafkaBrokerProfiles } from "../tools/kafka/service.js";
-import { SessionTokenStore } from "./SessionTokenStore.js";
+import { UsageTracker } from "./UsageTracker.js";
 
 export const SETTINGS_API_BASE = String(
   import.meta.env.VITE_WORKER_BASE || (import.meta.env.DEV ? "http://localhost:8787" : "https://adtools.lolik.workers.dev"),
@@ -107,7 +107,7 @@ export class PublishedSettingsSync {
         method: body === undefined ? "GET" : "POST",
         cache: "no-store",
         signal: this.controller.signal,
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), "Content-Type": "application/json" },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
       const data = await response.json();
@@ -122,14 +122,18 @@ export class PublishedSettingsSync {
 
   check() {
     if (this.pending) return this.pending;
-    const run = () => this.synchronize();
+    const run = async () => {
+      const generation = this.generation;
+      try {
+        await this.synchronize();
+      } catch (error) {
+        if (error.status !== 401) throw error;
+        if (generation !== this.generation) return;
+        await this.synchronize();
+      }
+    };
     this.pending = (globalThis.navigator?.locks ? navigator.locks.request("adtools-settings-sync", run) : run())
-      .catch((error) =>
-        this.setStatus(
-          error.status === 401 ? "auth" : "error",
-          error.status === 401 ? "Verify your account to receive published settings." : "Could not sync settings. Retrying automatically.",
-        ),
-      )
+      .catch(() => this.setStatus("error", "Could not sync settings. Retrying automatically."))
       .finally(() => {
         this.pending = null;
       });
@@ -140,15 +144,14 @@ export class PublishedSettingsSync {
     const generation = this.generation;
     const email = (localStorage.getItem("user.email") || "").trim().toLowerCase();
     if (!email || email === "dev@localhost") return;
-    const current = () => generation === this.generation && (localStorage.getItem("user.email") || "").trim().toLowerCase() === email;
+    const deviceId = UsageTracker.getDeviceId();
+    const current = () =>
+      generation === this.generation &&
+      (localStorage.getItem("user.email") || "").trim().toLowerCase() === email &&
+      UsageTracker.getDeviceId() === deviceId;
     let identity = read(CREDENTIAL_KEY);
-    if (!identity || identity.email.toLowerCase() !== email || identity.expiresAt < Date.now()) {
-      const sessionToken = SessionTokenStore.getToken();
-      if (!sessionToken) {
-        this.setStatus("auth", "Verify your account to receive published settings.");
-        return;
-      }
-      identity = await this.request("enroll", sessionToken, {});
+    if (!identity || identity.email.toLowerCase() !== email || identity.deviceId !== deviceId || identity.expiresAt < Date.now()) {
+      identity = await this.request("enroll", null, { email, deviceId });
       if (!current() || identity.email.toLowerCase() !== email) return;
       localStorage.setItem(CREDENTIAL_KEY, JSON.stringify(identity));
     }

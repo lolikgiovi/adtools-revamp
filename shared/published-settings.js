@@ -6,7 +6,13 @@ function collect(categories) {
   return categories.flatMap((category) => {
     if (["appearance", "updates"].includes(category.id)) return [];
     return [
-      ...(category.items || []).filter((item) => !["secret", "action"].includes(item.type) && !item.key.endsWith(".username")),
+      ...(category.items || []).filter(
+        (item) =>
+          !["secret", "action"].includes(item.type) &&
+          item.storageKey !== "theme" &&
+          !item.storageKey.startsWith("update.") &&
+          !item.key.endsWith(".username"),
+      ),
       ...collect(category.categories || []),
     ];
   });
