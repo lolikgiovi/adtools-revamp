@@ -447,24 +447,6 @@
               "validation": {
                 "pattern": "^(https?://[^\\s]+)?$"
               }
-            },
-            {
-              "key": "config.velocityValidator.format",
-              "storageKey": "config.velocityValidator.format",
-              "label": "Request format",
-              "type": "enum",
-              "default": "json",
-              "options": [
-                {
-                  "value": "json",
-                  "label": "JSON"
-                },
-                {
-                  "value": "form",
-                  "label": "Form URL encoded"
-                }
-              ],
-              "description": "JSON sends an object with context and template. Form sends context as JSON text and template as raw Velocity in separate encoded fields."
             }
           ]
         }

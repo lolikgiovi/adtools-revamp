@@ -4,11 +4,10 @@ import { isTauri } from "../../core/Runtime.js";
 export function readVelocityValidatorSettings() {
   return {
     url: (localStorage.getItem("config.velocityValidator.url") || "").trim(),
-    format: localStorage.getItem("config.velocityValidator.format") === "form" ? "form" : "json",
   };
 }
 
-export async function requestVelocityValidation({ url, template, context, format = "json", signal }) {
+export async function requestVelocityValidation({ url, template, context, signal }) {
   if (!url?.trim()) throw new Error("Set the endpoint in Settings → Velocity API Validator first.");
   let endpoint;
   try {
@@ -19,11 +18,8 @@ export async function requestVelocityValidation({ url, template, context, format
   if (!["http:", "https:"].includes(endpoint.protocol) || endpoint.username || endpoint.password) {
     throw new Error("Velocity API Validator URL must use HTTP or HTTPS without embedded credentials.");
   }
-  const contentType = format === "form" ? "application/x-www-form-urlencoded" : "application/json";
-  const body =
-    format === "form"
-      ? new URLSearchParams({ context: JSON.stringify(context), template }).toString()
-      : JSON.stringify({ context, template });
+  const contentType = "application/json";
+  const body = JSON.stringify({ context, template });
   const controller = new AbortController();
   const abort = () => controller.abort();
   signal?.addEventListener("abort", abort, { once: true });

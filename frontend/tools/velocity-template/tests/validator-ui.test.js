@@ -8,7 +8,7 @@ vi.mock("monaco-editor/esm/vs/language/json/monaco.contribution.js", () => ({}))
 vi.mock("../../../core/MonacoOracle.js", () => ({ createOracleEditor: vi.fn() }));
 vi.mock("../validator.js", () => ({
   requestVelocityValidation: vi.fn(),
-  readVelocityValidatorSettings: () => ({ url: "http://localhost/velocity", format: "json" }),
+  readVelocityValidatorSettings: () => ({ url: "http://localhost/velocity" }),
 }));
 import { requestVelocityValidation } from "../validator.js";
 import { VelocityTemplateTool } from "../main.js";

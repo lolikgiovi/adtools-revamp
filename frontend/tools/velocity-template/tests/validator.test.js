@@ -6,7 +6,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 import { isTauri } from "../../../core/Runtime.js";
 import { invoke } from "@tauri-apps/api/core";
 
-// Failure cases: incorrect JSON/form encoding, lost whitespace or special characters,
+// Failure cases: incorrect JSON encoding or legacy form preferences overriding JSON, lost whitespace or special characters,
 // missing/invalid settings, network failure, timeout, HTTP errors hidden as success,
 // response bodies discarded, or desktop requests ignoring the user's hosts mapping.
 describe("Velocity API validator transport", () => {
@@ -26,7 +26,7 @@ describe("Velocity API validator transport", () => {
     expect(readVelocityValidatorSettings().url).toBe("");
     await expect(requestVelocityValidation({ url: "", template, context })).rejects.toThrow(/Settings/);
     expect(fetch).not.toHaveBeenCalled();
-    const result = await requestVelocityValidation({ url, template, context, format: "json" });
+    const result = await requestVelocityValidation({ url, template, context });
     expect(fetch).toHaveBeenCalledWith(
       url,
       expect.objectContaining({
@@ -40,18 +40,19 @@ describe("Velocity API validator transport", () => {
     expect(result).toEqual({ status: 200, body: '{"value":"123"}' });
   });
 
-  it("reads the saved endpoint and request format", () => {
+  it("reads the saved endpoint and ignores the legacy request format", () => {
     localStorage.setItem("config.velocityValidator.url", url);
     localStorage.setItem("config.velocityValidator.format", "form");
-    expect(readVelocityValidatorSettings()).toEqual({ url, format: "form" });
+    expect(readVelocityValidatorSettings()).toEqual({ url });
   });
 
-  it("encodes context and template as separate form fields", async () => {
-    await requestVelocityValidation({ url, template, context, format: "form" });
+  it("always sends JSON even when a legacy caller requests form encoding", async () => {
+    localStorage.setItem("config.velocityValidator.url", url);
+    localStorage.setItem("config.velocityValidator.format", "form");
+    await requestVelocityValidation({ ...readVelocityValidatorSettings(), template, context, format: "form" });
     const options = fetch.mock.calls[0][1];
-    expect(options.headers["Content-Type"]).toBe("application/x-www-form-urlencoded");
-    expect(new URLSearchParams(options.body).get("context")).toBe(JSON.stringify(context));
-    expect(new URLSearchParams(options.body).get("template")).toBe(template);
+    expect(options.headers["Content-Type"]).toBe("application/json");
+    expect(JSON.parse(options.body)).toEqual({ context, template });
   });
 
   it.each([400, 422, 503])("preserves HTTP %i and the API error body without claiming template validity", async (status) => {
