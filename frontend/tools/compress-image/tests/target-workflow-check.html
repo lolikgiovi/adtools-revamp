@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Compression target workflow verification</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body style="padding: 16px">
+    <pre id="result">Running…</pre>
+    <div id="tool"></div>
+    <script type="module">
+      import { CompressImage } from "../main.js";
+      import { UsageTracker } from "../../../core/UsageTracker.js";
+      UsageTracker.trackToolUse = () => {};
+      const checks = [];
+      const check = (value, label) => {
+        if (!value) throw new Error(label);
+        checks.push(label);
+      };
+      const tool = new CompressImage();
+      // Exercise desktop parallelism even in a narrow browser panel when requested.
+      if (new URLSearchParams(location.search).get("workers") === "3") tool.pool.size = 3;
+      tool.mount(document.querySelector("#tool"));
+      window.tool = tool;
+      const inputTarget = async (value) => {
+        const input = tool.$("target-kb");
+        input.focus();
+        input.value = value;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        check(tool.$("zip").disabled && tool.$("quick-query").disabled, "Exports blocked while checking target");
+        check(tool.items[0].row.querySelector('[data-variant="lossy"]').dataset.state === "loading", "Result cells show loading");
+        await tool.targetCheck;
+        check(document.activeElement === input, "Target checks before blur or Enter");
+      };
+      try {
+        await tool.ready;
+        tool.clear();
+        tool.$("target-kb").value = "";
+        tool.updateSettings();
+        const canvas = document.createElement("canvas");
+        canvas.width = 240;
+        canvas.height = 160;
+        const context = canvas.getContext("2d");
+        const pixels = context.createImageData(canvas.width, canvas.height);
+        let seed = 42;
+        for (let i = 0; i < pixels.data.length; i++) {
+          seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+          pixels.data[i] = i % 4 === 3 ? 255 : seed >>> 24;
+        }
+        context.putImageData(pixels, 0, 0);
+        tool.addFiles([
+          new File([await new Promise((resolve) => canvas.toBlob(resolve, "image/png"))], "noise.png", { type: "image/png" }),
+        ]);
+        await tool.processQueue();
+        check(tool.$("quick-query").disabled, "Quick Query waits for the lossy pass");
+        await tool.offers;
+        await tool.targetCheck;
+        check(!tool.$("quick-query").disabled, "Quick Query enabled after both results settle");
+        const item = tool.items[0];
+        await inputTarget(String(Math.ceil(item.blob.size / 1000) + 1));
+        check(item.result.targetMet && !tool.$("zip").disabled, "Existing bytes fit the larger target");
+        await inputTarget("1");
+        check(!item.result.targetMet && tool.$("quick-query").disabled && tool.$("zip").disabled, "Oversized result blocks exports");
+        check(!item.row.querySelector(".ci-fit-target").hidden, "Adjustment offered directly");
+        check(tool.$("compress").hidden, "No recompression required for target-only edits");
+        const started = performance.now();
+        await tool.fitToTarget(item);
+        check(!item.error && item.blob.size < 1000 && item.result.targetMet, "Real worker encoding fits strict target");
+        check(item.result.width / item.result.height > 1.4, "Adjustment preserves aspect ratio");
+        check(!tool.$("zip").disabled && !tool.$("quick-query").disabled, "Exports enabled after fitting");
+        const elapsed = Math.round(performance.now() - started);
+        const pending = tool.exportOptions("noise.png");
+        const dialog = document.querySelector(".image-workflow-dialog");
+        check(
+          !dialog.querySelector("select") && dialog.querySelectorAll('input[name="format"]').length === 2,
+          "Download uses two format segments",
+        );
+        dialog.querySelector('input[value="base64"]').click();
+        dialog.querySelector('button[value="download"]').click();
+        check((await pending).format === "base64", "Segment selection submits Base64 format");
+        check(document.documentElement.scrollWidth === innerWidth, "No horizontal page overflow");
+        document.querySelector("#result").textContent =
+          `PASS: ${checks.length} checks\nFit: ${elapsed} ms; worker peak: ${tool.pool.stats.maxConcurrent}\n${checks.join("\n")}`;
+        if (new URLSearchParams(location.search).has("preview")) void tool.exportOptions("noise.png");
+      } catch (error) {
+        document.querySelector("#result").textContent = `FAIL: ${error.message}\n${checks.join("\n")}`;
+        console.error(error);
+      }
+    </script>
+  </body>
+</html>

@@ -91,7 +91,8 @@
           );
         }
         set("target-kb", "");
-        check(tool.isStale(), "Target changes invalidate results");
+        await tool.targetCheck;
+        check(!tool.isStale(), "Target changes recheck existing results without recompression");
         check(!tool.readSettings().targetBytes, "Blank target restores normal compression");
         tool.clear();
         for (let y = 0; y < 240; y++) {

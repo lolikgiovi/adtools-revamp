@@ -18,16 +18,19 @@ export function imageWorkflowDialog({ title, description, fields = [], actions, 
     form.append(text);
   }
   for (const field of fields) {
-    if (field.type === "radio-list") {
+    if (field.type === "radio-list" || field.type === "segmented") {
       const list = document.createElement("fieldset");
-      list.className = "image-workflow-options";
+      const segmented = field.type === "segmented";
+      list.className = segmented ? "image-workflow-segmented" : "image-workflow-options";
       const legend = document.createElement("legend");
-      legend.className = "sr-only";
+      legend.className = segmented ? "" : "sr-only";
       legend.textContent = field.label;
       list.append(legend);
       for (const option of field.options) {
         const row = document.createElement("label");
-        row.className = `image-workflow-option${option.separate ? " image-workflow-option-new" : ""}`;
+        row.className = segmented
+          ? "image-workflow-segment"
+          : `image-workflow-option${option.separate ? " image-workflow-option-new" : ""}`;
         const radio = document.createElement("input");
         radio.type = "radio";
         radio.name = field.name;

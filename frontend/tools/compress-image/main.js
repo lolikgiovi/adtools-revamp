@@ -134,13 +134,13 @@ export class CompressImage extends BaseTool {
     this.$("compress").addEventListener("click", () => this.processQueue());
     this.container.querySelectorAll(".ci-settings input, .ci-settings select").forEach((input) => {
       input.addEventListener("change", () => this.updateSettings());
+      if (input.matches("input")) input.addEventListener("input", () => this.updateSettings());
     });
     this.$("preset").addEventListener("change", () => {
       const preset = PRESETS[this.$("preset").value];
       this.$("quality").value = preset.jpeg.quality;
       this.updateSettings();
     });
-    this.$("quality").addEventListener("input", () => this.updateSettings());
     this.container.querySelectorAll(".ci-choice").forEach((button) => {
       button.addEventListener("click", () => this.chooseSize(button.dataset.size));
     });
@@ -212,8 +212,7 @@ export class CompressImage extends BaseTool {
     } finally {
       if (!lifecycle.signal.aborted) {
         this.restoring = false;
-        this.updateAdvice();
-        this.updateSummary();
+        this.updateSettings();
       }
     }
   }
@@ -298,7 +297,7 @@ export class CompressImage extends BaseTool {
     await this.flushWorkspace();
   }
   addToQuickQuery() {
-    if (this.running || this.zipping || this.isStale()) return;
+    if (!this.canExport()) return;
     const items = this.items.filter((item) => item.result && item.status === "Ready");
     if (!items.length) return;
     const names = new Set();
@@ -323,11 +322,69 @@ export class CompressImage extends BaseTool {
       height: Number(this.$("height").value),
     };
   }
-  // Results are stale when the settings differ from the ones they were made with.
+  // A target only constrains bytes already available; other settings require encoding.
+  encodingSettingsKey(settings) {
+    const { targetBytes, ...encoding } = settings;
+    return JSON.stringify(encoding);
+  }
   isStale() {
-    return this.items.some((item) => item.result) && this.appliedSettings !== JSON.stringify(this.readSettings());
+    const key = this.encodingSettingsKey(this.readSettings());
+    return this.items.some((item) => item.result && this.encodingSettingsKey(item.settings || {}) !== key);
+  }
+  variantsPending(item) {
+    return (
+      !!item.variantPending ||
+      ((item.type || item.file.type) === "image/png" &&
+        (!item.variants?.lossless || (!item.variants?.lossy && !item.lossyUnavailable)) &&
+        !item.variantError)
+    );
+  }
+  canExport() {
+    const settings = this.readSettings();
+    return (
+      !!this.items.length &&
+      !this.running &&
+      !this.zipping &&
+      !this.restoring &&
+      !this.targetChecking &&
+      !this.isStale() &&
+      this.$("target-kb").validity.valid &&
+      this.items.every(
+        (item) =>
+          item.status === "Ready" &&
+          item.result &&
+          !this.variantsPending(item) &&
+          !item.variantError &&
+          (!settings.targetBytes || item.blob.size < settings.targetBytes),
+      )
+    );
+  }
+  checkTarget() {
+    const settings = this.readSettings();
+    const token = (this.targetCheckToken = {});
+    this.targetChecking = true;
+    this.items.forEach((item) => this.updateRow(item));
+    // Yield once so both result cells display their checking state immediately.
+    this.targetCheck = new Promise((resolve) => setTimeout(resolve, 0)).then(() => {
+      if (this.targetCheckToken !== token || !this.container) return;
+      if (!this.isStale() && this.$("target-kb").validity.valid) {
+        for (const item of this.items.filter((entry) => entry.result)) {
+          for (const variant of [item, ...Object.values(item.variants || {})]) {
+            variant.result.targetBytes = settings.targetBytes;
+            variant.result.targetMet = settings.targetBytes ? variant.blob.size < settings.targetBytes : undefined;
+          }
+          item.settings = { ...item.settings, targetBytes: settings.targetBytes };
+        }
+        this.appliedSettings = JSON.stringify(settings);
+      }
+      this.targetChecking = false;
+      this.items.forEach((item) => this.updateRow(item));
+      this.updateSummary();
+      this.persistWorkspace();
+    });
   }
   updateSettings() {
+    if (!this.running && this.items.some((item) => item.result)) this.checkTarget();
     this.persistWorkspace();
     this.updateAdvice();
     this.updateSummary();
@@ -412,7 +469,7 @@ export class CompressImage extends BaseTool {
     row.innerHTML = `<th scope="row"><button type="button" class="ci-select" aria-pressed="false"><span class="ci-filename"></span></button>
       <div class="ci-file-outcome"><span class="ci-file-state" role="status" aria-live="polite"></span>
       <button type="button" class="ci-kept-info" aria-label="Why the original was kept" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 7v4"/><circle cx="8" cy="4.8" r=".6" fill="currentColor" stroke="none"/></svg></button>
-      <span class="ci-kept-tooltip" role="tooltip" popover="manual"></span></div><button type="button" class="btn btn-secondary btn-sm ci-fit-target" hidden>Fit to target</button><span class="ci-file-warning" hidden>Resize suggestion</span></th>
+      <span class="ci-kept-tooltip" role="tooltip" popover="manual"></span></div><button type="button" class="btn btn-secondary btn-sm ci-fit-target" hidden>Adjust image size to target</button><span class="ci-file-warning" hidden>Resize suggestion</span></th>
       <td class="ci-dimensions">—</td><td class="ci-before"></td>
       <td class="ci-after"><button type="button" class="ci-variant" data-variant="lossless" aria-pressed="false" disabled>—</button></td>
       <td class="ci-after"><button type="button" class="ci-variant" data-variant="lossy" aria-pressed="false" disabled>—</button></td>
@@ -577,6 +634,7 @@ export class CompressImage extends BaseTool {
             if (generation === this.generation && this.offerBatch === batch) {
               delete item.variantPending;
               this.updateRow(item);
+              this.updateSummary();
             }
           }
         }
@@ -587,7 +645,7 @@ export class CompressImage extends BaseTool {
         }
       }),
     );
-    if (generation === this.generation) this.persistWorkspace();
+    if (generation === this.generation) this.updateSettings();
   }
   cancelOffers() {
     this.offerBatch?.abort();
@@ -603,11 +661,13 @@ export class CompressImage extends BaseTool {
   }
   async fitToTarget(item) {
     if (this.running || this.zipping || !item.result) return;
+    await this.targetCheck;
+    if (!this.$("target-kb").validity.valid) return;
     if (this.isStale() || JSON.stringify(item.settings) !== JSON.stringify(this.readSettings())) {
       return this.error("Compress again to apply the current settings before fitting to the target.");
     }
     const settings = item.settings;
-    if (!settings?.targetBytes || item.result.targetMet || item.variants?.lossy?.result.targetMet) return;
+    if (!settings?.targetBytes || item.blob.size < settings.targetBytes) return;
     this.cancelOffers();
     await this.offers;
     const generation = this.generation;
@@ -642,6 +702,7 @@ export class CompressImage extends BaseTool {
       const best = await findLargestFit({
         ...bounds,
         targetBytes: settings.targetBytes,
+        concurrency: this.pool.size,
         encode: async (width, height) => {
           const outcome = await encode(width, height);
           if (!outcome) throw new Error("Cancelled");
@@ -678,6 +739,7 @@ export class CompressImage extends BaseTool {
       });
       item.error = null;
     } catch (error) {
+      batch.abort();
       if (generation === this.generation) {
         item.error = error.message;
         item.result = original;
@@ -965,7 +1027,9 @@ export class CompressImage extends BaseTool {
       const queued = item.status === "Queued";
       const loading =
         !unavailable &&
-        (item.variantPending === name || (processing && (item.fitting || type !== "image/png" || name === item.primaryPending)));
+        (this.targetChecking ||
+          item.variantPending === name ||
+          (processing && (item.fitting || type !== "image/png" || name === item.primaryPending)));
       const waiting =
         !unavailable &&
         !loading &&
@@ -1009,7 +1073,13 @@ export class CompressImage extends BaseTool {
     });
     const fit = row.querySelector(".ci-fit-target");
     fit.hidden =
-      !result?.targetBytes || !!result.targetMet || !!variants.lossy?.result.targetMet || !!item.variantPending || item.status !== "Ready";
+      !result?.targetBytes ||
+      !!result.targetMet ||
+      this.targetChecking ||
+      this.isStale() ||
+      !this.$("target-kb").validity.valid ||
+      this.variantsPending(item) ||
+      item.status !== "Ready";
     fit.disabled = this.running || this.zipping;
     fit.title = "Reduce dimensions to the largest image that fits the target, preserving aspect ratio and your quality limit.";
   }
@@ -1179,13 +1249,13 @@ export class CompressImage extends BaseTool {
           : `Compress ${this.items.length} images`;
     const query = this.$("quick-query");
     query.hidden = !ready.length;
-    query.disabled = !ready.length || this.running || this.zipping || stale || this.restoring;
+    query.disabled = !this.canExport();
     const zip = this.$("zip");
     zip.hidden = !ready.length;
     zip.textContent = this.zipping ? "Creating ZIP…" : "Download ZIP";
     zip.classList.toggle("btn-primary", !pending);
     zip.classList.toggle("btn-secondary", pending);
-    zip.disabled = !ready.length || this.running || this.zipping || this.restoring;
+    zip.disabled = !this.canExport();
     if (this.$("result")) this.$("result").disabled = this.running || this.zipping;
     this.container.querySelectorAll(".ci-settings input, .ci-settings select, .ci-choice").forEach((input) => {
       input.disabled = this.running || this.zipping || this.restoring;
@@ -1194,7 +1264,14 @@ export class CompressImage extends BaseTool {
     this.$("png-quality-preset").disabled = this.running || this.zipping || this.restoring;
     this.$("choose").disabled = this.$("add").disabled = this.$("clear").disabled = this.running || this.zipping || this.restoring;
     this.items.forEach((item) => {
-      item.row.querySelector(".ci-download").disabled = !item.result || this.running || this.zipping;
+      item.row.querySelector(".ci-download").disabled =
+        !item.result ||
+        this.running ||
+        this.zipping ||
+        this.targetChecking ||
+        stale ||
+        this.variantsPending(item) ||
+        (!!this.readSettings().targetBytes && !item.result.targetMet);
       item.row.querySelectorAll("[data-variant]").forEach((button) => {
         button.disabled = button.dataset.state !== "ready" || this.running || this.zipping;
       });
@@ -1213,6 +1290,7 @@ export class CompressImage extends BaseTool {
         { name: "filename", label: "File name", value: name },
         {
           name: "format",
+          type: "segmented",
           label: zip ? "Files in ZIP" : "Format",
           options: [
             { value: "image", label: "Image" },
@@ -1225,7 +1303,7 @@ export class CompressImage extends BaseTool {
     });
   }
   async download(blob, name) {
-    if (this.running || this.zipping) return;
+    if (this.running || this.zipping || this.targetChecking || this.isStale()) return;
     const options = await this.exportOptions(name);
     if (!options) return;
     try {
@@ -1263,9 +1341,9 @@ export class CompressImage extends BaseTool {
     this.showSuccess(`Download started: ${name}`);
   }
   async downloadZip() {
-    if (this.running || this.zipping || !this.items.some((item) => item.result)) return;
+    if (!this.canExport()) return;
     const options = await this.exportOptions("compressed-images.zip", true);
-    if (!options || this.running || this.zipping) return;
+    if (!options || !this.canExport()) return;
     const generation = this.generation;
     this.zipping = true;
     this.updateSummary();
@@ -1292,6 +1370,8 @@ export class CompressImage extends BaseTool {
     this.previewCleanup?.();
     this.previewCleanup = null;
     this.generation++;
+    this.targetCheckToken = null;
+    this.targetChecking = false;
     this.batch?.abort();
     this.offerBatch?.abort();
     this.pool.terminate();

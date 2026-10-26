@@ -1,3 +1,4 @@
+import { buildDailyTrendsQuery, buildDeviceHealthQuery, deviceVersionStatus } from "../utils/dashboardAnalysis.js";
 import { scopeDashboardDevices } from "../utils/dashboardDevices.js";
 import { buildCapabilityAdoptionQuery, buildImportSourcesQuery } from "../utils/capabilityAdoption.js";
 /**
@@ -34,6 +35,8 @@ const RECENT_ACTIVITY_SOURCE_SQL = `SELECT user_email, device_id, tool_id, actio
 
 // Default tab configurations (fallback when KV is empty)
 const DEFAULT_TABS = [
+  { id: "trends", name: "Daily Trends", query: buildDailyTrendsQuery("30d") },
+  { id: "device-health", name: "Device Health", query: buildDeviceHealthQuery() },
   {
     id: "overview",
     name: "Overview",
@@ -1556,6 +1559,40 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
           ? buildImportSourcesQuery(rangeConfig)
           : buildCapabilityAdoptionQuery(rangeConfig, tab.id === "capability-people");
       return executeQuery(env, `tab:${tab.id}:${rangeConfig.id}:v1`, query);
+    }
+
+    if (tab.id === "trends") {
+      await ensureToolUsageSchema(env);
+      return executeQuery(env, `tab:trends:${getDashboardRangeConfig(range).id}:v1`, buildDailyTrendsQuery(range));
+    }
+
+    if (tab.id === "device-health") {
+      const body = await coalesceDashboardQuery(env, "tab:device-health:v1", async () => {
+        await ensureDeviceAppVersionSchema(env);
+        await ensureToolUsageSchema(env);
+        const [result, manifest] = await Promise.all([
+          env.DB.prepare(buildDeviceHealthQuery()).all(),
+          env.UPDATES?.get("update/stable.json")
+            .then((object) => object?.json())
+            .catch(() => null),
+        ]);
+        const stable = manifest?.version || null;
+        const data = (result.results || []).map((row) => ({
+          ...row,
+          stable_version: stable,
+          version_status: deviceVersionStatus(row.app_version, stable),
+          activity_status:
+            row.days_since_seen === null
+              ? "Unknown"
+              : row.days_since_seen >= 30
+                ? "Inactive 30+ days"
+                : row.days_since_seen >= 7
+                  ? "Quiet 7–29 days"
+                  : "Active",
+        }));
+        return JSON.stringify({ ok: true, data });
+      });
+      return new Response(body, { headers: { "Content-Type": "application/json", ...corsHeaders() } });
     }
 
     if (tab.id === "overview") {

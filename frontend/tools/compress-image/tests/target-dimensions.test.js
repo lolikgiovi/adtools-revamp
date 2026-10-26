@@ -36,3 +36,24 @@ describe("largest dimensions for a target", () => {
     ).rejects.toThrow("codec");
   });
 });
+
+// Failure cases: probes accidentally serialized, skipping the largest fit, and
+// excessive speculative work when only one worker is available.
+it("searches bounded parallel probes while preserving the largest fit", async () => {
+  let active = 0;
+  let peak = 0;
+  const best = await findLargestFit({
+    width: 3000,
+    height: 1500,
+    targetBytes: 2000000,
+    concurrency: 3,
+    encode: async (width, height) => {
+      peak = Math.max(peak, ++active);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      active--;
+      return { size: width * height };
+    },
+  });
+  expect(peak).toBe(3);
+  expect(best.width).toBe(1999);
+});

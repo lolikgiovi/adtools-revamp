@@ -111,3 +111,47 @@ body .image-workflow-dialog {
     grid-column: 2;
   }
 }
+
+.image-workflow-segmented {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+}
+.image-workflow-segmented legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-size: 14px;
+}
+.image-workflow-dialog .image-workflow-segment {
+  position: relative;
+  flex: 1;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  padding: 10px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  text-align: center;
+}
+.image-workflow-dialog .image-workflow-segment input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  opacity: 0;
+}
+.image-workflow-segment:hover {
+  background: hsl(var(--muted) / 0.5);
+}
+.image-workflow-segment:has(input:checked) {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+.image-workflow-segment:has(input:focus-visible) {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}

@@ -3,6 +3,7 @@
  * Password-protected internal analytics viewer
  * Tabs are fetched dynamically from the API
  */
+import { renderTrends, renderDeviceHealth } from "./analysis.js";
 import { AnalyticsDashboardTemplate } from "./template.js";
 import "./styles.css";
 
@@ -12,15 +13,40 @@ const PRIMARY_VIEWS = [
   { id: "overview", label: "Summary" },
   { id: "opportunities", label: "Tools" },
   { id: "who", label: "People" },
+  { id: "trends", label: "Trends" },
+  { id: "device-health", label: "Devices" },
   { id: "daily", label: "Activity" },
 ];
-const RANGED_REPORTS = new Set(["overview", "opportunities", "who", "daily", "capability-adoption", "capability-people", "import-sources"]);
+const RANGED_REPORTS = new Set([
+  "trends",
+  "overview",
+  "opportunities",
+  "who",
+  "daily",
+  "capability-adoption",
+  "capability-people",
+  "import-sources",
+]);
 const REPORT_GROUPS = [
   [
     "Usage & Adoption",
-    ["overview", "opportunities", "who", "capability-adoption", "capability-people", "active-users", "tools", "tool-adoption", "daily"],
+    [
+      "overview",
+      "trends",
+      "opportunities",
+      "who",
+      "capability-adoption",
+      "capability-people",
+      "active-users",
+      "tools",
+      "tool-adoption",
+      "daily",
+    ],
   ],
-  ["Reliability & Diagnostics", ["friction", "improvement-notes", "errors", "error-summary", "versions", "devices", "events"]],
+  [
+    "Reliability & Diagnostics",
+    ["friction", "improvement-notes", "errors", "error-summary", "device-health", "versions", "devices", "events"],
+  ],
   ["Quick Query", ["quick-query", "import-sources", "qq-table-usage", "quick-query-errors", "qq-insights", "qq-splits", "qq-outcomes"]],
   ["Compare Config", ["compare-config", "cc-table-pairs"]],
   ["Run Query", ["run-query", "run-query-summary"]],
@@ -333,16 +359,18 @@ class AnalyticsDashboardPage {
     const actions = this.container.querySelector(".dashboard-actions");
     if (actions) actions.hidden = library;
     const search = this.container.querySelector(".dashboard-search");
-    if (search) search.hidden = this.currentTab === "overview" || Boolean(this.selectedPerson);
+    if (search) search.hidden = ["overview", "trends"].includes(this.currentTab) || Boolean(this.selectedPerson);
     const input = this.container.querySelector("#dashboard-search");
     const label =
       this.currentTab === "who"
         ? "Search people"
-        : this.currentTab === "opportunities"
-          ? "Search tools"
-          : this.currentTab === "daily"
-            ? "Search activity"
-            : "Search this report";
+        : this.currentTab === "device-health"
+          ? "Search people, devices or versions"
+          : this.currentTab === "opportunities"
+            ? "Search tools"
+            : this.currentTab === "daily"
+              ? "Search activity"
+              : "Search this report";
     if (input) {
       input.setAttribute("aria-label", label);
       input.placeholder = `${label}…`;
@@ -600,6 +628,8 @@ class AnalyticsDashboardPage {
   renderTable(container, data, { skipFilter = false } = {}) {
     if (!container) return;
     this.lastRenderedData = Array.isArray(data) ? data : [];
+    if (this.currentTab === "trends") return renderTrends(this, container, this.lastRenderedData);
+    if (this.currentTab === "device-health") return renderDeviceHealth(this, container, this.lastRenderedData);
     data = skipFilter || this.isPaginatedTab(this.currentTab) ? this.lastRenderedData : this.filterRows(this.lastRenderedData);
 
     if (!data.length) {

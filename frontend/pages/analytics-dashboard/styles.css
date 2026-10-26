@@ -1339,3 +1339,149 @@
     gap: 8px;
   }
 }
+
+.daily-trends,
+.device-health {
+  display: grid;
+  gap: 24px;
+}
+.analysis-heading,
+.day-comparison-controls,
+.device-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.analysis-heading {
+  justify-content: space-between;
+}
+.analysis-heading h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+.analysis-heading > span,
+.device-filters > span,
+.device-age {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.8125rem;
+}
+.day-comparison-controls label,
+.device-filters label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8125rem;
+}
+.day-comparison-controls select,
+.device-filters select {
+  max-width: 100%;
+  padding: 7px 10px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font: inherit;
+}
+.trend-chart-scroll {
+  overflow-x: auto;
+}
+.trend-chart {
+  display: grid;
+  grid-template-columns: repeat(var(--day-count), minmax(28px, 1fr));
+  gap: 4px;
+  min-width: 100%;
+  height: 200px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+.trend-day {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 4px 2px;
+  border: 0;
+  color: hsl(var(--muted-foreground));
+  background: transparent;
+  font: inherit;
+  font-size: 0.625rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.trend-bar-space {
+  display: flex;
+  align-items: flex-end;
+  height: 160px;
+  width: 100%;
+  border-bottom: 2px solid hsl(var(--muted-foreground));
+}
+.trend-bar {
+  display: block;
+  width: 100%;
+  background: hsl(var(--muted-foreground));
+}
+.trend-day[aria-pressed="true"] .trend-bar,
+.trend-day:hover .trend-bar {
+  background: hsl(var(--foreground));
+}
+.trend-day.is-partial .trend-bar {
+  border: 1px dashed hsl(var(--foreground));
+  background: hsl(var(--muted));
+}
+.trend-day:focus-visible,
+.daily-trends select:focus-visible,
+.device-health select:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+.device-identifier {
+  max-width: 240px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.device-age {
+  display: block;
+  margin-top: 4px;
+}
+.daily-trends td,
+.device-health td {
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 540px) {
+  .day-comparison-controls label {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+.daily-trends,
+.device-health,
+.daily-trends > *,
+.device-health > * {
+  min-width: 0;
+}
+.daily-trends .table-wrapper,
+.device-health .table-wrapper {
+  flex: none;
+  max-width: 100%;
+}
+.daily-trends .dashboard-table tbody th,
+.device-health .dashboard-table tbody th {
+  color: hsl(var(--foreground));
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.daily-trends,
+.device-health {
+  overflow-y: auto;
+  align-content: start;
+  padding-right: 4px;
+}
+.trend-day > span:last-child {
+  white-space: nowrap;
+}
+.daily-trends .table-wrapper:focus-visible,
+.device-health .table-wrapper:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: -2px;
+}

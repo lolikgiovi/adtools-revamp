@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "checks": [
+    "1440: 30 calendar days, date comparisons, chart selection, no document overflow",
+    "1440: range changes fetch 7 calendar days through the real Worker handler",
+    "1440: device identity, exclusions, update and inactivity filters, search, empty state, no overflow",
+    "390: 30 calendar days, date comparisons, chart selection, no document overflow",
+    "390: range changes fetch 7 calendar days through the real Worker handler",
+    "390: device identity, exclusions, update and inactivity filters, search, empty state, no overflow"
+  ],
+  "errors": [],
+  "data": "Synthetic SQLite fixtures; actual authenticated Worker handlers; stable-release R2 fixture",
+  "command": "PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs node frontend/pages/dashboard/tests/trends-browser.mjs"
+}
