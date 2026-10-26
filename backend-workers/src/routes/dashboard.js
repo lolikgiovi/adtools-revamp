@@ -35,13 +35,13 @@ const RECENT_ACTIVITY_SOURCE_SQL = `SELECT user_email, device_id, tool_id, actio
 
 // Default tab configurations (fallback when KV is empty)
 const DEFAULT_TABS = [
-  { id: "trends", name: "Daily Trends", query: buildDailyTrendsQuery("30d") },
-  { id: "device-health", name: "Device Health", query: buildDeviceHealthQuery() },
   {
     id: "overview",
     name: "Overview",
     query: "SELECT 'Overview is computed by the dashboard API' AS metric, '-' AS value, 'No direct SQL query is used' AS context",
   },
+  { id: "trends", name: "Daily Trends", query: buildDailyTrendsQuery("30d") },
+  { id: "device-health", name: "Device Health", query: buildDeviceHealthQuery() },
   {
     id: "opportunities",
     name: "Opportunities",

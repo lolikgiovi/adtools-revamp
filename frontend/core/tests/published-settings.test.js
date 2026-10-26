@@ -38,18 +38,39 @@ describe("published settings client", () => {
     expect(JSON.parse(localStorage.getItem("config.baseUrls"))).toEqual([{ key: "UAT", value: "https://cdn.test" }]);
     expect(JSON.parse(localStorage.getItem("config.oracle.connections"))[0].name).toBe("UAT");
   });
-  it("rolls back on storage failure and does not mark the publication applied", () => {
-    localStorage.setItem("config.redis.port", "6379");
-    const set = localStorage.setItem.bind(localStorage);
-    const spy = vi.spyOn(localStorage, "setItem").mockImplementationOnce(() => {
-      throw new Error("Quota");
-    });
-    expect(() => applyPublication(publication, "one")).toThrow();
-    spy.mockRestore();
-    expect(localStorage.getItem("config.redis.port")).toBe("6379");
-    set("config.redis.port", "6379");
-    expect(applyPublication(publication, "one")).toBe(true);
-  });
+  // Fail before writes, after an earlier setting changed, or while recording the applied marker.
+  it.each(["settings.sync.journal", "config.redis.host", "settings.sync.applied:one:1"])(
+    "rolls back a failed write to %s and allows retry",
+    (failedKey) => {
+      localStorage.setItem("config.redis.port", "6379");
+      localStorage.setItem("config.redis.host", "personal.example.test");
+      const set = localStorage.setItem.bind(localStorage);
+      // jsdom Storage proxies store instance method overrides as data instead of replacing the method.
+      const methods = Object.hasOwn(localStorage, "setItem") ? localStorage : Object.getPrototypeOf(localStorage);
+      let failed = false;
+      const spy = vi.spyOn(methods, "setItem").mockImplementation((key, value) => {
+        if (key === failedKey && !failed) {
+          failed = true;
+          throw new Error("Quota");
+        }
+        return set(key, value);
+      });
+      const incoming = { ...publication, settings: { ...publication.settings, "config.redis.host": "shared.example.test" } };
+      try {
+        expect(() => applyPublication(incoming, "one")).toThrow("Quota");
+        expect(failed).toBe(true);
+      } finally {
+        spy.mockRestore();
+      }
+      expect(localStorage.getItem("config.redis.port")).toBe("6379");
+      expect(localStorage.getItem("config.redis.host")).toBe("personal.example.test");
+      expect(localStorage.getItem("settings.sync.applied:one:1")).toBeNull();
+      expect(localStorage.getItem("settings.sync.journal")).toBeNull();
+      expect(applyPublication(incoming, "one")).toBe(true);
+      expect(localStorage.getItem("config.redis.port")).toBe("6380");
+      expect(localStorage.getItem("config.redis.host")).toBe("shared.example.test");
+    },
+  );
   it.each([false, true])("enrolls automatically without a session (expired credential: %s)", async (expired) => {
     localStorage.setItem("user.email", "one@bankmandiri.co.id");
     localStorage.setItem("adtools.deviceId", "d-one");

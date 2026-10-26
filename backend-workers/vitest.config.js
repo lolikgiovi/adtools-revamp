@@ -32,6 +32,7 @@ export default defineConfig({
       "backend-workers/tests/dashboard-ordering.test.js",
       "backend-workers/tests/dashboard-person.test.js",
       "backend-workers/tests/dashboard-tabs-smoke.test.js",
+      "backend-workers/tests/dashboard-trends.test.js",
       "backend-workers/tests/lifetime-usage-baseline.test.js",
     ],
   },
