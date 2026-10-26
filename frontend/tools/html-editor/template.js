@@ -1,3 +1,6 @@
+import { TemplateSqlImportTemplate } from "../../components/template-sql-import-template.js";
+import { TemplateContextReviewTemplate } from "../../components/template-context-review-template.js";
+
 export const HTMLTemplateToolTemplate = /* html */ `
   <div class="tool-container html-template">
     <div class="html-document-bar" aria-label="HTML documents">
@@ -13,78 +16,95 @@ export const HTMLTemplateToolTemplate = /* html */ `
       </div>
     </div>
     <div class="html-template-layout">
-      <div id="htmlDocumentPanel" class="pane editor-pane" role="tabpanel">
-        <div class="pane-header">
-          <div class="toolbar-left">
-            <input type="file" id="htmlFileInput" accept=".html,.htm" style="display: none;" />
-            <button id="btnImportHtml" class="btn btn-primary btn-sm" title="Import HTML File">Import</button>
-            <button id="btnSaveAsHtml" class="btn btn-primary btn-sm" title="Save HTML File As">Save As</button>
+      <div id="htmlDocumentPanel" class="html-input-panels" role="tabpanel">
+        <section class="pane editor-pane html-source-pane" aria-labelledby="htmlTemplateTitle">
+          <div class="pane-header">
+            <div class="html-panel-title">
+              <button id="btnCollapseHtmlTemplate" class="html-collapse-button" type="button"
+                aria-label="Collapse HTML Template" aria-expanded="true" aria-controls="htmlTemplateBody">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg>
+              </button>
+              <h3 id="htmlTemplateTitle">HTML Template</h3>
+            </div>
+            <div class="toolbar-left html-source-actions">
+            <input type="file" id="htmlFileInput" accept=".html,.htm,.vtl,.vm,.txt" hidden />
+            <details class="html-toolbar-menu">
+              <summary class="btn btn-primary btn-sm">Import
+                <svg class="html-toolbar-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+              </summary>
+              <div class="html-toolbar-menu-content">
+                <button id="btnImportHtml" type="button">Import from File</button>
+                <button id="btnImportVelocitySql" type="button">Import from SQL</button>
+              </div>
+            </details>
+            <div class="html-workspace-tabs" role="group" aria-label="HTML editor phase">
+              <button id="htmlModeEdit" type="button" aria-pressed="true">Edit</button>
+              <button id="htmlModeEncoding" type="button" aria-pressed="false"
+                title="Check for characters that may change in Windows text imports">Encoding</button>
+            </div>
+            <button id="btnSaveAsHtml" class="btn btn-primary btn-sm" type="button">Export</button>
+            <button id="btnCreateHtmlQuery" class="btn btn-primary btn-sm" type="button" disabled
+              title="Import this template from SQL before creating an update query">Create Query</button>
             <details class="html-toolbar-menu html-edit-action">
-              <summary class="btn btn-secondary btn-sm">
-                Format
+              <summary class="btn btn-secondary btn-sm" aria-label="More template actions">More
                 <svg class="html-toolbar-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
               </summary>
               <div class="html-toolbar-menu-content">
                 <button id="btnFormatHtml" type="button">Format HTML</button>
                 <button id="btnMinifyHtml" type="button">Minify HTML</button>
-              </div>
-            </details>
-            <button id="btnExtractVtl" class="btn btn-secondary btn-sm html-edit-action" title="Extract Velocity fields">Velocity</button>
-            <details class="html-toolbar-menu html-edit-action">
-              <summary class="btn btn-secondary btn-sm">
-                More
-                <svg class="html-toolbar-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
-              </summary>
-              <div class="html-toolbar-menu-content">
                 <button id="btnCopyHtml" type="button">Copy</button>
                 <button id="btnPasteHtml" type="button">Paste</button>
                 <button id="btnClearHtml" type="button">Clear</button>
               </div>
             </details>
           </div>
-          <div class="html-workspace-tabs" role="group" aria-label="HTML editor phase">
-            <button id="htmlModeEdit" type="button" aria-pressed="true">Edit</button>
-            <button
-              id="htmlModeEncoding"
-              type="button"
-              aria-pressed="false"
-              title="Check for characters that may change in Windows text imports"
-            >Encoding</button>
           </div>
-        </div>
-        <div id="htmlEncodingReport" class="html-encoding-report" role="status" aria-live="polite" hidden></div>
-        <div class="html-section-title" id="htmlTemplateTitle">HTML Template</div>
-        <div id="htmlEditor" class="monaco-editor-container" aria-labelledby="htmlTemplateTitle"></div>
-        <div id="htmlEncodingDiff" class="html-encoding-diff" aria-label="Original and ASCII-safe HTML source diff" hidden></div>
+          <div id="htmlTemplateBody" class="html-template-body">
+            <div id="htmlEncodingReport" class="html-encoding-report" role="status" aria-live="polite" hidden></div>
+            <div id="htmlEditor" class="monaco-editor-container" aria-labelledby="htmlTemplateTitle"></div>
+            <div id="htmlEncodingDiff" class="html-encoding-diff" aria-label="Original and ASCII-safe HTML source diff" hidden></div>
+          </div>
 
-        <section class="html-context-pane" aria-labelledby="htmlContextTitle">
-          <div class="pane-header">
-            <h3 id="htmlContextTitle">Velocity Context</h3>
-            <button id="btnFormatHtmlContext" class="btn btn-secondary btn-sm" type="button">Format JSON</button>
+          <!-- Modeless VTL modal positioned over the editor (bottom-left) -->
+          <div
+            id="vtlModal"
+            class="vtl-modal app-popover-surface"
+            role="dialog"
+            aria-modal="false"
+            aria-label="VTL Variables"
+            style="display:none;"
+          >
+            <div class="vtl-modal-header">
+              <h4 class="vtl-modal-title">VTL Variables</h4>
+              <div style="display:flex;gap:.5rem;align-items:center;">
+                <button id="btnResetVtl" class="btn btn-secondary btn-sm" title="Reset All">Reset</button>
+                <button id="btnCloseVtl" class="btn btn-secondary btn-sm" title="Close VTL">Close</button>
+              </div>
+            </div>
+            <div id="vtlModalBody" class="vtl-modal-body"></div>
           </div>
-          <div id="htmlVelocityContextError" class="html-validation-status" role="alert" hidden></div>
-          <textarea id="htmlVelocityContext" spellcheck="false" aria-labelledby="htmlContextTitle"
-            aria-describedby="htmlVelocityContextError" wrap="off"></textarea>
         </section>
 
-        <!-- Modeless VTL modal positioned over the editor (bottom-left) -->
-        <div
-          id="vtlModal"
-          class="vtl-modal app-popover-surface"
-          role="dialog"
-          aria-modal="false"
-          aria-label="VTL Variables"
-          style="display:none;"
-        >
-          <div class="vtl-modal-header">
-            <h4 class="vtl-modal-title">VTL Variables</h4>
-            <div style="display:flex;gap:.5rem;align-items:center;">
-              <button id="btnResetVtl" class="btn btn-secondary btn-sm" title="Reset All">Reset</button>
-              <button id="btnCloseVtl" class="btn btn-secondary btn-sm" title="Close VTL">Close</button>
+        <section class="pane html-context-pane" aria-labelledby="htmlContextTitle">
+          <div class="pane-header">
+            <div class="html-panel-title">
+              <button id="btnCollapseHtmlContext" class="html-collapse-button" type="button"
+                aria-label="Collapse Velocity Context" aria-expanded="true" aria-controls="htmlContextBody">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg>
+              </button>
+              <h3 id="htmlContextTitle">Velocity Context</h3>
+            </div>
+            <div class="toolbar-left">
+            <button id="btnSyncHtmlContext" class="btn btn-secondary btn-sm" type="button">Add missing fields…</button>
+            <button id="btnFormatHtmlContext" class="btn btn-secondary btn-sm" type="button">Format JSON</button>
             </div>
           </div>
-          <div id="vtlModalBody" class="vtl-modal-body"></div>
-        </div>
+          <div id="htmlContextBody" class="html-context-body">
+            <div id="htmlVelocityContextError" class="html-validation-status" role="alert" hidden></div>
+            <div id="htmlVelocityContext" class="monaco-editor-container" aria-labelledby="htmlContextTitle"
+              aria-describedby="htmlVelocityContextError"></div>
+          </div>
+        </section>
       </div>
 
       <div
@@ -101,9 +121,7 @@ export const HTMLTemplateToolTemplate = /* html */ `
       <div class="pane renderer-pane">
         <div class="pane-header">
           <div class="renderer-actions">
-            <button id="btnValidateHtmlVelocity" class="btn btn-primary btn-sm html-edit-action" type="button">Validate Velocity</button>
-            <button id="btnHtmlValidatorSettings" class="btn btn-secondary btn-sm html-edit-action" type="button"
-              title="Notification Template Endpoint settings">Settings</button>
+            <button id="btnValidateHtmlVelocity" class="btn btn-primary btn-sm html-edit-action" type="button">Validate</button>
             <div id="htmlEncodingPreviewModes" class="html-encoding-preview-modes" role="group" aria-label="Encoding preview" hidden>
               <button type="button" data-encoding-preview="original" aria-pressed="true">Original</button>
               <button type="button" data-encoding-preview="windows" aria-pressed="false">Windows example</button>
@@ -191,5 +209,7 @@ export const HTMLTemplateToolTemplate = /* html */ `
       </div>
     </div>
 
+    ${TemplateSqlImportTemplate}
+    ${TemplateContextReviewTemplate}
   </div>
 `;

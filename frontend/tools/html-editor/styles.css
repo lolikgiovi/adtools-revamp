@@ -1,4 +1,18 @@
+@import "../../components/template-sql-import.css";
+
 /* HTML Template Tool Styles */
+.main-content:has(.html-template) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tool-root:has(> .html-template) {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
 .tool-container.html-template {
   /* Override global tool-container constraints for wide layout */
   max-width: none;
@@ -10,7 +24,9 @@
 .html-template {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 90px);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
   background: hsl(var(--background));
   color: hsl(var(--foreground));
 }
@@ -19,6 +35,7 @@
   display: flex;
   align-items: center;
   min-height: 38px;
+  flex: 0 0 auto;
   margin-bottom: 0.5rem;
   border-bottom: 1px solid hsl(var(--border));
   background: transparent;
@@ -721,26 +738,65 @@ body.is-resizing * {
   }
 }
 
-.html-section-title {
-  padding: 0.45rem 0.75rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  border-bottom: 1px solid hsl(var(--border));
+.html-template .html-input-panels {
+  display: grid;
+  grid-template-rows: minmax(0, 5fr) minmax(0, 3fr);
+  gap: 0.75rem;
+  min-height: 0;
+  min-width: 0;
 }
 
-.html-context-pane {
+.html-template .html-input-panels > .pane { min-width: 0; }
+.html-template .html-input-panels .pane-header { flex-shrink: 0; }
+.html-template .html-panel-title { display: flex; align-items: center; gap: 0.35rem; }
+.html-template .html-panel-title h3 { margin: 0; font-size: 0.85rem; white-space: nowrap; }
+.html-template-body, .html-context-body {
   display: flex;
+  flex: 1;
   flex-direction: column;
-  flex: 0 0 32%;
-  min-height: 140px;
-  border-top: 1px solid hsl(var(--border));
+  min-height: 0;
 }
 
-.html-context-pane .pane-header { justify-content: space-between; }
-.html-context-pane h3 { margin: 0; font-size: 0.85rem; }
+.html-template .html-collapse-button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+}
+.html-template .html-collapse-button:hover { background: hsl(var(--muted) / 0.55); color: hsl(var(--foreground)); }
+.html-template .html-collapse-button:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+.html-template .html-collapse-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.75;
+  transform: rotate(90deg);
+  transition: transform 160ms ease-out;
+}
+.html-template .html-collapse-button[aria-expanded="false"] svg { transform: rotate(0deg); }
+.html-template .html-input-panels.is-template-collapsed { grid-template-rows: min-content minmax(0, 1fr); }
+.html-template .html-input-panels.is-context-collapsed { grid-template-rows: minmax(0, 1fr) min-content; }
+.html-template .is-template-collapsed .html-template-body,
+.html-template .is-context-collapsed .html-context-body { display: none; }
+.html-template.is-encoding-mode .html-input-panels { grid-template-rows: minmax(0, 1fr); }
+.html-template.is-encoding-mode .html-template-body { display: flex; }
+.html-template.is-encoding-mode #btnCollapseHtmlTemplate { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .html-template .html-collapse-button svg { transition: none; }
+}
+
 .html-context-pane textarea {
   flex: 1;
-  min-height: 70px;
+  min-height: 0;
   width: 100%;
   box-sizing: border-box;
   resize: none;
@@ -758,6 +814,15 @@ body.is-resizing * {
 .html-validation-output summary { cursor: pointer; font-size: 0.8rem; }
 .html-validation-output pre { max-height: 180px; overflow: auto; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .html-template.is-encoding-mode .html-context-pane,
-.html-template.is-encoding-mode .html-section-title,
 .html-template.is-encoding-mode .html-validation-status,
 .html-template.is-encoding-mode .html-validation-output { display: none; }
+
+.html-template .html-source-actions { margin-left: auto; }
+.html-template .html-source-actions .html-workspace-tabs { margin-left: 0; }
+.html-template .renderer-actions { justify-content: flex-start; }
+.html-template #htmlVelocityContext { flex: 1; min-height: 0; }
+.html-template .vtl-inline-error { padding: 0.5rem; color: hsl(var(--destructive)); }
+.html-template .vtl-inline-error[hidden] { display: none; }
+.html-template .vtl-sync-list { display: grid; gap: 0.75rem; padding: 0; list-style: none; }
+.html-template .vtl-sync-list li { display: grid; gap: 0.35rem; }
+.html-template .vtl-sync-list code { font-weight: 600; }

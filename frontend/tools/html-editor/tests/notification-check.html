@@ -21,11 +21,20 @@
       .fail {
         color: #f77;
       }
-      main {
-        height: calc(100vh - 150px);
+      body {
+        height: 100dvh;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
       }
-      main .html-template {
-        height: 100%;
+      body > details {
+        flex: 0 0 auto;
+      }
+      .fixture-header {
+        flex: 0 0 70px;
+      }
+      main {
+        min-width: 0;
       }
     </style>
   </head>
@@ -34,9 +43,11 @@
       <summary>Browser verification results</summary>
       <ol id="results"></ol>
     </details>
-    <main></main>
+    <div class="fixture-header" aria-hidden="true"></div>
+    <main class="main-content"><div class="tool-root"></div></main>
     <script type="module">
       import { HTMLTemplateTool } from "../main.js";
+      import { OracleConnectionService } from "../../../core/OracleConnectionService.js";
       import { UsageTracker } from "../../../core/UsageTracker.js";
       for (const key of ["trackEvent", "trackToolUse", "trackFeature"]) UsageTracker[key] = () => {};
       const results = document.querySelector("#results");
@@ -50,6 +61,9 @@
       const settle = () => new Promise((resolve) => setTimeout(resolve, 400));
       const key = "config.velocityValidator.notificationUrl";
       const previous = localStorage.getItem(key);
+      const paneKey = "tool:html-template:pane-state";
+      const previousPane = localStorage.getItem(paneKey);
+      localStorage.removeItem(paneKey);
       const originalFetch = window.fetch;
       const requests = [];
       let failNext = false;
@@ -89,30 +103,124 @@
           tool.renderDocumentTabs();
           return tool.documents;
         };
-        tool.container = document.querySelector("main");
+        tool.container = document.querySelector(".tool-root");
         tool.container.innerHTML = tool.render();
         await tool.onMount();
         const find = (selector) => tool.container.querySelector(selector);
         const input = (text) => {
-          find("#htmlVelocityContext").value = text;
-          find("#htmlVelocityContext").dispatchEvent(new Event("input", { bubbles: true }));
+          tool.contextEditor.setValue(text);
         };
         check(
           find("#htmlVelocityContext").getBoundingClientRect().top > find("#htmlEditor").getBoundingClientRect().top,
           "Velocity Context sits below HTML Template",
         );
+        const source = tool.editor.getValue();
+        check(
+          !find("#btnHtmlValidatorSettings") && find("#btnValidateHtmlVelocity").textContent === "Validate",
+          "Render toolbar has Validate and no Settings",
+        );
+        check(tool.contextEditor.getModel().getLanguageId() === "json", "Velocity Context uses Monaco JSON");
+        const sourceActions = [...find(".html-source-actions").children].filter((item) => !item.hidden);
+        check(
+          sourceActions[0].matches("details") &&
+            sourceActions[0].querySelector("#btnImportHtml") &&
+            sourceActions[1].classList.contains("html-workspace-tabs") &&
+            sourceActions[2].id === "btnSaveAsHtml" &&
+            sourceActions[3].id === "btnCreateHtmlQuery",
+          "Source toolbar keeps Import, mode, Export, Create Query order",
+        );
+        const originalPicker = window.showSaveFilePicker;
+        let exported;
+        try {
+          window.showSaveFilePicker = async () => ({
+            name: "notification.vm",
+            createWritable: async () => ({
+              write: async (value) => {
+                exported = value;
+              },
+              close: async () => {},
+            }),
+          });
+          find("#btnSaveAsHtml").click();
+          await settle();
+          check(exported === source, "Export preserves the source with a custom file extension");
+        } finally {
+          window.showSaveFilePicker = originalPicker;
+        }
+        tool.editor.setValue(Array.from({ length: 400 }, (_, i) => `<p>Long notification line ${i}</p>`).join("\n"));
+        find("#btnCollapseHtmlContext").click();
+        await settle();
+        const viewportFits = () => {
+          const root = find(".html-template").getBoundingClientRect();
+          const main = document.querySelector("main").getBoundingClientRect();
+          const context = find(".html-context-pane").getBoundingClientRect();
+          return root.bottom <= main.bottom + 1 && main.bottom <= innerHeight + 1 && context.bottom <= main.bottom + 1;
+        };
+        check(viewportFits(), "Long template and collapsed context stay inside the available viewport");
+        find("#btnCollapseHtmlContext").click();
+        await settle();
+        check(viewportFits(), "Expanded panels stay inside the available viewport");
+        const shellHeight = document.body.style.height;
+        document.body.style.height = "420px";
+        await settle();
+        check(viewportFits(), "Expanded panels fit a shorter application area");
+        find("#btnCollapseHtmlContext").click();
+        await settle();
+        check(viewportFits(), "Collapsed context remains reachable in a shorter application area");
+        find("#btnCollapseHtmlContext").click();
+        document.body.style.height = shellHeight;
+        await settle();
+        tool.editor.setValue(source);
+        const panels = find("#htmlDocumentPanel");
+        check(
+          find(".html-context-pane").parentElement === panels && find(".html-source-pane").parentElement === panels,
+          "Template and context have separate containers",
+        );
+        find("#btnCollapseHtmlTemplate").click();
+        await settle();
+        check(
+          find("#btnCollapseHtmlTemplate").getAttribute("aria-expanded") === "false" &&
+            find("#htmlEditor").getBoundingClientRect().height === 0 &&
+            find("#htmlVelocityContext").getBoundingClientRect().height > 0,
+          "Collapse template gives context the space",
+        );
+        find("#btnCollapseHtmlContext").click();
+        await settle();
+        check(
+          find("#btnCollapseHtmlTemplate").getAttribute("aria-expanded") === "true" &&
+            find("#htmlVelocityContext").getBoundingClientRect().height === 0 &&
+            find("#htmlEditor").getBoundingClientRect().height > 0,
+          "Collapse context expands template",
+        );
+        tool.initializePaneState();
+        check(find("#btnCollapseHtmlContext").getAttribute("aria-expanded") === "false", "Collapsed pane preference restores");
+        find("#btnCollapseHtmlContext").click();
+        await settle();
+        check(
+          find("#htmlEditor").getBoundingClientRect().height > 0 && find("#htmlVelocityContext").getBoundingClientRect().height > 0,
+          "Expand restores both panels",
+        );
+        find("#htmlModeEncoding").click();
+        await settle();
+        check(
+          find("#htmlEditor").getBoundingClientRect().height > 0 && find("#htmlVelocityContext").getBoundingClientRect().height === 0,
+          "Encoding keeps template accessible",
+        );
+        find("#htmlModeEdit").click();
+        if (previousPane === null) localStorage.removeItem(paneKey);
+        else localStorage.setItem(paneKey, previousPane);
         input('{"amount":');
         find("#btnValidateHtmlVelocity").click();
         await settle();
         check(requests.length === 0 && !find("#htmlVelocityContextError").hidden, "Invalid JSON stays local");
         await tool.duplicateDocument("notification-one");
-        check(find("#htmlVelocityContext").value === '{"amount":', "Duplicate preserves unfinished context");
+        check(tool.contextEditor.getValue() === '{"amount":', "Duplicate preserves unfinished context");
         await tool.switchDocument("notification-one");
-        check(find("#htmlVelocityContext").value === '{"amount":', "Tab switch restores unfinished context");
+        check(tool.contextEditor.getValue() === '{"amount":', "Tab switch restores unfinished context");
         check(records.get("notification-one").contextText === '{"amount":', "Document save retains context draft");
         input('{"amount":60000}');
         find("#btnFormatHtmlContext").click();
-        check(find("#htmlVelocityContext").value.includes("\n"), "Format JSON works");
+        check(tool.contextEditor.getValue().includes("\n"), "Format JSON works");
         find("#btnValidateHtmlVelocity").click();
         await settle();
         check(
@@ -145,6 +253,78 @@
         input('{"amount":60000}');
         find("#btnValidateHtmlVelocity").click();
         await settle();
+        const oracleKey = "config.oracle.connections";
+        const queryKey = "tool:html-template:import-queries";
+        const priorOracle = localStorage.getItem(oracleKey);
+        const priorQueries = localStorage.getItem(queryKey);
+        const originalQuery = OracleConnectionService.queryViaSidecar;
+        const originalApp = window.app;
+        try {
+          localStorage.setItem(oracleKey, JSON.stringify([{ name: "Fixture", connect_string: "fixture" }]));
+          OracleConnectionService.queryViaSidecar = async () => ({
+            columns: ["TEMPLATE_ID", "HTML_CONTENT"],
+            rows: [["1", "<h1>$name</h1>"]],
+          });
+          find("#btnImportVelocitySql").hidden = false;
+          find("#btnImportVelocitySql").click();
+          tool._sqlImportEditor.setValue("SELECT * FROM DEMO.NOTIFICATION_TEMPLATE WHERE TEMPLATE_ID = 1");
+          find("#btnFetchVelocitySql").click();
+          await settle();
+          find("#velocitySqlField").value = "1";
+          find("#velocitySqlField").dispatchEvent(new Event("change"));
+          find("#btnApplyVelocitySqlImport").click();
+          await settle();
+          check(
+            tool.editor.getValue() === "<h1>$name</h1>" && !find("#btnCreateHtmlQuery").disabled,
+            "SQL import selects HTML field and enables Create Query",
+          );
+          check(
+            records.get(tool.activeDocumentId).sourceIdentity.templateColumn === "HTML_CONTENT",
+            "Imported SQL identity persists with the document",
+          );
+          let handoff;
+          window.app = {
+            router: {
+              navigate: (target, data) => {
+                handoff = { target, data };
+              },
+            },
+          };
+          find("#btnCreateHtmlQuery").click();
+          check(
+            handoff.target === "quick-query" && handoff.data.createQuery.inputData[1].includes("<h1>$name</h1>"),
+            "Create Query passes the current HTML to Quick Query",
+          );
+          find("#btnSyncHtmlContext").click();
+          check(
+            !find("#velocitySyncDialog").hidden && find("#velocitySyncFields").textContent.includes("name"),
+            "Missing context fields open a review",
+          );
+          find("#btnApplyVelocitySync").click();
+          check(Object.hasOwn(JSON.parse(tool.contextEditor.getValue()), "name"), "Review applies missing fields into Monaco context");
+          await tool.switchDocument("notification-one");
+          check(find("#btnCreateHtmlQuery").disabled, "File-only document does not inherit SQL identity");
+          tool.contextEditor.executeEdits("fixture", [
+            { range: tool.contextEditor.getModel().getFullModelRange(), text: '{"amount":61000}' },
+          ]);
+          const sourceContext = tool.contextEditor.getValue();
+          await tool.newDocument("Undo isolation", "<p>Undo context</p>");
+          tool.contextEditor.executeEdits("fixture", [
+            { range: tool.contextEditor.getModel().getFullModelRange(), text: '{"other":true}' },
+          ]);
+          tool.contextEditor.trigger("fixture", "undo", null);
+          check(!tool.contextEditor.getValue().includes("amount"), "Context undo stays within the active document");
+          await tool.switchDocument("notification-one");
+          check(tool.contextEditor.getValue() === sourceContext, "Switching back restores the original context edits");
+          input('{"amount":60000}');
+        } finally {
+          OracleConnectionService.queryViaSidecar = originalQuery;
+          window.app = originalApp;
+          if (priorOracle === null) localStorage.removeItem(oracleKey);
+          else localStorage.setItem(oracleKey, priorOracle);
+          if (priorQueries === null) localStorage.removeItem(queryKey);
+          else localStorage.setItem(queryKey, priorQueries);
+        }
         document.title = "PASS: HTML notification validation";
       } catch (error) {
         const row = document.createElement("li");
@@ -153,6 +333,8 @@
         results.append(row);
         document.title = "FAIL: HTML notification validation";
       } finally {
+        if (previousPane === null) localStorage.removeItem(paneKey);
+        else localStorage.setItem(paneKey, previousPane);
         if (previous === null) localStorage.removeItem(key);
         else localStorage.setItem(key, previous);
         window.fetch = originalFetch;

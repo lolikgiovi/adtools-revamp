@@ -16,14 +16,13 @@ export class NotificationValidation {
 
   bind() {
     this.element("btnValidateHtmlVelocity").addEventListener("click", () => void this.validate());
-    this.element("btnHtmlValidatorSettings").addEventListener("click", () => {
-      localStorage.setItem("settings.focus", ENDPOINT_KEY);
-      window.app?.router?.navigate("settings");
-    });
     this.element("htmlVelocityContext").addEventListener("input", () => this.applyContext());
+    this.contextSubscription = this.tool.contextEditor?.onDidChangeModelContent(() => {
+      if (!this.syncingContext) this.applyContext();
+    });
     this.element("btnFormatHtmlContext").addEventListener("click", () => {
       try {
-        this.element("htmlVelocityContext").value = JSON.stringify(this.readContext(), null, 2);
+        this.setContextText(JSON.stringify(this.readContext(), null, 2));
         this.applyContext();
       } catch (error) {
         this.setContextError(error.message);
@@ -31,8 +30,23 @@ export class NotificationValidation {
     });
   }
 
+  getContextText() {
+    return this.tool.contextEditor?.getValue() ?? this.element("htmlVelocityContext").value;
+  }
+
+  setContextText(text) {
+    this.syncingContext = true;
+    try {
+      if (this.tool.contextEditor) {
+        if (this.tool.contextEditor.getValue() !== text) this.tool.contextEditor.setValue(text);
+      } else this.element("htmlVelocityContext").value = text;
+    } finally {
+      this.syncingContext = false;
+    }
+  }
+
   readContext() {
-    const context = JSON.parse(this.element("htmlVelocityContext").value);
+    const context = JSON.parse(this.getContextText());
     if (!context || typeof context !== "object" || Array.isArray(context)) throw new Error("Velocity Context must be a JSON object.");
     return context;
   }
@@ -50,20 +64,28 @@ export class NotificationValidation {
     const values = JSON.stringify(this.tool.vtlValues);
     if (this.documentId !== document.id) {
       this.invalidate();
-      this.element("htmlVelocityContext").value = document.contextText ?? JSON.stringify(this.tool.vtlValues, null, 2);
+      if (document.contextModel && this.tool.contextEditor?.getModel() !== document.contextModel) {
+        this.syncingContext = true;
+        try {
+          this.tool.contextEditor.setModel(document.contextModel);
+        } finally {
+          this.syncingContext = false;
+        }
+      }
+      this.setContextText(document.contextText ?? JSON.stringify(this.tool.vtlValues, null, 2));
       try {
         const saved = this.readContext();
         if (JSON.stringify(saved) !== values) {
-          this.element("htmlVelocityContext").value = JSON.stringify(this.tool.vtlValues, null, 2);
-          document.contextText = this.element("htmlVelocityContext").value;
+          this.setContextText(JSON.stringify(this.tool.vtlValues, null, 2));
+          document.contextText = this.getContextText();
         }
       } catch (_) {
         /* Preserve unfinished JSON drafts across document switches. */
       }
       this.documentId = document.id;
     } else if (this.values !== values) {
-      this.element("htmlVelocityContext").value = JSON.stringify(this.tool.vtlValues, null, 2);
-      document.contextText = this.element("htmlVelocityContext").value;
+      this.setContextText(JSON.stringify(this.tool.vtlValues, null, 2));
+      document.contextText = this.getContextText();
     }
     this.values = values;
     try {
@@ -78,7 +100,7 @@ export class NotificationValidation {
     this.invalidate();
     const document = this.tool.activeDocument;
     if (!document) return;
-    document.contextText = this.element("htmlVelocityContext").value;
+    document.contextText = this.getContextText();
     this.tool.scheduleDocumentSave();
     try {
       this.tool.vtlValues = this.readContext();
@@ -95,7 +117,7 @@ export class NotificationValidation {
     return {
       documentId: this.tool.activeDocumentId,
       template: this.tool.editor.getValue(),
-      contextText: this.element("htmlVelocityContext").value,
+      contextText: this.getContextText(),
       url: (localStorage.getItem(ENDPOINT_KEY) || "").trim(),
     };
   }
@@ -109,7 +131,7 @@ export class NotificationValidation {
   resetButton() {
     const button = this.element("btnValidateHtmlVelocity");
     button.disabled = false;
-    button.textContent = "Validate Velocity";
+    button.textContent = "Validate";
     button.removeAttribute("aria-busy");
   }
 
@@ -120,7 +142,7 @@ export class NotificationValidation {
     this.result = false;
     this.resetButton();
     this.element("htmlValidationOutput").hidden = true;
-    if (hadResult) this.status("Inputs changed. Validate Velocity again.");
+    if (hadResult) this.status("Inputs changed. Validate again.");
   }
 
   async validate() {
@@ -161,7 +183,7 @@ export class NotificationValidation {
       });
       if (this.request !== request) return;
       if (JSON.stringify(snapshot) !== JSON.stringify(this.snapshot())) {
-        this.status("Inputs or endpoint changed. Validate Velocity again.");
+        this.status("Inputs or endpoint changed. Validate again.");
         return;
       }
       this.result = true;
@@ -192,6 +214,7 @@ export class NotificationValidation {
   }
 
   dispose() {
+    this.contextSubscription?.dispose();
     this.invalidate();
   }
 }

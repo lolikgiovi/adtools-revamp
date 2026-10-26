@@ -1,7 +1,11 @@
+import { withTemplateSqlImport } from "../../components/TemplateSqlImport.js";
+import { buildVelocityQuickQueryDraft, getTemplateImportIdentity, parseTemplateImportQuery, suggestMissingContextFields, setNestedValue } from "../velocity-template/service.js";
 import { BaseTool } from "../../core/BaseTool.js";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.main.js";
 import "monaco-editor/esm/vs/basic-languages/html/html.contribution.js";
 import "monaco-editor/esm/vs/language/html/monaco.contribution.js";
+import "monaco-editor/esm/vs/language/json/monaco.contribution.js";
+import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
@@ -54,11 +58,16 @@ const PREVIEW_VIEWPORT_PRESETS = [
   { value: "custom", label: "Custom width…", width: null },
 ];
 
-class HTMLTemplateTool extends BaseTool {
+class HTMLTemplateTool extends withTemplateSqlImport(BaseTool) {
   constructor(eventBus) {
     super({ id: "html-template", eventBus, isHeavyTool: true });
 
     this.editor = null;
+    this.contextEditor = null;
+    this._sqlImportRows = [];
+    this._sqlImportColumns = [];
+    this._sqlImportSql = "";
+    this._sqlImportRowIndex = 0;
     this._velocityCompletionProvider = null;
     this.minifyWorker = null;
     this.minifierAvailable = false;
@@ -212,7 +221,7 @@ class HTMLTemplateTool extends BaseTool {
 
   async onMount() {
     const sequence = ++this._mountSequence;
-    configureMonacoWorkers(self, { editor: editorWorker, html: htmlWorker });
+    configureMonacoWorkers(self, { editor: editorWorker, html: htmlWorker, json: jsonWorker });
     const initializedDocuments = await this.initializeDocuments(sequence);
     if (sequence !== this._mountSequence || !this.container) {
       this.disposeDocumentModels(initializedDocuments);
@@ -230,9 +239,20 @@ class HTMLTemplateTool extends BaseTool {
     } catch (_) {}
     this.initializeWorker();
     this.bindDocumentEvents();
+    this.contextEditor = monaco.editor.create(this.container.querySelector("#htmlVelocityContext"), {
+      model: this.activeDocument.contextModel,
+      automaticLayout: true,
+      minimap: { enabled: false },
+      fontSize: 13,
+      scrollBeyondLastLine: false,
+      wordWrap: "on",
+      ariaLabel: "Velocity context JSON",
+    });
     this.notificationValidation = new NotificationValidation(this);
     this.notificationValidation.bind();
     this.bindToolEvents();
+    this.initializePaneState();
+    this.bindTemplateSqlActions();
     window.addEventListener("pagehide", this._handlePageHide);
     window.addEventListener("message", this._handlePreviewScrollMessage);
     document.addEventListener("visibilitychange", this._handleVisibilityChange);
@@ -250,6 +270,10 @@ class HTMLTemplateTool extends BaseTool {
   onUnmount() {
     this.notificationValidation?.dispose();
     this.notificationValidation = null;
+    this.contextEditor?.dispose();
+    this.contextEditor = null;
+    this._sqlImportEditor?.dispose();
+    this._sqlImportEditor = null;
     this._mountSequence += 1;
     window.removeEventListener("pagehide", this._handlePageHide);
     window.removeEventListener("message", this._handlePreviewScrollMessage);
@@ -305,12 +329,18 @@ class HTMLTemplateTool extends BaseTool {
     const documentId = encodeURIComponent(String(document.id ?? "untitled"));
     const modelUri = `inmemory://html-template/${this.analyticsSessionId}/${modelSequence}/${documentId}.html`;
     document.model = monaco.editor.createModel(document.html, "html", monaco.Uri.parse(modelUri));
+    document.contextModel = monaco.editor.createModel(
+      document.contextText ?? JSON.stringify(document.vtlValues, null, 2),
+      "json",
+      monaco.Uri.parse(`${modelUri}.context.json`),
+    );
     return document;
   }
 
   disposeDocumentModels(documents = []) {
     documents.forEach((document) => {
       if (document.model && !document.model.isDisposed()) document.model.dispose();
+      if (document.contextModel && !document.contextModel.isDisposed()) document.contextModel.dispose();
     });
   }
 
@@ -321,6 +351,7 @@ class HTMLTemplateTool extends BaseTool {
       html: document.model?.getValue() ?? document.html,
       vtlValues: structuredClone(document.vtlValues || {}),
       contextText: document.contextText,
+      sourceIdentity: document.sourceIdentity,
       createdAt: document.createdAt,
       updatedAt: Date.now(),
     };
@@ -400,6 +431,7 @@ class HTMLTemplateTool extends BaseTool {
   }
 
   renderDocumentTabs() {
+    this.updateCreateQueryButton();
     const strip = this.container?.querySelector("#htmlDocumentTabs");
     if (!strip) return;
     strip.replaceChildren();
@@ -634,7 +666,7 @@ class HTMLTemplateTool extends BaseTool {
       this.editor.layout();
       return document;
     } catch (_) {
-      document?.model.dispose();
+      if (document) this.disposeDocumentModels([document]);
       return null;
     } finally {
       this._tabTransition = false;
@@ -771,7 +803,7 @@ class HTMLTemplateTool extends BaseTool {
         this.renderPreview(this.editor.getValue(), true);
         this.editor.layout();
       }
-      oldDocuments.filter((document) => idsToClose.has(document.id)).forEach((document) => document.model.dispose());
+      this.disposeDocumentModels(oldDocuments.filter((document) => idsToClose.has(document.id)));
       this._closedDocuments = { closed, previousActiveId, replacementId: replacement?.id || null };
       clearTimeout(this._undoTimer);
       this.container.querySelector("#htmlDocumentUndoMessage").textContent = `${closed.length} tab${closed.length === 1 ? "" : "s"} closed`;
@@ -783,7 +815,7 @@ class HTMLTemplateTool extends BaseTool {
       this.renderDocumentTabs();
       this.container.querySelector(`#html-document-tab-${nextId}`)?.focus();
     } catch (_) {
-      if (!committed) replacement?.model.dispose();
+      if (!committed && replacement) this.disposeDocumentModels([replacement]);
       // Keep the original tabs visible if the storage transaction fails.
     } finally {
       this._tabTransition = false;
@@ -835,14 +867,14 @@ class HTMLTemplateTool extends BaseTool {
         this.renderPreview(this.editor.getValue(), true);
         this.editor.layout();
       }
-      if (dropReplacement) replacement.model.dispose();
+      if (dropReplacement) this.disposeDocumentModels([replacement]);
       this._closedDocuments = null;
       clearTimeout(this._undoTimer);
       this.container.querySelector("#htmlDocumentUndo").hidden = true;
       this.renderDocumentTabs();
       this.container.querySelector(`#html-document-tab-${nextId}`)?.focus();
     } catch (_) {
-      if (!committed) restored.forEach((document) => document.model.dispose());
+      if (!committed) this.disposeDocumentModels(restored);
       // The Undo control stays available if the storage transaction fails.
     } finally {
       this._tabTransition = false;
@@ -1535,7 +1567,7 @@ class HTMLTemplateTool extends BaseTool {
 
     if (!force && html === this.lastRenderedHTML) return;
     this.lastRenderedHTML = html;
-    const renderSequence = this._previewRenderSequence = (this._previewRenderSequence || 0) + 1;
+    const renderSequence = (this._previewRenderSequence = (this._previewRenderSequence || 0) + 1);
 
     // Ensure sandbox set
     this.applyIframeSandbox();
@@ -1551,31 +1583,36 @@ class HTMLTemplateTool extends BaseTool {
     // Apply the same VTL mode and selected finding to both sides of a comparison.
     try {
       const buildPreview = (mode) => {
-        const previewHtml = mode === "windows"
-          ? simulateWindows1252Import(html)
-          : mode === "safe" ? convertHtmlForToad(html) : html;
+        const previewHtml = mode === "windows" ? simulateWindows1252Import(html) : mode === "safe" ? convertHtmlForToad(html) : html;
         const rendered = getPreviewContent(previewHtml, this.vtlValues, this.previewVtlMode);
         const selected = this._encodingPreviewFinding;
         const needle = selected
-          ? mode === "windows" ? selected.simulated : mode === "safe" ? selected.replacement : selected.character
+          ? mode === "windows"
+            ? selected.simulated
+            : mode === "safe"
+              ? selected.replacement
+              : selected.character
           : null;
         if (!needle) return rendered;
         try {
           const preview = markEncodingPreview(rendered, needle, selected.previewIndex);
           return preview;
-        } catch (_) { return rendered; /* Keep the rendered preview when source markup is incomplete. */ }
+        } catch (_) {
+          return rendered; /* Keep the rendered preview when source markup is incomplete. */
+        }
       };
 
       // Use srcdoc for atomic update and secure context
       const preview = buildPreview(comparing ? "windows" : this.previewEncodingMode);
       iframe.hidden = !preview.trim();
       const hasTarget = preview.includes('id="adtools-encoding-target"');
-      iframe.srcdoc = preview && (comparing || (this.workspaceMode === "encoding" && hasTarget))
-        ? withEncodingPreviewBridge(preview, {
-          key: scrollKey || "",
-          target: hasTarget,
-        })
-        : preview || "";
+      iframe.srcdoc =
+        preview && (comparing || (this.workspaceMode === "encoding" && hasTarget))
+          ? withEncodingPreviewBridge(preview, {
+              key: scrollKey || "",
+              target: hasTarget,
+            })
+          : preview || "";
       if (afterIframe) {
         const afterPreview = comparing ? buildPreview("safe") : "";
         afterIframe.hidden = !afterPreview.trim();
@@ -1696,7 +1733,9 @@ class HTMLTemplateTool extends BaseTool {
     root?.classList.toggle("is-encoding-mode", mode === "encoding");
     this.container.querySelector("#htmlModeEdit")?.setAttribute("aria-pressed", String(mode === "edit"));
     this.container.querySelector("#htmlModeEncoding")?.setAttribute("aria-pressed", String(mode === "encoding"));
-    this.container.querySelectorAll(".html-toolbar-menu").forEach((menu) => { menu.open = false; });
+    this.container.querySelectorAll(".html-toolbar-menu").forEach((menu) => {
+      menu.open = false;
+    });
     this.applyPreviewViewport();
     if (mode === "encoding") this.showEncodingReport();
     else {
@@ -1789,15 +1828,21 @@ class HTMLTemplateTool extends BaseTool {
     const tab = this.container?.querySelector("#htmlModeEncoding");
     if (tab) {
       tab.dataset.severity = severity;
-      const description = severity === "error" ? "Possible broken encoding detected"
-        : severity === "warning" ? "Characters or charset need encoding review" : "No encoding issues detected";
+      const description =
+        severity === "error"
+          ? "Possible broken encoding detected"
+          : severity === "warning"
+            ? "Characters or charset need encoding review"
+            : "No encoding issues detected";
       tab.title = description;
       tab.setAttribute("aria-label", `Encoding: ${description}`);
     }
     const decoration = (offset, length, error, message) => ({
       range: new monaco.Range(
-        model.getPositionAt(offset).lineNumber, model.getPositionAt(offset).column,
-        model.getPositionAt(offset + length).lineNumber, model.getPositionAt(offset + length).column,
+        model.getPositionAt(offset).lineNumber,
+        model.getPositionAt(offset).column,
+        model.getPositionAt(offset + length).lineNumber,
+        model.getPositionAt(offset + length).column,
       ),
       options: {
         inlineClassName: error ? "html-encoding-error" : "html-encoding-risk",
@@ -1807,10 +1852,18 @@ class HTMLTemplateTool extends BaseTool {
     });
     const errors = corruption.flatMap((issue) => issue.ranges.map((range) => ({ ...range, message: issue.message })));
     this._encodingDecorations?.set([
-      ...findings.flatMap((finding) => finding.offsets
-        .filter((offset) => !errors.some((range) => offset >= range.offset && offset < range.offset + range.length))
-        .map((offset) => decoration(offset, finding.character.length, false,
-          `${finding.name} (${finding.codePoint}) — review before Windows text import`))),
+      ...findings.flatMap((finding) =>
+        finding.offsets
+          .filter((offset) => !errors.some((range) => offset >= range.offset && offset < range.offset + range.length))
+          .map((offset) =>
+            decoration(
+              offset,
+              finding.character.length,
+              false,
+              `${finding.name} (${finding.codePoint}) — review before Windows text import`,
+            ),
+          ),
+      ),
       ...errors.map((range) => decoration(range.offset, range.length, true, range.message)),
     ]);
     return { source, charset, issues, findings };
@@ -1825,14 +1878,17 @@ class HTMLTemplateTool extends BaseTool {
     report.replaceChildren();
     const summary = document.createElement("p");
     const total = findings.reduce((sum, finding) => sum + finding.count, 0);
-    summary.textContent = `${importEncoding ? `Imported as ${importEncoding.toUpperCase()} · ` : ""}${charset || "Charset not declared"} · ` +
+    summary.textContent =
+      `${importEncoding ? `Imported as ${importEncoding.toUpperCase()} · ` : ""}${charset || "Charset not declared"} · ` +
       (findings.length ? `${total} characters to review` : "No non-ASCII characters found");
     report.appendChild(summary);
-    issues.filter((issue) => issue.code !== "non_ascii").forEach((issue) => {
-      const item = document.createElement("p");
-      item.textContent = issue.message;
-      report.appendChild(item);
-    });
+    issues
+      .filter((issue) => issue.code !== "non_ascii")
+      .forEach((issue) => {
+        const item = document.createElement("p");
+        item.textContent = issue.message;
+        report.appendChild(item);
+      });
     let safeAvailable = true;
     if (findings.length) {
       const explanation = document.createElement("p");
@@ -1882,18 +1938,20 @@ class HTMLTemplateTool extends BaseTool {
           const range = new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column);
           this.editor.setSelection(range);
           this.editor.revealRangeInCenter(range);
-          this._encodingActiveDecoration?.set([{
-            range,
-            options: {
-              inlineClassName: "html-encoding-active",
-              overviewRuler: { color: "#ef4444", position: monaco.editor.OverviewRulerLane.Right },
+          this._encodingActiveDecoration?.set([
+            {
+              range,
+              options: {
+                inlineClassName: "html-encoding-active",
+                overviewRuler: { color: "#ef4444", position: monaco.editor.OverviewRulerLane.Right },
+              },
             },
-          }]);
+          ]);
           list.querySelectorAll(".html-encoding-finding").forEach((item) => item.classList.remove("is-active"));
           button.classList.add("is-active");
           const previewIndex = visibleOffsets.indexOf(offset);
-          location.textContent = `${occurrence + 1} / ${finding.count} · line ${start.lineNumber}` +
-            (previewIndex < 0 ? " · source only" : "");
+          location.textContent =
+            `${occurrence + 1} / ${finding.count} · line ${start.lineNumber}` + (previewIndex < 0 ? " · source only" : "");
           this.setEncodingPreviewMode(this.previewEncodingMode === "compare" ? "compare" : "windows", { ...finding, previewIndex });
         });
         list.appendChild(button);
@@ -1974,9 +2032,12 @@ class HTMLTemplateTool extends BaseTool {
         const { save } = await import("@tauri-apps/plugin-dialog");
         const { writeTextFile } = await import("@tauri-apps/plugin-fs");
         const selected = await save({
-          filters: [{ name: "HTML Files", extensions: ["html", "htm"] }],
+          filters: [
+            { name: "HTML Files", extensions: ["html", "htm"] },
+            { name: "All Files", extensions: ["*"] },
+          ],
           defaultPath: fileName,
-          title: "Save HTML File As",
+          title: "Export template",
         });
         if (!selected) return;
         await writeTextFile(selected, content);
@@ -2000,7 +2061,12 @@ class HTMLTemplateTool extends BaseTool {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = fileName;
+      const exportName = window.prompt("Export filename", fileName);
+      if (!exportName?.trim()) {
+        URL.revokeObjectURL(url);
+        return;
+      }
+      link.download = exportName.trim();
       link.style.display = "none";
       document.body.appendChild(link);
       link.click();
@@ -2040,7 +2106,10 @@ class HTMLTemplateTool extends BaseTool {
 
       const selected = await open({
         multiple: false,
-        filters: [{ name: "HTML Files", extensions: ["html", "htm"] }],
+        filters: [
+          { name: "HTML Files", extensions: ["html", "htm"] },
+          { name: "All Files", extensions: ["*"] },
+        ],
         title: "Select HTML File to Import",
       });
 
@@ -2087,6 +2156,177 @@ class HTMLTemplateTool extends BaseTool {
       source: "import",
       session_id: this.analyticsSessionId,
       ...summarizeText(content, "input"),
+    });
+  }
+
+  bindTemplateSqlActions() {
+    const find = (id) => this.container.querySelector(`#${id}`);
+    find("btnImportVelocitySql").hidden = !isTauri();
+    find("btnImportVelocitySql").addEventListener("click", () => this.openSqlImport());
+    find("btnFetchVelocitySql").addEventListener("click", () => void this.fetchSqlImportFields());
+    find("velocitySqlRowTable").addEventListener("click", (event) => {
+      const row = event.target.closest("tr[data-row-index]");
+      const cell = event.target.closest("td[data-column-index]");
+      if (row)
+        this.selectSqlImportRow(Number(row.dataset.rowIndex), {
+          columnIndex: cell ? Number(cell.dataset.columnIndex) : undefined,
+        });
+    });
+    find("velocitySqlRowTable").addEventListener("keydown", (event) => this.handleSqlImportGridKeydown(event));
+    find("velocitySqlField").addEventListener("change", () => this.updateSqlImportPreview());
+    find("btnApplyVelocitySqlImport").addEventListener("click", () => void this.applySqlImport());
+    for (const id of ["btnCloseVelocitySqlImport", "btnCancelVelocitySqlImport", "velocitySqlImportOverlay"]) {
+      find(id).addEventListener("click", () => this.closeSqlImport());
+    }
+    find("velocitySqlImportDialog").addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.closeSqlImport();
+      }
+    });
+    find("btnCreateHtmlQuery").addEventListener("click", () => this.createUpdateQuery());
+    find("btnSyncHtmlContext").addEventListener("click", () => this.openContextReview());
+    for (const id of ["btnCloseVelocitySync", "btnCancelVelocitySync", "velocitySyncOverlay"]) {
+      find(id).addEventListener("click", () => this.closeContextReview());
+    }
+    find("velocitySyncDialog").addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.closeContextReview();
+      }
+    });
+    find("btnApplyVelocitySync").addEventListener("click", () => {
+      try {
+        const context = this.notificationValidation.readContext();
+        this._pendingContextFields.forEach(({ path, value }) => setNestedValue(context, path, value));
+        this.contextEditor.setValue(JSON.stringify(context, null, 2));
+        this.closeContextReview();
+      } catch (error) {
+        this.showError(error.message);
+      }
+    });
+  }
+
+  async applySqlImport() {
+    try {
+      const query = parseTemplateImportQuery(this._sqlImportEditor?.getValue() || "");
+      if (!this._sqlImportRows.length || query !== this._sqlImportSql)
+        throw new Error("Fetch fields for the current query before importing.");
+      const columnIndex = Number(this.sqlElement("velocitySqlField").value);
+      const column = this._sqlImportColumns[columnIndex];
+      const identity = getTemplateImportIdentity(query, this._sqlImportColumns, this._sqlImportRows[this._sqlImportRowIndex], column);
+      const template = this.sqlElement("velocitySqlPreview").value;
+      const imported = await this.newDocument(identity?.label || "Imported template", template);
+      if (!imported) return;
+      imported.sourceIdentity = identity ? { ...identity, templateColumn: column } : null;
+      this.renderDocumentTabs();
+      await this.flushActiveDocument();
+      this.closeSqlImport();
+    } catch (error) {
+      this.showSqlImportError(error);
+    }
+  }
+
+  updateCreateQueryButton() {
+    const button = this.container?.querySelector("#btnCreateHtmlQuery");
+    if (!button) return;
+    const source = this.activeDocument?.sourceIdentity;
+    button.disabled = !source?.table || !source?.templateColumn || !Object.keys(source?.identifiers || {}).length;
+    button.title = button.disabled
+      ? "Import this template from SQL before creating an update query"
+      : "Open an update draft in Quick Query";
+  }
+
+  createUpdateQuery() {
+    try {
+      const draft = buildVelocityQuickQueryDraft(this.activeDocument?.sourceIdentity, this.editor.getValue());
+      draft.title = this.activeDocument.name;
+      draft.source = "html-template";
+      window.app?.router?.navigate("quick-query", { createQuery: draft });
+    } catch (error) {
+      this.showError(error.message);
+    }
+  }
+
+  openContextReview() {
+    try {
+      this._pendingContextFields = suggestMissingContextFields(this.editor.getValue(), this.notificationValidation.readContext());
+      if (!this._pendingContextFields.length) {
+        this.showSuccess("No missing context fields");
+        return;
+      }
+      const list = this.container.querySelector("#velocitySyncFields");
+      list.replaceChildren(
+        ...this._pendingContextFields.map(({ path, value, note }) => {
+          const item = document.createElement("li");
+          const key = document.createElement("code");
+          key.textContent = path;
+          const sample = document.createElement("span");
+          sample.textContent = `${JSON.stringify(value)}${note ? ` — ${note}` : ""}`;
+          item.append(key, sample);
+          return item;
+        }),
+      );
+      for (const selector of [".html-document-bar", ".html-template-layout"])
+        this.container.querySelector(selector)?.setAttribute("inert", "");
+      this.container.querySelector("#velocitySyncOverlay").hidden = false;
+      this.container.querySelector("#velocitySyncDialog").hidden = false;
+      this.container.querySelector("#btnApplyVelocitySync").focus();
+    } catch (error) {
+      this.showError(`Fix Velocity Context JSON before adding fields. ${error.message}`);
+    }
+  }
+
+  closeContextReview() {
+    this.container.querySelector("#velocitySyncOverlay").hidden = true;
+    this.container.querySelector("#velocitySyncDialog").hidden = true;
+    for (const selector of [".html-document-bar", ".html-template-layout"])
+      this.container.querySelector(selector)?.removeAttribute("inert");
+    this.container.querySelector("#btnSyncHtmlContext").focus();
+  }
+
+  initializePaneState() {
+    let state = "expanded";
+    try {
+      state = localStorage.getItem("tool:html-template:pane-state") || "expanded";
+    } catch (_) {}
+    this.setPaneState(state, { persist: false });
+    for (const [pane, id] of [
+      ["template", "btnCollapseHtmlTemplate"],
+      ["context", "btnCollapseHtmlContext"],
+    ]) {
+      const button = this.container?.querySelector(`#${id}`);
+      if (button.dataset.bound) continue;
+      button.dataset.bound = "true";
+      button.addEventListener("click", () => {
+        const collapsed = button.getAttribute("aria-expanded") === "false";
+        this.setPaneState(collapsed ? "expanded" : pane);
+      });
+    }
+  }
+
+  setPaneState(collapsedPane, { persist = true } = {}) {
+    const panels = this.container?.querySelector("#htmlDocumentPanel");
+    if (!panels) return;
+    const state = ["template", "context"].includes(collapsedPane) ? collapsedPane : "expanded";
+    panels.classList.toggle("is-template-collapsed", state === "template");
+    panels.classList.toggle("is-context-collapsed", state === "context");
+    for (const [pane, id, label] of [
+      ["template", "btnCollapseHtmlTemplate", "HTML Template"],
+      ["context", "btnCollapseHtmlContext", "Velocity Context"],
+    ]) {
+      const button = this.container.querySelector(`#${id}`);
+      button?.setAttribute("aria-expanded", String(state !== pane));
+      button?.setAttribute("aria-label", `${state === pane ? "Expand" : "Collapse"} ${label}`);
+    }
+    if (persist) {
+      try {
+        localStorage.setItem("tool:html-template:pane-state", state);
+      } catch (_) {}
+    }
+    requestAnimationFrame(() => {
+      this.editor?.layout?.();
+      this.contextEditor?.layout?.();
     });
   }
 
