@@ -17,6 +17,7 @@ export const JenkinsRunnerTemplate = /*html*/ `
             <select id="jenkins-job" class="jr-input" aria-label="Job Name">
               <option value="tester-execute-query-new">tester-execute-query-new</option>
               <option value="tester-execute-query">tester-execute-query</option>
+              <option value="bmdl-tester-execute-query">bmdl-tester-execute-query</option>
             </select>
             <select id="jenkins-env" class="jr-input" aria-label="ENV Choice"></select>
             <button id="jenkins-clear" class="btn btn-secondary btn-sm-xs" title="Clear editor">Clear</button>

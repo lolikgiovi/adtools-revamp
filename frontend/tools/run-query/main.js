@@ -560,7 +560,7 @@ export class JenkinsRunner extends BaseTool {
       console.log("[subscribeToLogs] All listeners registered");
     };
 
-    const allowedJobs = new Set(["tester-execute-query", "tester-execute-query-new"]);
+    const allowedJobs = new Set(["tester-execute-query", "tester-execute-query-new", "bmdl-tester-execute-query"]);
     const DEFAULT_JOB = "tester-execute-query-new";
     const hasToken = await this.service.hasToken();
 
@@ -2662,7 +2662,7 @@ export class JenkinsRunner extends BaseTool {
         return;
       }
       if (!allowedJobs.has(job)) {
-        this.showError("Invalid job name. Allowed: tester-execute-query or tester-execute-query-new.");
+        this.showError(`Invalid job name. Allowed: ${[...allowedJobs].join(", ")}.`);
         return;
       }
 
