@@ -27,6 +27,8 @@ export const HTMLTemplateToolTemplate = /* html */ `
               <h3 id="htmlTemplateTitle">HTML Template</h3>
             </div>
             <div class="toolbar-left html-source-actions">
+            <button id="btnHtmlFocus" class="btn btn-secondary btn-sm" type="button" aria-pressed="false"
+              title="Focus on the editor and preview">Focus mode</button>
             <input type="file" id="htmlFileInput" accept=".html,.htm,.vtl,.vm,.txt" hidden />
             <details class="html-toolbar-menu">
               <summary class="btn btn-secondary btn-sm">Import

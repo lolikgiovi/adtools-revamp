@@ -87,6 +87,24 @@ class HTMLTemplateTool extends withTemplateSqlImport(BaseTool) {
     this.previewViewportWidth = 390;
     this._splitStorageKey = "tool:html-template:split-ratio";
     this._resizerCleanup = null;
+    this._focusMode = false;
+    this._handleFocusEscape = (event) => {
+      if (event.key !== "Escape" || event.defaultPrevented || !this._focusMode || event.isComposing) return;
+      // Let menus, Monaco widgets, and dialogs consume their own Escape first.
+      const overlays = document.querySelectorAll(
+        'dialog[open], [role="dialog"], [role="menu"], .context-view, .suggest-widget.visible, .find-widget.visible',
+      );
+      if ([...overlays].some((overlay) => overlay.getClientRects().length && getComputedStyle(overlay).visibility !== "hidden")) return;
+      const menu = this.container?.querySelector(".html-toolbar-menu[open]");
+      if (menu) {
+        menu.open = false;
+        menu.querySelector("summary")?.focus();
+        event.preventDefault();
+        return;
+      }
+      this.setFocusMode(false);
+      event.preventDefault();
+    };
     this.analyticsSessionId = this.createAnalyticsId();
     this._documentModelSequence = 0;
     this.inputSource = "default";
@@ -251,6 +269,7 @@ class HTMLTemplateTool extends withTemplateSqlImport(BaseTool) {
     this.notificationValidation = new NotificationValidation(this);
     this.notificationValidation.bind();
     this.bindToolEvents();
+    document.addEventListener("keydown", this._handleFocusEscape);
     this.initializePaneState();
     this.bindTemplateSqlActions();
     window.addEventListener("pagehide", this._handlePageHide);
@@ -268,6 +287,8 @@ class HTMLTemplateTool extends withTemplateSqlImport(BaseTool) {
   }
 
   onUnmount() {
+    this.setFocusMode(false, { restoreFocus: false });
+    document.removeEventListener("keydown", this._handleFocusEscape);
     this.notificationValidation?.dispose();
     this.notificationValidation = null;
     this.contextEditor?.dispose();
@@ -314,6 +335,7 @@ class HTMLTemplateTool extends withTemplateSqlImport(BaseTool) {
   }
 
   onSoftDeactivate() {
+    this.setFocusMode(false, { restoreFocus: false });
     this.notificationValidation?.invalidate();
     this.cleanupResizer();
   }
@@ -1043,6 +1065,7 @@ class HTMLTemplateTool extends withTemplateSqlImport(BaseTool) {
   }
 
   bindToolEvents() {
+    this.container.querySelector("#btnHtmlFocus")?.addEventListener("click", () => this.setFocusMode(!this._focusMode));
     const btnFormat = document.getElementById("btnFormatHtml");
     const btnMinify = document.getElementById("btnMinifyHtml");
     const btnExtract = document.getElementById("btnExtractVtl");
@@ -2285,6 +2308,38 @@ class HTMLTemplateTool extends withTemplateSqlImport(BaseTool) {
     this.container.querySelector("#btnSyncHtmlContext").focus();
   }
 
+  setFocusMode(enabled, { restoreFocus = true } = {}) {
+    const root = this.container?.querySelector(".html-template");
+    const layout = root?.querySelector(".html-template-layout");
+    if (!root || !layout || enabled === this._focusMode) return;
+    const button = root.querySelector("#btnHtmlFocus");
+    const viewState = this.editor?.saveViewState();
+    if (enabled) {
+      this.closeDocumentMenu();
+      this._focusSplitColumns = layout.style.gridTemplateColumns;
+      // Flexible tracks retain the current split while the workspace grows.
+      const columns = getComputedStyle(layout).gridTemplateColumns.split(" ").map(Number.parseFloat);
+      if (window.innerWidth > 900 && columns[0] > 0 && columns[2] > 0) {
+        layout.style.gridTemplateColumns = `minmax(240px, ${columns[0]}fr) 6px minmax(240px, ${columns[2]}fr)`;
+      }
+    } else {
+      layout.style.gridTemplateColumns = this._focusSplitColumns || "";
+    }
+    this._focusMode = enabled;
+    root.classList.toggle("is-focus-mode", enabled);
+    button.setAttribute("aria-pressed", String(enabled));
+    button.textContent = enabled ? "Exit focus" : "Focus mode";
+    button.title = enabled ? "Exit focus mode (Esc)" : "Focus on the editor and preview";
+    this.editor?.layout();
+    this.contextEditor?.layout();
+    this._encodingDiffEditor?.layout();
+    if (viewState) this.editor.restoreViewState(viewState);
+    if (restoreFocus) {
+      if (enabled) this.editor?.focus();
+      else button.focus();
+    }
+  }
+
   initializePaneState() {
     let state = "expanded";
     try {
@@ -2370,7 +2425,7 @@ class HTMLTemplateTool extends withTemplateSqlImport(BaseTool) {
       const right = Math.max(MIN_RIGHT, Math.round(total - left));
       layout.style.gridTemplateColumns = `${left}px ${RESIZER_W}px ${right}px`;
       updateAria(left, total);
-      if (persist) {
+      if (persist && !this._focusMode) {
         try {
           localStorage.setItem(this._splitStorageKey, String(left / total));
         } catch (_) {}

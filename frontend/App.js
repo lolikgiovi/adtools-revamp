@@ -19,7 +19,6 @@ import { UsageOverviewService } from "./core/UsageOverviewService.js";
 import { getUsageAccessState, normalizeUsageScope } from "./core/UsageOverviewModel.js";
 import { ErrorMonitor } from "./core/ErrorMonitor.js";
 import { isTauri } from "./core/Runtime.js";
-import { isToolVisibleToUser } from "./core/ToolVisibility.js";
 import WebUpdateChecker from "./core/WebUpdateChecker.js";
 import { publishedSettingsSync } from "./core/PublishedSettings.js";
 import { ReleaseTips, ReleaseTour, takePendingRelease } from "./core/ReleaseTour.js";
@@ -463,11 +462,6 @@ class App {
 
     if (!definition) {
       console.error(`Tool not found: ${toolId}`);
-      this.router.navigate("home");
-      return;
-    }
-
-    if (!isToolVisibleToUser(toolId)) {
       this.router.navigate("home");
       return;
     }
@@ -1349,7 +1343,6 @@ class App {
     return this.getToolDefinitions()
       .filter((definition) => {
         if (!definition.enabled) return false;
-        if (!isToolVisibleToUser(definition.id)) return false;
         if (forHome && !definition.showOnHome) return false;
         if (!forHome && !definition.showInSidebar) return false;
         if (definition.requiresTauri && !runtimeIsTauri) return false;
@@ -1839,7 +1832,6 @@ class App {
 
   #renderFeedbackOptions() {
     return this.getToolDefinitions()
-      .filter((definition) => isToolVisibleToUser(definition.id))
       .slice()
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((definition) => `<option value="${this.#escapeHtml(definition.id)}">${this.#escapeHtml(definition.name)}</option>`)

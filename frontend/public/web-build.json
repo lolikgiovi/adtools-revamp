@@ -1,86 +1,16 @@
 {
-  "build": "20261026165325",
-  "timestamp": "2026-10-26T16:53:25.725Z",
-  "releaseId": "release-1.3.12",
-  "version": "1.3.12",
-  "title": "Prepare images and templates in one workspace",
-  "summary": "Compress images, bring them into Quick Query, and validate notification templates with their Velocity Context.",
+  "build": "20261029070648",
+  "timestamp": "2026-10-29T07:06:48.721Z",
+  "releaseId": "release-1.3.13",
+  "version": "1.3.13",
+  "title": "Run tools restored and HTML focus mode",
+  "summary": "Run Query and Run Batch are available to all desktop users, and HTML Template gains a focused editor and preview workspace.",
   "notes": [
-    "Compress PNG, JPEG, and WebP images with target file sizes, maximum dimensions, and side-by-side previews.",
-    "Compare available lossless and lossy results, download a batch as ZIP, or add selected images to Quick Query.",
-    "Send image attachments from Quick Query to Compress Image and restore saved image workspaces when you return.",
-    "HTML Template adds editable Velocity Context and notification API validation, with rendered results in the preview.",
-    "Search Settings and global search for configuration entries; manage testing environments and Oracle connections in grouped dialogs.",
-    "Administrators can publish selected settings to registered recipients from Dashboard; registered devices receive them automatically.",
-    "QR generation and TLV viewing now share one tool, and Image tools have their own sidebar group."
+    "Restore Run Query and Run Batch in navigation for all departments.",
+    "Keep both tools visible on devices with missing saved department details.",
+    "HTML Template adds Focus mode to expand the editor and preview; press Escape or Exit focus to return."
   ],
-  "slides": [
-    {
-      "title": "Choose the image result that fits",
-      "body": "Add PNG, JPEG, or WebP images, set size limits, and compare available lossless and lossy results before choosing what to use.",
-      "bullets": [
-        "Set a target file size and optional maximum dimensions.",
-        "Inspect images side by side with linked zoom and pan.",
-        "Download selected results individually or as a ZIP."
-      ],
-      "action": {
-        "label": "Open Compress Image",
-        "route": "compress-image"
-      }
-    },
-    {
-      "title": "Move images into Quick Query",
-      "body": "Send image attachments to Compress Image, then add the selected results to the Quick Query destination you choose.",
-      "bullets": [
-        "Choose an existing query tab or create a new one.",
-        "Image workspaces are saved so you can return to them later."
-      ],
-      "action": {
-        "label": "Open Quick Query",
-        "route": "quick-query"
-      }
-    },
-    {
-      "title": "Validate notification templates with context",
-      "body": "Edit HTML and Velocity Context in separate panels, then validate through your configured notification endpoint and review the rendered response.",
-      "bullets": [
-        "Keep context drafts with each document.",
-        "Review suggested missing fields before adding them.",
-        "Configure the notification endpoint in Settings."
-      ],
-      "action": {
-        "label": "Open HTML Template",
-        "route": "html-template"
-      }
-    }
-  ],
+  "slides": [],
   "tour": [],
-  "tips": [
-    {
-      "id": "compress-image-start",
-      "route": "compress-image",
-      "target": "[data-ci=\"add\"]",
-      "placement": "bottom",
-      "title": "Add images to compress",
-      "body": "Choose PNG, JPEG, or WebP files, then set a target size or compress at the current settings.",
-      "guided": false,
-      "completeOn": {
-        "event": "change",
-        "target": "#ci-files"
-      }
-    },
-    {
-      "id": "settings-search",
-      "route": "settings",
-      "target": "#settings-search",
-      "placement": "bottom",
-      "title": "Find a setting",
-      "body": "Search for an environment, connection, or integration to jump to its settings.",
-      "guided": false,
-      "completeOn": {
-        "event": "change",
-        "target": "#settings-search"
-      }
-    }
-  ]
+  "tips": []
 }

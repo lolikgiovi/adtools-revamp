@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en" class="dark" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HTML focus mode verification</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      #results { position: fixed; bottom: 8px; right: 8px; z-index: 1500; max-width: 420px;
+        padding: 8px; background: #202020; color: #eee; font: 12px/1.5 system-ui; }
+      #results ol { max-height: 40vh; overflow: auto; padding-left: 20px; }
+      .fail { color: #ff8585; }
+      .pass { color: #90d8b0; }
+    </style>
+  </head>
+  <body>
+    <details id="results"><summary>Running focus checks…</summary><ol></ol></details>
+    <div class="sidebar-provider">
+      <aside class="sidebar" data-state="expanded">Sidebar fixture</aside>
+      <!-- Sidebar.updateSidebarState sets this inline margin in the application. -->
+      <main class="main" style="margin-left: var(--sidebar-width)">
+        <header class="main-header">Header fixture</header>
+        <div class="main-content"><div class="tool-root"></div></div>
+      </main>
+    </div>
+    <script type="module">
+      import { HTMLTemplateTool } from "../main.js";
+      import { UsageTracker } from "../../../core/UsageTracker.js";
+      for (const key of ["trackEvent", "trackToolUse", "trackFeature"]) UsageTracker[key] = () => {};
+      const check = (condition, label) => {
+        const row = document.createElement("li");
+        row.className = condition ? "pass" : "fail";
+        row.textContent = `${condition ? "PASS" : "FAIL"}: ${label}`;
+        document.querySelector("#results ol").append(row);
+        if (!condition) throw new Error(label);
+      };
+      const settle = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const visible = (element) => element.getClientRects().length > 0;
+      const tool = new HTMLTemplateTool();
+      tool.initializeDocuments = async () => {
+        tool.documentStore = {
+          saveDocument: async () => {}, saveWorkspace: async () => {},
+          saveWorkspaceAndDocument: async () => {}, close: () => {},
+        };
+        tool.documents = [tool.createDocumentModel({
+          id: "focus-fixture", name: "Focus fixture", html: "<h1>Focus preview</h1>\n" + "<!-- line -->\n".repeat(180),
+          vtlValues: {}, createdAt: Date.now(),
+        })];
+        tool.activeDocumentId = tool.documents[0].id;
+        tool.vtlValues = tool.activeDocument.vtlValues;
+        tool.renderDocumentTabs();
+        return tool.documents;
+      };
+      try {
+        tool.container = document.querySelector(".tool-root");
+        tool.container.innerHTML = tool.render();
+        await tool.onMount();
+        await settle();
+        const find = (selector) => tool.container.querySelector(selector);
+        const button = find("#btnHtmlFocus");
+        const root = find(".html-template");
+        const layout = find(".html-template-layout");
+        const originalColumns = layout.style.gridTemplateColumns;
+        const originalRatio = localStorage.getItem(tool._splitStorageKey);
+        const initialHeight = find("#htmlEditor").getBoundingClientRect().height;
+        tool.setPaneState("context", { persist: false });
+        await settle();
+        tool.editor.setPosition({ lineNumber: 130, column: 4 });
+        tool.editor.revealLineInCenter(130, 1);
+        const scrollTop = tool.editor.getScrollTop();
+        button.click();
+        await settle();
+        check(root.classList.contains("is-focus-mode") && button.textContent === "Exit focus", "Button enters focus mode");
+        check(button.getAttribute("aria-pressed") === "true", "Toggle exposes its pressed state");
+        check(!visible(document.querySelector(".sidebar")) && !visible(document.querySelector(".main-header")), "Shell is hidden");
+        const workspaceBounds = root.getBoundingClientRect();
+        check(workspaceBounds.left <= 9 && innerWidth - workspaceBounds.right <= 9, "Focus workspace fills available width");
+        check(!visible(find(".html-document-bar")) && !visible(find(".html-context-pane")), "Tabs and context are hidden");
+        check(visible(find("#htmlEditor")) && visible(find(".renderer-pane")), "Editor and preview remain visible");
+        check(find("#htmlEditor").getBoundingClientRect().height > initialHeight, "Editor gains vertical space");
+        check(tool.editor.getPosition().lineNumber === 130 && Math.abs(tool.editor.getScrollTop() - scrollTop) < 2,
+          "Cursor and scroll survive entering focus");
+        if (innerWidth > 900) {
+          find("#splitResizer").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+          check(localStorage.getItem(tool._splitStorageKey) === originalRatio, "Focus resizing preserves saved normal split");
+        }
+        const menu = find(".html-toolbar-menu");
+        menu.open = true;
+        menu.querySelector("summary").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+        check(!menu.open && root.classList.contains("is-focus-mode"), "Escape closes open menu before exiting focus");
+        button.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+        await settle();
+        check(!root.classList.contains("is-focus-mode") && document.activeElement === button, "Escape exits and returns keyboard focus");
+        check(layout.style.gridTemplateColumns === originalColumns, "Normal split is restored");
+        check(parseFloat(getComputedStyle(document.querySelector(".main")).marginLeft) > 0, "Sidebar margin returns after exit");
+        check(find("#htmlDocumentPanel").classList.contains("is-context-collapsed"), "Original collapsed panel state is restored");
+        check(visible(document.querySelector(".main-header")) && visible(find(".html-document-bar")), "Shell and tabs return");
+        tool.setPaneState("template", { persist: false });
+        button.click();
+        check(visible(find("#htmlEditor")), "Collapsed source opens in focus mode");
+        tool.onSoftDeactivate();
+        check(!root.classList.contains("is-focus-mode"), "Switching tools clears focus mode");
+        tool.onWarmResume();
+        tool.setPaneState("context", { persist: false });
+        button.click();
+        tool.editor.setValue("<h1>Edited in focus</h1>");
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        check(find("#htmlRenderer").srcdoc.includes("Edited in focus"), "Live preview updates while focused");
+        button.click();
+        check(tool.editor.getValue() === "<h1>Edited in focus</h1>", "Edits survive exiting focus");
+        button.click();
+        tool.previewWhiteBackground = true;
+        tool.applyPreviewBackground();
+        document.querySelector("#results summary").textContent = `PASS: ${document.querySelectorAll("#results li").length} focus checks`;
+      } catch (error) {
+        document.querySelector("#results").open = true;
+        document.querySelector("#results summary").textContent = `FAIL: ${error.message}`;
+        console.error(error);
+      }
+    </script>
+  </body>
+</html>

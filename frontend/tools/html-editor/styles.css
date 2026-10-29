@@ -2,6 +2,52 @@
 
 @import "../../components/template-sql-import.css";
 
+/* Focus is a workspace layout, so native window controls remain available. */
+body:has(.html-template.is-focus-mode) .sidebar,
+body:has(.html-template.is-focus-mode) .sidebar-overlay,
+body:has(.html-template.is-focus-mode) .main-header {
+  display: none;
+}
+
+body:has(.html-template.is-focus-mode) .sidebar-provider > .main {
+  /* Sidebar.updateSidebarState writes an inline margin; focus temporarily overrides it. */
+  margin-left: 0 !important;
+}
+
+body:has(.html-template.is-focus-mode) .main-content {
+  padding: 0.5rem;
+}
+
+.html-template.is-focus-mode .html-document-bar,
+.html-template.is-focus-mode .html-context-pane,
+.html-template.is-focus-mode #btnCollapseHtmlTemplate {
+  display: none;
+}
+
+.html-template.is-focus-mode #htmlDocumentPanel.html-input-panels {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.html-template.is-focus-mode .html-input-panels .html-template-body {
+  display: flex;
+}
+
+.html-template #btnHtmlFocus {
+  white-space: nowrap;
+}
+
+.html-template #btnHtmlFocus:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+  .html-template.is-focus-mode .html-template-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
 /* HTML Template Tool Styles */
 .main-content:has(.html-template) {
   display: flex;

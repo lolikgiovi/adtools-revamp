@@ -1,12 +1,4 @@
-export function isToolVisibleToUser(toolId) {
-  if (toolId !== "run-query" && toolId !== "run-batch") return true;
-  try {
-    return (
-      String(localStorage.getItem("user.department") || "")
-        .trim()
-        .toUpperCase() === "RETAIL"
-    );
-  } catch (_) {
-    return false;
-  }
+// Department details are optional for tool visibility, including on older devices.
+export function isToolVisibleToUser() {
+  return true;
 }

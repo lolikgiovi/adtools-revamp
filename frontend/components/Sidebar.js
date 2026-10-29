@@ -3,7 +3,6 @@
  * Manages navigation and tool selection
  */
 import { UsageTracker } from "../core/UsageTracker.js";
-import { isToolVisibleToUser } from "../core/ToolVisibility.js";
 
 class Sidebar {
   static PINNED_TOOLS_STORAGE_KEY = "sidebar.pinnedTools.v1";
@@ -391,7 +390,7 @@ class Sidebar {
         const enabled = cfg ? cfg.enabled !== false : true;
         const showInSidebar = cfg ? cfg.showInSidebar !== false : true;
         const requiresTauriOk = cfg && cfg.requiresTauri ? runtimeIsTauri : true;
-        return enabled && showInSidebar && requiresTauriOk && isToolVisibleToUser(tool.id);
+        return enabled && showInSidebar && requiresTauriOk;
       })
       .sort((a, b) => {
         const ca = this.toolsConfigMap.get(a.id)?.order ?? 0;

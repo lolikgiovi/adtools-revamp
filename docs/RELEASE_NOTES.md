@@ -1,4 +1,12 @@
-# AD Tools 1.3.12
+# AD Tools 1.3.13
+
+- **Run Query and Run Batch** — Restore navigation for all desktop users, including devices with missing saved department details after an update.
+
+- **HTML Template** — Focus mode expands the editor and preview, with Escape or Exit focus to return to the normal workspace.
+
+## Earlier release notes
+
+### AD Tools 1.3.12
 
 - **Compress Image** — Compress PNG, JPEG, and WebP images with target file sizes, maximum dimensions, lossless/lossy result selection, linked comparison previews, and ZIP downloads.
 - **Quick Query images** — Send image attachments to Compress Image and add selected results to an existing or new query tab. Image workspaces persist between visits.
@@ -6,8 +14,6 @@
 - **Settings** — Search configuration entries from Settings or global search, manage testing environments, and edit integrations and connections in grouped dialogs.
 - **Dashboard** — Publish selected settings to registered email or department recipients, with automatic delivery to registered devices. Analytics gains sortable activity and clearer date formatting.
 - **Navigation** — Image tools have their own group; QR generation and TLV viewing share QR & TLV.
-
-## Earlier release notes
 
 ### AD Tools 1.3.11
 

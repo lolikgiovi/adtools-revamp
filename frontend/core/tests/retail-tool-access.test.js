@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// Failure cases: missing/other departments see Run Query or Run Batch; pins bypass filtering; direct links load it;
-// RETAIL loses access; department casing/whitespace changes access; unrelated tools are accidentally restricted.
+// Failure cases: missing or non-RETAIL departments hide execution tools; direct links redirect;
+// desktop-only tools become visible in the browser; unrelated tools are accidentally restricted.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../../App.js";
 import { Sidebar } from "../../components/Sidebar.js";
@@ -22,14 +22,14 @@ function appHarness() {
   });
 }
 
-describe("RETAIL execution-tool visibility", () => {
+describe("Execution-tool visibility for all departments", () => {
   it.each([null, "", "SME", "WHOLESALE", "RETAIL OPERATIONS", "RETAIL", " retail "])(
-    "filters discovery and pinned navigation for department %s",
+    "shows discovery and pinned navigation for department %s",
     async (department) => {
       if (department !== null) localStorage.setItem("user.department", department);
       window.__TAURI__ = {};
       const app = appHarness();
-      const allowed = department?.trim().toUpperCase() === "RETAIL";
+      const allowed = true;
       for (const forHome of [false, true]) {
         const visible = app.getVisibleToolDefinitions({ runtimeIsTauri: true, forHome }).map((tool) => tool.id);
         expect(visible.includes("run-query")).toBe(allowed);
@@ -53,20 +53,34 @@ describe("RETAIL execution-tool visibility", () => {
     },
   );
 
+  it("keeps execution tools desktop-only", () => {
+    const app = appHarness();
+    for (const forHome of [false, true]) {
+      const visible = app.getVisibleToolDefinitions({ runtimeIsTauri: false, forHome }).map((tool) => tool.id);
+      expect(visible).not.toContain("run-query");
+      expect(visible).not.toContain("run-batch");
+    }
+  });
+
   it.each([
     [null, "run-query"],
     ["SME", "run-query"],
     [null, "run-batch"],
     ["SME", "run-batch"],
-  ])("redirects a direct link for department %s and tool %s before loading", async (department, toolId) => {
+  ])("loads a direct link for department %s and tool %s", async (department, toolId) => {
     if (department !== null) localStorage.setItem("user.department", department);
     localStorage.setItem("user.email", "registered@bankmandiri.co.id");
     localStorage.setItem("user.username", "Registered User");
     localStorage.setItem("user.registered", "true");
     window.__TAURI__ = {};
     const app = appHarness();
+    app.clearCurrentShellPage = vi.fn();
+    app.setMainContentFlush = vi.fn();
+    app.warmHeavyTools = new Map();
+    app.renderLoadingState = vi.fn();
+    app.loadWithAssetRecovery = (load) => load();
     await app.showTool(toolId);
-    expect(app.router.navigate).toHaveBeenCalledWith("home");
-    expect(app.ensureToolLoaded).not.toHaveBeenCalled();
+    expect(app.router.navigate).not.toHaveBeenCalled();
+    expect(app.ensureToolLoaded).toHaveBeenCalledWith(toolId);
   });
 });
