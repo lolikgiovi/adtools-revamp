@@ -40,14 +40,21 @@ export function buildDeviceHealthQuery() {
     SELECT device_id, MAX(julianday(${instant("created_time")})) AS seen FROM tool_usage GROUP BY device_id
     UNION ALL SELECT device_id, MAX(julianday(${instant("created_time")})) AS seen FROM usage_log GROUP BY device_id
   ), latest AS (SELECT device_id, MAX(seen) AS seen FROM activity GROUP BY device_id),
-  devices AS (
+  last_action AS (
+    SELECT device_id, MAX(julianday(${instant("created_time")})) AS last_action
+    FROM tool_usage WHERE source='client' AND julianday(${instant("created_time")})<=julianday('now') GROUP BY device_id
+  ), devices AS (
     SELECT d.device_id, LOWER(u.email) AS user_email, COALESCE(d.platform, 'Unknown') AS platform,
+      COALESCE(NULLIF(TRIM(u.department),''),'Unknown') AS department,
+      strftime('%Y-%m-%dT%H:%M:%SZ',${instant("d.last_seen")}) AS last_checkin,
+      strftime('%Y-%m-%dT%H:%M:%SZ',a.last_action) AS last_tool_action,
       NULLIF(TRIM(d.app_version), '') AS app_version,
       MAX(COALESCE(julianday(${instant("d.last_seen")}), l.seen),
         COALESCE(l.seen, julianday(${instant("d.last_seen")}))) AS seen
     FROM device d JOIN users u ON u.id = d.user_id LEFT JOIN latest l ON l.device_id = d.device_id
+      LEFT JOIN last_action a ON a.device_id=d.device_id
     WHERE ${includedAnalyticsEmailSql("u.email")}
-  ) SELECT device_id, user_email, platform, app_version,
+  ) SELECT device_id, user_email, department, platform, app_version, last_checkin, last_tool_action,
     strftime('%Y-%m-%dT%H:%M:%SZ', seen) AS last_seen,
     CASE WHEN seen IS NULL OR seen > julianday('now') THEN NULL
       ELSE CAST(julianday('now') - seen AS INTEGER) END AS days_since_seen

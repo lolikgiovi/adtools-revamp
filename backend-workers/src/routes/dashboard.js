@@ -1,4 +1,5 @@
 import { buildDailyTrendsQuery, buildDeviceHealthQuery, deviceVersionStatus } from "../utils/dashboardAnalysis.js";
+import { readUsagePatterns } from "../utils/usagePatterns.js";
 import { scopeDashboardDevices } from "../utils/dashboardDevices.js";
 import { buildCapabilityAdoptionQuery, buildImportSourcesQuery } from "../utils/capabilityAdoption.js";
 /**
@@ -1563,11 +1564,20 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
 
     if (tab.id === "trends") {
       await ensureToolUsageSchema(env);
-      return executeQuery(env, `tab:trends:${getDashboardRangeConfig(range).id}:v1`, buildDailyTrendsQuery(range));
+      const normalized = getDashboardRangeConfig(range).id;
+      const result = await coalesceDashboardQuery(env, `tab:trends:${normalized}:patterns-v1`, async () => {
+        await ensureErrorEventsSchema(env);
+        const [daily, analysis] = await Promise.all([
+          env.DB.prepare(buildDailyTrendsQuery(normalized)).all(),
+          readUsagePatterns(env, normalized),
+        ]);
+        return JSON.stringify({ ok: true, data: daily.results || [], analysis });
+      });
+      return new Response(result, { headers: { "Content-Type": "application/json", ...corsHeaders() } });
     }
 
     if (tab.id === "device-health") {
-      const body = await coalesceDashboardQuery(env, "tab:device-health:v1", async () => {
+      const body = await coalesceDashboardQuery(env, "tab:device-health:v2", async () => {
         await ensureDeviceAppVersionSchema(env);
         await ensureToolUsageSchema(env);
         const [result, manifest] = await Promise.all([

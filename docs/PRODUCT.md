@@ -12,7 +12,8 @@ The analytics dashboard serves the maintainer investigating AD Tools adoption an
 
 ## Product Purpose
 
-Help the maintainer understand who uses the tools, which actions produce value, and whether people return.
+Help the maintainer understand when and how people use tools, how patterns change between periods,
+and how people and devices are distributed across departments. More recorded activity is not a product goal.
 
 ## Operating Context
 
@@ -25,6 +26,8 @@ AD Tools has a Vanilla JavaScript frontend, a Cloudflare Workers backend, and a 
 - Distinguish successful uses, opens, tracked events, validation reports, and uncaught errors.
 - Repeated use within one date window is not evidence of returning on a later day.
 - Do not invent trends, funnels, cohorts, or retention metrics unsupported by the data.
+- Recorded tool actions are not unique tasks, productivity, or time saved. Separate output actions, opens, errors, and device check-ins.
+- Compare equal periods in Jakarta time and expose collection gaps and uncertainty rather than treating missing telemetry as confirmed non-use.
 - Keep the redesign scoped to analytics; other tools are outside the request.
 
 ## Evidence on Hand

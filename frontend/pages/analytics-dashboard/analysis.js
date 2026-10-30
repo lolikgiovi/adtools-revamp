@@ -137,14 +137,24 @@ export function renderDeviceHealth(page, container, data) {
     ${
       rows.length
         ? table(
-            ["Person", "Device", "Platform", "Version", "Update status", "Last seen · Jakarta", "Activity"],
+            [
+              "Person",
+              "Department",
+              "Device",
+              "Platform",
+              "Version",
+              "Update status",
+              "App check-in · Jakarta",
+              "Last tool action · Jakarta",
+              "Activity",
+            ],
             rows
               .map(
                 (row) =>
-                  `<tr><th scope="row">${escape(row.user_email)}</th><td class="device-identifier">${escape(row.device_id)}</td>
+                  `<tr><th scope="row"><button type="button" class="device-person" data-device-person="${escape(row.user_email)}">${escape(row.user_email)}</button></th>
+        <td>${escape(row.department || "Unknown")}</td><td class="device-identifier">${escape(row.device_id)}</td>
         <td>${escape(row.platform)}</td><td>${escape(row.app_version || "Unknown")}</td><td>${escape(row.version_status)}</td>
-        <td>${row.last_seen ? escape(new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(new Date(row.last_seen))) : "Unknown"}
-          ${row.days_since_seen !== null ? `<small class="device-age">${number(row.days_since_seen)} days ago</small>` : ""}</td>
+        <td>${deviceTime(row.last_checkin, escape)}</td><td>${deviceTime(row.last_tool_action, escape)}</td>
         <td>${escape(row.activity_status)}</td></tr>`,
               )
               .join(""),
@@ -152,7 +162,8 @@ export function renderDeviceHealth(page, container, data) {
         : '<p class="panel-empty">No matching devices.</p>'
     }
     <details class="counting-help"><summary>About device status</summary><p>Active: seen in the last 7 days. Quiet: 7–29 days.
-      Inactive: 30 or more days. Last seen uses the latest device check-in or recorded tool activity.
+      Inactive: 30 or more days. Activity status uses the latest device check-in or recorded activity.
+      App check-in is not evidence of tool use. Last tool action uses directly recorded actions and excludes future timestamps.
       Inactivity does not prove a device was abandoned. Versions are last reported values compared with the published stable release.</p></details>
   </section>`;
   container.querySelectorAll("[data-device-filter]").forEach((select) =>
@@ -163,5 +174,19 @@ export function renderDeviceHealth(page, container, data) {
     }),
   );
   enhanceSearchableDropdowns(container);
+  container
+    .querySelectorAll("[data-device-person]")
+    .forEach((button) => button.addEventListener("click", () => page.openPerson(button.dataset.devicePerson)));
   restoreFocus();
+}
+
+function deviceTime(value, escape) {
+  if (!value || !Number.isFinite(Date.parse(value))) return "Unknown";
+  return escape(
+    new Intl.DateTimeFormat(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: "Asia/Jakarta",
+    }).format(new Date(value)),
+  );
 }

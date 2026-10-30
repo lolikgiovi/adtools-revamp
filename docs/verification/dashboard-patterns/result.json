@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "checks": [
+    "1440: 30 calendar days, equal-period comparison, hourly patterns, day/hour drill-down, departments, no document overflow",
+    "1440: range changes fetch 7 calendar days through the real Worker handler",
+    "1440: device identity, exclusions, update and inactivity filters, search, empty state, no overflow",
+    "1440: cached Trends keeps analysis data and the heatmap supports arrow-key navigation",
+    "390: 30 calendar days, equal-period comparison, hourly patterns, day/hour drill-down, departments, no document overflow",
+    "390: range changes fetch 7 calendar days through the real Worker handler",
+    "390: device identity, exclusions, update and inactivity filters, search, empty state, no overflow",
+    "390: cached Trends keeps analysis data and the heatmap supports arrow-key navigation"
+  ],
+  "errors": [],
+  "data": "Synthetic SQLite fixtures; actual authenticated Worker handlers; stable-release R2 fixture",
+  "command": "PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs node frontend/pages/dashboard/tests/trends-browser.mjs"
+}

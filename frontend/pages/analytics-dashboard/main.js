@@ -4,6 +4,7 @@
  * Tabs are fetched dynamically from the API
  */
 import { renderTrends, renderDeviceHealth } from "./analysis.js";
+import { renderUsagePatterns } from "./patterns.js";
 import { AnalyticsDashboardTemplate } from "./template.js";
 import "./styles.css";
 
@@ -575,8 +576,9 @@ class AnalyticsDashboardPage {
           this.cache[cacheKey] = pageResult;
           this.applyPaginatedPage(content, pageResult.data, pageResult.pagination, append, paginationState);
         } else {
-          this.cache[cacheKey] = data.data;
-          this.renderTable(content, data.data);
+          const report = tabId === "trends" && data.analysis ? { data: data.data, analysis: data.analysis } : data.data;
+          this.cache[cacheKey] = report;
+          this.renderTable(content, report);
         }
       } else {
         content.innerHTML = `<div class="panel-error">${this.escapeHtml(data.error || "Failed to load data")}</div>`;
@@ -627,6 +629,10 @@ class AnalyticsDashboardPage {
 
   renderTable(container, data, { skipFilter = false } = {}) {
     if (!container) return;
+    if (this.currentTab === "trends" && data?.analysis) {
+      this.lastRenderedData = data.data;
+      return renderUsagePatterns(this, container, data.analysis);
+    }
     this.lastRenderedData = Array.isArray(data) ? data : [];
     if (this.currentTab === "trends") return renderTrends(this, container, this.lastRenderedData);
     if (this.currentTab === "device-health") return renderDeviceHealth(this, container, this.lastRenderedData);

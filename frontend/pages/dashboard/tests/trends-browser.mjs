@@ -9,7 +9,7 @@ const { default: worker } = await moduleServer.ssrLoadModule("/../backend-worker
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || "playwright");
 const base = process.env.DASHBOARD_TEST_URL || "http://localhost:1246";
-const output = resolve("docs/verification/dashboard-trends");
+const output = resolve("docs/verification/dashboard-patterns");
 await mkdir(output, { recursive: true });
 const db = new DatabaseSync(":memory:");
 const migrations = new URL("../../../../backend-workers/migrations/", import.meta.url);
@@ -33,9 +33,9 @@ const env = {
   adtools: { get: async () => null, put: async () => {}, delete: async () => {} },
   UPDATES: { get: async () => ({ json: async () => ({ version: "1.3.12" }) }) },
 };
-db.exec(`INSERT INTO users (id,email,created_time,last_seen) VALUES
-  ('alex','alex@example.test',datetime('now'),datetime('now')),
-  ('sam','sam@example.test',datetime('now'),datetime('now'));
+db.exec(`INSERT INTO users (id,email,created_time,last_seen,department) VALUES
+  ('alex','alex@example.test',datetime('now'),datetime('now'),'RETAIL'),
+  ('sam','sam@example.test',datetime('now'),datetime('now'),NULL);
   INSERT INTO device (device_id,user_id,platform,created_time,last_seen,app_version) VALUES
   ('macbook-alex-001','alex','macOS',datetime('now','-100 days'),datetime('now','+7 hours'),'1.3.12'),
   ('windows-alex-002','alex','Windows',datetime('now','-100 days'),datetime('now','+7 hours','-45 days'),'1.3.9'),
@@ -43,12 +43,20 @@ db.exec(`INSERT INTO users (id,email,created_time,last_seen) VALUES
   ('unknown-sam-004','sam','Unknown',datetime('now'), 'invalid',NULL),
   ('excluded-device','sam','macOS',datetime('now'),datetime('now'),'1.3.12');`);
 const insert = db.prepare(`INSERT INTO tool_usage (event_id,user_email,device_id,tool_id,action,source,created_time)
-  VALUES (?,?,'macbook-alex-001','json-tools','prettify','client',datetime('now','+7 hours','start of day',?,'+1 hour'))`);
+  VALUES (?,?,?,'json-tools','prettify','client',datetime('now','+7 hours','start of day',?,'+12 hours'))`);
 for (let day = 1; day < 31; day++) {
   const count = day % 6 === 0 ? 0 : ((day * 7) % 23) + 2;
   for (let event = 0; event < count; event++)
-    insert.run(`${day}-${event}`, event % 3 ? "alex@example.test" : "sam@example.test", `-${day} days`);
+    insert.run(
+      `${day}-${event}`,
+      event % 3 ? "alex@example.test" : "sam@example.test",
+      event % 3 ? "macbook-alex-001" : "linux-sam-003",
+      `-${day} days`,
+    );
 }
+db.exec(`INSERT INTO tool_usage (event_id,user_email,device_id,tool_id,action,source,created_time) VALUES
+  ('night-merge','sam@example.test','linux-sam-003','quick-query','merge','client',datetime('now','+7 hours','start of day','-1 day','+1 hour')),
+  ('prior-example','alex@example.test','macbook-alex-001','json-tools','copy_output','client',datetime('now','+7 hours','start of day','-35 days','+14 hours'));`);
 const auth = await worker.fetch(
   new Request("http://localhost/dashboard/verify", {
     method: "POST",
@@ -102,6 +110,16 @@ try {
     await page.locator('[data-tab="trends"]').click();
     await page.locator(".trend-day").first().waitFor();
     assert.equal(await page.locator(".trend-day").count(), 30);
+    assert.equal(await page.locator(".pattern-hour").count(), 24);
+    assert.equal(await page.locator(".heatmap-cell").count(), 30 * 24);
+    assert.match(await page.locator(".period-comparison").innerText(), /Previous period/);
+    assert.match(await page.locator(".department-summary").innerText(), /RETAIL/);
+    assert.match(await page.locator(".department-summary").innerText(), /Unknown/);
+    assert.equal(await page.locator(".daily-trends").getByText("Successful uses", { exact: true }).count(), 0);
+    if (!process.env.SKIP_SCREENSHOTS) await page.screenshot({ path: resolve(output, `${width}-trends.png`), fullPage: true });
+    await page.locator('[data-pattern-hour="1"]').click();
+    assert.match(await page.locator(".pattern-evidence").innerText(), /Quick Query/);
+    await page.locator("[data-pattern-reset]").click();
     await page
       .locator('[data-trend-select="day"]')
       .evaluate((select) => select.closest(".ad-searchable-dropdown").querySelector("button").focus());
@@ -110,13 +128,21 @@ try {
       await page.evaluate(() => document.activeElement.closest(".ad-searchable-dropdown")?.querySelector("select").dataset.trendSelect),
       "day",
     );
-    await page.locator('[data-trend-select="comparison"]').selectOption({ index: 2 });
     assert.equal(await page.locator('[data-trend-select="day"]').evaluate((element) => element.selectedIndex), 1);
     await page.locator(".trend-day").nth(4).click();
-    assert.equal(await page.locator('.trend-day[aria-pressed="true"]').count(), 1);
+    await page.locator('[data-pattern-hour="12"]').click();
+    assert.match(await page.locator(".pattern-evidence").innerText(), /12:00/);
+    assert.match(await page.locator(".pattern-evidence").innerText(), /JSON/);
+    await page.locator("[data-pattern-reset]").click();
+    await page.locator("[data-pattern-department]").selectOption("RETAIL");
+    assert.equal(await page.locator('.pattern-evidence [data-pattern-person="sam@example.test"]').count(), 0);
+    await page.locator("[data-pattern-department]").selectOption("");
+    assert.equal(await page.locator('.trend-day[aria-pressed="true"]').count(), 0);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
-    await page.screenshot({ path: resolve(output, `${width}-trends.png`), fullPage: true });
-    checks.push(`${width}: 30 calendar days, date comparisons, chart selection, no document overflow`);
+    if (!process.env.SKIP_SCREENSHOTS) await page.screenshot({ path: resolve(output, `${width}-detail.png`), fullPage: true });
+    checks.push(
+      `${width}: 30 calendar days, equal-period comparison, hourly patterns, day/hour drill-down, departments, no document overflow`,
+    );
     // Native select is upgraded by the shared searchable-dropdown component in the full application.
     await page.evaluate(() => {
       const select = document.querySelector("#dashboard-range");
@@ -128,6 +154,8 @@ try {
     await page.locator('[data-tab="device-health"]').click();
     await page.locator(".device-health tbody tr").first().waitFor();
     assert.equal(await page.locator(".device-health tbody tr").count(), 4);
+    assert.match(await page.locator(".device-health thead").innerText(), /Last tool action/);
+    assert.match(await page.locator(".device-health thead").innerText(), /App check-in/);
     assert.equal(await page.locator("#dashboard-range").isVisible(), false);
     await page
       .locator('[data-device-filter="activity"]')
@@ -150,8 +178,16 @@ try {
     await page.locator("#dashboard-search").fill("");
     await page.locator('[data-device-filter="version"]').selectOption({ index: 0 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
-    await page.screenshot({ path: resolve(output, `${width}-devices.png`), fullPage: true });
+    if (!process.env.SKIP_SCREENSHOTS) await page.screenshot({ path: resolve(output, `${width}-devices.png`), fullPage: true });
     checks.push(`${width}: device identity, exclusions, update and inactivity filters, search, empty state, no overflow`);
+    await page.locator('[data-tab="trends"]').click();
+    await page.locator(".pattern-hour").first().waitFor();
+    assert.equal(await page.locator(".trend-day").count(), 7);
+    const firstCell = page.locator(".heatmap-cell").first();
+    await firstCell.focus();
+    await page.keyboard.press("ArrowRight");
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.patternCellHour), "1");
+    checks.push(`${width}: cached Trends keeps analysis data and the heatmap supports arrow-key navigation`);
     await context.close();
   }
   assert.deepEqual(errors, []);

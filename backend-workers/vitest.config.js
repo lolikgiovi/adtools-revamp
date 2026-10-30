@@ -25,6 +25,9 @@ export default defineConfig({
     exclude: [
       "backend-workers/tests/settings-publishing.test.js",
       "backend-workers/tests/analytics-count-integrity.test.js",
+      "backend-workers/tests/analytics-timestamps.test.js",
+      "backend-workers/tests/analytics-timestamp-repair.test.js",
+      "backend-workers/tests/analytics-timestamp-regression-repair.test.js",
       "backend-workers/tests/capability-adoption.test.js",
       "backend-workers/tests/canonical-tool-usage-migration.test.js",
       "backend-workers/tests/dashboard-performance.test.js",
@@ -33,6 +36,7 @@ export default defineConfig({
       "backend-workers/tests/dashboard-person.test.js",
       "backend-workers/tests/dashboard-tabs-smoke.test.js",
       "backend-workers/tests/dashboard-trends.test.js",
+      "backend-workers/tests/dashboard-patterns.test.js",
       "backend-workers/tests/lifetime-usage-baseline.test.js",
     ],
   },

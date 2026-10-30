@@ -1485,3 +1485,198 @@
   outline: 2px solid hsl(var(--ring));
   outline-offset: -2px;
 }
+
+.usage-patterns h2 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+}
+.usage-patterns > section {
+  min-width: 0;
+}
+.usage-patterns .analysis-heading h2 {
+  margin-bottom: 0;
+}
+.usage-patterns > section + section {
+  padding-top: 8px;
+}
+.pattern-observation,
+.pattern-note,
+.pattern-quality p {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+.pattern-note {
+  color: hsl(var(--muted-foreground));
+  margin: 10px 0 0;
+  max-width: 75ch;
+}
+.pattern-quality {
+  padding: 12px 16px;
+  background: hsl(var(--muted));
+  border-radius: 6px;
+  font-size: 0.8125rem;
+}
+.pattern-quality summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.pattern-quality p {
+  margin: 8px 0 0;
+  max-width: 75ch;
+}
+.pattern-metrics,
+.pattern-legend,
+.pattern-people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pattern-metrics [aria-pressed="true"] {
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+}
+.pattern-legend {
+  gap: 20px;
+  margin-bottom: 12px;
+  font-size: 0.75rem;
+}
+.pattern-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.pattern-swatch {
+  width: 12px;
+  height: 12px;
+  display: inline-block;
+}
+.pattern-swatch.current,
+.pattern-hour-current {
+  background: hsl(var(--foreground));
+}
+.pattern-swatch.previous,
+.pattern-hour-previous {
+  background: hsl(var(--muted-foreground));
+  opacity: 0.55;
+}
+.pattern-hour-scroll,
+.pattern-heatmap-scroll {
+  max-width: 100%;
+  overflow: auto;
+  scrollbar-color: hsl(var(--muted-foreground)) transparent;
+  scrollbar-width: thin;
+}
+.pattern-hours {
+  display: grid;
+  grid-template-columns: repeat(24, minmax(24px, 1fr));
+  gap: 6px;
+  height: 200px;
+}
+.pattern-hour {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 4px 1px;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: hsl(var(--foreground));
+  font: inherit;
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.pattern-hour-bars {
+  height: 160px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+}
+.pattern-hour-bars > span {
+  display: block;
+  width: 42%;
+  min-width: 6px;
+}
+.pattern-hour[aria-pressed="true"],
+.pattern-hour:hover {
+  border-bottom-color: hsl(var(--foreground));
+}
+.pattern-heatmap {
+  display: grid;
+  grid-template-columns: 64px repeat(24, minmax(20px, 1fr));
+  grid-auto-rows: 22px;
+  gap: 4px;
+  margin-top: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.heatmap-hour {
+  text-align: center;
+  font-size: 0.6875rem;
+  color: hsl(var(--muted-foreground));
+}
+.heatmap-date {
+  text-align: left;
+  background: transparent;
+  border: 0;
+  color: hsl(var(--foreground));
+  font: inherit;
+  font-size: 0.6875rem;
+  cursor: pointer;
+}
+.heatmap-cell {
+  position: relative;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--muted));
+  border-radius: 2px;
+  cursor: pointer;
+}
+.heatmap-cell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: hsl(var(--foreground));
+  opacity: var(--cell-strength);
+  border-radius: inherit;
+}
+.heatmap-cell[aria-pressed="true"] {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 1px;
+}
+.usage-patterns button:focus-visible,
+.device-person:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+.pattern-people {
+  margin-top: 12px;
+}
+.pattern-people button {
+  overflow-wrap: anywhere;
+  white-space: normal;
+  text-align: left;
+}
+.device-person {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.pattern-evidence .day-comparison-controls {
+  margin: 14px 0;
+}
+@media (max-width: 540px) {
+  .pattern-evidence .day-comparison-controls label {
+    min-width: 0;
+  }
+  .pattern-evidence .ad-searchable-dropdown {
+    min-width: 0;
+    max-width: 72%;
+  }
+}
