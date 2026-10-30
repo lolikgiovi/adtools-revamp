@@ -1,0 +1,18 @@
+{
+  "passed": true,
+  "checks": [
+    "project-1440",
+    "sidebar-project-1440",
+    "lockey-1440",
+    "lockey-mode-1440",
+    "dialog-true-1440",
+    "dialog-false-1440",
+    "adaptive-threshold-keyboard-live-updates-1440",
+    "project-620",
+    "lockey-620",
+    "lockey-mode-620",
+    "dialog-true-620",
+    "dialog-false-620",
+    "adaptive-threshold-keyboard-live-updates-620"
+  ]
+}

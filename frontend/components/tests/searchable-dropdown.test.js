@@ -9,6 +9,7 @@ function renderSelect() {
       <option value="dev">Development</option>
       <option value="staging">Staging</option>
       <option value="production">Production</option>
+      <option value="qa">QA</option>
     </select>
   `;
   return document.querySelector("#environment");

@@ -29,7 +29,8 @@ function cleanText(value) {
 }
 
 /**
- * Turns a native select into a searchable, keyboard-friendly combobox while
+ * Turns a native select into a keyboard-friendly custom dropdown, with search
+ * when there are more than three options, while
  * leaving the original element in the DOM as the source of truth. Existing
  * tool code can continue to read `.value`, populate options, and listen for
  * native `input`/`change` events without knowing about the visual upgrade.
@@ -128,6 +129,7 @@ export class SearchableDropdown {
 
     const searchWrap = document.createElement("div");
     searchWrap.className = "ad-searchable-dropdown-search-wrap";
+    this.searchWrap = searchWrap;
     const searchIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     searchIcon.setAttribute("viewBox", "0 0 24 24");
     searchIcon.setAttribute("fill", "none");
@@ -158,6 +160,7 @@ export class SearchableDropdown {
     this.optionsEl.id = optionListId;
     this.optionsEl.className = "ad-searchable-dropdown-options";
     this.optionsEl.setAttribute("role", "listbox");
+    this.optionsEl.setAttribute("aria-label", accessibleLabel || "Select an option");
     this.optionsEl.tabIndex = -1;
 
     this.noResultsEl = document.createElement("div");
@@ -196,7 +199,10 @@ export class SearchableDropdown {
     if (explicitLabel) return cleanText(explicitLabel);
 
     const labels = this.select.labels ? Array.from(this.select.labels) : [];
-    const labelText = labels.map((label) => cleanText(label.textContent)).filter(Boolean).join(" ");
+    const labelText = labels
+      .map((label) => cleanText(label.textContent))
+      .filter(Boolean)
+      .join(" ");
     return labelText || cleanText(this.select.title);
   }
 
@@ -242,8 +248,12 @@ export class SearchableDropdown {
       if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
         event.preventDefault();
         this.open();
-        this.searchInput.value = event.key;
-        this.renderOptions();
+        if (this.isSearchable) {
+          this.searchInput.value = event.key;
+          this.renderOptions();
+        } else {
+          this.highlightByPrefix(event.key);
+        }
       }
     };
     this.onSearchInput = () => this.renderOptions();
@@ -254,7 +264,11 @@ export class SearchableDropdown {
       } else if (event.key === "ArrowUp") {
         event.preventDefault();
         this.moveActive(-1);
-      } else if (event.key === "Enter") {
+      } else if (!this.isSearchable && ["Home", "End"].includes(event.key)) {
+        event.preventDefault();
+        const available = this.filteredOptions.map((option, index) => (option.disabled ? -1 : index)).filter((index) => index >= 0);
+        this.setActiveIndex(event.key === "Home" ? available[0] : available.at(-1));
+      } else if (event.key === "Enter" || (!this.isSearchable && event.key === " ")) {
         event.preventDefault();
         const option = this.filteredOptions[this.activeIndex];
         if (option) this.chooseOption(option);
@@ -262,7 +276,10 @@ export class SearchableDropdown {
         event.preventDefault();
         this.close(true);
       } else if (event.key === "Tab") {
-        this.close(false);
+        this.close(true);
+      } else if (!this.isSearchable && event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+        this.highlightByPrefix(event.key);
       }
     };
     this.onOptionsClick = (event) => {
@@ -278,7 +295,7 @@ export class SearchableDropdown {
       if (Number.isInteger(index)) this.setActiveIndex(index);
     };
     this.onDocumentClick = (event) => {
-      if (this.isOpen && !this.wrapper.contains(event.target)) this.close(false);
+      if (this.isOpen && !this.wrapper.contains(event.target) && !this.menu.contains(event.target)) this.close(false);
     };
     this.onSelectEvent = () => this.sync();
     this.onFormReset = () => {
@@ -290,6 +307,7 @@ export class SearchableDropdown {
     this.trigger.addEventListener("keydown", this.onTriggerKeydown);
     this.searchInput.addEventListener("input", this.onSearchInput);
     this.searchInput.addEventListener("keydown", this.onSearchKeydown);
+    this.optionsEl.addEventListener("keydown", this.onSearchKeydown);
     this.optionsEl.addEventListener("click", this.onOptionsClick);
     this.optionsEl.addEventListener("pointerover", this.onOptionsPointerover);
     this.select.addEventListener("input", this.onSelectEvent);
@@ -322,6 +340,7 @@ export class SearchableDropdown {
 
   sync() {
     if (!this.select || !this.wrapper) return;
+    this.syncSearchMode();
 
     const selected = this.select.options[this.select.selectedIndex];
     const selectedLabel = cleanText(selected?.textContent) || this.select.dataset.placeholder || "Select an option";
@@ -337,6 +356,39 @@ export class SearchableDropdown {
     if (this.isOpen) this.renderOptions();
   }
 
+  syncSearchMode() {
+    const searchable = this.select.options.length > 3;
+    if (this.isSearchable === searchable) return;
+    const hadMenuFocus = this.menu.contains(document.activeElement);
+    this.isSearchable = searchable;
+    this.searchWrap.hidden = !searchable;
+    this.searchInput.value = "";
+    this.activeIndex = -1;
+    this.wrapper.classList.toggle("is-searchable", searchable);
+    this.menu.classList.toggle("is-searchable", searchable);
+    this.menu.setAttribute("role", searchable ? "dialog" : "presentation");
+    if (searchable) this.menu.setAttribute("aria-label", this.accessibleLabel ? `${this.accessibleLabel} options` : "Select an option");
+    else this.menu.removeAttribute("aria-label");
+    this.trigger.setAttribute("aria-haspopup", searchable ? "dialog" : "listbox");
+    this.trigger.setAttribute("aria-controls", searchable ? this.menu.id : this.optionsEl.id);
+    if (this.isOpen && hadMenuFocus) this.focusMenu();
+  }
+
+  focusMenu() {
+    const target = this.isSearchable ? this.searchInput : this.optionsEl;
+    target.focus({ preventScroll: true });
+  }
+
+  highlightByPrefix(character) {
+    const now = Date.now();
+    this.typeahead = now - (this.typeaheadAt || 0) < 700 ? (this.typeahead || "") + character : character;
+    this.typeaheadAt = now;
+    const index = this.filteredOptions.findIndex(
+      (option) => !option.disabled && option.label.toLowerCase().startsWith(this.typeahead.toLowerCase()),
+    );
+    if (index >= 0) this.setActiveIndex(index);
+  }
+
   positionMenu() {
     if (!this.isOpen || !this.trigger || !this.menu) return;
 
@@ -345,7 +397,10 @@ export class SearchableDropdown {
     const menuGap = 6;
     const viewportWidth = Math.max(window.innerWidth || document.documentElement.clientWidth || 0, viewportPadding * 2);
     const viewportHeight = Math.max(window.innerHeight || document.documentElement.clientHeight || 0, viewportPadding * 2);
-    const preferredWidth = Math.max(triggerRect.width || 0, 240);
+    const optionLabelWidth = this.isSearchable
+      ? 0
+      : Math.max(0, ...Array.from(this.optionsEl.querySelectorAll(".ad-searchable-dropdown-option-label"), (label) => label.scrollWidth));
+    const preferredWidth = Math.max(triggerRect.width || 0, this.isSearchable ? 240 : Math.max(120, optionLabelWidth + 64));
     const menuWidth = Math.min(preferredWidth, viewportWidth - viewportPadding * 2);
     const left = Math.min(Math.max(triggerRect.left, viewportPadding), viewportWidth - viewportPadding - menuWidth);
 
@@ -361,11 +416,12 @@ export class SearchableDropdown {
     const top = Math.min(Math.max(preferredTop, viewportPadding), maxTop);
 
     this.wrapper.classList.toggle("is-open-up", openUp);
+    this.menu.classList.toggle("is-open-up", openUp);
     this.menu.style.setProperty("--ad-searchable-dropdown-menu-top", `${top}px`);
   }
 
   renderOptions() {
-    const query = cleanText(this.searchInput.value).toLowerCase();
+    const query = this.isSearchable ? cleanText(this.searchInput.value).toLowerCase() : "";
     const options = this.getOptions();
     this.filteredOptions = options.filter((option) => {
       if (!query) return true;
@@ -377,6 +433,7 @@ export class SearchableDropdown {
     this.filteredOptions.forEach((option, index) => {
       const optionEl = document.createElement("button");
       optionEl.type = "button";
+      optionEl.tabIndex = -1;
       optionEl.className = "ad-searchable-dropdown-option";
       optionEl.dataset.optionIndex = String(index);
       optionEl.id = `${this.optionsEl.id}-${index}`;
@@ -428,8 +485,10 @@ export class SearchableDropdown {
     optionEls.forEach((optionEl, index) => optionEl.classList.toggle("is-active", index === this.activeIndex));
 
     const activeEl = optionEls[this.activeIndex];
+    this.searchInput.removeAttribute("aria-activedescendant");
     if (activeEl) {
       this.optionsEl.setAttribute("aria-activedescendant", activeEl.id);
+      if (this.isSearchable) this.searchInput.setAttribute("aria-activedescendant", activeEl.id);
       try {
         activeEl.scrollIntoView({ block: "nearest" });
       } catch (_) {}
@@ -449,7 +508,12 @@ export class SearchableDropdown {
     if (!available.length) return;
 
     const currentPosition = available.indexOf(this.activeIndex);
-    const nextPosition = currentPosition < 0 ? (direction > 0 ? 0 : available.length - 1) : (currentPosition + direction + available.length) % available.length;
+    const nextPosition =
+      currentPosition < 0
+        ? direction > 0
+          ? 0
+          : available.length - 1
+        : (currentPosition + direction + available.length) % available.length;
     this.setActiveIndex(available[nextPosition]);
   }
 
@@ -472,18 +536,29 @@ export class SearchableDropdown {
 
   open() {
     if (this.select.disabled) return;
+    this.syncSearchMode();
+    instances.forEach((instance) => {
+      if (instance !== this) instance.close(false);
+    });
     this.isOpen = true;
     this.wrapper.classList.add("is-open");
+    this.menu.classList.add("is-open");
     this.menu.setAttribute("aria-hidden", "false");
     this.trigger.setAttribute("aria-expanded", "true");
+    // Top-layer popovers escape ancestor clipping and stacking contexts while
+    // retaining DOM ancestry, inherited themes, and modal-dialog focus behavior.
+    if (typeof this.menu.showPopover === "function") {
+      this.menu.setAttribute("popover", "manual");
+      this.menu.showPopover();
+    } else {
+      // Keep the fallback within its modal's focus scope, if there is one.
+      this.menu.removeAttribute("popover");
+      (this.wrapper.closest("dialog[open]") || document.body).appendChild(this.menu);
+    }
     this.searchInput.value = "";
     this.renderOptions();
     this.positionMenu();
-    try {
-      this.searchInput.focus({ preventScroll: true });
-    } catch (_) {
-      this.searchInput.focus();
-    }
+    this.focusMenu();
   }
 
   close(restoreFocus = false) {
@@ -491,9 +566,14 @@ export class SearchableDropdown {
     this.isOpen = false;
     this.wrapper.classList.remove("is-open");
     this.wrapper.classList.remove("is-open-up");
+    if (this.menu.hasAttribute("popover") && typeof this.menu.hidePopover === "function") this.menu.hidePopover();
+    this.menu.classList.remove("is-open", "is-open-up");
+    if (this.menu.parentNode !== this.wrapper) this.wrapper.appendChild(this.menu);
     this.menu.setAttribute("aria-hidden", "true");
     this.trigger.setAttribute("aria-expanded", "false");
     this.searchInput.value = "";
+    this.typeahead = "";
+    this.typeaheadAt = 0;
     this.activeIndex = -1;
     if (restoreFocus) this.trigger.focus();
   }
@@ -505,6 +585,7 @@ export class SearchableDropdown {
     this.trigger?.removeEventListener("keydown", this.onTriggerKeydown);
     this.searchInput?.removeEventListener("input", this.onSearchInput);
     this.searchInput?.removeEventListener("keydown", this.onSearchKeydown);
+    this.optionsEl?.removeEventListener("keydown", this.onSearchKeydown);
     this.optionsEl?.removeEventListener("click", this.onOptionsClick);
     this.optionsEl?.removeEventListener("pointerover", this.onOptionsPointerover);
     this.select?.removeEventListener("input", this.onSelectEvent);

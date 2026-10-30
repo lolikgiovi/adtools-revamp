@@ -1,4 +1,4 @@
-/* Shared searchable dropdown treatment for every native single-select. */
+/* Shared custom selects: search appears only when there are more than three options. */
 .ad-searchable-dropdown {
   position: relative;
   display: inline-flex;
@@ -47,8 +47,12 @@
   line-height: 1.2;
   text-align: left;
   cursor: pointer;
-  box-shadow: 0 1px 0 hsl(var(--foreground) / 0.03), 0 5px 14px hsl(var(--shadow) / 0.08) !important;
-  transition: border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+  box-shadow: none !important;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
 }
 
 .ad-searchable-dropdown-trigger:hover:not(:disabled) {
@@ -64,7 +68,7 @@
   outline: 2px solid hsl(var(--ring) / 0.8) !important;
   outline-offset: 2px;
   border-color: hsl(var(--ring)) !important;
-  box-shadow: 0 0 0 4px hsl(var(--ring) / 0.14) !important;
+  box-shadow: none !important;
 }
 
 .ad-searchable-dropdown-trigger:disabled {
@@ -85,7 +89,9 @@
   width: 1rem;
   height: 1rem;
   color: hsl(var(--muted-foreground));
-  transition: transform 180ms ease, color 180ms ease;
+  transition:
+    transform 180ms ease,
+    color 180ms ease;
 }
 
 .ad-searchable-dropdown.is-open .ad-searchable-dropdown-chevron {
@@ -95,9 +101,13 @@
 
 .ad-searchable-dropdown-menu {
   position: fixed;
+  margin: 0;
+  right: auto;
+  bottom: auto;
   top: var(--ad-searchable-dropdown-menu-top, 0px);
   left: var(--ad-searchable-dropdown-menu-left, 0px);
-  z-index: 300;
+  /* Also cover elevated panels in browsers without the top-layer Popover API. */
+  z-index: 2147483647;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -110,23 +120,26 @@
   border-radius: calc(var(--radius) + 0.1rem);
   background: hsl(var(--popover));
   color: hsl(var(--popover-foreground));
-  box-shadow: 0 16px 38px hsl(var(--shadow) / 0.22), 0 2px 8px hsl(var(--shadow) / 0.1);
+  box-shadow: none;
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
   transform: translateY(-0.35rem) scale(0.985);
   transform-origin: top left;
-  transition: opacity 160ms ease, transform 160ms ease, visibility 160ms ease;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    visibility 160ms ease;
 }
 
-.ad-searchable-dropdown.is-open .ad-searchable-dropdown-menu {
+.ad-searchable-dropdown-menu.is-open {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
   transform: translateY(0) scale(1);
 }
 
-.ad-searchable-dropdown.is-open-up .ad-searchable-dropdown-menu {
+.ad-searchable-dropdown-menu.is-open-up {
   transform-origin: bottom left;
 }
 
@@ -140,6 +153,40 @@
   border-radius: calc(var(--radius) - 2px);
   background: hsl(var(--background) / 0.62);
   color: hsl(var(--muted-foreground));
+}
+
+.ad-searchable-dropdown-search-wrap[hidden] {
+  display: none;
+}
+
+/* Short lists use the same flat, compact treatment as the Velocity type menu. */
+.ad-searchable-dropdown-menu:not(.is-searchable) {
+  gap: 0;
+  padding: 0.35rem;
+}
+
+.ad-searchable-dropdown-menu:not(.is-searchable) .ad-searchable-dropdown-options {
+  gap: 0;
+  padding: 0;
+  outline: none;
+}
+
+.ad-searchable-dropdown-menu:not(.is-searchable) .ad-searchable-dropdown-option {
+  padding: 0.5rem 0.6rem;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: hsl(var(--foreground));
+  font-weight: 400;
+}
+
+.ad-searchable-dropdown-menu:not(.is-searchable) .ad-searchable-dropdown-option:hover:not(:disabled),
+.ad-searchable-dropdown-menu:not(.is-searchable) .ad-searchable-dropdown-option.is-active:not(:disabled) {
+  background: hsl(var(--muted) / 0.55);
+}
+
+.ad-searchable-dropdown-menu:not(.is-searchable) .ad-searchable-dropdown-check {
+  color: currentColor;
 }
 
 .ad-searchable-dropdown-search-wrap:focus-within {
@@ -198,7 +245,10 @@
   line-height: 1.25;
   text-align: left;
   cursor: pointer;
-  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
 }
 
 .ad-searchable-dropdown-option:hover:not(:disabled),
