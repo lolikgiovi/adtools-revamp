@@ -1,3 +1,5 @@
+import { getActiveProject } from "../../core/Projects.js";
+import { renderProjectManager, renderProjectSchemaLink } from "./projects.js";
 import { SettingsTemplate } from "./template.js";
 import { buildOracleJsonPlan, applyOracleJsonPlan } from "./oracle-json.js";
 import { mountBulkEditor } from "./bulk-editor.js";
@@ -461,7 +463,20 @@ class SettingsPage {
     this.categoriesRoot.innerHTML = "";
 
     const frag = document.createDocumentFragment();
-    for (const cat of categories) {
+    const activeProject = getActiveProject();
+    const environmentCategory = categories.find((category) => category.id === "environments");
+    const projectCategory = {
+      id: "project-settings",
+      label: activeProject.name,
+      initiallyExpanded: true,
+      items: [
+        { key: "config.projects", type: "project-manager" },
+        { key: "project.schema", type: "project-schema" },
+      ],
+      categories: environmentCategory ? [{ ...environmentCategory, label: "Testing Environments" }] : [],
+    };
+    const projectCategories = categories.map((category) => (category.id === "environments" ? projectCategory : category));
+    for (const cat of projectCategories) {
       if (!this.service.shouldShowCategory(cat)) continue;
       const el = this.renderCategory(cat);
       frag.appendChild(el);
@@ -1077,6 +1092,10 @@ class SettingsPage {
   }
 
   renderItem(item) {
+    if (item.type === "project-manager") {
+      return renderProjectManager({ eventBus: this.eventBus, refresh: () => this.renderCategories(this.currentConfig.categories) });
+    }
+    if (item.type === "project-schema") return renderProjectSchemaLink();
     if (item.type === "kafka-brokers") return this.renderKafkaBrokersItem(item);
     if (item.type === "environments") return this.renderEnvironmentsItem(item);
     const storageKey = item.storageKey || item.key;

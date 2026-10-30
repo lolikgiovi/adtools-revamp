@@ -1056,3 +1056,65 @@ body .settings-edit-dialog-wide {
   padding-block: 6px;
   flex-wrap: wrap;
 }
+
+.project-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.project-form-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.project-controls > .project-settings-select {
+  flex: 1 1 180px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.project-name-form:not([hidden]) {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  max-width: 420px;
+}
+
+.project-name-form .setting-input {
+  width: 100%;
+  min-width: 0;
+}
+
+.project-form-actions {
+  justify-content: flex-end;
+}
+
+.project-status:not(:empty) {
+  margin-top: 8px;
+  color: hsl(var(--destructive));
+}
+
+.project-schema-link {
+  color: hsl(var(--foreground));
+  text-underline-offset: 3px;
+  font-weight: 500;
+}
+
+.project-schema-link:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 4px;
+}
+
+@media (max-width: 600px) {
+  .project-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .project-controls > .project-settings-select {
+    grid-column: 1 / -1;
+  }
+}

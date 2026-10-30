@@ -1,3 +1,4 @@
+import { getActiveProject, selectProject } from "./core/Projects.js";
 /**
  * App - Main application class
  * Initializes and coordinates all components
@@ -157,7 +158,10 @@ class App {
 
     // Dashboard links can be opened directly; other launches keep the Home start screen.
     const initialRoute = window.location.hash.slice(1).split("/")[0];
-    if (["dashboard", "analytics-dashboard", "approval"].includes(initialRoute)) this.router.handleRouteChange();
+    const projectResumeRoute = sessionStorage.getItem("project.resume-route");
+    sessionStorage.removeItem("project.resume-route");
+    if (projectResumeRoute && this.router.routes.has(projectResumeRoute)) this.router.navigate(projectResumeRoute);
+    else if (["dashboard", "analytics-dashboard", "approval"].includes(initialRoute)) this.router.handleRouteChange();
     else this.router.navigate("home");
 
     this.bindGlobalEvents();
@@ -251,6 +255,7 @@ class App {
     this.sidebar = new Sidebar({
       eventBus: this.eventBus,
       router: this.router,
+      onProjectChange: (id) => this.switchProject(id),
       getIcon: this.getToolIcon.bind(this),
       tools: this.getToolDefinitions(),
       menuConfig: this.buildMenuConfig(),
@@ -1963,6 +1968,41 @@ class App {
         UsageTracker.reportDeviceVersion(String(version)).catch(() => {});
       }
     } catch (_) {}
+  }
+
+  async switchProject(id) {
+    if (this._switchingProject || id === getActiveProject().id) return false;
+    this._switchingProject = true;
+    try {
+      const tools = [...this.tools.values()];
+      if (tools.some((tool) => this.toolHasActiveBackgroundWork(tool))) {
+        throw new Error("Wait for running jobs to finish before switching projects.");
+      }
+      const ui = this.tools.get("quick-query")?.ui;
+      if (ui) {
+        await ui.ready;
+        if (ui.isGenerating || ui._tabOperation || ui._oracleDataBusy || ui._queryPreparationPending || ui._receivingImages) {
+          throw new Error("Wait for Quick Query to finish before switching projects.");
+        }
+        const flushed = await ui.flushPendingDataAutosave();
+        if (flushed === false || !(await ui.saveActiveTabDraft())) {
+          throw new Error("Your query could not be saved. Save it before switching projects.");
+        }
+      }
+      selectProject(id);
+      this.reloadForProjectChange();
+      return true;
+    } catch (error) {
+      this.eventBus?.emit?.("notification:error", { message: error.message });
+      return false;
+    } finally {
+      this._switchingProject = false;
+    }
+  }
+
+  reloadForProjectChange() {
+    sessionStorage.setItem("project.resume-route", this.router.getCurrentRoute() || "home");
+    window.location.reload();
   }
 
   clearCurrentTool() {

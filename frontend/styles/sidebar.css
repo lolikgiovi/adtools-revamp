@@ -378,3 +378,38 @@
     animation: none;
   }
 }
+
+.sidebar-header:has(.sidebar-project) {
+  height: auto;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sidebar-project > .ad-searchable-dropdown {
+  width: 100%;
+}
+
+.sidebar-project {
+  width: 100%;
+  min-width: 0;
+}
+
+.sidebar-project > select,
+.sidebar-project .ad-searchable-dropdown-trigger {
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid hsl(var(--sidebar-border));
+  border-radius: var(--radius);
+  background: hsl(var(--sidebar-background));
+  color: hsl(var(--sidebar-foreground));
+  font: inherit;
+  font-size: 0.8125rem;
+  text-overflow: ellipsis;
+}
+
+.sidebar-project > select:focus-visible,
+.sidebar-project .ad-searchable-dropdown-trigger:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}

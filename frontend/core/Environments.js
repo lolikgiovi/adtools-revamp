@@ -1,3 +1,5 @@
+import { projectEnvironmentStorage, allProjectEnvironmentStores } from "./Projects.js";
+
 /**
  * Shared testing-environment model.
  *
@@ -163,10 +165,11 @@ function migrateLegacyEnvironments(target = storage()) {
 }
 
 export function readEnvironments(target = storage()) {
-  return migrateLegacyEnvironments(target);
+  return migrateLegacyEnvironments(projectEnvironmentStorage(target));
 }
 
-export function writeEnvironments(list, target = storage()) {
+export function writeEnvironments(list, target = storage(), projectId) {
+  target = projectEnvironmentStorage(target, projectId);
   const environments = normalizeList(list);
   target?.setItem(STORAGE_KEY, JSON.stringify(environments));
   syncLegacyBaseUrls(environments, target);
@@ -223,26 +226,33 @@ function replaceConnectionReference(environment, previousName, nextName) {
   return changed;
 }
 
+function changeConnectionReference(previousName, nextName, target) {
+  let changed = false;
+  for (const scoped of allProjectEnvironmentStores(target)) {
+    // Do not run legacy discovery for inactive projects.
+    const raw = scoped.getItem(STORAGE_KEY);
+    if (raw === null) continue;
+    const environments = normalizeList(parseArray(raw));
+    let projectChanged = false;
+    for (const environment of environments) {
+      if (replaceConnectionReference(environment, previousName, nextName)) projectChanged = true;
+    }
+    if (projectChanged) {
+      scoped.setItem(STORAGE_KEY, JSON.stringify(environments));
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 export function updateConnectionReference(previousName, nextName, target = storage()) {
   if (!previousName || !nextName || previousName === nextName) return false;
-  const environments = readEnvironments(target);
-  let changed = false;
-  for (const environment of environments) {
-    if (replaceConnectionReference(environment, previousName, nextName)) changed = true;
-  }
-  if (changed) writeEnvironments(environments, target);
-  return changed;
+  return changeConnectionReference(previousName, nextName, target);
 }
 
 export function clearConnectionReference(name, target = storage()) {
   if (!name) return false;
-  const environments = readEnvironments(target);
-  let changed = false;
-  for (const environment of environments) {
-    if (replaceConnectionReference(environment, name, "")) changed = true;
-  }
-  if (changed) writeEnvironments(environments, target);
-  return changed;
+  return changeConnectionReference(name, "", target);
 }
 
 export { ROLE_CRITICAL, ROLE_COMPLEMENTARY };

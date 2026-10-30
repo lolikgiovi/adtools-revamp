@@ -1,8 +1,8 @@
+import { getQuickQueryDatabaseName } from "../../../core/Projects.js";
 import { UsageTracker } from "../../../core/UsageTracker.js";
 import { scoreFuzzyTerm } from "../../../core/FuzzySearch.js";
 
 // Database constants
-const DB_NAME = "QuickQueryDatabase";
 const DB_VERSION = 2;
 const SCHEMA_STORE = "schemas";
 const DATA_STORE = "tableData";
@@ -27,6 +27,7 @@ const MAX_CACHED_ROWS = 1000;
  */
 export class IndexedDBStorageService {
   constructor() {
+    this.databaseName = getQuickQueryDatabaseName();
     this.db = null;
     this._initPromise = null;
 
@@ -68,7 +69,7 @@ export class IndexedDBStorageService {
    */
   _openDatabase() {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      const request = indexedDB.open(this.databaseName, DB_VERSION);
 
       request.onerror = () => {
         reject(new Error(`Failed to open database: ${request.error?.message}`));
@@ -113,6 +114,7 @@ export class IndexedDBStorageService {
    */
   async _migrateFromLocalStorage() {
     try {
+      if (this.databaseName !== "QuickQueryDatabase") return;
       const legacySchemaRaw = localStorage.getItem(LEGACY_SCHEMA_KEY);
       const legacyDataRaw = localStorage.getItem(LEGACY_DATA_KEY);
 

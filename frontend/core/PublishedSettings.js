@@ -1,3 +1,4 @@
+import { getLegacyProjectId, getProjectStorageKey } from "./Projects.js";
 import { validateSettings } from "../../shared/published-settings.js";
 import { writeEnvironments } from "./Environments.js";
 import { saveKafkaBrokerProfiles } from "../tools/kafka/service.js";
@@ -34,14 +35,18 @@ export function applyPublication(publication, userId) {
     localStorage.removeItem(journalKey);
   }
   if (localStorage.getItem(marker)) return false;
+  const environmentProjectId = Object.hasOwn(publication.settings, "config.environments") ? getLegacyProjectId() : null;
   const keys = new Set([...Object.keys(publication.settings), marker]);
-  if (keys.has("config.environments")) keys.add("config.baseUrls");
+  if (keys.has("config.environments")) {
+    keys.add(getProjectStorageKey("config.environments", localStorage, environmentProjectId));
+    keys.add(getProjectStorageKey("config.baseUrls", localStorage, environmentProjectId));
+  }
   if (keys.has("tool:kafka:brokers")) keys.add("tool:kafka:active-broker");
   const values = Object.fromEntries([...keys].map((key) => [key, localStorage.getItem(key)]));
   localStorage.setItem(journalKey, JSON.stringify({ marker, values }));
   try {
     for (const [key, value] of Object.entries(publication.settings)) {
-      if (key === "config.environments") writeEnvironments(value);
+      if (key === "config.environments") writeEnvironments(value, localStorage, environmentProjectId);
       else if (key === "tool:kafka:brokers") saveKafkaBrokerProfiles(value);
       else localStorage.setItem(key, typeof value === "object" ? JSON.stringify(value) : String(value));
     }

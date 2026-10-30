@@ -1,3 +1,4 @@
+import { getActiveProject, listProjects } from "../core/Projects.js";
 /**
  * Sidebar - Modular sidebar component
  * Manages navigation and tool selection
@@ -12,6 +13,7 @@ class Sidebar {
   constructor(config = {}) {
     this.eventBus = config.eventBus;
     this.router = config.router;
+    this.onProjectChange = config.onProjectChange;
     this.tools = config.tools || [];
     this.getIcon = typeof config.getIcon === "function" ? config.getIcon : null;
     this.menuConfig = config.menuConfig || { app: [], config: [], footer: [] };
@@ -50,6 +52,7 @@ class Sidebar {
   init() {
     this.bindEvents();
     this.setupToggle();
+    this.renderProjectSelector();
     this.initializeAccessibility();
     this.setupMenuButtons();
     this.renderTools();
@@ -60,6 +63,39 @@ class Sidebar {
       this.state.isCollapsed = false;
     }
     this.updateSidebarState();
+  }
+
+  renderProjectSelector() {
+    const header = document.querySelector(".sidebar-header");
+    if (!header) return;
+    header.querySelector(".sidebar-project")?.remove();
+    const wrapper = document.createElement("div");
+    wrapper.className = "sidebar-project";
+    const select = document.createElement("select");
+    select.className = "sidebar-project-select";
+    select.setAttribute("aria-label", "Project");
+    const active = getActiveProject();
+    const group = document.createElement("optgroup");
+    group.label = active.department === "UNASSIGNED" ? "Projects" : active.department;
+    for (const project of listProjects()) group.append(new Option(project.name, project.id, false, project.id === active.id));
+    select.append(group, new Option("Manage projects…", "__manage__"));
+    select.addEventListener("change", async () => {
+      if (select.value === "__manage__") {
+        select.value = active.id;
+        localStorage.setItem("settings.focus", "config.projects");
+        this.router?.navigate("settings", { setting: "config.projects" });
+        return;
+      }
+      select.disabled = true;
+      try {
+        const changed = await this.onProjectChange?.(select.value);
+        if (!changed) select.value = active.id;
+      } finally {
+        select.disabled = false;
+      }
+    });
+    wrapper.append(select);
+    header.prepend(wrapper);
   }
 
   /**
@@ -86,6 +122,9 @@ class Sidebar {
    * Bind event listeners
    */
   bindEvents() {
+    this._handleProjectsUpdated = () => this.renderProjectSelector();
+    window.addEventListener("adtools:projects-updated", this._handleProjectsUpdated);
+    this.eventBus?.on?.("user:registered", this._handleProjectsUpdated);
     if (this.eventBus) {
       this.eventBus.on("route:changed", (data) => {
         this.updateActiveItem(data.path);

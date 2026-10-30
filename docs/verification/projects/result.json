@@ -1,0 +1,7 @@
+{
+  "passed": true,
+  "checks": [
+    "1440px: migrated legacy environment, created/renamed/switched projects, isolated schemas and drafts, restored environments, no overflow/errors",
+    "390px: migrated legacy environment, created/renamed/switched projects, isolated schemas and drafts, restored environments, no overflow/errors"
+  ]
+}
