@@ -67,13 +67,16 @@ export function parseTsFlexible(x) {
 }
 
 /**
- * Converts an ISO timestamp string to GMT+7 plain format
- * @param {string} s - ISO timestamp string
+ * Converts a timestamp to GMT+7 plain format. Legacy clients send Jakarta wall
+ * time without an offset; explicit offsets and Z already identify an instant.
+ * @param {string} s - ISO timestamp or legacy Jakarta wall time
  * @returns {string|null} - Plain GMT+7 format or null if invalid
  */
 export function tsToGmt7Plain(s) {
   try {
-    const t = Date.parse(String(s || ""));
+    const raw = String(s || "").trim();
+    const jakartaWallTime = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(raw);
+    const t = Date.parse(jakartaWallTime ? `${raw.replace(" ", "T")}+07:00` : raw);
     if (Number.isNaN(t)) return null;
     const d = new Date(t + 7 * 60 * 60 * 1000);
     const y = d.getUTCFullYear();
