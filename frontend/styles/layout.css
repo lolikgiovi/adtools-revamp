@@ -1,3 +1,9 @@
+:root {
+  --app-header-height: 40px;
+  --sidebar-header-height: 40px;
+  --app-workspace-inset: calc(var(--app-header-height) + 2rem);
+}
+
 /* SidebarTrigger */
 .sidebar-trigger {
   display: inline-flex;
@@ -43,6 +49,7 @@ html[data-tauri="true"] {
    * native bar height has to be expressed in CSS px as 32 / 0.9.
    */
   --window-titlebar-height: calc(32px / 0.9);
+  --app-header-height: 0px;
 }
 
 html[data-tauri="true"] .window-titlebar {
@@ -51,20 +58,19 @@ html[data-tauri="true"] .window-titlebar {
   right: 0;
   left: 0;
   z-index: 300;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 22vw) minmax(0, 1fr);
   align-items: center;
-  justify-content: center;
+  column-gap: 12px;
+  padding-inline: 12px;
   height: var(--window-titlebar-height);
   background-color: hsl(var(--background));
   user-select: none;
   -webkit-user-select: none;
 }
 
-.window-titlebar-title {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: hsl(var(--muted-foreground));
-  pointer-events: none;
+html[data-tauri="true"] .main-header {
+  display: none;
 }
 
 html[data-tauri="true"] .sidebar-provider {
@@ -91,13 +97,13 @@ html[data-tauri="true"] .notification-container {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 1rem;
-  padding: 0.75rem 1rem;
+  padding: 0 1rem;
   border-bottom: 1px solid hsl(var(--border));
   background-color: hsl(var(--background));
   position: sticky;
   top: 0;
   z-index: 250;
-  height: 57px;
+  height: var(--app-header-height);
 }
 
 .header-context {
@@ -155,8 +161,22 @@ html[data-tauri="true"] .notification-container {
   min-width: 0;
 }
 
-.main-header[data-runtime="web"] .connection-indicators {
-  display: none;
+.window-titlebar .connection-indicators {
+  max-width: 100%;
+}
+
+.window-titlebar .connection-indicator {
+  height: 26px;
+  font-size: 0.6875rem;
+}
+
+.window-titlebar .connection-menu {
+  top: calc(100% + 6px);
+}
+
+.main-header .header-project .ad-searchable-dropdown-trigger {
+  height: 30px;
+  min-height: 30px;
 }
 
 .connection-indicator-group {
@@ -391,10 +411,10 @@ button.connection-indicator:focus-visible,
   .mobile-search { display: inline-flex; }
 }
 
-@media (max-width: 600px) {
-  .connection-menu {
+@media (max-width: 700px) {
+  .window-titlebar .connection-menu {
     position: fixed;
-    top: calc(57px + 0.65rem);
+    top: calc(var(--window-titlebar-height, 0px) + 6px);
     right: 0.75rem;
     left: 0.75rem;
     width: auto;
@@ -571,4 +591,165 @@ button.connection-indicator:focus-visible,
   font-size: 0.875rem;
   color: hsl(var(--muted-foreground));
   line-height: 1.4;
+}
+
+.header-project {
+  width: max-content;
+  max-width: min(20rem, 35vw);
+  min-width: 0;
+}
+
+.header-project > select,
+.header-project > .ad-searchable-dropdown {
+  width: 100%;
+  min-width: 0;
+}
+
+.header-project .ad-searchable-dropdown-trigger {
+  min-height: 32px;
+  background: transparent;
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 600px) {
+  .header-project {
+    max-width: 35vw;
+  }
+
+  .main-header {
+    gap: 0.5rem;
+    padding-inline: 0.75rem;
+  }
+
+  .window-titlebar .connection-name {
+    display: none;
+  }
+}
+
+
+@media (max-width: 600px) {
+  .header-actions .release-tour-dev-preview {
+    display: none;
+  }
+}
+
+
+.window-titlebar-leading {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding-left: 88px;
+  gap: 6px;
+}
+
+.window-titlebar-actions {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.window-titlebar .release-tour-dev-preview {
+  height: 26px;
+  padding: 0 8px;
+  font-size: 0.6875rem;
+  white-space: nowrap;
+}
+
+.window-titlebar .header-project .ad-searchable-dropdown-trigger {
+  height: 26px;
+  min-height: 26px;
+  padding: 0 0.55rem !important;
+  gap: 0.4rem;
+  font-size: 0.6875rem;
+}
+
+.window-titlebar .header-project .ad-searchable-dropdown-chevron {
+  width: 12px;
+  height: 12px;
+}
+
+
+.window-titlebar .sidebar-trigger,
+.window-titlebar .mobile-search {
+  width: 26px;
+  height: 26px;
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.window-titlebar-center {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.window-titlebar .header-search {
+  width: 100%;
+  height: 26px;
+  min-width: 0;
+  padding: 0 8px;
+  gap: 8px;
+  font-size: 0.75rem;
+}
+
+html[data-tauri="true"] .sidebar-header {
+  display: none;
+}
+
+.window-titlebar .breadcrumb {
+  flex: 1;
+  min-width: 0;
+}
+
+.window-titlebar .breadcrumb-list {
+  gap: 6px;
+  min-width: 0;
+}
+
+.window-titlebar .breadcrumb-item:first-child {
+  flex: 0 0 auto;
+}
+
+.window-titlebar .breadcrumb-current {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.window-titlebar .breadcrumb-link,
+.window-titlebar .breadcrumb-current {
+  font-size: 0.75rem;
+}
+
+.window-titlebar .breadcrumb-link {
+  padding: 3px 0;
+  color: hsl(var(--foreground));
+}
+
+.window-titlebar .breadcrumb-current span {
+  padding: 0;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.window-titlebar .header-project .ad-searchable-dropdown-trigger {
+  background: hsl(var(--primary) / 0.16) !important;
+  border-color: hsl(var(--primary) / 0.65) !important;
+  font-weight: 600;
+}
+
+.sidebar-footer > .release-tour-dev-preview {
+  width: 100%;
+  margin-bottom: 6px;
+  font-size: 0.6875rem;
+}
+
+@media (max-width: 1000px) {
+  .window-titlebar .connection-name {
+    display: none;
+  }
 }

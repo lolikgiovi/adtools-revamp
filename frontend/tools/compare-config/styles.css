@@ -13,9 +13,9 @@
   height: 100%;
   overflow-y: auto;
   /* Vertical space the app shell takes around the tool content: the fixed .main-header
-     (57px) + .main-content padding (1rem top, 1rem bottom) + this tool's
+     (--app-header-height) + .main-content padding (1rem top, 1rem bottom) + this tool's
      .main-interface padding-bottom (1rem). Keeps the results card flush with the viewport. */
-  --results-viewport-chrome: 105px;
+  --results-viewport-chrome: calc(var(--app-header-height, 57px) + var(--window-titlebar-height, 0px) + 3rem);
   /* The tool's mono voice, in one place: every code, key, and numeral surface reads it, and the
      diff editor resolves it too, so the comparison and its chrome share one mono face. */
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;

@@ -51,7 +51,7 @@ try {
     await page.waitForFunction(() => Boolean(window.app));
     await page.evaluate(() => window.app.router.navigate("settings"));
     await checkMenu(page, page.locator(".project-controls .ad-searchable-dropdown-trigger"), `project-${width}`);
-    if (width === 1440) await checkMenu(page, page.locator(".sidebar-project .ad-searchable-dropdown-trigger"), `sidebar-project-${width}`);
+    if (width === 1440) await checkMenu(page, page.locator(".header-project .ad-searchable-dropdown-trigger"), `header-project-${width}`);
     await page.goto(`${base}/tools/master-lockey/tests/search-modes.html`);
     await page.locator("#load").click();
     await checkMenu(page, page.locator("#domain-selector-trigger"), `lockey-${width}`);

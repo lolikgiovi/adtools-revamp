@@ -1,0 +1,32 @@
+{
+  "passed": true,
+  "checks": [
+    {
+      "mode": "desktop",
+      "metrics": {
+        "rowHeight": 32,
+        "fontSize": "14px",
+        "iconSize": "16px",
+        "groupFontSize": "12px",
+        "contentHeight": 976,
+        "visibleHeight": 741,
+        "searchHeight": 32
+      },
+      "passed": true
+    },
+    {
+      "mode": "touch",
+      "metrics": {
+        "rowHeight": 32,
+        "fontSize": "14px",
+        "iconSize": "16px",
+        "groupFontSize": "12px",
+        "contentHeight": 777,
+        "visibleHeight": 777,
+        "searchHeight": 32
+      },
+      "passed": true
+    }
+  ],
+  "errors": []
+}

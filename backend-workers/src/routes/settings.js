@@ -184,6 +184,32 @@ export async function handleSettings(request, env) {
         expiresAt,
         isDevelopment: user.is_development === 1,
       });
+    } else if (path === "projects" && ["GET", "POST"].includes(method)) {
+      const user = await identity(request, env);
+      if (!user) return json({ ok: false, error: "Verify your account to use shared projects." }, 401);
+      if (method === "GET") {
+        const after = url.searchParams.get("after") || "";
+        const rows = await env.DB.prepare("SELECT id, name FROM project_directory WHERE name_key > ? ORDER BY name_key LIMIT 100")
+          .bind(after)
+          .all();
+        const projects = rows.results;
+        return json({ ok: true, projects, next: projects.length === 100 ? projects.at(-1).name.normalize("NFKC").toLowerCase() : null });
+      }
+      const data = await readBody(request);
+      if (!data || typeof data !== "object" || Array.isArray(data) || Object.keys(data).some((key) => key !== "name")) {
+        error("Publish only a project name.");
+      }
+      const name = typeof data.name === "string" ? data.name.normalize("NFKC").trim() : "";
+      if (!name || name.length > 80 || [...name].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127))
+        error("Enter a project name between 1 and 80 characters.");
+      const key = name.toLowerCase();
+      await env.DB.prepare(
+        "INSERT INTO project_directory (id, name, name_key, created_by) VALUES (?, ?, ?, ?) ON CONFLICT(name_key) DO NOTHING",
+      )
+        .bind(crypto.randomUUID(), name, key, user.userId)
+        .run();
+      const project = await env.DB.prepare("SELECT id, name FROM project_directory WHERE name_key = ?").bind(key).first();
+      return json({ ok: true, project });
     } else if ((path === "sync" && method === "GET") || (path === "ack" && method === "POST")) {
       const user = await identity(request, env);
       if (!user) return json({ ok: false, error: "Verify your account to receive settings." }, 401);

@@ -1,3 +1,4 @@
+import { getActiveProject } from "../../core/Projects.js";
 import { IndexedDBStorageService } from "./services/IndexedDBStorageService.js";
 import { columnIndexToLetter, findReferencedBlobAttachments, findImportedBlobValues } from "./services/QueryGenerationService.js";
 import { isDbeaverSchema } from "./services/SchemaValidationService.js";
@@ -128,7 +129,16 @@ export class QuickQuery extends BaseTool {
     return this.ui?.createNewTab();
   }
 
-  onRouteData({ tableName, createQuery, compressedImages } = {}) {
+  onRouteData({ tableName, createQuery, compressedImages, manageSchemas } = {}) {
+    if (manageSchemas) {
+      const ui = this.ui;
+      void ui?.ready
+        .then(() => {
+          if (this.isActive && this.ui === ui) return ui.openSavedSchemas();
+        })
+        .catch((error) => this.eventBus.emit("notification:error", { message: error.message }));
+      return;
+    }
     if (compressedImages?.length) return this.ui?.receiveCompressedImages(compressedImages);
     if (createQuery?.sql || (Array.isArray(createQuery?.schemaData) && Array.isArray(createQuery?.inputData))) {
       void this.ui?.openCreatedQuery(createQuery);
@@ -725,17 +735,7 @@ export class QuickQueryUI {
         click: () => this.handlePasteDbeaverSchema(),
       },
       showSavedSchemasButton: {
-        click: async () => {
-          this.elements.schemaOverlay.classList.remove("hidden");
-          if (this.elements.savedSchemasSearch) {
-            this.elements.savedSchemasSearch.value = "";
-          }
-          // Ensure latest abbreviations are indexed (e.g., 'svc' for 'service')
-          if (this.storageService && typeof this.storageService.rebuildIndex === "function") {
-            await this.storageService.rebuildIndex();
-          }
-          await this.updateSavedSchemasList();
-        },
+        click: () => this.openSavedSchemas(),
       },
       closeSchemaOverlayButton: {
         click: () => this.elements.schemaOverlay.classList.add("hidden"),
@@ -2148,6 +2148,18 @@ export class QuickQueryUI {
   async chooseSchemaLoadMode(fullName) {
     if (this.isCurrentDraftEmpty({ ignoreTableName: true })) return "schema-data";
     return this.openSchemaLoadModeOverlay(fullName);
+  }
+
+  async openSavedSchemas() {
+    const overlay = this.elements.schemaOverlay;
+    overlay.querySelector("h3").textContent = `${getActiveProject().name} — Saved schemas`;
+    overlay.classList.remove("hidden");
+    if (this.elements.savedSchemasSearch) {
+      this.elements.savedSchemasSearch.value = "";
+      this.elements.savedSchemasSearch.focus();
+    }
+    if (typeof this.storageService?.rebuildIndex === "function") await this.storageService.rebuildIndex();
+    await this.updateSavedSchemasList();
   }
 
   openSchemaLoadModeOverlay(fullName) {

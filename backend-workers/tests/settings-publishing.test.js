@@ -96,6 +96,32 @@ describe("settings publishing API", () => {
   });
   afterEach(() => sqlite.close());
 
+  // Directory failure cases: unauthenticated access, duplicate publication/races,
+  // invalid names or extra data, cross-user visibility, and accidental private-data sharing.
+  it("shares only project names across registered users and deduplicates publication", async () => {
+    expect((await call("projects", undefined, null)).status).toBe(401);
+    expect((await call("projects", { name: "Livin" }, null)).status).toBe(401);
+    const first = await enroll();
+    const published = await (await call("projects", { name: " Livin " }, first)).json();
+    expect(published.project.name).toBe("Livin");
+    const duplicate = await (await call("projects", { name: "livin" }, first)).json();
+    expect(duplicate.project).toEqual(published.project);
+    const second = await enroll({ email: "two@bankmandiri.co.id", userId: "two", deviceId: "d-two" });
+    const directory = await (await call("projects", undefined, second)).json();
+    expect(directory.projects).toEqual([published.project]);
+    expect(Object.keys(directory.projects[0]).sort()).toEqual(["id", "name"]);
+    for (const body of [
+      { name: "" },
+      { name: "x".repeat(81) },
+      { name: "Bad\nName" },
+      { name: "IHSP", schemas: [] },
+      { name: "IHSP", environments: [] },
+    ]) {
+      expect((await call("projects", body, second)).status).toBe(400);
+    }
+    expect(sqlite.prepare("SELECT COUNT(*) AS n FROM project_directory").get().n).toBe(1);
+  });
+
   it("requires real admin authentication and rejects device IDs as credentials", async () => {
     expect((await call("admin/preview", payload, null)).status).toBe(401);
     expect((await call("admin/publications", payload, "session")).status).toBe(401);

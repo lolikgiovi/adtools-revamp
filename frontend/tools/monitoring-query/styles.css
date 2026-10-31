@@ -1,7 +1,7 @@
 .mq-tool {
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - 89px);
+  height: calc(100dvh - var(--app-workspace-inset, 89px) - var(--window-titlebar-height, 0px));
   min-height: 400px;
   min-width: 0;
   gap: 0;
@@ -495,7 +495,7 @@
 @media (max-width: 600px) {
   .mq-tool {
     height: auto;
-    min-height: calc(100dvh - 89px);
+    min-height: calc(100dvh - var(--app-workspace-inset, 89px) - var(--window-titlebar-height, 0px));
   }
   .mq-workspace {
     grid-template-columns: 1fr;

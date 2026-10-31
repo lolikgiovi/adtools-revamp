@@ -1,7 +1,7 @@
 @import "../../styles/contained-toggle.css";
 
 .quick-query-tool-container {
-  --qq-app-header-height: 57px;
+  --qq-app-header-height: var(--app-header-height, 57px);
   --qq-tab-strip-space: 46px;
   display: flex;
   flex-direction: column;
@@ -401,7 +401,7 @@
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - var(--qq-app-header-height) - var(--qq-tab-strip-space));
+  height: calc(100dvh - var(--qq-app-header-height) - var(--window-titlebar-height, 0px) - var(--qq-tab-strip-space));
   min-height: 320px;
   padding: 8px 0 8px 0;
   border-top: 1px solid hsl(var(--border));
@@ -2776,4 +2776,16 @@
 .quick-query-attachments-controls #compressImagesButton[hidden],
 #executeInJenkinsRunner[hidden] {
   display: none;
+}
+
+
+.schema-modal-header {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.schema-modal-header h3 {
+  min-width: 0;
+  padding-right: 32px;
+  overflow-wrap: anywhere;
 }

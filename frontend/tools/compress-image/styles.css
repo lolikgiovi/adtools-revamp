@@ -4,7 +4,7 @@
   max-width: none;
   min-width: 0;
   min-height: 0;
-  height: calc(100dvh - 89px - var(--window-titlebar-height, 0px));
+  height: calc(100dvh - var(--app-workspace-inset, 89px) - var(--window-titlebar-height, 0px));
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -827,7 +827,7 @@
 @media (max-width: 960px) {
   .tool-container.compress-image {
     height: auto;
-    min-height: calc(100dvh - 89px);
+    min-height: calc(100dvh - var(--app-workspace-inset, 89px));
   }
   .ci-workspace {
     grid-template-columns: minmax(0, 1fr);
@@ -838,7 +838,7 @@
   }
   .ci-file-pane,
   .ci-inspector {
-    height: min(600px, calc(100dvh - 89px - var(--window-titlebar-height, 0px)));
+    height: min(600px, calc(100dvh - var(--app-workspace-inset, 89px) - var(--window-titlebar-height, 0px)));
     min-height: 0;
   }
 }

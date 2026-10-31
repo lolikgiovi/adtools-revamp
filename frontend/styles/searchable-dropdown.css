@@ -362,3 +362,8 @@
     transition: none;
   }
 }
+
+
+.ad-searchable-dropdown-menu[data-width="content"] {
+  max-width: calc(100vw - 24px);
+}

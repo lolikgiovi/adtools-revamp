@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "checks": [
+    "1440px web: 40px header, project selector visible, native title bar hidden, no overflow",
+    "1440px desktop simulation: one desktop row, working Home breadcrumbs, centered search, prominent project selector, working sidebar, no clipping, Escape focus",
+    "900px web: 40px header, project selector visible, native title bar hidden, no overflow",
+    "900px desktop simulation: one desktop row, working Home breadcrumbs, centered search, prominent project selector, working sidebar, no clipping, Escape focus",
+    "620px web: 40px header, project selector visible, native title bar hidden, no overflow",
+    "620px desktop simulation: one desktop row, working Home breadcrumbs, centered search, prominent project selector, working sidebar, no clipping, Escape focus",
+    "390px web: 40px header, project selector visible, native title bar hidden, no overflow"
+  ],
+  "errors": []
+}

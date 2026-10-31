@@ -1,3 +1,4 @@
+import { ProjectSelector } from "./components/ProjectSelector.js";
 import { getActiveProject, selectProject } from "./core/Projects.js";
 /**
  * App - Main application class
@@ -251,11 +252,16 @@ class App {
    * Initialize core components
    */
   initializeComponents() {
+    this.projectSelector = new ProjectSelector({
+      eventBus: this.eventBus,
+      router: this.router,
+      onProjectChange: (id) => this.switchProject(id),
+    });
+
     // Initialize sidebar
     this.sidebar = new Sidebar({
       eventBus: this.eventBus,
       router: this.router,
-      onProjectChange: (id) => this.switchProject(id),
       getIcon: this.getToolIcon.bind(this),
       tools: this.getToolDefinitions(),
       menuConfig: this.buildMenuConfig(),
@@ -831,8 +837,9 @@ class App {
     button.textContent = "Preview What's New";
     button.title = "Preview the current release tour without simulating an update";
     button.addEventListener("click", () => this.openReleaseTourPreview());
-    container.appendChild(button);
+    container.insertBefore(button, container.querySelector(".header-project"));
     this._releaseTourPreviewButton = button;
+    this.placeHeaderControls();
   }
 
   openReleaseTourPreview() {
@@ -1923,6 +1930,31 @@ class App {
       void this.submitUsageFeedback(feedbackForm);
     });
   }
+  placeHeaderControls(desktop = isTauri()) {
+    this._headerSidebarToggle ||= document.querySelector(".sidebar-trigger");
+    this._headerBreadcrumb ||= document.querySelector(".breadcrumb");
+    this._headerSearch ||= document.querySelector(".mobile-search");
+    this._desktopSearch ||= document.querySelector(".header-search");
+    for (const [control, desktopHost, webHost] of [
+      [this._headerSidebarToggle, ".window-titlebar-leading", ".header-context"],
+      [this._headerBreadcrumb, ".window-titlebar-leading", ".header-context"],
+      [this._desktopSearch, ".window-titlebar-center", ".sidebar-header"],
+      [this._headerSearch, ".header-actions", ".header-actions"],
+    ]) {
+      const host = document.querySelector(desktop ? desktopHost : webHost);
+      if (control && host && control.parentElement !== host) {
+        if (desktop || control === this._headerBreadcrumb) host.append(control);
+        else host.prepend(control);
+      }
+    }
+    this.projectSelector?.updatePlacement(desktop);
+    const preview = this._releaseTourPreviewButton;
+    const host = document.querySelector(desktop ? ".sidebar-footer" : ".header-actions");
+    if (preview && host && preview.parentElement !== host) {
+      host.insertBefore(preview, desktop ? host.firstChild : host.querySelector(".header-project"));
+    }
+  }
+
   setupHeaderRuntime() {
     const header = document.querySelector(".main-header");
 
@@ -1933,6 +1965,7 @@ class App {
       // The desktop shell replaces the native macOS title bar with a centered
       // one; CSS keys its layout offsets off this attribute.
       document.documentElement.setAttribute("data-tauri", String(tauriRuntime));
+      this.placeHeaderControls(tauriRuntime);
     };
 
     // Initial runtime set + delayed re-check to handle late Tauri init

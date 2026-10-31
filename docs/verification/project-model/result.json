@@ -1,0 +1,44 @@
+{
+  "checkedAt": "2026-10-30T13:25:45.427Z",
+  "passed": false,
+  "checks": [
+    {
+      "name": "New project starts without another project's environments, schemas or drafts",
+      "passed": true
+    },
+    {
+      "name": "Identical APP.CUSTOMER, draft IDs and UAT names preserve Livin data",
+      "passed": true
+    },
+    {
+      "name": "Switching back restores Livin Dili schemas, table data, draft, session and environment",
+      "passed": true
+    },
+    {
+      "name": "Project identity and contents survive reload",
+      "passed": true
+    },
+    {
+      "name": "Existing tab retains its project when another tab switches",
+      "passed": true
+    },
+    {
+      "name": "Actual Quick Query UI renders the correct project's same-named table, columns, input rows and SQL",
+      "passed": true
+    },
+    {
+      "name": "Retail user can select an assigned project handled by another department",
+      "passed": false,
+      "actual": {
+        "visible": false,
+        "error": "Project not found in your department."
+      },
+      "note": "Assignment is a business scenario; the implementation has no project membership model."
+    },
+    {
+      "name": "No browser exceptions during the scenarios",
+      "passed": true
+    }
+  ],
+  "browserErrors": []
+}

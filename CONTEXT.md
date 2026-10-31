@@ -1,8 +1,23 @@
-# AD Tools Analytics
+# AD Tools
 
-This context defines how product adoption and delivered user value are described and measured across AD Tools.
+This glossary defines project organization and how delivered user value is measured across AD Tools.
 
-## Language
+## Project organization
+
+**Department**:
+A person's organizational home. People can work on projects handled by other departments.
+
+**Project**:
+A work context, such as Livin or Livin Dili, that groups its environments and Quick Query schema catalog.
+People can work on multiple projects independently of their department.
+
+**Environment**:
+A target within a project, with its database connections and CDN entry points. Different projects can use the same environment name.
+
+**Quick Query schema catalog**:
+The table definitions belonging to one project. Identical schema and table names in different projects represent separate definitions.
+
+## Analytics language
 
 **Tool Open**:
 A user reaches a usable tool surface. It measures adoption and visits, not value delivered.

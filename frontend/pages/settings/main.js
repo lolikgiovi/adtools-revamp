@@ -1,4 +1,3 @@
-import { getActiveProject } from "../../core/Projects.js";
 import { renderProjectManager, renderProjectSchemaLink } from "./projects.js";
 import { SettingsTemplate } from "./template.js";
 import { buildOracleJsonPlan, applyOracleJsonPlan } from "./oracle-json.js";
@@ -463,11 +462,10 @@ class SettingsPage {
     this.categoriesRoot.innerHTML = "";
 
     const frag = document.createDocumentFragment();
-    const activeProject = getActiveProject();
     const environmentCategory = categories.find((category) => category.id === "environments");
     const projectCategory = {
       id: "project-settings",
-      label: activeProject.name,
+      label: "Project",
       initiallyExpanded: true,
       items: [
         { key: "config.projects", type: "project-manager" },
@@ -1095,7 +1093,7 @@ class SettingsPage {
     if (item.type === "project-manager") {
       return renderProjectManager({ eventBus: this.eventBus, refresh: () => this.renderCategories(this.currentConfig.categories) });
     }
-    if (item.type === "project-schema") return renderProjectSchemaLink();
+    if (item.type === "project-schema") return renderProjectSchemaLink({ router: globalThis.app?.router });
     if (item.type === "kafka-brokers") return this.renderKafkaBrokersItem(item);
     if (item.type === "environments") return this.renderEnvironmentsItem(item);
     const storageKey = item.storageKey || item.key;

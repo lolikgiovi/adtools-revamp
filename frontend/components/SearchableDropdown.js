@@ -123,6 +123,7 @@ export class SearchableDropdown {
     this.menu = document.createElement("div");
     this.menu.id = menuId;
     this.menu.className = "ad-searchable-dropdown-menu app-popover-surface";
+    if (this.select.dataset.dropdownWidth === "content") this.menu.dataset.width = "content";
     this.menu.setAttribute("role", "dialog");
     this.menu.setAttribute("aria-label", accessibleLabel ? `${accessibleLabel} options` : "Select an option");
     this.menu.setAttribute("aria-hidden", "true");
@@ -397,10 +398,19 @@ export class SearchableDropdown {
     const menuGap = 6;
     const viewportWidth = Math.max(window.innerWidth || document.documentElement.clientWidth || 0, viewportPadding * 2);
     const viewportHeight = Math.max(window.innerHeight || document.documentElement.clientHeight || 0, viewportPadding * 2);
-    const optionLabelWidth = this.isSearchable
-      ? 0
-      : Math.max(0, ...Array.from(this.optionsEl.querySelectorAll(".ad-searchable-dropdown-option-label"), (label) => label.scrollWidth));
-    const preferredWidth = Math.max(triggerRect.width || 0, this.isSearchable ? 240 : Math.max(120, optionLabelWidth + 64));
+    const fitContent = this.select.dataset.dropdownWidth === "content";
+    let preferredWidth;
+    if (fitContent) {
+      // Let intrinsic layout account for option text, checkmarks, padding, and search.
+      this.menu.style.width = "max-content";
+      preferredWidth = Math.max(triggerRect.width || 0, this.menu.offsetWidth);
+      this.menu.style.removeProperty("width");
+    } else {
+      const optionLabelWidth = this.isSearchable
+        ? 0
+        : Math.max(0, ...Array.from(this.optionsEl.querySelectorAll(".ad-searchable-dropdown-option-label"), (label) => label.scrollWidth));
+      preferredWidth = Math.max(triggerRect.width || 0, this.isSearchable ? 240 : Math.max(120, optionLabelWidth + 64));
+    }
     const menuWidth = Math.min(preferredWidth, viewportWidth - viewportPadding * 2);
     const left = Math.min(Math.max(triggerRect.left, viewportPadding), viewportWidth - viewportPadding - menuWidth);
 
@@ -559,6 +569,9 @@ export class SearchableDropdown {
     this.renderOptions();
     this.positionMenu();
     this.focusMenu();
+    if (this.select.dataset.dropdownWidth === "content") {
+      void document.fonts?.ready.then(() => this.positionMenu());
+    }
   }
 
   close(restoreFocus = false) {
