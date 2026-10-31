@@ -259,20 +259,6 @@
   text-overflow: ellipsis;
 }
 
-.sidebar-pin-indicator {
-  position: absolute;
-  top: 50%;
-  left: 0.1rem;
-  z-index: 1;
-  display: block;
-  width: 0.6rem;
-  height: 0.6rem;
-  color: currentColor;
-  opacity: 0.62;
-  pointer-events: none;
-  transform: translateY(-50%);
-}
-
 .sidebar-pin-icon {
   display: block;
   width: 100%;

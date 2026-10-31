@@ -443,7 +443,6 @@ class Sidebar {
           return `
             <div class="sidebar-menu-item" data-tool="${toolId}" data-pinned="${isPinned ? "true" : "false"}">
               <button class="sidebar-menu-button" type="button" title="${toolTitle}">
-                ${isPinned ? `<span class="sidebar-pin-indicator" title="Pinned" aria-label="Pinned">${this.getPinIconSvg()}</span>` : ""}
                 ${svg}
                 <span class="sidebar-menu-label">${toolName}</span>
               </button>
@@ -579,7 +578,6 @@ class Sidebar {
           return `
             <div class=\"sidebar-menu-item\" ${dataAttr} data-pinned=\"${isPinned ? "true" : "false"}\">
               <button class=\"sidebar-menu-button\" type=\"button\" title=\"${itemTitle}\">
-                ${isPinned ? `<span class=\"sidebar-pin-indicator\" title=\"Pinned\" aria-label=\"Pinned\">${this.getPinIconSvg()}</span>` : ""}
                 ${svg}
                 <span class=\"sidebar-menu-label\">${itemName}</span>
               </button>

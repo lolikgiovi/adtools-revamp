@@ -443,11 +443,10 @@ class App {
         <div class="home-container">
           <h1 class="home-greeting">${this.#escapeHtml(this.getHomeGreeting())}</h1>
           <div id="home-workspace"></div>
-          <div id="usage-panel"></div>
-          <details class="home-feedback">
-            <summary>Send feedback</summary>
+          <div class="home-feedback">
             ${this.#renderFeedbackSection({ canSubmit: Boolean(this.#getUsageIdentity()) })}
-          </details>
+          </div>
+          <div id="usage-details"></div>
         </div>
       `;
       this.renderHomeWorkspace();
@@ -1817,7 +1816,7 @@ class App {
       <section class="usage-scope-card usage-scope-card-${kind}" aria-labelledby="usage-${kind}-title">
         <div class="usage-scope-header">
           <div class="usage-scope-heading">
-            <h2 id="usage-${kind}-title">${this.#escapeHtml(title)}</h2>
+            <h3 id="usage-${kind}-title">${this.#escapeHtml(title)}</h3>
             ${subtitle ? `<p>${this.#escapeHtml(subtitle)}</p>` : ""}
           </div>
           <div class="usage-scope-total">
@@ -1826,7 +1825,9 @@ class App {
           </div>
         </div>
         <div class="usage-scope-tools">
-          <div class="usage-feature-list" role="list" aria-label="${this.#escapeHtml(`${scope.tools.length.toLocaleString()} tools`)}">${this.#renderFeatureList(scope)}</div>
+          <div class="usage-feature-list" role="list" aria-label="Top tools">
+            ${this.#renderFeatureList({ ...scope, tools: scope.tools.slice(0, 5) })}
+          </div>
         </div>
       </section>
     `;
@@ -1862,20 +1863,19 @@ class App {
       <section class="usage-feedback-section" aria-labelledby="usage-feedback-title">
         <div class="usage-feedback-copy">
           <h2 id="usage-feedback-title">Send feedback</h2>
-          <p>Tell us what blocked you in a tool.</p>
         </div>
         <form class="usage-feedback-form" data-usage-feedback-form>
           <div class="usage-feedback-fields">
             <label class="usage-form-field usage-form-tool-field">
-              <span>Tool <small>optional</small></span>
+              <span class="sr-only">Tool (optional)</span>
               <select name="tool_id">
-                <option value="">Choose a tool</option>
+                <option value="">Tool (optional)</option>
                 ${this.#renderFeedbackOptions()}
               </select>
             </label>
             <label class="usage-form-field">
-              <span>What should be better?</span>
-              <textarea name="message" rows="3" maxlength="4000" required placeholder="Example: the next step is hard to find."></textarea>
+              <span class="sr-only">What should be better?</span>
+              <textarea name="message" rows="1" maxlength="4000" required placeholder="What should be better?"></textarea>
             </label>
           </div>
           <div class="usage-feedback-actions">
@@ -1896,7 +1896,9 @@ class App {
       this.homeWorkspace.render();
       return;
     }
+    const usageData = this.usageOverviewState?.source === "api" ? this.usageOverviewState.data?.user : null;
     this.homeWorkspace = new HomeWorkspace(container, {
+      usageScope: this.#normalizeUsageScope(usageData || this.#getLocalUsageScope()),
       tools: this.getVisibleToolDefinitions(),
       pinnedIds: this.sidebar?.getPinnedToolIds() || new Set(),
       recentStore: this.globalSearch?.recentInteractionStore,
@@ -1907,53 +1909,36 @@ class App {
   }
 
   renderUsagePanel() {
-    const container = document.getElementById("usage-panel");
+    const container = document.getElementById("usage-details");
     if (!container) return;
-    const expanded = container.querySelector(".home-usage-details")?.open || false;
     const state = this.usageOverviewState || { data: null, source: "local", loading: false, error: null };
     const apiData = state.source === "api" ? state.data : null;
     const userScope = this.#normalizeUsageScope(apiData?.user || this.#getLocalUsageScope());
     const globalScope = apiData?.global ? this.#normalizeUsageScope(apiData.global) : null;
-    const visibleTools = new Set(this.getVisibleToolDefinitions().map((tool) => tool.id));
-    const popular = globalScope?.tools.filter((tool) => visibleTools.has(tool.id)).slice(0, 3) || [];
-    const status = state.loading ? "Loading team usage…" : "Team usage is unavailable. Your tools are ready to use.";
+    if (this.homeWorkspace?.container === document.getElementById("home-workspace")) {
+      this.homeWorkspace.updateUsage(userScope);
+    }
+    const teamSubtitle = globalScope
+      ? `All time · ${globalScope.activeUsers.toLocaleString()} people · ${globalScope.toolsUsed.toLocaleString()} tools used`
+      : "";
     container.innerHTML = /*html*/ `
-      <div class="usage-panel">
-        <section class="home-impact" aria-labelledby="home-impact-title" aria-busy="${Boolean(state.loading)}">
-          <div class="home-impact-heading">
-            <h2 id="home-impact-title">Used across the team</h2>
-            <span>All time</span>
-          </div>
-          ${globalScope ? `
-            <dl class="home-impact-metrics">
-              <div><dt>Recorded uses</dt><dd>${globalScope.totalActivities.toLocaleString()}</dd></div>
-              <div><dt>People</dt><dd>${globalScope.activeUsers.toLocaleString()}</dd></div>
-              <div><dt>Tools used</dt><dd>${globalScope.toolsUsed.toLocaleString()}</dd></div>
-            </dl>
-            ${popular.length ? `<div class="home-popular">
-              <h3>Most used</h3>
-              ${popular.map((tool) => `<button type="button" class="home-text-button" data-usage-tool="${this.#escapeHtml(tool.id)}">
-                ${this.#escapeHtml(tool.name)} <span>${tool.count.toLocaleString()}</span>
-              </button>`).join("")}
-            </div>` : ""}
-          ` : `<p class="home-impact-status" role="status">${status}</p>
+      <section class="home-usage-details" aria-labelledby="home-usage-title">
+        <h2 id="home-usage-title">Usage details</h2>
+        <div class="usage-overview-grid">
+          ${this.#renderScopeCard(userScope, {
+            kind: "user", title: "Your top tools", subtitle: apiData ? "All time" : "On this device",
+          })}
+          ${globalScope ? this.#renderScopeCard(globalScope, {
+            kind: "global", title: "Team top tools", subtitle: teamSubtitle,
+          }) : `<section class="home-usage-unavailable" aria-labelledby="usage-global-title" aria-busy="${Boolean(state.loading)}">
+            <h3 id="usage-global-title">Team usage</h3>
+            <p role="status">${state.loading ? "Loading team usage…" : "Team usage is unavailable."}</p>
             ${!state.loading && this.#getUsageIdentity() ? `
-              <button class="home-text-button" type="button" data-usage-retry>Retry team usage</button>` : ""}`}
-        </section>
-        <details class="home-usage-details"${expanded ? " open" : ""}>
-          <summary>View usage</summary>
-          <div class="usage-overview-grid">
-            ${this.#renderScopeCard(userScope, {
-              kind: "user", title: "Your usage", subtitle: apiData ? "All time" : "On this device",
-            })}
-            ${globalScope ? this.#renderScopeCard(globalScope, { kind: "global", title: "Team usage", subtitle: "All time" }) : ""}
-          </div>
-        </details>
-      </div>
+              <button class="home-text-button" type="button" data-usage-retry>Retry team usage</button>` : ""}
+          </section>`}
+        </div>
+      </section>
     `;
-    container.querySelectorAll("[data-usage-tool]").forEach((button) => {
-      button.addEventListener("click", () => this.router.navigate(button.dataset.usageTool));
-    });
     container.querySelector("[data-usage-retry]")?.addEventListener("click", () => {
       const requestId = ++this.usageOverviewRequestId;
       this.usageOverviewState = { ...state, loading: true, error: null };
@@ -2185,7 +2170,7 @@ class App {
           <div class="shell-loading-spinner" aria-hidden="true">
             <span class="shell-loading-ring"></span>
           </div>
-          <h2 class="shell-loading-title">${this.#escapeHtml(title)}</h2>
+          <h2 class="shell-loading-title">${this.#escapeHtml(title)}</h3>
           <p class="shell-loading-message">${this.#escapeHtml(message)}</p>
         </div>
       </div>

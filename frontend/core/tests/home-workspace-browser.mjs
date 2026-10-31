@@ -10,13 +10,27 @@ const release = JSON.parse(await readFile("frontend/config/release-content.json"
 const overview = {
   ok: true,
   period: { totals: "all-time", daily: "last-7-days" },
-  user: { totalActivities: 3593, toolsUsed: 2, tools: [{ toolId: "json-tools", count: 279 }] },
+  user: {
+    totalActivities: 3593,
+    toolsUsed: 6,
+    tools: [
+      { toolId: "quick-query", count: 1502 },
+      { toolId: "run-query", count: 748 },
+      { toolId: "json-tools", count: 279 },
+      { toolId: "check-image", count: 210 },
+      { toolId: "sql-in-clause", count: 181 },
+      { toolId: "compare-config", count: 125 },
+    ],
+  },
   global: {
     totalActivities: 52252,
     activeUsers: 53,
     toolsUsed: 18,
     tools: [
       { toolId: "quick-query", count: 19672 },
+      { toolId: "run-query", count: 13454 },
+      { toolId: "html-template", count: 3493 },
+      { toolId: "sql-in-clause", count: 3409 },
       { toolId: "json-tools", count: 2229 },
       { toolId: "uuid-generator", count: 2262 },
     ],
@@ -27,7 +41,7 @@ const browser = await chromium.launch({ channel: "chrome", headless: true });
 const checks = [];
 const errors = [];
 try {
-  for (const width of [1440, 900, 620, 390]) {
+  for (const width of [1920, 1440, 900, 620, 390]) {
     const context = await browser.newContext({ viewport: { width, height: 900 } });
     await context.addInitScript(
       ({ release }) => {
@@ -41,6 +55,8 @@ try {
           "adtools.global-search.recent-interactions.v1",
           JSON.stringify([
             { key: "tool:base64-tools", lastInteractedAt: Date.now() - 60000 },
+            { key: "tool:html-template", lastInteractedAt: Date.now() - 120000 },
+            { key: "tool:sql-in-clause", lastInteractedAt: Date.now() - 180000 },
             { key: "tool:removed-tool", lastInteractedAt: Date.now() },
           ]),
         );
@@ -51,26 +67,56 @@ try {
       { release },
     );
     let offline = false;
+    let activeOverview = overview;
+    let feedbackFails = true;
     await context.route("**/*", (route) => {
       if (route.request().url().includes("/analytics/public-overview")) {
         return route.fulfill({
           status: offline ? 503 : 200,
           contentType: "application/json",
-          body: JSON.stringify(offline ? { error: "Offline" } : overview),
+          body: JSON.stringify(offline ? { error: "Offline" } : activeOverview),
         });
       }
       if (route.request().url().includes("/feedback/public-improvement")) {
-        return route.fulfill({ status: 200, contentType: "application/json", body: '{"ok":true}' });
+        return route.fulfill({
+          status: feedbackFails ? 503 : 200,
+          contentType: "application/json",
+          body: JSON.stringify(feedbackFails ? { error: "Please retry feedback." } : { ok: true }),
+        });
       }
       return new URL(route.request().url()).origin === base ? route.continue() : route.abort();
     });
     const page = await context.newPage();
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(base);
-    await page.locator(".home-impact-metrics").waitFor();
-    assert.match(await page.locator(".home-impact").innerText(), /52,252/);
-    assert.match(await page.locator(".home-impact").innerText(), /53/);
-    assert.match(await page.locator(".home-impact").innerText(), /All time/);
+    await page.locator(".usage-scope-card-global").waitFor();
+    assert.equal(await page.locator(".home-impact").count(), 0, "Duplicate team summary is removed");
+    assert.match(await page.locator(".usage-scope-card-global").innerText(), /52,252/);
+    assert.match(await page.locator(".usage-scope-card-global").innerText(), /53 people/);
+    assert.match(await page.locator(".usage-scope-card-global").innerText(), /18 tools used/);
+    assert.equal(await page.locator(".home-container details").count(), 0);
+    assert.equal(await page.locator("textarea[name='message']").isVisible(), true);
+    const recommendedIds = () =>
+      page.locator(".home-start [data-home-tool]").evaluateAll((nodes) => nodes.map((node) => node.dataset.homeTool));
+    assert.equal((await recommendedIds()).length, 3);
+    assert.equal(
+      (await recommendedIds()).some((id) => overview.user.tools.some((tool) => tool.toolId === id)),
+      false,
+    );
+    assert.equal(await page.locator(".home-start [data-home-tool='master-lockey']").count(), 0, "Desktop tools are excluded on web");
+    const recentBounds = await page.locator(".home-recent").boundingBox();
+    const tipsBounds = await page.locator(".home-start").boundingBox();
+    const feedbackBounds = await page.locator(".home-feedback").boundingBox();
+    const detailsBounds = await page.locator(".home-usage-details").boundingBox();
+    assert.ok(recentBounds.y < tipsBounds.y && tipsBounds.y < feedbackBounds.y && feedbackBounds.y < detailsBounds.y);
+    if (width >= 900) {
+      const main = await page.locator(".main-content").boundingBox();
+      const home = await page.locator(".home-container").boundingBox();
+      assert.ok(home.width >= main.width - 50, "Home uses the available workspace width");
+      assert.ok(feedbackBounds.y - tipsBounds.y - tipsBounds.height >= 28, "Sections have room to breathe");
+      assert.ok(feedbackBounds.height < 125, "Feedback is a compact, visible form");
+    }
+
     assert.equal(await page.locator(".home-pinned [data-home-tool='json-tools']").count(), 1);
     assert.equal(await page.locator("[data-home-tool='removed-tool']").count(), 0);
     assert.equal(await page.locator(".home-recent [data-home-tool='base64-tools']").count(), 1);
@@ -79,16 +125,16 @@ try {
     await page.locator(".global-search-overlay[aria-hidden='false']").waitFor();
     await page.keyboard.press("Escape");
     assert.equal(await page.locator("[data-home-search]").evaluate((node) => node === document.activeElement), true);
-    await page.getByText("View usage", { exact: true }).click();
     assert.match(await page.locator(".home-usage-details .usage-scope-card-user").innerText(), /3,593/);
-    await page.getByText("View usage", { exact: true }).click();
-    await page.locator(".home-feedback > summary").click();
     await page.locator("textarea[name='message']").fill("Keep my feedback while analytics refresh.");
     await page.evaluate(() => window.app.eventBus.emit("usage:updated"));
     assert.equal(await page.locator("textarea[name='message']").inputValue(), "Keep my feedback while analytics refresh.");
     await page.locator(".usage-feedback-form button[type='submit']").click();
+    await page.getByText("Please retry feedback.", { exact: true }).waitFor();
+    assert.equal(await page.locator("textarea[name='message']").inputValue(), "Keep my feedback while analytics refresh.");
+    feedbackFails = false;
+    await page.locator(".usage-feedback-form button[type='submit']").click();
     await page.getByText("Feedback sent.", { exact: true }).waitFor();
-    await page.locator(".home-feedback > summary").click();
     if (width >= 900) {
       await page.locator(".sidebar-menu-item[data-tool='base64-tools']").hover();
       await page.locator(".sidebar-menu-item[data-tool='base64-tools'] .sidebar-pin-action").click();
@@ -100,15 +146,24 @@ try {
     await page.locator(".home-pinned [data-home-tool='json-tools']").click();
     await page.waitForFunction(() => window.app.currentTool?.id === "json-tools");
     await page.evaluate(() => window.app.router.navigate("home"));
-    await page.locator(".home-impact-metrics").waitFor();
+    await page.locator(".usage-scope-card-global").waitFor();
     assert.equal(await page.locator(".home-recent [data-home-tool='json-tools']").count(), 1);
     await page.reload();
-    await page.locator(".home-impact-metrics").waitFor();
+    await page.locator(".usage-scope-card-global").waitFor();
     assert.equal(await page.locator(".home-recent [data-home-tool='json-tools']").count(), 1);
+    assert.equal(await page.locator(".home-usage-details .usage-scope-card-user .usage-feature-row").count(), 5);
+    assert.equal(await page.locator(".home-usage-details .usage-scope-card-global .usage-feature-row").count(), 5);
     await page.evaluate(() => document.fonts.ready);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.screenshot({ path: resolve(output, `${width}-home.png`), fullPage: true, animations: "disabled" });
-    checks.push(`${width}px: real adoption totals, pins, recent navigation and reload, disclosure, feedback persistence, no overflow`);
+    if (width < 900) {
+      await page.locator(".home-usage-details").scrollIntoViewIfNeeded();
+      await page.screenshot({ path: resolve(output, `${width}-details.png`), animations: "disabled" });
+      await page.locator(".home-greeting").scrollIntoViewIfNeeded();
+    }
+    checks.push(
+      `${width}px: single adoption breakdown, pins, recent navigation and reload, visible usage details, compact feedback persistence, no overflow`,
+    );
     if (width >= 620) {
       await page.evaluate(() => {
         // Desktop shell simulation only: native connection calls are stubbed.
@@ -119,6 +174,7 @@ try {
         window.app.connectionIndicators.render();
         window.app.renderHomeWorkspace();
       });
+
       const oracle = page.locator("[data-connection='oracle']");
       assert.match(await oracle.getAttribute("aria-label"), /Not configured/);
       await page.evaluate(() => {
@@ -137,26 +193,51 @@ try {
       }
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
       await page.screenshot({ path: resolve(output, `${width}-desktop.png`), fullPage: true, animations: "disabled" });
-      checks.push(`${width}px desktop shell: tools and adoption visible, connection states identify configuration and active target`);
+      checks.push(
+        `${width}px desktop shell: personal recommendations and usage details, connection states identify configuration and active target`,
+      );
     }
 
     offline = true;
     await page.reload();
     await page.getByRole("button", { name: "Retry team usage" }).waitFor();
-    assert.equal(await page.locator(".home-impact-metrics").count(), 0);
+    assert.equal(await page.locator(".usage-scope-card-global").count(), 0);
     assert.ok((await page.locator(".home-pinned [data-home-tool]").count()) > 0);
     offline = false;
     await page.getByRole("button", { name: "Retry team usage" }).click();
-    await page.locator(".home-impact-metrics").waitFor();
+    await page.locator(".usage-scope-card-global").waitFor();
     await page.evaluate(() => {
       localStorage.setItem("adtools.global-search.recent-interactions.v1", "broken");
       localStorage.setItem("sidebar.pinnedTools.v1", "[]");
     });
     await page.reload();
-    await page.locator(".home-impact-metrics").waitFor();
+    await page.locator(".usage-scope-card-global").waitFor();
     assert.ok((await page.locator(".home-start [data-home-tool]").count()) > 0);
-    assert.equal(await page.locator(".home-recent").count(), 0);
+    assert.equal(await page.locator(".home-recent [data-home-tool]").count(), 0);
     checks.push(`${width}px: analytics failure preserves tools, retry works, empty/corrupt local data has usable fallback`);
+    const toolIds = await page.evaluate(() => window.app.getVisibleToolDefinitions().map((tool) => tool.id));
+    activeOverview = {
+      ...overview,
+      user: {
+        ...overview.user,
+        tools: toolIds.map((toolId, index) => ({
+          toolId,
+          count: { "compress-image": 1, "char-counter": 2, "merge-sql": 3 }[toolId] || 100 + index,
+        })),
+      },
+    };
+    await page.evaluate(() => window.app.loadUsageOverview());
+    assert.deepEqual(await recommendedIds(), ["compress-image", "char-counter", "merge-sql"]);
+    activeOverview = { ...activeOverview, global: { ...overview.global, tools: [{ toolId: "compress-image", count: 999999 }] } };
+    await page.evaluate(() => window.app.loadUsageOverview());
+    assert.deepEqual(
+      await recommendedIds(),
+      ["compress-image", "char-counter", "merge-sql"],
+      "Team popularity does not change personal recommendations",
+    );
+    await page.locator(".home-start [data-home-tool='char-counter']").click();
+    await page.waitForFunction(() => window.app.currentTool?.id === "char-counter");
+    checks.push(`${width}px: unused tools first, least-used ranking after sync, team counts ignored, recommendation opens the tool`);
     await context.close();
   }
   assert.deepEqual(errors, []);
