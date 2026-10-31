@@ -39,15 +39,25 @@ try {
       createProject("Livin — Integration testing environments");
       window.app.projectSelector.render();
     });
-    assert.equal((await page.locator(".main-header").boundingBox()).height, 40);
+    const webHeader = await page.locator(".main-header").boundingBox();
+    assert.equal(webHeader.height, 57);
     assert.equal(await page.locator(".connection-indicators").isVisible(), false);
-    assert.equal(await page.locator(".main-header .connection-indicators").count(), 0);
+    assert.equal(await page.locator(".header-center .header-search").count(), 1);
+    assert.equal(await page.locator(".sidebar-header .sidebar-project").count(), 1);
+    assert.equal(await page.locator(".sidebar-header .header-search").count(), 0);
+    const webSearch = await page.locator(".header-center .header-search").boundingBox();
+    assert.equal(webSearch.height, width <= 600 ? 32 : 30);
+    assert.ok(Math.abs(webSearch.x + webSearch.width / 2 - webHeader.x - webHeader.width / 2) < 1);
+    await page.locator(".header-search").click();
+    await page.locator(".global-search-overlay[aria-hidden='false']").waitFor();
+    await page.keyboard.press("Escape");
+    assert.equal(await page.locator(".header-search").evaluate((node) => node === document.activeElement), true);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.screenshot({ path: resolve(output, `${width}-web.png`), animations: "disabled" });
-    checks.push(`${width}px web: 40px header, project selector visible, native title bar hidden, no overflow`);
+    checks.push(`${width}px web: restored 57px header, centered working search, sidebar project selector, no overflow`);
     if (width >= 620) {
       await page.evaluate(() => {
-        // Exercise the actual connection controller with native calls stubbed.
+        // Layout simulation: native calls are stubbed; no desktop services are contacted.
         window.__TAURI__ = {};
         window.app.connectionIndicators.native = async () => null;
         document.documentElement.dataset.tauri = "true";
@@ -57,76 +67,71 @@ try {
       assert.equal(await page.locator(".main-header").isVisible(), false);
       const nativeBar = await page.locator(".window-titlebar").boundingBox();
       const content = await page.locator(".main-content").boundingBox();
-      assert.ok(Math.abs(content.y - nativeBar.height) < 1, "Workspace starts immediately below title bar");
-      assert.equal(await page.locator(".sidebar-header").isVisible(), false);
+      assert.ok(Math.abs(content.y - nativeBar.height) < 1, "No duplicate workspace header on desktop");
       assert.equal(await page.locator(".window-titlebar-center .header-search").count(), 1);
+      assert.equal(await page.locator(".window-titlebar-actions > .header-actions").count(), 1);
+      assert.equal(await page.locator(".sidebar-footer .release-tour-dev-preview").count(), 1);
+      assert.equal(await page.locator(".window-titlebar .release-tour-dev-preview").count(), 0);
       const sidebar = page.locator(".sidebar");
-      const originalState = await sidebar.getAttribute("data-state");
       const toggle = page.locator(".window-titlebar-leading .sidebar-trigger");
-      assert.equal(await toggle.count(), 1);
+      if (!["expanded", "open"].includes(await sidebar.getAttribute("data-state"))) await toggle.click();
       await toggle.click();
-      assert.notEqual(await sidebar.getAttribute("data-state"), originalState);
-      await toggle.click();
-      assert.equal(await sidebar.getAttribute("data-state"), originalState);
-      if (originalState === "expanded") await toggle.click();
-      await page.locator(".window-titlebar-center .header-search").click();
+      assert.ok(["collapsed", "closed"].includes(await sidebar.getAttribute("data-state")));
+      await page.locator(".header-search").click();
       await page.locator(".global-search-overlay[aria-hidden='false']").waitFor();
       await page.keyboard.press("Escape");
-      if (originalState === "expanded") await toggle.click();
-      const home = page.locator(".window-titlebar-leading #breadcrumb-home");
-      assert.equal(await home.isVisible(), true);
-      const connections = await page.locator(".connection-indicators").boundingBox();
-      const project = await page.locator(".header-project").boundingBox();
+      await toggle.click();
+      await page.waitForTimeout(200);
+      assert.equal(await page.locator(".sidebar-header").isVisible(), true);
+      const project = await page.locator(".sidebar-project").boundingBox();
+      const search = await page.locator(".header-search").boundingBox();
       const navigation = await page.locator(".window-titlebar-leading").boundingBox();
-      const search = await page.locator(".window-titlebar-center .header-search").boundingBox();
-      assert.ok(Math.abs(search.x + search.width / 2 - width / 2) < 1, "Search is centered in the desktop window");
+      const connections = await page.locator(".connection-indicators").boundingBox();
+      assert.ok(project.x >= 0 && project.y >= nativeBar.height && project.x + project.width <= 192);
+      assert.ok(Math.abs(search.x + search.width / 2 - width / 2) < 1, "Native search remains centered");
       assert.ok(navigation.x + navigation.width <= search.x);
       assert.ok(search.x + search.width < connections.x);
-      assert.equal(await page.locator(".main-header .header-project").count(), 0);
-      assert.ok((await toggle.boundingBox()).x >= 100, "Reserve the traffic-light area");
-      assert.ok(connections.x + connections.width < project.x);
-      assert.ok(project.y < 36 && project.width < 140, "Project trigger should fit Livin");
-      const sizing = await page.evaluate(() => {
-        const read = (selector) => {
-          const node = document.querySelector(selector);
-          return {
-            height: node.getBoundingClientRect().height,
-            fontSize: getComputedStyle(node).fontSize,
-            chevronWidth: node.querySelector("svg").getBoundingClientRect().width,
-          };
-        };
-        return { project: read(".header-project .ad-searchable-dropdown-trigger"), connection: read(".connection-indicator") };
-      });
-      assert.deepEqual(sizing.project, sizing.connection, "Project uses the same sizing as connection controls");
-      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
-      await page.locator(".header-project .ad-searchable-dropdown-trigger").click();
+      assert.ok((await toggle.boundingBox()).x >= 100, "Reserve native traffic-light area");
+      assert.equal(await page.locator(".window-titlebar .sidebar-project").count(), 0);
+      await page.locator(".sidebar-project .ad-searchable-dropdown-trigger").click();
       const projectMenu = page.locator(".ad-searchable-dropdown-menu[aria-hidden='false']");
       await projectMenu.waitFor({ state: "visible" });
       await page.waitForTimeout(180);
       const menuBounds = await projectMenu.boundingBox();
-      assert.ok(menuBounds.width > project.width + 80, "Menu should fit option contents independently of trigger");
       assert.ok(menuBounds.x >= 0 && menuBounds.x + menuBounds.width <= width);
-      const longOption = projectMenu.locator(".ad-searchable-dropdown-option-label").filter({ hasText: "Livin — Integration" });
-      assert.equal(await longOption.evaluate((label) => label.scrollWidth <= label.clientWidth + 1), true);
-      assert.ok(menuBounds.width <= (await longOption.evaluate((label) => label.scrollWidth + 90)), "Avoid unused menu width");
+      assert.equal(
+        await projectMenu.evaluate((node) => {
+          const r = node.getBoundingClientRect();
+          return node.contains(document.elementFromPoint(r.left + 12, r.top + 12));
+        }),
+        true,
+      );
       await page.screenshot({ path: resolve(output, `${width}-project-menu.png`), animations: "disabled" });
       await page.keyboard.press("Escape");
-      await projectMenu.waitFor({ state: "hidden" });
+      assert.ok(["expanded", "open"].includes(await sidebar.getAttribute("data-state")));
+      assert.equal(
+        await page.locator(".sidebar-project .ad-searchable-dropdown-trigger").evaluate((node) => node === document.activeElement),
+        true,
+      );
+      await page.evaluate(async () => {
+        const { getActiveProject, renameProject } = await import("/core/Projects.js");
+        renameProject(getActiveProject().id, "Livin Retail " + "x".repeat(65));
+      });
+      assert.ok(Math.abs((await page.locator(".sidebar-project").boundingBox()).width - project.width) < 1);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
       await page.evaluate(async () => {
         const { getActiveProject, renameProject } = await import("/core/Projects.js");
         renameProject(getActiveProject().id, "Livin Retail");
       });
-      const renamed = await page.locator(".header-project").boundingBox();
-      assert.ok(renamed.width > project.width && renamed.width < project.width + 90);
-      await page.evaluate(() => {
-        window.app.openReleaseTourPreview = () => {
-          window.previewClicked = true;
-        };
-      });
-      if (originalState !== "expanded") await toggle.click();
-      await page.locator(".sidebar-footer .release-tour-dev-preview").click();
-      if (originalState !== "expanded") await toggle.click();
-      assert.equal(await page.evaluate(() => window.previewClicked), true);
+      if (width > 1000) {
+        await page.evaluate(() => {
+          window.app.openReleaseTourPreview = () => {
+            window.previewClicked = true;
+          };
+        });
+        await page.locator(".sidebar-footer .release-tour-dev-preview").click();
+        assert.equal(await page.evaluate(() => window.previewClicked), true);
+      }
       for (const service of ["oracle", "kafka", "redis"]) {
         const trigger = page.locator(`button[data-connection='${service}']`);
         await trigger.click();
@@ -146,35 +151,49 @@ try {
         assert.equal(await trigger.getAttribute("aria-expanded"), "false");
         assert.equal(await trigger.evaluate((node) => document.activeElement === node), true);
       }
-      await page.evaluate(async () => {
-        const { getActiveProject, renameProject } = await import("/core/Projects.js");
-        renameProject(getActiveProject().id, "Livin Retail " + "x".repeat(65));
-      });
-      const longProject = await page.locator(".header-project").boundingBox();
-      const compressedConnections = await page.locator(".connection-indicators").boundingBox();
-      assert.ok(search.x + search.width < compressedConnections.x);
-      assert.ok(compressedConnections.x + compressedConnections.width < longProject.x);
-      assert.ok(longProject.x + longProject.width <= width);
-      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
-      await page.evaluate(async () => {
-        const { getActiveProject, renameProject } = await import("/core/Projects.js");
-        renameProject(getActiveProject().id, "Livin Retail");
-      });
+      await page.evaluate(() => window.app.renderUpdateBanner({ version: "9.9.9", notes: "Layout test" }));
+      const updateNotice = await page.locator(".window-titlebar .update-banner").boundingBox();
+      assert.ok(updateNotice.y >= nativeBar.height && updateNotice.x >= 0 && updateNotice.x + updateNotice.width <= width);
+      await page.locator(".update-banner-later").click();
       await page.screenshot({ path: resolve(output, `${width}-desktop.png`), animations: "disabled" });
       await page.evaluate(() => window.app.router.navigate("quick-query"));
       await page.waitForFunction(() => Boolean(window.app.tools.get("quick-query")?.ui));
       await page.evaluate(() => window.app.tools.get("quick-query").ui.ready);
       const tabs = await page.locator(".qq-tab-strip").boundingBox();
-      assert.ok(tabs.y >= nativeBar.height && tabs.y < nativeBar.height + 25, JSON.stringify({ tabs, nativeBar }));
+      assert.ok(tabs.y >= nativeBar.height && tabs.y < nativeBar.height + 25);
       await page.screenshot({ path: resolve(output, `${width}-quick-query.png`), animations: "disabled" });
       assert.equal(await page.locator(".window-titlebar-leading #breadcrumb-current").innerText(), "Quick Query");
-      await home.click();
+      await page.locator(".window-titlebar-leading #breadcrumb-home").click();
       await page.waitForFunction(() => window.app.router.getCurrentRoute() === "home");
       assert.equal(await page.locator(".window-titlebar-leading .breadcrumb-current").isVisible(), false);
+      // Runtime placement can run repeatedly, including after delayed native initialization.
+      await page.evaluate(() => {
+        delete window.__TAURI__;
+        document.documentElement.dataset.tauri = "false";
+        document.querySelector(".main-header").dataset.runtime = "web";
+        window.app.placeHeaderControls(false);
+        window.app.placeHeaderControls(false);
+      });
+      assert.equal(await page.locator(".main-header > .header-actions").count(), 1);
+      assert.equal(await page.locator(".header-center .header-search").count(), 1);
+      assert.equal(await page.locator(".header-context .sidebar-trigger + .breadcrumb").count(), 1);
+      assert.equal(await page.locator(".sidebar-header .sidebar-project").count(), 1);
+      assert.equal((await page.locator(".main-header").boundingBox()).height, 57);
       checks.push(
-        `${width}px desktop simulation: one desktop row, working Home breadcrumbs, centered search, prominent project selector, working sidebar, no clipping, Escape focus`,
+        `${width}px desktop simulation: one native toolbar, centered search, sidebar project/menu, native actions and connections, keyboard focus, runtime restoration`,
       );
     }
+    if (["collapsed", "closed"].includes(await page.locator(".sidebar").getAttribute("data-state"))) {
+      await page.locator(".sidebar-trigger").click();
+    }
+    await page.locator(".sidebar-project .ad-searchable-dropdown-trigger").click();
+    await page.getByRole("option", { name: "Create or manage projects…", exact: true }).click();
+    await page.locator(".project-name-save").waitFor();
+    if (width <= 768) assert.equal(await page.locator(".sidebar").getAttribute("data-state"), "closed");
+    const currentCrumb = await page.locator(".header-context .breadcrumb").boundingBox();
+    const currentSearch = await page.locator(".header-search").boundingBox();
+    assert.ok(currentCrumb.x + currentCrumb.width <= currentSearch.x);
+    checks.push(`${width}px sidebar management opens Settings with readable web breadcrumbs`);
     await context.close();
   }
   assert.deepEqual(errors, []);

@@ -1,8 +1,7 @@
-import { isTauri } from "../core/Runtime.js";
 import { listSharedProjects, useSharedProject } from "../core/ProjectDirectory.js";
 import { getActiveProject, listProjects } from "../core/Projects.js";
 
-/** Global project scope belongs to the application header, independent of navigation. */
+/** Global project scope belongs to the sidebar, independent of navigation. */
 export class ProjectSelector {
   constructor({ eventBus, router, onProjectChange }) {
     this.router = router;
@@ -26,23 +25,22 @@ export class ProjectSelector {
     this.refreshDirectory();
   }
 
-  updatePlacement(desktop = isTauri()) {
-    const host = document.querySelector(desktop ? ".window-titlebar-actions" : ".header-actions");
+  updatePlacement() {
+    const host = document.querySelector(".sidebar-header");
     if (host && this.element && this.element.parentElement !== host) host.append(this.element);
   }
 
   render() {
-    const header = document.querySelector(".header-actions");
-    if (!header) return;
+    const sidebar = document.querySelector(".sidebar-header");
+    if (!sidebar) return;
     this.element?.remove();
     const wrapper = document.createElement("div");
-    wrapper.className = "header-project";
+    wrapper.className = "sidebar-project";
     const select = document.createElement("select");
-    select.className = "header-project-select";
+    select.className = "sidebar-project-select";
     select.setAttribute("aria-label", "Project");
     const active = getActiveProject();
     select.title = active.name;
-    select.dataset.dropdownWidth = "content";
     const group = document.createElement("optgroup");
     group.label = active.department === "UNASSIGNED" ? "Projects" : active.department;
     for (const project of listProjects()) group.append(new Option(project.name, project.id, false, project.id === active.id));

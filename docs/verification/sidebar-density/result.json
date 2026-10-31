@@ -5,11 +5,17 @@
       "mode": "desktop",
       "metrics": {
         "rowHeight": 30,
+        "projectHeight": 30,
+        "projectFontSize": "13px",
+        "projectWeight": "500",
+        "rowWeight": "500",
+        "projectPadding": "10px",
+        "rowPadding": "10px",
         "fontSize": "13px",
         "iconSize": "14px",
         "groupFontSize": "11px",
         "contentHeight": 856,
-        "visibleHeight": 756,
+        "visibleHeight": 732,
         "searchHeight": 26
       },
       "passed": true
@@ -18,12 +24,18 @@
       "mode": "touch",
       "metrics": {
         "rowHeight": 40,
+        "projectHeight": 40,
+        "projectFontSize": "14px",
+        "projectWeight": "500",
+        "rowWeight": "500",
+        "projectPadding": "10px",
+        "rowPadding": "10px",
         "fontSize": "14px",
         "iconSize": "16px",
         "groupFontSize": "11px",
         "contentHeight": 828,
-        "visibleHeight": 761,
-        "searchHeight": 36
+        "visibleHeight": 691,
+        "searchHeight": 32
       },
       "passed": true
     }

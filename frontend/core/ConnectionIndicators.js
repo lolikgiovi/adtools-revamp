@@ -313,12 +313,13 @@ export class ConnectionIndicators {
     const kafka = readKafkaConfig();
     const redis = readRedisConfig();
     const states = [
-      { service: "oracle", name: "Oracle", state: names.length ? "active" : "idle", detail: names.join(", ") || "Idle" },
+      { service: "oracle", name: "Oracle", state: names.length ? "active" : "idle",
+        detail: names.join(", ") || (readOracleConnections().length ? "Disconnected" : "Not configured") },
       { service: "kafka", name: "Kafka", state: this.manual.kafka || this.kafkaListening ? "active" : this.busy.kafka ? "busy" : "idle",
         detail: this.kafkaListening ? `Listening${this.kafkaListenerLabel ? ` · ${this.kafkaListenerLabel}` : ""}`
-          : this.manual.kafka || (this.busy.kafka ? "Working" : kafka.brokers ? "On demand" : "Not set") },
+          : this.manual.kafka || (this.busy.kafka ? "Working" : kafka.brokers ? "On demand" : "Not configured") },
       { service: "redis", name: "Redis", state: this.manual.redis ? "active" : this.busy.redis ? "busy" : "idle",
-        detail: this.manual.redis || (this.busy.redis ? "Working" : redis.host ? "On demand" : "Not set") },
+        detail: this.manual.redis || (this.busy.redis ? "Working" : redis.host ? "On demand" : "Not configured") },
     ];
     for (const item of states) {
       const trigger = this.container.querySelector(`[data-connection="${item.service}"]`);

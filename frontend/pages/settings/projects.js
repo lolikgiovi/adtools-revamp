@@ -5,139 +5,149 @@ export function renderProjectManager({ eventBus, refresh }) {
   const wrapper = document.createElement("div");
   wrapper.className = "setting-item project-manager";
   wrapper.dataset.setting = "config.projects";
-  wrapper.dataset.searchText = "Project department add create rename publish shared choose directory";
+  wrapper.dataset.searchText = "Project department name save create rename publish shared choose directory";
   wrapper.innerHTML = `
-    <p class="project-scope-intro">Projects keep testing environments, Quick Query schemas, and query tabs together. Switch projects from the header.</p>
-    <div class="project-controls">
-      <select class="setting-input project-settings-select" aria-label="Project"></select>
-      <button type="button" class="btn btn-secondary btn-sm project-add">Add project</button>
-      <button type="button" class="btn btn-secondary btn-sm project-rename">Rename</button>
-      <button type="button" class="btn btn-secondary btn-sm project-publish">Publish name</button>
-    </div>
-    <div class="project-directory">
-      <label for="shared-project-select">Shared projects</label>
-      <div class="project-directory-controls">
-        <select id="shared-project-select" class="setting-input project-directory-select" aria-label="Shared projects" disabled>
-          <option value="">Loading shared projects…</option>
-        </select>
-        <button type="button" class="btn btn-secondary btn-sm project-use-shared" disabled>Use project</button>
-        <button type="button" class="btn btn-secondary btn-sm project-directory-retry" hidden>Retry</button>
-      </div>
-      <p class="project-sharing-note">Only names are shared. Environments, schemas, and query tabs stay on your device.</p>
-      <div class="project-directory-status" role="status" aria-live="polite"></div>
-    </div>
-    <form class="project-name-form" hidden>
-      <label for="project-name">Project name</label>
-      <input id="project-name" class="setting-input project-name-input" required maxlength="80" autocomplete="off" />
-      <div class="project-form-actions">
-        <button type="button" class="btn btn-secondary btn-sm project-name-cancel">Cancel</button>
-        <button type="submit" class="btn btn-primary btn-sm project-name-save">Save project</button>
-      </div>
+    <form class="project-name-form project-controls">
+      <select class="setting-input project-settings-select" aria-label="Choose project"></select>
+      <input class="setting-input project-name-input" aria-label="Project name" placeholder="Project name"
+        required maxlength="80" autocomplete="off" />
+      <button type="submit" class="btn btn-primary btn-sm project-name-save">Save name</button>
     </form>
+    <div class="project-directory-feedback">
+      <div class="project-directory-status" role="status" aria-live="polite"></div>
+      <button type="button" class="btn btn-secondary btn-sm project-directory-retry" hidden>Retry</button>
+    </div>
     <div class="project-status" role="status" aria-live="polite"></div>`;
   const select = wrapper.querySelector("select");
   const form = wrapper.querySelector("form");
   const input = wrapper.querySelector("input");
   const status = wrapper.querySelector(".project-status");
-  const active = getActiveProject();
-  let editing = false;
-  for (const project of listProjects()) select.add(new Option(project.name, project.id, false, project.id === active.id));
-  select.addEventListener("change", async () => {
-    select.disabled = true;
-    const changed = await globalThis.app?.switchProject(select.value);
-    if (!changed) {
-      select.value = active.id;
-      select.disabled = false;
-    }
-  });
-  const directory = wrapper.querySelector(".project-directory-select");
   const directoryStatus = wrapper.querySelector(".project-directory-status");
-  const useButton = wrapper.querySelector(".project-use-shared");
   const retryButton = wrapper.querySelector(".project-directory-retry");
+  const saveButton = wrapper.querySelector(".project-name-save");
+  let active = getActiveProject();
   let sharedProjects = [];
+  let creating = false;
+  let savedProject = null;
+  let busy = false;
+  const normalized = (name) => name.normalize("NFKC").trim().toLowerCase();
+  const fillOptions = () => {
+    const locals = listProjects();
+    const names = new Set(locals.map((project) => normalized(project.name)));
+    select.replaceChildren();
+    for (const project of locals) select.add(new Option(project.name, project.id));
+    for (const project of sharedProjects) {
+      if (!names.has(normalized(project.name))) {
+        select.add(new Option(project.name, `shared:${project.id}`));
+        names.add(normalized(project.name));
+      }
+    }
+    select.add(new Option("New project…", "__new__"));
+    select.value = creating ? "__new__" : active.id;
+  };
+  const setBusy = (value) => {
+    busy = value;
+    select.disabled = value;
+    input.disabled = value;
+    saveButton.disabled = value;
+  };
   const loadDirectory = async () => {
     retryButton.hidden = true;
     directoryStatus.textContent = "";
     try {
       sharedProjects = await listSharedProjects();
-      directory.replaceChildren(new Option(sharedProjects.length ? "Choose a project…" : "No shared projects yet", ""));
-      for (const project of sharedProjects) directory.add(new Option(project.name, project.id));
-      directory.disabled = !sharedProjects.length;
+      fillOptions();
     } catch (error) {
-      directory.replaceChildren(new Option("Shared projects unavailable", ""));
-      directory.disabled = true;
       directoryStatus.textContent = error.message;
       retryButton.hidden = false;
     }
-    useButton.disabled = true;
   };
+  input.value = active.name;
+  fillOptions();
   retryButton.addEventListener("click", loadDirectory);
-  directory.addEventListener("change", () => {
-    useButton.disabled = !directory.value;
-  });
-  useButton.addEventListener("click", async () => {
-    useButton.disabled = true;
-    try {
-      const project = useSharedProject(sharedProjects.find((item) => item.id === directory.value));
-      if (project.id === active.id) directoryStatus.textContent = "You’re already using this project.";
-      else if (!(await globalThis.app?.switchProject(project.id))) {
-        eventBus?.emit?.("notification:info", { message: "Project added. Switch to it when your current work is saved." });
-        window.dispatchEvent(new Event("adtools:projects-updated"));
-        refresh();
-      }
-    } catch (error) {
-      directoryStatus.textContent = error.message;
-    } finally {
-      useButton.disabled = !directory.value;
-    }
-  });
-  wrapper.querySelector(".project-publish").addEventListener("click", async (event) => {
-    const button = event.currentTarget;
-    button.disabled = true;
-    try {
-      await publishProjectName(active.name);
-      await loadDirectory();
-      directoryStatus.textContent = `“${active.name}” is available for everyone to choose.`;
-    } catch (error) {
-      directoryStatus.textContent = error.message;
-    } finally {
-      button.disabled = false;
-    }
-  });
   void loadDirectory();
-  const open = (rename) => {
-    editing = rename;
-    form.hidden = false;
-    input.value = rename ? active.name : "";
+  select.addEventListener("change", async () => {
+    if (busy) return;
     status.textContent = "";
-    input.focus();
-  };
-  wrapper.querySelector(".project-add").addEventListener("click", () => open(false));
-  wrapper.querySelector(".project-rename").addEventListener("click", () => open(true));
-  wrapper.querySelector(".project-name-cancel").addEventListener("click", () => {
-    form.hidden = true;
-    wrapper.querySelector(editing ? ".project-rename" : ".project-add").focus();
+    savedProject = null;
+    creating = select.value === "__new__";
+    if (creating) {
+      input.value = "";
+      input.focus();
+      return;
+    }
+    setBusy(true);
+    try {
+      const shared = sharedProjects.find((project) => `shared:${project.id}` === select.value);
+      const project = shared ? useSharedProject(shared) : listProjects().find((project) => project.id === select.value);
+      if (project.id !== active.id && !(await globalThis.app?.switchProject(project.id))) {
+        eventBus?.emit?.("notification:info", { message: "Project added. Switch to it when your current work is saved." });
+      }
+      input.value = active.name;
+      fillOptions();
+      if (shared) window.dispatchEvent(new Event("adtools:projects-updated"));
+    } catch (error) {
+      status.textContent = error.message;
+      fillOptions();
+    } finally {
+      setBusy(false);
+    }
   });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const button = form.querySelector('[type="submit"]');
-    button.disabled = true;
+    if (busy) return;
+    const name = input.value.trim();
+    status.textContent = "";
+    status.dataset.state = "error";
+    if (!name || name.length > 80) {
+      status.textContent = "Enter a project name between 1 and 80 characters.";
+      input.focus();
+      return;
+    }
+    if (
+      listProjects().some(
+        (project) =>
+          ((creating && !savedProject) || project.id !== (savedProject || active).id) && normalized(project.name) === normalized(name),
+      )
+    ) {
+      status.textContent = "That project name is already saved. Choose it from the project list.";
+      input.focus();
+      return;
+    }
+    setBusy(true);
+    saveButton.textContent = "Saving…";
     try {
-      if (editing) {
-        renameProject(active.id, input.value);
-        refresh();
+      // Persist locally first so a connection failure cannot discard a name or project data.
+      const project = creating && !savedProject ? createProject(name) : renameProject((savedProject || active).id, name);
+      savedProject = project;
+      // Keep the saved project selected for a publication retry without creating it again.
+      try {
+        await publishProjectName(project.name);
+      } catch (error) {
+        status.textContent = `Name saved on this device. Could not publish: ${error.message} Select Save name to retry.`;
+        fillOptions();
+        window.dispatchEvent(new Event("adtools:projects-updated"));
         return;
       }
-      const project = createProject(input.value);
-      if (!(await globalThis.app?.switchProject(project.id))) {
+      creating = false;
+      if (project.id !== active.id) {
+        if (await globalThis.app?.switchProject(project.id)) return;
+        window.dispatchEvent(new Event("adtools:projects-updated"));
         refresh();
-        eventBus?.emit?.("notification:info", { message: "Project created. Select it when your current work is saved." });
+        eventBus?.emit?.("notification:info", { message: "Project saved. Select it when your current work is saved." });
+        return;
       }
+      active = project;
+      input.value = project.name;
+      fillOptions();
+      status.dataset.state = "success";
+      status.textContent = "Name saved and published.";
+      await loadDirectory();
     } catch (error) {
       status.textContent = error.message;
-      input.focus();
     } finally {
-      button.disabled = false;
+      setBusy(false);
+      saveButton.textContent = "Save name";
     }
   });
   return wrapper;
@@ -148,8 +158,8 @@ export function renderProjectSchemaLink({ router } = {}) {
   row.className = "setting-item project-schema";
   row.dataset.setting = "project.schema";
   row.dataset.searchText = "QQ Schema Quick Query saved schemas query tabs";
-  const label = document.createElement("span");
-  label.className = "project-schema-label";
+  const label = document.createElement("h4");
+  label.className = "project-section-heading";
   label.textContent = "Quick Query schemas";
   const button = document.createElement("button");
   button.type = "button";

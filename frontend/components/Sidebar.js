@@ -89,6 +89,7 @@ class Sidebar {
     if (this.eventBus) {
       this.eventBus.on("route:changed", (data) => {
         this.updateActiveItem(data.path);
+        if (this.state.isMobile) this.close();
       });
     }
 
@@ -142,6 +143,9 @@ class Sidebar {
    * Handle keyboard events
    */
   handleKeydown(e) {
+    // Nested controls, such as the project picker, handle Escape before the sidebar.
+    if (e.defaultPrevented) return;
+
     if (this.contextMenuEl) {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -443,6 +447,10 @@ class Sidebar {
                 ${svg}
                 <span class="sidebar-menu-label">${toolName}</span>
               </button>
+              <button class="sidebar-pin-action" type="button" aria-pressed="${isPinned}"
+                aria-label="${isPinned ? "Unpin" : "Pin"} ${toolName}" title="${isPinned ? "Unpin" : "Pin"} ${toolName}">
+                ${this.getPinIconSvg()}
+              </button>
             </div>
           `;
         })
@@ -450,6 +458,17 @@ class Sidebar {
 
       menuEl.querySelectorAll(".sidebar-menu-item .sidebar-menu-button").forEach((button) => {
         this.bindMenuButton(button);
+      });
+      menuEl.querySelectorAll(".sidebar-pin-action").forEach((button) => {
+        button.addEventListener("click", async (event) => {
+          event.stopPropagation();
+          const toolId = button.closest("[data-tool]").dataset.tool;
+          this.togglePin(toolId, "button");
+          await this._pinRenderPromise;
+          const item = Array.from(sidebarContent.querySelectorAll("[data-tool]"))
+            .find((node) => node.dataset.tool === toolId);
+          item?.querySelector(".sidebar-pin-action")?.focus({ preventScroll: true });
+        });
       });
     };
 
@@ -884,7 +903,7 @@ class Sidebar {
     this.contextMenuToolId = null;
   }
 
-  togglePin(toolId) {
+  togglePin(toolId, source = "context_menu") {
     const normalizedToolId = String(toolId || "").trim();
     if (!normalizedToolId) return false;
 
@@ -900,7 +919,7 @@ class Sidebar {
     try {
       UsageTracker.trackEvent(normalizedToolId, isPinned ? "sidebar_pin" : "sidebar_unpin", {
         tool_id: normalizedToolId,
-        source: "sidebar_context_menu",
+        source: `sidebar_${source}`,
         pinned_count: pinnedTools.size,
         persisted,
       });
@@ -909,10 +928,10 @@ class Sidebar {
     this.eventBus?.emit?.("sidebar:pinChanged", {
       toolId: normalizedToolId,
       isPinned,
-      source: "context_menu",
+      source,
     });
 
-    this.renderTools();
+    this._pinRenderPromise = this.renderTools();
     return isPinned;
   }
 

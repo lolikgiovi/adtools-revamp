@@ -76,3 +76,34 @@ passed. Browser results passed at both widths. `1440-desktop-header.png` checks
 the desktop header layout with connection indicators shown (layout simulation,
 not a native Tauri runtime test). The design detector's two warnings refer to
 existing Quick Query width animation/accent rules outside the changed styles.
+
+## Simplified project settings (2026-10-31)
+
+Settings now uses one picker for local and shared project names. Choosing a saved
+name switches immediately; selecting “New project…” clears the inline name field.
+“Save name” saves locally and publishes automatically, including when renaming the
+current project. Separate Add, Rename, Publish, Shared projects, and Use project
+controls are removed. Quick Query schemas and Testing Environments are sibling
+sections with identical headings and alignment; environments no longer have a
+nested accordion.
+
+The browser command above verifies both 1440px and 390px layouts against the real
+Worker routes using disposable SQLite. It also covers duplicate rejection without
+publishing, failed publication on creation and rename, retry without duplicate
+projects, and automatic sharing across accounts. Only project names are published.
+Publication failure keeps the local name and displays a retry message. A new
+project switches after successful publication; its failed publication can be
+retried with Save name or the locally saved project can be chosen from the picker.
+
+Verification: browser scenarios passed at both widths; 15 focused project,
+switching, and environment editor tests passed; production Vite bundling passed.
+Targeted ESLint has no errors (existing Settings warnings remain), the design
+scan has no findings, and `git diff --check` passed.
+
+## Sidebar project selection (2026-10-31)
+
+The global project picker now lives in `.sidebar-header .sidebar-project` on both
+platforms. The browser scenario opens the narrow sidebar before checking its
+menu, verifies project state there, and confirms it remains below the native
+header in the desktop layout simulation. See `../compact-header/README.md` for
+the platform header, centered search, and keyboard verification.

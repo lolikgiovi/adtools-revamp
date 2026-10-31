@@ -1059,38 +1059,15 @@ body .settings-edit-dialog-wide {
 
 .project-controls {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
 }
 
-.project-form-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.project-controls > .project-settings-select {
-  flex: 1 1 180px;
-  min-width: 0;
-  max-width: 100%;
-}
-
-.project-name-form:not([hidden]) {
-  display: grid;
-  gap: 8px;
-  margin-top: 12px;
-  max-width: 420px;
-}
-
-.project-name-form .setting-input {
+.project-controls > .setting-input,
+.project-controls > .ad-searchable-dropdown {
   width: 100%;
   min-width: 0;
-}
-
-.project-form-actions {
-  justify-content: flex-end;
 }
 
 .project-status:not(:empty) {
@@ -1098,72 +1075,58 @@ body .settings-edit-dialog-wide {
   color: hsl(var(--destructive));
 }
 
-.project-scope-intro {
-  margin: 0 0 16px;
-  max-width: 65ch;
+.project-status[data-state="success"] {
   color: hsl(var(--muted-foreground));
-  font-size: 0.875rem;
-  line-height: 1.5;
 }
 
-.project-schema {
+.project-schema,
+.project-manager ~ .setting-item-environments > .environments-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px;
+  padding-block: 12px;
 }
 
-.project-schema-label {
-  font-weight: 500;
+.project-section-heading {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
 }
 
-.project-directory {
-  margin-top: 20px;
-  display: grid;
-  gap: 8px;
+.project-manager ~ .setting-item-environments {
+  padding-top: 0;
 }
 
-.project-directory-controls {
+.project-manager ~ .setting-item-environments .environment-row {
+  margin-inline-start: 0;
+}
+
+.project-directory-feedback {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 8px;
-}
-
-.project-directory-controls > .ad-searchable-dropdown,
-.project-directory-controls > select {
-  flex: 1 1 180px;
-  min-width: 0;
-}
-
-.project-sharing-note {
-  margin: 0;
   color: hsl(var(--muted-foreground));
   font-size: 0.8125rem;
-  line-height: 1.5;
 }
 
-.project-directory-status:empty {
-  display: none;
-}
-
-@media (max-width: 600px) {
-  .project-controls {
-    display: flex;
-    flex-wrap: wrap;
-  }
-
-  .project-controls > .ad-searchable-dropdown {
-    flex-basis: 100%;
-  }
-}
-
+.project-directory-feedback:has(.project-directory-status:empty),
 .project-directory-retry[hidden] {
   display: none;
 }
 
-.project-directory > label {
-  font-size: 0.875rem;
-  font-weight: 500;
+.project-directory-feedback:has(.project-directory-status:not(:empty)) {
+  margin-top: 8px;
+}
+
+@media (max-width: 600px) {
+  .project-controls {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .project-controls > .ad-searchable-dropdown,
+  .project-controls > select {
+    grid-column: 1 / -1;
+  }
 }

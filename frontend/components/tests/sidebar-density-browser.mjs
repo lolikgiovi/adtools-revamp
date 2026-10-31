@@ -44,13 +44,20 @@ try {
     }
     await page.waitForTimeout(200);
     await page.evaluate(() => window.app.router.navigate("settings"));
-    await page.locator(".project-add").waitFor();
+    await page.locator(".project-name-save").waitFor();
     const metrics = await page.locator(".sidebar").evaluate((sidebar) => {
       const button = sidebar.querySelector(".sidebar-menu-button");
       const label = sidebar.querySelector(".sidebar-group-label");
       const list = sidebar.querySelector(".sidebar-content");
+      const project = sidebar.querySelector(".sidebar-project .ad-searchable-dropdown-trigger");
       return {
         rowHeight: button.getBoundingClientRect().height,
+        projectHeight: project.getBoundingClientRect().height,
+        projectFontSize: getComputedStyle(project).fontSize,
+        projectWeight: getComputedStyle(project).fontWeight,
+        rowWeight: getComputedStyle(button).fontWeight,
+        projectPadding: getComputedStyle(project).paddingInlineStart,
+        rowPadding: getComputedStyle(button).paddingInlineStart,
         fontSize: getComputedStyle(button).fontSize,
         iconSize: getComputedStyle(button.querySelector("svg")).width,
         groupFontSize: getComputedStyle(label).fontSize,
@@ -62,11 +69,15 @@ try {
     if (!process.env.SIDEBAR_BASELINE) {
       assert.equal(metrics.rowHeight, touch ? 40 : 30);
       assert.equal(metrics.fontSize, touch ? "14px" : "13px");
+      assert.equal(metrics.projectHeight, metrics.rowHeight);
+      assert.equal(metrics.projectFontSize, metrics.fontSize);
+      assert.equal(metrics.projectWeight, metrics.rowWeight);
+      assert.equal(metrics.projectPadding, metrics.rowPadding);
       assert.equal(metrics.iconSize, touch ? "16px" : "14px");
-      assert.equal(metrics.searchHeight, touch ? 36 : 26);
+      assert.equal(metrics.searchHeight, touch ? 32 : 26);
       assert.equal(await page.locator('.sidebar [data-active="true"]').count(), 1);
     }
-    await page.locator(touch ? ".mobile-search" : ".window-titlebar-center .header-search").click();
+    await page.locator(".header-search").click();
     await page.locator(".global-search-overlay[aria-hidden='false']").waitFor();
     await page.keyboard.press("Escape");
     if (touch && (await page.locator(".sidebar").getAttribute("data-state")) !== "open") await page.locator(".sidebar-trigger").click();

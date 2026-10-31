@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "checks": [
+    "Real Tauri macOS drag handler dispatches maximize/restore once per double-click on navigation whitespace",
+    "Single-click retains native dragging; search and connection controls do not trigger window resize",
+    "Preview remains usable in the sidebar footer, outside the desktop header"
+  ],
+  "runtimePath": "/Users/lolik/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-2.9.5/src/window/scripts/drag.js"
+}

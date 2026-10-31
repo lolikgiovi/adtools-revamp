@@ -18,7 +18,7 @@ import { UsageTracker } from "./core/UsageTracker.js";
 import { BehaviorTracker } from "./core/BehaviorTracker.js";
 import { CapabilityTracker } from "./core/CapabilityTracker.js";
 import { UsageOverviewService } from "./core/UsageOverviewService.js";
-import { getUsageAccessState, normalizeUsageScope } from "./core/UsageOverviewModel.js";
+import { normalizeUsageScope } from "./core/UsageOverviewModel.js";
 import { ErrorMonitor } from "./core/ErrorMonitor.js";
 import { isTauri } from "./core/Runtime.js";
 import WebUpdateChecker from "./core/WebUpdateChecker.js";
@@ -31,6 +31,7 @@ import releaseContent from "./config/release-content.json";
 import settingsConfig from "./pages/settings/config.json";
 import { buildSettingsSearchEntries } from "./pages/settings/search-entries.js";
 import { ConnectionIndicators } from "./core/ConnectionIndicators.js";
+import { HomeWorkspace } from "./components/HomeWorkspace.js";
 
 const ASSET_LOAD_RETRY_DELAY_MS = 3000;
 
@@ -289,7 +290,6 @@ class App {
       searchQuickQuery: this.searchQuickQueryTables.bind(this),
     });
     document.querySelector(".header-search")?.addEventListener("click", () => this.globalSearch.open("header"));
-    document.querySelector(".mobile-search")?.addEventListener("click", () => this.globalSearch.open("mobile"));
 
     // Setup notification system
     this.setupNotifications();
@@ -442,9 +442,19 @@ class App {
       this.mainContent.innerHTML = `
         <div class="home-container">
           <h1 class="home-greeting">${this.#escapeHtml(this.getHomeGreeting())}</h1>
+          <div id="home-workspace"></div>
           <div id="usage-panel"></div>
+          <details class="home-feedback">
+            <summary>Send feedback</summary>
+            ${this.#renderFeedbackSection({ canSubmit: Boolean(this.#getUsageIdentity()) })}
+          </details>
         </div>
       `;
+      this.renderHomeWorkspace();
+      this.mainContent.querySelector("[data-usage-feedback-form]")?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        void this.submitUsageFeedback(event.currentTarget);
+      });
       const requestId = ++this.usageOverviewRequestId;
       const usageIdentity = this.#getUsageIdentity();
       this.usageOverviewState = {
@@ -537,6 +547,7 @@ class App {
     }
 
     if (this.isNavigationCurrent(navigationId, toolId)) {
+      this.globalSearch?.recentInteractionStore?.touchItem({ type: "tool", route: toolId });
       this.eventBus.emit("page:changed", { page: "tool", toolId, title: definition.name });
       UsageTracker.trackFeature(toolId, "open", { route: `#${toolId}` }, 2000);
     }
@@ -729,6 +740,7 @@ class App {
    * Bind global events
    */
   bindGlobalEvents() {
+    this.eventBus.on("sidebar:pinChanged", () => this.renderHomeWorkspace());
     // Handle window resize
     window.addEventListener("resize", () => {
       this.eventBus.emit("window:resize", {
@@ -829,7 +841,7 @@ class App {
 
   setupDevReleaseTourPreview() {
     if (!IS_DEV || this._releaseTourPreviewButton) return;
-    const container = this.getHeaderActions();
+    const container = document.querySelector(".sidebar-footer");
     if (!container) return;
     const button = document.createElement("button");
     button.type = "button";
@@ -837,7 +849,7 @@ class App {
     button.textContent = "Preview What's New";
     button.title = "Preview the current release tour without simulating an update";
     button.addEventListener("click", () => this.openReleaseTourPreview());
-    container.insertBefore(button, container.querySelector(".header-project"));
+    container.prepend(button);
     this._releaseTourPreviewButton = button;
     this.placeHeaderControls();
   }
@@ -1820,28 +1832,6 @@ class App {
     `;
   }
 
-  #renderScopeUnavailable(state, { hasIdentity = false, isRegistered = false } = {}) {
-    let statusLabel = "Unavailable";
-    if (state.loading) statusLabel = "Syncing";
-    let description = "We could not reach synced analytics. Your local activity is still available.";
-    if (state.loading) description = "Loading team activity.";
-    else if (!hasIdentity && isRegistered) description = "Add a valid account email before syncing team activity.";
-    else if (!isRegistered) description = "Register an account email before syncing team activity.";
-
-    return `
-      <aside class="usage-compare-card ${state.error ? "usage-compare-card-error" : ""}" aria-labelledby="usage-global-title" aria-busy="${state.loading ? "true" : "false"}">
-        <div class="usage-compare-card-content">
-          <span class="usage-compare-status${state.loading ? " usage-compare-status-loading" : ""}" role="status" aria-live="polite">
-            ${state.loading ? '<span class="usage-compare-spinner" aria-hidden="true"></span>' : ""}
-            ${this.#escapeHtml(statusLabel)}
-          </span>
-          <h2 id="usage-global-title">Team usage</h2>
-          <p>${this.#escapeHtml(description)}</p>
-        </div>
-      </aside>
-    `;
-  }
-
   #renderFeedbackOptions() {
     return this.getToolDefinitions()
       .slice()
@@ -1897,62 +1887,95 @@ class App {
     `;
   }
 
+  renderHomeWorkspace() {
+    const container = document.getElementById("home-workspace");
+    if (!container) return;
+    if (this.homeWorkspace?.container === container) {
+      this.homeWorkspace.options.tools = this.getVisibleToolDefinitions();
+      this.homeWorkspace.options.pinnedIds = this.sidebar?.getPinnedToolIds() || new Set();
+      this.homeWorkspace.render();
+      return;
+    }
+    this.homeWorkspace = new HomeWorkspace(container, {
+      tools: this.getVisibleToolDefinitions(),
+      pinnedIds: this.sidebar?.getPinnedToolIds() || new Set(),
+      recentStore: this.globalSearch?.recentInteractionStore,
+      getIcon: this.getToolIcon.bind(this),
+      onOpen: (id) => this.router.navigate(id),
+      onSearch: () => this.globalSearch?.open("home"),
+    });
+  }
+
   renderUsagePanel() {
     const container = document.getElementById("usage-panel");
     if (!container) return;
-    const state = this.usageOverviewState || { data: null, source: "local", loading: false, error: null, authRequired: false };
-    const localScope = this.#getLocalUsageScope();
+    const expanded = container.querySelector(".home-usage-details")?.open || false;
+    const state = this.usageOverviewState || { data: null, source: "local", loading: false, error: null };
     const apiData = state.source === "api" ? state.data : null;
-    const userScope = this.#normalizeUsageScope(apiData?.user || localScope);
+    const userScope = this.#normalizeUsageScope(apiData?.user || this.#getLocalUsageScope());
     const globalScope = apiData?.global ? this.#normalizeUsageScope(apiData.global) : null;
-    const teamSubtitle = globalScope ? `Across ${globalScope.activeUsers.toLocaleString()} users` : "";
-    const usageIdentity = this.#getUsageIdentity();
-    const hasIdentity = Boolean(usageIdentity);
-    const usageAccess = getUsageAccessState({
-      registered: hasCompletedRegistration(),
-      hasIdentity,
-    });
-    container.style.display = "block";
+    const visibleTools = new Set(this.getVisibleToolDefinitions().map((tool) => tool.id));
+    const popular = globalScope?.tools.filter((tool) => visibleTools.has(tool.id)).slice(0, 3) || [];
+    const status = state.loading ? "Loading team usage…" : "Team usage is unavailable. Your tools are ready to use.";
     container.innerHTML = /*html*/ `
       <div class="usage-panel">
-        <div class="usage-overview-grid">
-          ${this.#renderScopeCard(userScope, { kind: "user", title: "Your usage" })}
-          ${globalScope ? this.#renderScopeCard(globalScope, { kind: "global", title: "Team usage", subtitle: teamSubtitle }) : this.#renderScopeUnavailable(state, { hasIdentity, isRegistered: usageAccess.isRegistered })}
-        </div>
-
-        ${this.#renderFeedbackSection({ canSubmit: hasIdentity })}
+        <section class="home-impact" aria-labelledby="home-impact-title" aria-busy="${Boolean(state.loading)}">
+          <div class="home-impact-heading">
+            <h2 id="home-impact-title">Used across the team</h2>
+            <span>All time</span>
+          </div>
+          ${globalScope ? `
+            <dl class="home-impact-metrics">
+              <div><dt>Recorded uses</dt><dd>${globalScope.totalActivities.toLocaleString()}</dd></div>
+              <div><dt>People</dt><dd>${globalScope.activeUsers.toLocaleString()}</dd></div>
+              <div><dt>Tools used</dt><dd>${globalScope.toolsUsed.toLocaleString()}</dd></div>
+            </dl>
+            ${popular.length ? `<div class="home-popular">
+              <h3>Most used</h3>
+              ${popular.map((tool) => `<button type="button" class="home-text-button" data-usage-tool="${this.#escapeHtml(tool.id)}">
+                ${this.#escapeHtml(tool.name)} <span>${tool.count.toLocaleString()}</span>
+              </button>`).join("")}
+            </div>` : ""}
+          ` : `<p class="home-impact-status" role="status">${status}</p>
+            ${!state.loading && this.#getUsageIdentity() ? `
+              <button class="home-text-button" type="button" data-usage-retry>Retry team usage</button>` : ""}`}
+        </section>
+        <details class="home-usage-details"${expanded ? " open" : ""}>
+          <summary>View usage</summary>
+          <div class="usage-overview-grid">
+            ${this.#renderScopeCard(userScope, {
+              kind: "user", title: "Your usage", subtitle: apiData ? "All time" : "On this device",
+            })}
+            ${globalScope ? this.#renderScopeCard(globalScope, { kind: "global", title: "Team usage", subtitle: "All time" }) : ""}
+          </div>
+        </details>
       </div>
     `;
-
-    const feedbackForm = container.querySelector("[data-usage-feedback-form]");
-    feedbackForm?.addEventListener("submit", (event) => {
-      event.preventDefault();
-      void this.submitUsageFeedback(feedbackForm);
+    container.querySelectorAll("[data-usage-tool]").forEach((button) => {
+      button.addEventListener("click", () => this.router.navigate(button.dataset.usageTool));
+    });
+    container.querySelector("[data-usage-retry]")?.addEventListener("click", () => {
+      const requestId = ++this.usageOverviewRequestId;
+      this.usageOverviewState = { ...state, loading: true, error: null };
+      this.renderUsagePanel();
+      void this.loadUsageOverview(null, requestId);
     });
   }
   placeHeaderControls(desktop = isTauri()) {
     this._headerSidebarToggle ||= document.querySelector(".sidebar-trigger");
     this._headerBreadcrumb ||= document.querySelector(".breadcrumb");
-    this._headerSearch ||= document.querySelector(".mobile-search");
-    this._desktopSearch ||= document.querySelector(".header-search");
+    this._headerSearch ||= document.querySelector(".header-search");
+    this._headerActions ||= document.querySelector(".header-actions");
     for (const [control, desktopHost, webHost] of [
       [this._headerSidebarToggle, ".window-titlebar-leading", ".header-context"],
       [this._headerBreadcrumb, ".window-titlebar-leading", ".header-context"],
-      [this._desktopSearch, ".window-titlebar-center", ".sidebar-header"],
-      [this._headerSearch, ".header-actions", ".header-actions"],
+      [this._headerSearch, ".window-titlebar-center", ".header-center"],
+      [this._headerActions, ".window-titlebar-actions", ".main-header"],
     ]) {
       const host = document.querySelector(desktop ? desktopHost : webHost);
-      if (control && host && control.parentElement !== host) {
-        if (desktop || control === this._headerBreadcrumb) host.append(control);
-        else host.prepend(control);
-      }
+      if (control && host && control.parentElement !== host) host.append(control);
     }
-    this.projectSelector?.updatePlacement(desktop);
-    const preview = this._releaseTourPreviewButton;
-    const host = document.querySelector(desktop ? ".sidebar-footer" : ".header-actions");
-    if (preview && host && preview.parentElement !== host) {
-      host.insertBefore(preview, desktop ? host.firstChild : host.querySelector(".header-project"));
-    }
+    this.projectSelector?.updatePlacement();
   }
 
   setupHeaderRuntime() {

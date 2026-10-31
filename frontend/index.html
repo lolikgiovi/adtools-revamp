@@ -27,13 +27,13 @@
 </head>
 
 <body>
-    <!-- Desktop toolbar: navigation, global search, and project/connection scope -->
+    <!-- Desktop toolbar: navigation, global search, and actions -->
     <div class="window-titlebar" data-tauri-drag-region>
         <div class="window-titlebar-leading" data-tauri-drag-region></div>
         <div class="window-titlebar-center" data-tauri-drag-region></div>
         <div class="window-titlebar-actions" data-tauri-drag-region>
-            <div class="connection-indicators" aria-label="Connection activity">
-                <div class="connection-indicator-group">
+            <div data-tauri-drag-region class="connection-indicators" aria-label="Connection activity">
+                <div data-tauri-drag-region class="connection-indicator-group">
                     <button class="connection-indicator" data-connection="oracle" data-state="idle" type="button"
                         aria-label="Oracle connections" title="Oracle connections"
                         aria-expanded="false" aria-controls="oracle-connection-menu" aria-haspopup="true">
@@ -45,7 +45,7 @@
                     </button>
                     <div class="connection-menu app-popover-surface" id="oracle-connection-menu" hidden></div>
                 </div>
-                <div class="connection-indicator-group">
+                <div data-tauri-drag-region class="connection-indicator-group">
                     <button class="connection-indicator" data-connection="kafka" data-state="idle" type="button"
                         aria-label="Kafka connections" title="Kafka connections"
                         aria-expanded="false" aria-controls="kafka-connection-menu" aria-haspopup="true">
@@ -57,7 +57,7 @@
                     </button>
                     <div class="connection-menu app-popover-surface" id="kafka-connection-menu" hidden></div>
                 </div>
-                <div class="connection-indicator-group">
+                <div data-tauri-drag-region class="connection-indicator-group">
                     <button class="connection-indicator" data-connection="redis" data-state="idle" type="button"
                         aria-label="Redis connections" title="Redis connections"
                         aria-expanded="false" aria-controls="redis-connection-menu" aria-haspopup="true">
@@ -78,16 +78,7 @@
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar" role="navigation" aria-label="Main navigation" data-state="expanded">
             <!-- SidebarHeader -->
-            <div class="sidebar-header">
-                <button class="header-search" type="button" aria-label="Search tools, pages, and Quick Query schemas">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                        <circle cx="11" cy="11" r="7" />
-                        <path d="m20 20-4-4" />
-                    </svg>
-                    <span>Search</span>
-                    <kbd>⌘K</kbd>
-                </button>
-            </div>
+            <div class="sidebar-header"></div>
 
             <!-- SidebarContent -->
             <div class="sidebar-content">
@@ -117,32 +108,35 @@
                     </button>
 
                     <!-- Breadcrumb Navigation -->
-                    <nav class="breadcrumb" aria-label="Breadcrumb">
-                        <ol class="breadcrumb-list">
-                            <li class="breadcrumb-item">
+                    <nav data-tauri-drag-region class="breadcrumb" aria-label="Breadcrumb">
+                        <ol data-tauri-drag-region class="breadcrumb-list">
+                            <li data-tauri-drag-region class="breadcrumb-item">
                                 <a href="#" class="breadcrumb-link" id="breadcrumb-home">Home</a>
                             </li>
-                            <li class="breadcrumb-separator" aria-hidden="true">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polyline points="9,18 15,12 9,6" />
+                            <li data-tauri-drag-region class="breadcrumb-separator" aria-hidden="true">
+                                <svg data-tauri-drag-region viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline data-tauri-drag-region points="9,18 15,12 9,6" />
                                 </svg>
                             </li>
-                            <li class="breadcrumb-item breadcrumb-current" aria-current="page">
-                                <span id="breadcrumb-current">Home</span>
+                            <li data-tauri-drag-region class="breadcrumb-item breadcrumb-current" aria-current="page">
+                                <span data-tauri-drag-region id="breadcrumb-current">Home</span>
                             </li>
                         </ol>
                     </nav>
                 </div>
 
-                <!-- Header actions (right side) -->
-                <div class="header-actions">
-                    <button class="mobile-search" type="button" aria-label="Search tools, pages, and Quick Query schemas">
+                <div class="header-center">
+                    <button class="header-search" type="button" aria-label="Search tools, pages, and Quick Query schemas">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                             <circle cx="11" cy="11" r="7" />
                             <path d="m20 20-4-4" />
                         </svg>
+                        <span>Search</span>
+                        <kbd>⌘K</kbd>
                     </button>
                 </div>
+                <!-- Header actions move together into the native desktop title bar. -->
+                <div data-tauri-drag-region class="header-actions"></div>
             </header>
 
             <div class="main-content">

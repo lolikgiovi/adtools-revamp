@@ -68,7 +68,7 @@ describe("connection indicators", () => {
     expect(document.querySelector('[data-connection="oracle"]').dataset.state).toBe("active");
     oracle.pools = [];
     await indicators.refreshOracle();
-    expect(detail("oracle")).toBe("Idle");
+    expect(detail("oracle")).toBe("Not configured");
   });
 
   it("connects two saved Oracle names and blocks a third until one disconnects", async () => {

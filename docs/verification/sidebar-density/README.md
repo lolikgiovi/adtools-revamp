@@ -1,9 +1,10 @@
 # Compact sidebar
 
-Desktop rows are 30px (previously 32px), with 13px labels (previously 14px),
-14px icons (previously 16px), 11px group labels, tighter group gaps, and a 28px
-search control. Sidebar width and the desktop title bar are unchanged. Coarse
-pointers use 40px rows, 14px text, 16px icons, and a 36px search control.
+Desktop rows and the sidebar project selector are both 30px high with 13px
+labels, 500 weight, and 10px horizontal padding. Icons and the selector chevron
+are 14px. Coarse pointers use 40px rows and selector controls with 14px text.
+Web header controls are 30px (32px search on narrow screens), while native
+title-bar controls are 26px. The restored 57px web header remains unchanged.
 
 Run Vite using the installed project binary:
 
@@ -29,7 +30,8 @@ same fixture. Desktop tool-list scroll height fell from 976px to 856px (12.3%).
 The visible list area grew from 741px to 749px as the footer became smaller.
 Touch uses larger click targets. The mechanical design scan passed.
 
-The later desktop toolbar revision moves search into the title bar (26px) and
-hides the now-empty sidebar search row. The current browser script verifies that
-location; web/touch keeps the sidebar search. The original density baseline
+The project selector lives in the sidebar on both platforms. Search is centered
+in the web header or native title bar. The browser check records the selector's
+computed height, font size, weight, and padding alongside the sidebar row values,
+and asserts they match for both desktop and touch. The original density baseline
 figures above describe the initial compact-sidebar change.

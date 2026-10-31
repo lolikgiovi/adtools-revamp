@@ -1,0 +1,18 @@
+{
+  "passed": true,
+  "checks": [
+    "1440px: real adoption totals, pins, recent navigation and reload, disclosure, feedback persistence, no overflow",
+    "1440px desktop shell: tools and adoption visible, connection states identify configuration and active target",
+    "1440px: analytics failure preserves tools, retry works, empty/corrupt local data has usable fallback",
+    "900px: real adoption totals, pins, recent navigation and reload, disclosure, feedback persistence, no overflow",
+    "900px desktop shell: tools and adoption visible, connection states identify configuration and active target",
+    "900px: analytics failure preserves tools, retry works, empty/corrupt local data has usable fallback",
+    "620px: real adoption totals, pins, recent navigation and reload, disclosure, feedback persistence, no overflow",
+    "620px desktop shell: tools and adoption visible, connection states identify configuration and active target",
+    "620px: analytics failure preserves tools, retry works, empty/corrupt local data has usable fallback",
+    "390px: real adoption totals, pins, recent navigation and reload, disclosure, feedback persistence, no overflow",
+    "390px: analytics failure preserves tools, retry works, empty/corrupt local data has usable fallback"
+  ],
+  "errors": [],
+  "fixtures": true
+}

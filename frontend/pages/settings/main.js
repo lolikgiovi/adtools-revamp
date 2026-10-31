@@ -470,8 +470,8 @@ class SettingsPage {
       items: [
         { key: "config.projects", type: "project-manager" },
         { key: "project.schema", type: "project-schema" },
+        ...(environmentCategory?.items || []).map((item) => ({ ...item, projectSection: true })),
       ],
-      categories: environmentCategory ? [{ ...environmentCategory, label: "Testing Environments" }] : [],
     };
     const projectCategories = categories.map((category) => (category.id === "environments" ? projectCategory : category));
     for (const cat of projectCategories) {
@@ -804,6 +804,7 @@ class SettingsPage {
     const uid = Math.random().toString(36).slice(2, 8);
     wrapper.innerHTML = `
       <div class="environments-header">
+        ${item.projectSection ? '<h4 class="project-section-heading">Testing Environments</h4>' : ""}
         <button type="button" class="btn btn-secondary btn-sm environment-add-btn">Add Environment</button>
       </div>
       <div class="environments-list"></div>

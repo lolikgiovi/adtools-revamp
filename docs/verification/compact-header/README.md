@@ -1,12 +1,17 @@
-# Desktop toolbar verification
+# Sidebar and platform header verification
 
-Desktop uses one title-bar row: sidebar toggle and live Home breadcrumbs on the
-left, global search centered in the window, and connections plus a tinted/bolder
-project selector on the right. The project trigger fits the selected name; its
-open menu fits option contents within the viewport. Desktop search is moved
-from the sidebar, so there is no duplicate sidebar search or empty header row.
-The development preview button lives in the sidebar footer. Web retains its
-40px workspace header, sidebar search, breadcrumbs, and project selector.
+Project selection lives at the top of the sidebar on both web and desktop.
+The web header is restored to its previous 57px height, with navigation on the
+left, global search centered in the workspace header, and actions on the right.
+On narrow web layouts, centered search becomes an icon and the sidebar opens
+below the header so the project picker remains usable.
+
+Desktop moves navigation, centered search, and the complete actions container
+into the native title bar. Connections remain on the right. There is no second
+workspace header; the sidebar project selector remains visible when expanded.
+Development release preview actions live in the sidebar footer on both platforms,
+and update notices open below the title bar. Native traffic-light space and drag
+regions are preserved.
 
 Reproduce with installed tools only:
 
@@ -24,18 +29,23 @@ node frontend/core/tests/compact-header-browser.mjs
 
 `result.json` records checks and failures. Screenshots cover web at 1440, 900,
 620, and 390px and desktop layouts at 1440, 900, and 620px. `*-quick-query.png`
-shows actual Quick Query tabs below the native toolbar. `*-project-menu.png`
-shows the project selector open independently of its trigger width.
+shows Quick Query immediately below the native toolbar; `*-project-menu.png`
+shows the sidebar picker and its open menu.
 
-Checks cover Home navigation and updated breadcrumbs, centered working search,
-sidebar toggle, native traffic-light clearance, project placement, short/long
-selected names, rename resizing, menu sizing and hit testing, Escape and focus
-return, no duplicate sidebar search, and viewport overflow. A 78-character name
-also checks that toolbar controls remain separate. Tool viewport calculations
-reclaim the removed 40px desktop row. Existing project isolation/browser checks
-also pass via `frontend/core/tests/projects-browser.mjs`.
+Checks cover header height, centered search with the sidebar open and closed,
+keyboard focus, Home navigation, project picker placement, long project names,
+menu hit testing and bounds, Escape without collapsing the sidebar, preview
+actions, connection menus, update notice bounds, opening project Settings,
+readable breadcrumbs, and repeated desktop-to-web placement without duplicates.
+The actual connection controller runs with native calls stubbed and external
+network requests blocked. These are desktop layout simulations; native window
+dragging and packaged macOS behavior require a native runtime.
 
-The real connection menu controller runs with native calls stubbed and external
-network requests blocked. This is a desktop layout simulation, not packaged macOS
-or native dragging verification. Sidebar, dropdown, global-search, and connection
-unit suites passed (21 tests). The production Vite build and design scan passed.
+The project browser scenarios in `frontend/core/tests/projects-browser.mjs` also
+verify switching, isolated schemas/drafts/environments, automatic name publishing,
+publication retries, and cross-account sharing against real Worker routes using
+disposable SQLite. Results remain in `docs/verification/projects/`.
+
+Native drag and double-click hit testing is recorded in `../titlebar/README.md`.
+The replay uses the installed Tauri macOS event handler and checks command
+routing, including the absence of window actions on interactive controls.
