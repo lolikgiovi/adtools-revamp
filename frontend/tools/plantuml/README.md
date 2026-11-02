@@ -8,7 +8,7 @@ native dialogs, shared Monaco workers, IndexedDB, and the already installed JSZi
 - `main.js`: workspace UI, editor models, autosave coordination, and tool lifecycle.
 - `service.js`: serialized IndexedDB saves with revision conflict detection.
 - `workspace.js`: validated files/folders, moves, paths, and ZIP session format.
-- `editor.js`, `language.js`, `themes.js`, `completions.js`, `plantuml.js`: language support, snippets, templates, palette, and formatter.
+- `editor.js`, `language.js`, `themes.js`, `completions.js`, `plantuml.js`: language support, keyword completions, templates, palette, and formatter.
 - `renderer.js`: debounced render requests, readiness, stale results, timeouts, and restart.
 - `preview.js`, `files.js`: image-document preview, pan/zoom, source/SVG/PNG/ZIP import/export.
 - `../../public/plantuml/`: separate rendering document with restrictive CSP and a local-only file loader.
@@ -48,7 +48,8 @@ See [formatting and feedback checks](../../../docs/verification/plantuml/quality
 
 The activity rail is 36 px wide with 18 px icons. Commands remain available through Cmd/Ctrl+Shift+P.
 Syntax colors emphasize structural keywords, directives, strings, constants, and explicit variables/functions.
-Participant references, message labels, group/title text, and notes remain neutral; SQL words in notes are plain prose.
+Participant references use subdued role accents: databases are warm, controls purple, entities green, and other participants blue.
+Message labels, group/title text, and notes remain neutral; SQL words in notes are plain prose.
 Only explicit `$variables`, `${interpolation}`, and `%functions()` retain accents inside prose.
 Theme palettes are adapted for PlantUML and are bundled locally.
 The tokenizer provides visual guidance rather than evaluating preprocessor branches or inferring runtime types.
@@ -59,3 +60,9 @@ all apply the same bounds. Two-finger touch gestures support simultaneous zoom a
 The preview zoom footer is 29 px tall with 24 px controls. Render duration is not shown; loading, editing, and error states remain visible.
 See [experience verification](../../../docs/verification/plantuml/experience/README.md) and
 [quiet editor checks](../../../docs/verification/plantuml/quiet/README.md) for reproducible browser checks.
+
+Common structural completions (`alt`, `group`, `loop`, `note`, `participant`, and related keywords) use Monaco keyword icons.
+Tab and Enter insert only the keyword, without sample participants, conditions, or block bodies. Keyword completions are offered
+at statement starts and suppressed inside prose blocks and strings. Explicit variables and user-defined functions keep their symbol completions.
+Use the Colors control to insert palette definitions; new files still start from the bundled sequence template.
+See [completion verification](../../../docs/verification/plantuml/completions/README.md) for real-keyboard acceptance checks.

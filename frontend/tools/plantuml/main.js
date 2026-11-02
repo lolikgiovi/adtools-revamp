@@ -100,7 +100,7 @@ export class PlantUmlTool extends BaseTool {
       wordWrap: "off",
       fixedOverflowWidgets: true,
       quickSuggestions: { other: true, comments: false, strings: false },
-      suggest: { showWords: false },
+      suggest: { showWords: false, showIcons: true },
       editContext: false,
       "semanticHighlighting.enabled": true,
       // Monaco 0.54 leaves a rejected highlight delay when switching models while focused.

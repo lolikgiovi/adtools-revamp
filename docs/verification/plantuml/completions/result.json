@@ -1,0 +1,31 @@
+{
+  "passed": true,
+  "base": "http://127.0.0.1:1234",
+  "checks": [
+    "alt accepts only the keyword with Tab",
+    "alt accepts only the keyword with Enter",
+    "group accepts only the keyword with Tab",
+    "group accepts only the keyword with Enter",
+    "loop accepts only the keyword with Tab",
+    "loop accepts only the keyword with Enter",
+    "note accepts only the keyword with Tab",
+    "note accepts only the keyword with Enter",
+    "participant accepts only the keyword with Tab",
+    "participant accepts only the keyword with Enter",
+    "activate accepts only the keyword with Tab",
+    "activate accepts only the keyword with Enter",
+    "else accepts only the keyword with Tab",
+    "else accepts only the keyword with Enter",
+    "opt accepts only the keyword with Tab",
+    "opt accepts only the keyword with Enter",
+    "endbox accepts only the keyword with Tab",
+    "endbox accepts only the keyword with Enter",
+    "completion in the middle of a keyword replaces its suffix",
+    "symbol completion preserves an adjacent arrow",
+    "keyword suggestion has a loaded, visible Monaco icon",
+    "keywords are not suggested as the first word in a multiline note",
+    "database, control and variable references are distinct while note prose stays neutral"
+  ],
+  "failures": [],
+  "errors": []
+}

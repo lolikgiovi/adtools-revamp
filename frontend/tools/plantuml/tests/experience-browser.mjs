@@ -174,7 +174,7 @@ class Record {
     assert.ok(lines[8].includes("class.plantuml"));
     assert.ok(lines[9].includes("member.plantuml"));
   });
-  await check("theme chooser persists, keeps role references neutral, and survives app theme changes", async () => {
+  await check("theme chooser persists, uses restrained role colors, and survives app theme changes", async () => {
     await page.getByRole("button", { name: /^Editor theme:/ }).click();
     await page.getByRole("option", { name: "Dark", exact: true }).click();
     const source = "@startuml\ncontrol API\ndatabase DB\nentity Record\nnode Host\nAPI -> DB: find($value)\nDB --> API: response\n@enduml";
@@ -187,7 +187,7 @@ class Record {
         return span && getComputedStyle(span).color;
       });
     });
-    assert.equal(new Set(roleColors).size, 1, JSON.stringify(roleColors));
+    assert.ok(new Set(roleColors).size >= 3, JSON.stringify(roleColors));
     assert.ok(roleColors.every(Boolean));
     await page.evaluate(() => document.dispatchEvent(new Event("themeChange")));
     assert.equal(

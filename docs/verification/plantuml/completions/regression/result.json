@@ -1,0 +1,18 @@
+{
+  "passed": true,
+  "base": "http://127.0.0.1:1234",
+  "checks": [
+    "compact rail has workspace/search and no Commands button",
+    "trackpad pinch holds the diagram point under the cursor",
+    "drag and wheel remain within 30% overscroll at all scales and after resize",
+    "touch pinch zooms and translates without jumping when a finger lifts",
+    "syntax separates variables, functions, responses, note text and node members",
+    "compact arrows and inline notes do not leak syntax state",
+    "theme chooser persists, uses restrained role colors, and survives app theme changes",
+    "layout fits 1440px",
+    "layout fits 1000px",
+    "layout fits 390px"
+  ],
+  "failures": [],
+  "errors": []
+}

@@ -126,6 +126,24 @@ export function definePlantUmlThemes(monaco) {
   };
   for (const [name, { baseTheme, ...palette }] of Object.entries(variants)) palettes[name] = { ...palettes[baseTheme], ...palette };
   for (const [name, p] of Object.entries(palettes)) {
+    // A small set of subdued role accents distinguishes references without coloring prose.
+    const tint = (color, weight) =>
+      [0, 2, 4]
+        .map((offset) => {
+          const base = parseInt(p.foreground.slice(offset, offset + 2), 16);
+          const accent = parseInt(color.slice(offset, offset + 2), 16);
+          return Math.round(base * (1 - weight) + accent * weight)
+            .toString(16)
+            .padStart(2, "0");
+        })
+        .join("");
+    const referenceColor = (type) => {
+      if (!participantTypes.includes(type)) return p[type];
+      if (type === "database") return tint(p.base === "vs" ? "895D32" : "D6B67D", 0.75);
+      if (type === "control") return tint(p.keyword, 0.55);
+      if (type === "entity" || type === "class") return tint(p.string, 0.65);
+      return tint(p.variable, 0.45);
+    };
     monaco.editor.defineTheme(`plantuml-${name}`, {
       base: p.base,
       inherit: true,
@@ -143,10 +161,13 @@ export function definePlantUmlThemes(monaco) {
         { token: "annotation.plantuml", foreground: p.operator },
         ...[...participantTypes, "constant", "variable", "function"].flatMap((token) => [
           { token: `${token}.plantuml`, foreground: participantTypes.includes(token) ? p.keyword : p[token] },
-          { token, foreground: participantTypes.includes(token) ? p.foreground : p[token] },
+          { token, foreground: referenceColor(token) },
         ]),
       ],
       colors: {
+        "symbolIcon.keywordForeground": `#${p.keyword}`,
+        "symbolIcon.variableForeground": `#${p.variable}`,
+        "symbolIcon.functionForeground": `#${p.function}`,
         "editor.background": `#${p.background}`,
         "editor.foreground": `#${p.foreground}`,
         "editorGutter.background": `#${p.background}`,

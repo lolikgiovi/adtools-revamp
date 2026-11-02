@@ -1,12 +1,12 @@
 // Adapted from lolikgiovi/plantuml at 74bc3e7.
 import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.main.js";
-import { collectSymbols, completionContext, matchingSymbols } from "./completions.js";
+import { collectSymbols, completionContext, matchingSymbols, plantUmlKeywords } from "./completions.js";
 import { plantUmlLanguage, participantLegend, participantTokens } from "./language.js";
 import { definePlantUmlThemes } from "./themes.js";
 import { nodePath, resolvePath } from "./workspace.js";
 import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
-import { confluencePalette, formatPlantUml, sequenceTemplate } from "./plantuml.js";
+import { formatPlantUml } from "./plantuml.js";
 globalThis.__plantumlEditorRegistrations?.forEach((registration) => registration.dispose());
 const registrations = [];
 globalThis.__plantumlEditorRegistrations = registrations;
@@ -98,54 +98,23 @@ registrations.push(
     },
   }),
 );
-const snippetDefinitions = [
-  {
-    label: "confluence-colors",
-    detail: "Confluence \xB7 all 36 sequence colors",
-    text: confluencePalette,
-  },
-  {
-    label: "sequence",
-    detail: "API sequence \xB7 config query, error, HTTP 200",
-    text: sequenceTemplate,
-  },
-  {
-    label: "alt",
-    detail: "Alternative paths",
-    text: "alt ${1:Condition}\n	${2:Alice -> Bob: Success}\nelse ${3:Otherwise}\n	${4:Alice -> Bob: Failure}\nend",
-  },
-  {
-    label: "loop",
-    detail: "Sequence loop",
-    text: "loop ${1:Condition}\n	${2:Alice -> Bob: Request}\nend",
-  },
-  {
-    label: "participant",
-    detail: "Named participant",
-    text: 'participant "${1:Service}" as ${2:service} ${3:COLOR_BLUE_SUBTLEST}',
-  },
-  {
-    label: "note",
-    detail: "Multiline note",
-    text: "note ${1:right of} ${2:Alice}\n	${3:Note text}\nend note",
-  },
-  {
-    label: "confluence-sequence-style",
-    detail: "Confluence sequence styling",
-    text: "skinparam shadowing false\nskinparam sequence {\n	ArrowColor COLOR_BLUE\n	ParticipantBorderColor COLOR_BLUE\n	ParticipantBackgroundColor COLOR_BLUE_SUBTLEST\n	ParticipantFontColor #172B4D\n	GroupBorderColor COLOR_TEAL\n	GroupBackgroundColor COLOR_TEAL_SUBTLEST\n}",
-  },
-];
 registrations.push(
   monaco.languages.registerCompletionItemProvider("plantuml", {
     triggerCharacters: ["$", "%"],
     provideCompletionItems(model, position) {
       const beforeCursor = model.getLineContent(position.lineNumber).slice(0, position.column - 1);
       const context = completionContext(beforeCursor);
+      const line = model.getLineContent(position.lineNumber);
+      const suffix = /^\w*/.exec(line.slice(position.column - 1))[0];
+      const lexical = monaco.editor.tokenize(model.getValue(), "plantuml")[position.lineNumber - 1];
+      const prefixStart = position.column - 1 - context.prefix.length;
+      const token = lexical.findLast((token) => token.offset <= prefixStart)?.type || "";
+      const keywordContext = context.keywords && !/^(?:comment|string|note\.|message\.|text(?:\.|$))/.test(token);
       const range = {
         startLineNumber: position.lineNumber,
         endLineNumber: position.lineNumber,
         startColumn: position.column - context.prefix.length,
-        endColumn: position.column,
+        endColumn: position.column + suffix.length,
       };
       const active = completionWorkspace.find((node) => model.uri.path === `/${node.id}.puml`);
       const path = active ? nodePath(completionWorkspace, active.id) : model.uri.path;
@@ -175,18 +144,17 @@ registrations.push(
               symbol.parameters === null
                 ? monaco.languages.CompletionItemInsertTextRule.None
                 : monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-            sortText: `0-${symbol.name}`,
+            sortText: `1-${symbol.name}`,
           })),
-          ...(context.snippets
-            ? snippetDefinitions
-                .filter((snippet) => snippet.label.startsWith(context.prefix.toLowerCase()))
-                .map((snippet) => ({
-                  label: snippet.label,
-                  detail: snippet.detail,
-                  kind: monaco.languages.CompletionItemKind.Snippet,
-                  insertText: snippet.text,
-                  insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                  sortText: `1-${snippet.label}`,
+          ...(keywordContext
+            ? plantUmlKeywords
+                .filter((keyword) => keyword.startsWith(context.prefix.toLowerCase()))
+                .map((keyword) => ({
+                  label: keyword,
+                  kind: monaco.languages.CompletionItemKind.Keyword,
+                  insertText: keyword,
+                  insertTextRules: monaco.languages.CompletionItemInsertTextRule.None,
+                  sortText: `0-${keyword}`,
                   range,
                 }))
             : []),

@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "base": "http://127.0.0.1:1234",
+  "checks": [
+    "ordinary words and numbers in prose are neutral; explicit variables remain highlighted",
+    "preview footer is at most 30px, with no render-time counter",
+    "expanded themes render, preserve text and persist on reload",
+    "compact footer retains errors and editing feedback",
+    "compact controls fit 1000px",
+    "compact controls fit 390px"
+  ],
+  "failures": [],
+  "errors": []
+}

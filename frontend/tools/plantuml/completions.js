@@ -1,5 +1,42 @@
 // Adapted from lolikgiovi/plantuml at 74bc3e7.
 import { resolvePath } from "./workspace.js";
+export const plantUmlKeywords = [
+  "alt",
+  "else",
+  "opt",
+  "loop",
+  "par",
+  "break",
+  "critical",
+  "group",
+  "end",
+  "box",
+  "endbox",
+  "participant",
+  "actor",
+  "boundary",
+  "control",
+  "entity",
+  "database",
+  "collections",
+  "queue",
+  "note",
+  "hnote",
+  "rnote",
+  "ref",
+  "activate",
+  "deactivate",
+  "create",
+  "destroy",
+  "return",
+  "autonumber",
+  "title",
+  "hide",
+  "show",
+  "skinparam",
+  "newpage",
+];
+
 const builtinFunctions = [
   ["%strlen", "text"],
   ["%upper", "text"],
@@ -131,7 +168,7 @@ function completionContext(beforeCursor) {
   const prefix = /[$%]?[A-Za-z_][\w-]*$/.exec(beforeCursor)?.[0] ?? "";
   return {
     prefix,
-    snippets: beforeCursor.trim() === prefix && !/^[$%]/.test(prefix),
+    keywords: beforeCursor.trim() === prefix && !/^[$%]/.test(prefix),
     color: /\b\w*color\s+[$\w]*$/i.test(beforeCursor),
   };
 }
