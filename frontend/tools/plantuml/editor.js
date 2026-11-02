@@ -2,7 +2,8 @@
 import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.main.js";
 import { collectSymbols, completionContext, matchingSymbols } from "./completions.js";
-import { plantUmlLanguage, participantLegend, participantTokens, definePlantUmlThemes } from "./language.js";
+import { plantUmlLanguage, participantLegend, participantTokens } from "./language.js";
+import { definePlantUmlThemes } from "./themes.js";
 import { nodePath, resolvePath } from "./workspace.js";
 import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import { confluencePalette, formatPlantUml, sequenceTemplate } from "./plantuml.js";

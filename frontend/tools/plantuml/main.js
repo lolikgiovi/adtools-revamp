@@ -10,6 +10,7 @@ import { downloadBlob, exportPng, exportWorkspace, readWorkspaceZip } from "./fi
 import { addNode, deleteNode, initialWorkspace, moveNode, nodePath, renameNode, validateWorkspace } from "./workspace.js";
 import { colorNames, colorRows, confluencePalette, starterSequence } from "./plantuml.js";
 import { getIconSvg, workbenchIcon } from "./icon.js";
+import { editorThemeOptions } from "./themes.js";
 import { template } from "./template.js";
 import "./styles.css";
 
@@ -109,7 +110,7 @@ export class PlantUmlTool extends BaseTool {
     this.editorTheme = "auto";
     try {
       const saved = localStorage.getItem("plantuml.editorTheme");
-      if (["auto", "light", "dark", "contrast"].includes(saved)) this.editorTheme = saved;
+      if (editorThemeOptions.some(([value]) => value === saved)) this.editorTheme = saved;
     } catch {
       /* Keep the app theme when preferences are unavailable. */
     }
@@ -457,7 +458,7 @@ export class PlantUmlTool extends BaseTool {
     const status = this.$("#puml-status");
     status.dataset.state = result.state;
     status.textContent = {
-      ready: `${result.milliseconds} ms`,
+      ready: "",
       loading: "Loading engine…",
       waiting: "Editing…",
       rendering: "Rendering…",

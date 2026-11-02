@@ -1,3 +1,4 @@
+import { editorThemeOptions } from "./themes.js";
 import { workbenchIcon } from "./icon.js";
 
 const button = (action, label, extra = "") =>
@@ -39,10 +40,7 @@ export const template = `
               ${[10, 11, 12, 13, 14, 16, 18, 20].map((size) => `<option value="${size}" ${size === 12 ? "selected" : ""}>${size} px</option>`).join("")}
             </select>
             <select id="puml-editor-theme" aria-label="Editor theme" title="Editor theme">
-              <option value="auto">Follow app</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-              <option value="contrast">High contrast</option>
+              ${editorThemeOptions.map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}
             </select>
             ${iconButton("palette", "Colors", "palette", 'aria-haspopup="dialog"')}
             ${iconButton("source", "Save source (.puml)", "download")}

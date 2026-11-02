@@ -135,7 +135,7 @@ try {
     const tokens = await page.evaluate(async () => {
       const { monaco } = await import("/tools/plantuml/editor.js");
       const source =
-        "@startuml\n!$dynamic = 1\n!define LIMIT 3\ncontrol API\ndatabase DB\nAPI -> DB: find($dynamic)\nDB --> API: response ${value}\nnote right of API\nSELECT id FROM config\nend note\nclass Record {\n+id: String\n}\n@enduml";
+        "@startuml\n!$dynamic = 1\n!define LIMIT 3\ncontrol API\ndatabase DB\nAPI -> DB: $find($dynamic)\nDB --> API: response ${value}\nnote right of API\nSELECT id FROM config\nend note\nclass Record {\n+id: String\n}\n@enduml";
       return monaco.editor
         .tokenize(source, "plantuml")
         .flat()
@@ -174,7 +174,7 @@ class Record {
     assert.ok(lines[8].includes("class.plantuml"));
     assert.ok(lines[9].includes("member.plantuml"));
   });
-  await check("theme chooser persists, differentiates roles, and survives app theme changes", async () => {
+  await check("theme chooser persists, keeps role references neutral, and survives app theme changes", async () => {
     await page.getByRole("button", { name: /^Editor theme:/ }).click();
     await page.getByRole("option", { name: "Dark", exact: true }).click();
     const source = "@startuml\ncontrol API\ndatabase DB\nentity Record\nnode Host\nAPI -> DB: find($value)\nDB --> API: response\n@enduml";
@@ -183,11 +183,11 @@ class Record {
     const roleColors = await page.locator("#puml-editor .view-lines").evaluate((el) => {
       const names = ["API", "DB", "Record", "Host"];
       return names.map((name) => {
-        const span = [...el.querySelectorAll("span")].find((s) => s.textContent === name);
+        const span = [...el.querySelectorAll("span")].find((s) => s.textContent.trim() === name);
         return span && getComputedStyle(span).color;
       });
     });
-    assert.equal(new Set(roleColors).size, 4, JSON.stringify(roleColors));
+    assert.equal(new Set(roleColors).size, 1, JSON.stringify(roleColors));
     assert.ok(roleColors.every(Boolean));
     await page.evaluate(() => document.dispatchEvent(new Event("themeChange")));
     assert.equal(
