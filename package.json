@@ -67,6 +67,7 @@
     "@jsquash/jpeg": "^1.6.0",
     "@jsquash/oxipng": "^2.3.0",
     "@jsquash/webp": "^1.5.0",
+    "@plantuml/core": "1.2026.9",
     "@tanstack/table-core": "^9.2.8",
     "@tauri-apps/api": "^2.1.0",
     "@tauri-apps/plugin-clipboard-manager": "^2.3.2",
@@ -85,7 +86,8 @@
     "pako": "1.0.11",
     "qrcode": "^1.5.4",
     "velocityjs": "^2.1.5",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "zod": "4.6.7"
   },
   "allowScripts": {
     "esbuild@0.28.2": true,

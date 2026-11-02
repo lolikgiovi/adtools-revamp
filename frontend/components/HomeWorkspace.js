@@ -34,6 +34,7 @@ const TOOL_ACTIONS = {
   "html-template": "Edit and preview an HTML template",
   "splunk-template": "Format a Splunk template",
   "velocity-template": "Preview a Velocity template with JSON",
+  plantuml: "Write diagrams with a local live preview",
   "merge-sql": "Combine SQL files into one script",
   "check-image": "Check image IDs across environments",
 };

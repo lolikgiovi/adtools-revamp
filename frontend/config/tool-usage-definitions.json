@@ -1,4 +1,8 @@
 {
+  "plantuml": {
+    "actions": ["render", "export_svg", "export_png", "export_workspace", "import"],
+    "boundary": "a current local diagram renders successfully, a valid export is initiated, or workspace import completes"
+  },
   "uuid-generator": { "actions": ["single", "multiple"], "boundary": "clipboard write succeeds" },
   "json-tools": {
     "actions": ["prettify", "minify", "stringify", "unstringify", "escape", "unescape", "extract_keys", "json_to_table"],

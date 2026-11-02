@@ -1,4 +1,8 @@
 const TOOL_MODULES = {
+  plantuml: {
+    description: "Write PlantUML diagrams with local preview, workspace files, and SVG/PNG export",
+    load: () => import("../tools/plantuml/main.js").then((module) => ({ ToolClass: module.PlantUmlTool })),
+  },
   "compress-image": {
     description: "Compress images losslessly or as smaller WebP files, with linked before and after previews",
     load: () => import("../tools/compress-image/main.js").then((module) => ({ ToolClass: module.CompressImage })),

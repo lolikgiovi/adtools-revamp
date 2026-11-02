@@ -1,0 +1,39 @@
+{
+  "passed": true,
+  "checks": [
+    {
+      "command": "npm run build",
+      "frontend_test_files": 180,
+      "frontend_tests": 1847,
+      "worker_test_files": 7,
+      "worker_tests": 87,
+      "release_content_check": "passed",
+      "production_bundle": "passed"
+    },
+    {
+      "command": "./node_modules/.bin/vite build",
+      "result": "passed against final source"
+    },
+    {
+      "command": "./node_modules/.bin/vite build --mode tauri --outDir /tmp/adtools-plantuml-tauri-dist",
+      "result": "passed against final source"
+    },
+    {
+      "check": "all six engine files plus frame and host match source in web and Tauri output",
+      "result": "passed"
+    },
+    {
+      "check": "targeted ESLint, Prettier, and git diff --check",
+      "result": "passed"
+    },
+    {
+      "check": "production browser suite",
+      "result": "14 checks passed with no page errors",
+      "evidence": "production/result.json"
+    }
+  ],
+  "limits": [
+    "Native macOS application execution was not tested.",
+    "The browser renderer does not promise Java PlantUML feature parity."
+  ]
+}

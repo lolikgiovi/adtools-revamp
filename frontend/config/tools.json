@@ -184,6 +184,13 @@
       "icon": "language",
       "requiresTauri": true,
       "order": 20
+    },
+    {
+      "id": "plantuml",
+      "name": "PlantUML",
+      "category": "general",
+      "icon": "plantuml",
+      "order": 42
     }
   ]
 }

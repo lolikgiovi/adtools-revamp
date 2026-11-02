@@ -1,0 +1,802 @@
+import { BaseTool } from "../../core/BaseTool.js";
+import { UsageTracker } from "../../core/UsageTracker.js";
+import { ThemeManager } from "../../core/ThemeManager.js";
+import { confirmAction } from "../../components/ConfirmationDialog.js";
+import { monaco, setCompletionWorkspace } from "./editor.js";
+import { PlantUmlStore } from "./service.js";
+import { PlantUmlRenderer } from "./renderer.js";
+import { DiagramPreview } from "./preview.js";
+import { downloadBlob, exportPng, exportWorkspace, readWorkspaceZip } from "./files.js";
+import { addNode, deleteNode, initialWorkspace, moveNode, nodePath, renameNode, validateWorkspace } from "./workspace.js";
+import { colorNames, colorRows, confluencePalette, starterSequence } from "./plantuml.js";
+import { getIconSvg } from "./icon.js";
+import { template } from "./template.js";
+import "./styles.css";
+
+// Composition: a quiet file rail, persistent source tabs, and a dominant diagram canvas.
+// Content: workspace actions above the editor; render/export actions beside the preview.
+// Interaction: direct tab/file manipulation, immediate stale feedback, and pan/zoom without animation.
+export class PlantUmlTool extends BaseTool {
+  constructor(eventBus) {
+    super({ id: "plantuml", eventBus, isHeavyTool: true });
+    this.models = new Map();
+    this.views = new Map();
+    this.workspace = null;
+    this.sequence = 0;
+  }
+
+  getIconSvg() {
+    return getIconSvg();
+  }
+  render() {
+    return template;
+  }
+  $(selector) {
+    return this.container?.querySelector(selector);
+  }
+  get activeFile() {
+    return this.workspace?.nodes.find((node) => node.id === this.workspace.activeId && node.kind === "file");
+  }
+
+  async onMount() {
+    const sequence = ++this.sequence;
+    this.abort = new AbortController();
+    const { signal } = this.abort;
+    this.loading = true;
+    this.dirty = false;
+    this.saveFailed = false;
+    this.selectedId = null;
+    this.store = new PlantUmlStore();
+    const store = this.store;
+    let workspace;
+    try {
+      workspace = await store.load();
+    } catch (error) {
+      if (sequence !== this.sequence) {
+        void store.close();
+        return;
+      }
+      workspace = initialWorkspace();
+      this.saveFailed = true;
+      this.storageError(`Cannot open local storage. Export your work before closing. ${error.message}`);
+    }
+    if (sequence !== this.sequence || !this.container) {
+      void store.close();
+      return;
+    }
+    this.workspace = workspace;
+    this.loading = false;
+    this.editor = monaco.editor.create(this.$("#puml-editor"), {
+      model: null,
+      automaticLayout: true,
+      fontSize: 13,
+      lineHeight: 22,
+      tabSize: 2,
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      padding: { top: 12, bottom: 20 },
+      wordWrap: "off",
+      fixedOverflowWidgets: true,
+      quickSuggestions: { other: true, comments: false, strings: false },
+      suggest: { showWords: false },
+      editContext: false,
+      // Monaco 0.54 leaves a rejected highlight delay when switching models while focused.
+      // PlantUML has completion providers but no document-highlight provider.
+      occurrencesHighlight: "off",
+    });
+    this.applyEditorTheme();
+    document.addEventListener(
+      "themeChange",
+      () => {
+        if (this.isActive) this.applyEditorTheme();
+      },
+      { signal },
+    );
+    this.preview = new DiagramPreview(this.$("#puml-preview"), signal);
+    this.renderer = new PlantUmlRenderer(this.$(".plantuml-tool"), (result) => this.renderChanged(result));
+    this.$(".plantuml-tool").addEventListener(
+      "click",
+      (event) => {
+        const button = event.target.closest("[data-action]");
+        if (!button || button.disabled) return;
+        void this.action(button.dataset.action, button).catch((error) => this.showError(error.message));
+      },
+      { signal },
+    );
+    this.$("#puml-import").addEventListener(
+      "change",
+      (event) => {
+        const files = [...event.target.files];
+        event.target.value = "";
+        void this.importFiles(files).catch((error) => this.showError(error.message));
+      },
+      { signal },
+    );
+    this.$(".plantuml-tool").addEventListener("keydown", (event) => this.keydown(event), { signal, capture: true });
+    window.addEventListener(
+      "beforeunload",
+      (event) => {
+        if (this.dirty || this.saving || this.saveFailed) {
+          event.preventDefault();
+          event.returnValue = "";
+        }
+      },
+      { signal },
+    );
+    window.addEventListener("pagehide", () => this.flushSave(), { signal });
+    document.addEventListener(
+      "visibilitychange",
+      () => {
+        if (document.hidden) this.flushSave();
+      },
+      { signal },
+    );
+    this.bindDragAndResize(signal);
+    const compact = matchMedia("(max-width: 760px)");
+    if (compact.matches) this.toggleExplorer(false);
+    compact.addEventListener("change", (event) => this.toggleExplorer(!event.matches), { signal });
+    this.refresh();
+    this.scheduleSave();
+  }
+
+  model(file) {
+    if (this.models.has(file.id)) return this.models.get(file.id);
+    const model = monaco.editor.createModel(file.content, "plantuml", monaco.Uri.parse(`plantuml://workspace/${file.id}.puml`));
+    model.onDidChangeContent(() => {
+      if (!this.workspace) return;
+      this.workspace = {
+        ...this.workspace,
+        nodes: this.workspace.nodes.map((node) => (node.id === file.id ? { ...node, content: model.getValue() } : node)),
+      };
+      setCompletionWorkspace(this.workspace.nodes);
+      this.scheduleSave();
+      if (this.isActive) this.renderer?.render(this.activeFile, this.workspace.nodes);
+    });
+    this.models.set(file.id, model);
+    return model;
+  }
+
+  refresh() {
+    if (!this.workspace || !this.editor) return;
+    const file = this.activeFile;
+    if (this.currentFileId !== file?.id) {
+      if (this.currentFileId) this.views.set(this.currentFileId, this.editor.saveViewState());
+      this.currentFileId = file?.id;
+      this.editor.setModel(file ? this.model(file) : null);
+      if (file && this.views.has(file.id)) this.editor.restoreViewState(this.views.get(file.id));
+      this.diagram = null;
+      this.preview.clear();
+      this.preview.reset();
+    }
+    this.$("#puml-no-file").hidden = Boolean(file);
+    this.$("#puml-path").textContent = file ? nodePath(this.workspace.nodes, file.id) : "PlantUML";
+    for (const action of ["source", "format", "palette"]) this.$(`[data-action="${action}"]`).disabled = !file;
+    this.renderTree();
+    this.renderTabs();
+    setCompletionWorkspace(this.workspace.nodes);
+    this.renderer.render(file, this.workspace.nodes);
+  }
+
+  update(workspace) {
+    this.workspace = workspace;
+    this.refresh();
+    this.scheduleSave();
+  }
+
+  renderTree() {
+    const tree = this.$("#puml-tree");
+    tree.replaceChildren();
+    const append = (parentId, depth) => {
+      const children = this.workspace.nodes
+        .filter((node) => node.parentId === parentId)
+        .sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "folder" ? -1 : 1));
+      for (const node of children) {
+        const row = document.createElement("div");
+        row.className = "puml-node";
+        row.classList.toggle("selected", (this.selectedId || this.workspace.activeId) === node.id);
+        row.style.paddingLeft = `${10 + depth * 12}px`;
+        row.dataset.node = node.id;
+        row.draggable = true;
+        const open = document.createElement("button");
+        open.type = "button";
+        open.dataset.action = "open";
+        open.dataset.id = node.id;
+        open.title = nodePath(this.workspace.nodes, node.id);
+        if (node.kind === "folder") open.setAttribute("aria-expanded", String(this.workspace.expanded.includes(node.id)));
+        const icon = document.createElement("span");
+        icon.textContent = node.kind === "folder" ? (this.workspace.expanded.includes(node.id) ? "▾" : "▸") : "◇";
+        icon.setAttribute("aria-hidden", "true");
+        const name = document.createElement("span");
+        name.textContent = node.name;
+        open.append(icon, name);
+        row.append(open);
+        for (const [action, text, label] of [
+          ["rename", "✎", "Rename"],
+          ["delete", "×", "Delete"],
+        ]) {
+          const button = document.createElement("button");
+          button.className = "puml-node-action";
+          button.type = "button";
+          button.dataset.action = action;
+          button.dataset.id = node.id;
+          button.textContent = text;
+          button.title = `${label} ${node.name}`;
+          button.setAttribute("aria-label", `${label} ${node.name}`);
+          row.append(button);
+        }
+        tree.append(row);
+        if (node.kind === "folder" && this.workspace.expanded.includes(node.id)) append(node.id, depth + 1);
+      }
+    };
+    append(null, 0);
+  }
+
+  renderTabs() {
+    const tabs = this.$("#puml-tabs");
+    tabs.replaceChildren();
+    for (const id of this.workspace.tabs) {
+      const file = this.workspace.nodes.find((node) => node.id === id);
+      if (!file) continue;
+      const tab = document.createElement("div");
+      tab.className = "puml-tab";
+      tab.classList.toggle("active", id === this.workspace.activeId);
+      tab.draggable = true;
+      tab.dataset.tab = id;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.setAttribute("role", "tab");
+      button.setAttribute("aria-selected", String(id === this.workspace.activeId));
+      button.dataset.action = "tab";
+      button.dataset.id = id;
+      button.textContent = file.name;
+      button.title = nodePath(this.workspace.nodes, id);
+      const close = document.createElement("button");
+      close.type = "button";
+      close.textContent = "×";
+      close.dataset.action = "close-tab";
+      close.dataset.id = id;
+      close.setAttribute("aria-label", `Close ${file.name}`);
+      tab.append(button, close);
+      tabs.append(tab);
+    }
+  }
+
+  openFile(id) {
+    this.selectedId = id;
+    this.update({ ...this.workspace, tabs: [...new Set([...this.workspace.tabs, id])], activeId: id });
+    if (matchMedia("(max-width: 760px)").matches) this.toggleExplorer(false);
+  }
+
+  closeActiveTab(id = this.workspace?.activeId) {
+    if (!id) return;
+    const tabs = this.workspace.tabs.filter((tab) => tab !== id);
+    this.update({ ...this.workspace, tabs, activeId: this.workspace.activeId === id ? tabs.at(-1) || null : this.workspace.activeId });
+    if (this.models.has(id)) {
+      this.models.get(id).dispose();
+      this.models.delete(id);
+    }
+    this.views.delete(id);
+  }
+
+  createNewTab() {
+    return this.action("new-file");
+  }
+
+  async action(action, button) {
+    if (!this.workspace) return;
+    const id = button?.dataset.id;
+    const file = this.activeFile;
+    if (action === "explorer") this.toggleExplorer();
+    else if (action === "root") {
+      this.selectedId = null;
+      this.renderTree();
+    } else if (action === "open") {
+      const node = this.workspace.nodes.find((node) => node.id === id);
+      this.selectedId = id;
+      if (node.kind === "file") this.openFile(id);
+      else
+        this.update({
+          ...this.workspace,
+          expanded: this.workspace.expanded.includes(id)
+            ? this.workspace.expanded.filter((item) => item !== id)
+            : [...this.workspace.expanded, id],
+        });
+    } else if (action === "tab") this.openFile(id);
+    else if (action === "close-tab") this.closeActiveTab(id);
+    else if (action === "new-file" || action === "new-folder") {
+      const kind = action === "new-file" ? "file" : "folder";
+      const selected = this.workspace.nodes.find((node) => node.id === this.selectedId);
+      const parentId = selected?.kind === "folder" ? selected.id : selected?.parentId || null;
+      this.nameDialog(`New ${kind}`, kind === "file" ? "diagram.puml" : "folder", (name) => {
+        const next = addNode(this.workspace, name, parentId, kind, kind === "file" ? starterSequence : "");
+        this.selectedId = next.nodes.at(-1).id;
+        this.update(next);
+      });
+    } else if (action === "rename") {
+      const node = this.workspace.nodes.find((node) => node.id === id);
+      this.nameDialog("Rename", node.name, (name) => this.update(renameNode(this.workspace, id, name)));
+    } else if (action === "delete") {
+      const node = this.workspace.nodes.find((node) => node.id === id);
+      const workspace = this.workspace;
+      if (
+        await confirmAction({
+          title: `Delete ${node.name}?`,
+          description: node.kind === "folder" ? "All files inside this folder will be deleted." : "This file will be deleted.",
+          confirmLabel: "Delete",
+        })
+      ) {
+        if (!this.container || this.workspace !== workspace) return;
+        const next = deleteNode(this.workspace, id);
+        this.selectedId = null;
+        this.update(next);
+        for (const [key, model] of this.models)
+          if (!next.nodes.some((node) => node.id === key)) {
+            model.dispose();
+            this.models.delete(key);
+            this.views.delete(key);
+          }
+      }
+    } else if (action === "format") await this.editor.getAction("editor.action.formatDocument").run();
+    else if (action === "palette") this.paletteDialog();
+    else if (action === "import") this.$("#puml-import").click();
+    else if (action === "backup") {
+      await exportWorkspace(this.workspace);
+      UsageTracker.trackToolUse("plantuml", "export_workspace");
+    } else if (action === "source" && file) downloadBlob(new Blob([file.content], { type: "text/plain;charset=utf-8" }), file.name);
+    else if (action === "restart") {
+      this.renderer.latest = [file, this.workspace.nodes];
+      this.renderer.restart();
+    } else if (action === "svg" || action === "png") {
+      if (this.renderState !== "ready" || !this.diagram || this.diagram.fileId !== file?.id || this.diagram.source !== file.content) return;
+      const svg = this.diagram.svg;
+      if (action === "png") await exportPng(svg, file.name);
+      else downloadBlob(new Blob([svg], { type: "image/svg+xml" }), file.name.replace(/\.[^.]+$/, "") + ".svg");
+      UsageTracker.trackToolUse("plantuml", `export_${action}`);
+    } else if (action === "zoom-in") this.preview.zoom(1.2);
+    else if (action === "zoom-out") this.preview.zoom(1 / 1.2);
+    else if (action === "fit") this.preview.reset();
+    else if (action === "actual-size") {
+      this.preview.reset();
+      this.preview.scale = 1;
+      this.preview.layout();
+    }
+  }
+
+  renderChanged(result) {
+    if (!this.container) return;
+    this.renderState = result.state;
+    const status = this.$("#puml-status");
+    status.dataset.state = result.state;
+    status.textContent = {
+      ready: `${result.milliseconds} ms`,
+      loading: "Loading engine…",
+      rendering: "Rendering…",
+      error: "Preview outdated",
+      empty: "No file open",
+    }[result.state];
+    this.$("#puml-error").hidden = result.state !== "error";
+    this.$("#puml-error").textContent = result.error || "";
+    if (result.state === "ready") {
+      this.diagram = result;
+      this.preview?.show(result.svg, this.activeFile?.name || "diagram");
+      UsageTracker.trackToolUse("plantuml", "render", { input_size: result.source.length });
+    }
+    if (!this.diagram) {
+      const empty = this.$("#puml-preview-empty");
+      empty.hidden = false;
+      empty.textContent =
+        result.state === "empty" ? "Open a diagram to preview" : result.state === "error" ? "Unable to render" : status.textContent;
+    }
+    this.$("#puml-preview img").classList.toggle("stale", result.state !== "ready");
+    for (const action of ["svg", "png"]) this.$(`[data-action="${action}"]`).disabled = result.state !== "ready";
+  }
+
+  toggleExplorer(show = this.$(".puml-workspace").classList.contains("explorer-hidden")) {
+    this.$(".puml-workspace").classList.toggle("explorer-hidden", !show);
+    this.$('[data-action="explorer"]').setAttribute("aria-expanded", String(show));
+  }
+
+  dialog(title) {
+    this.dialogElement?.remove();
+    const dialog = document.createElement("dialog");
+    dialog.className = "puml-dialog";
+    const heading = document.createElement("h2");
+    heading.id = "puml-dialog-title";
+    heading.textContent = title;
+    dialog.setAttribute("aria-labelledby", heading.id);
+    dialog.append(heading);
+    document.body.append(dialog);
+    this.dialogElement = dialog;
+    dialog.addEventListener("close", () => {
+      dialog.remove();
+      this.editor?.focus();
+    });
+    return dialog;
+  }
+
+  nameDialog(title, initial, accept) {
+    const dialog = this.dialog(title);
+    const form = document.createElement("form");
+    const input = document.createElement("input");
+    input.value = initial;
+    input.required = true;
+    input.maxLength = 180;
+    input.setAttribute("aria-label", "Name");
+    const error = document.createElement("div");
+    error.className = "puml-dialog-error";
+    error.setAttribute("role", "alert");
+    const footer = document.createElement("footer");
+    const cancel = document.createElement("button");
+    cancel.className = "btn btn-secondary btn-sm";
+    cancel.type = "button";
+    cancel.textContent = "Cancel";
+    cancel.onclick = () => dialog.close();
+    const save = document.createElement("button");
+    save.className = "btn btn-primary btn-sm";
+    save.textContent = "Save";
+    footer.append(cancel, save);
+    form.append(input, error, footer);
+    form.onsubmit = (event) => {
+      event.preventDefault();
+      try {
+        accept(input.value);
+        dialog.close();
+      } catch (failure) {
+        error.textContent = failure.message;
+      }
+    };
+    dialog.append(form);
+    dialog.showModal();
+    input.focus();
+    input.select();
+  }
+
+  paletteDialog() {
+    const dialog = this.dialog("Confluence colors");
+    const grid = document.createElement("div");
+    grid.className = "puml-colors";
+    const insert = (text) => {
+      const selection = this.editor.getSelection();
+      if (!selection) return;
+      this.editor.executeEdits("plantuml-palette", [{ range: selection, text, forceMoveMarkers: true }]);
+      this.editor.pushUndoStop();
+    };
+    for (const row of colorRows)
+      for (let index = 0; index < colorNames.length; index++) {
+        const button = document.createElement("button");
+        const token = `COLOR_${colorNames[index]}${row.suffix}`;
+        button.type = "button";
+        button.style.background = row.colors[index];
+        button.title = `${token} · ${row.colors[index]}`;
+        button.setAttribute("aria-label", token);
+        button.onclick = () => {
+          insert(token);
+          dialog.close();
+        };
+        grid.append(button);
+      }
+    const footer = document.createElement("footer");
+    for (const [label, handler] of [
+      ["Copy definitions", () => this.copyToClipboard(confluencePalette)],
+      [
+        "Insert definitions",
+        () => {
+          const model = this.editor.getModel();
+          const afterStart = /^\s*@start\w+[^\n]*\n/.exec(model.getValue());
+          const position = model.getPositionAt(afterStart ? afterStart[0].length : 0);
+          this.editor.executeEdits("plantuml-palette", [
+            {
+              range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column),
+              text: `\n${confluencePalette}\n`,
+            },
+          ]);
+        },
+      ],
+      ["Close", () => {}],
+    ]) {
+      const button = document.createElement("button");
+      button.className = "btn btn-secondary btn-sm";
+      button.textContent = label;
+      button.onclick = () => {
+        void handler();
+        dialog.close();
+      };
+      footer.append(button);
+    }
+    dialog.append(grid, footer);
+    dialog.showModal();
+  }
+
+  quickPick(commands = false) {
+    const dialog = this.dialog(commands ? "Commands" : "Go to file");
+    const input = document.createElement("input");
+    input.type = "search";
+    input.setAttribute("aria-label", commands ? "Find a command" : "Find a file");
+    const list = document.createElement("div");
+    list.className = "puml-quick-pick";
+    const items = commands
+      ? [
+          ["New file", () => this.action("new-file")],
+          ["New folder", () => this.action("new-folder")],
+          ["Format document", () => this.action("format")],
+          ["Confluence colors", () => this.action("palette")],
+          [
+            "Toggle word wrap",
+            () => {
+              this.wrap = !this.wrap;
+              this.editor.updateOptions({ wordWrap: this.wrap ? "on" : "off" });
+            },
+          ],
+          ["Import files or workspace", () => this.action("import")],
+          ["Export workspace ZIP", () => this.action("backup")],
+          ["Save source file", () => this.action("source")],
+          ["Export SVG", () => this.action("svg")],
+          ["Export PNG", () => this.action("png")],
+          ["Restart renderer", () => this.action("restart")],
+          ["Fit diagram", () => this.action("fit")],
+        ]
+      : this.workspace.nodes
+          .filter((node) => node.kind === "file")
+          .map((node) => [nodePath(this.workspace.nodes, node.id), () => this.openFile(node.id)]);
+    const populate = () => {
+      list.replaceChildren();
+      for (const [label, run] of items.filter(([label]) => label.toLowerCase().includes(input.value.toLowerCase()))) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        button.onclick = () => {
+          dialog.close();
+          Promise.resolve()
+            .then(run)
+            .catch((error) => this.showError(error.message));
+        };
+        list.append(button);
+      }
+      if (!list.children.length) list.textContent = "No results";
+    };
+    input.oninput = populate;
+    dialog.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && event.target === input) {
+        event.preventDefault();
+        list.querySelector("button")?.click();
+      } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const buttons = [...list.querySelectorAll("button")];
+        const index = buttons.indexOf(document.activeElement);
+        const next = index + (event.key === "ArrowDown" ? 1 : -1);
+        buttons[(next + buttons.length) % buttons.length]?.focus();
+      }
+    });
+    populate();
+    dialog.append(input, list);
+    dialog.showModal();
+    input.focus();
+  }
+
+  async importFiles(files) {
+    if (!files.length) return;
+    const sequence = this.sequence;
+    const zip = files.find((file) => /\.zip$/i.test(file.name));
+    if (zip) {
+      if (files.length !== 1) throw new Error("Import one workspace ZIP at a time.");
+      const next = await readWorkspaceZip(zip);
+      if (sequence !== this.sequence) return;
+      if (
+        !(await confirmAction({
+          title: "Replace PlantUML workspace?",
+          description: "Current files will be replaced. Export a ZIP first to keep a backup.",
+          confirmLabel: "Replace workspace",
+        }))
+      )
+        return;
+      if (sequence !== this.sequence) return;
+      this.editor.setModel(null);
+      for (const model of this.models.values()) model.dispose();
+      this.models.clear();
+      this.views.clear();
+      this.currentFileId = null;
+      this.selectedId = null;
+      this.update(next);
+    } else {
+      if (files.reduce((sum, file) => sum + file.size, 0) > 20 * 1024 * 1024) throw new Error("Choose files totaling less than 20 MB.");
+      const loaded = await Promise.all(files.map(async (file) => ({ name: file.name, content: await file.text() })));
+      if (sequence !== this.sequence) return;
+      let next = this.workspace;
+      const selected = next.nodes.find((node) => node.id === this.selectedId);
+      const parentId = selected?.kind === "folder" ? selected.id : selected?.parentId || null;
+      for (const file of loaded) next = addNode(next, file.name, parentId, "file", file.content);
+      this.update(validateWorkspace(next));
+    }
+    UsageTracker.trackToolUse("plantuml", "import");
+  }
+
+  scheduleSave() {
+    this.dirty = true;
+    if (!this.saveFailed) this.$("#puml-save").textContent = "Saving…";
+    clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => this.flushSave(), 200);
+  }
+
+  flushSave() {
+    clearTimeout(this.saveTimer);
+    if (!this.dirty || this.saveFailed || !this.workspace) return;
+    this.dirty = false;
+    this.saving = (this.saving || 0) + 1;
+    const sequence = this.sequence;
+    void this.store
+      .save(this.workspace)
+      .then(() => {
+        if (sequence === this.sequence && !this.dirty && this.saving === 1) this.$("#puml-save").textContent = "Saved locally";
+      })
+      .catch((error) => {
+        if (sequence !== this.sequence) return;
+        this.saveFailed = true;
+        this.storageError(error.message);
+      })
+      .finally(() => {
+        if (sequence === this.sequence) this.saving--;
+      });
+  }
+
+  storageError(message) {
+    this.$("#puml-save").textContent = "Not saved";
+    this.$("#puml-storage-error").textContent = message;
+    this.$("#puml-storage-error").hidden = false;
+  }
+
+  keydown(event) {
+    const command = event.ctrlKey || event.metaKey;
+    if (command && event.key.toLowerCase() === "p") {
+      event.preventDefault();
+      event.stopPropagation();
+      this.quickPick(event.shiftKey);
+    } else if (event.altKey && event.key.toLowerCase() === "n") {
+      event.preventDefault();
+      void this.action("new-file");
+    } else if (command && event.key.toLowerCase() === "b") {
+      event.preventDefault();
+      this.toggleExplorer();
+    } else if (command && event.key.toLowerCase() === "s") {
+      event.preventDefault();
+      void this.action("source");
+    } else if (event.altKey && event.key.toLowerCase() === "z") {
+      event.preventDefault();
+      this.wrap = !this.wrap;
+      this.editor.updateOptions({ wordWrap: this.wrap ? "on" : "off" });
+    }
+  }
+
+  bindDragAndResize(signal) {
+    const root = this.$(".plantuml-tool");
+    root.addEventListener(
+      "dragstart",
+      (event) => {
+        const element = event.target.closest("[data-node], [data-tab]");
+        if (!element) return;
+        this.dragged = { id: element.dataset.node || element.dataset.tab, tab: Boolean(element.dataset.tab) };
+        event.dataTransfer.setData("text/plain", this.dragged.id);
+      },
+      { signal },
+    );
+    root.addEventListener(
+      "dragover",
+      (event) => {
+        if (this.dragged) event.preventDefault();
+      },
+      { signal },
+    );
+    root.addEventListener(
+      "dragend",
+      () => {
+        this.dragged = null;
+      },
+      { signal },
+    );
+    root.addEventListener(
+      "drop",
+      (event) => {
+        if (!this.dragged) return;
+        event.preventDefault();
+        const dragged = this.dragged;
+        this.dragged = null;
+        try {
+          const tab = event.target.closest("[data-tab]");
+          if (dragged.tab && tab) {
+            const tabs = this.workspace.tabs.filter((id) => id !== dragged.id);
+            tabs.splice(Math.max(0, tabs.indexOf(tab.dataset.tab)), 0, dragged.id);
+            this.update({ ...this.workspace, tabs });
+          } else if (event.target.closest("#puml-explorer")) {
+            const target = this.workspace.nodes.find((node) => node.id === event.target.closest("[data-node]")?.dataset.node);
+            const parentId = target?.kind === "folder" ? target.id : target?.parentId || null;
+            this.update(moveNode(this.workspace, dragged.id, parentId));
+          }
+        } catch (error) {
+          this.showError(error.message);
+        }
+      },
+      { signal },
+    );
+    const resizer = this.$(".puml-resizer");
+    const layout = this.$(".puml-workspace");
+    const setShare = (share) => {
+      this.share = Math.max(0.35, Math.min(2.8, share));
+      layout.style.setProperty("--puml-editor-share", `${this.share}fr`);
+    };
+    resizer.addEventListener(
+      "pointerdown",
+      (event) => {
+        resizer.setPointerCapture(event.pointerId);
+        this.resizing = true;
+      },
+      { signal },
+    );
+    resizer.addEventListener(
+      "pointermove",
+      (event) => {
+        if (!this.resizing) return;
+        const editor = this.$(".puml-editor-pane").getBoundingClientRect();
+        const preview = this.$(".puml-preview-pane").getBoundingClientRect();
+        const fraction = Math.max(0.25, Math.min(0.75, (event.clientX - editor.left) / (preview.right - editor.left)));
+        setShare(fraction / (1 - fraction));
+      },
+      { signal },
+    );
+    for (const event of ["pointerup", "pointercancel", "lostpointercapture"])
+      resizer.addEventListener(
+        event,
+        () => {
+          this.resizing = false;
+        },
+        { signal },
+      );
+    resizer.addEventListener(
+      "keydown",
+      (event) => {
+        if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+        event.preventDefault();
+        setShare((this.share || 1) + (event.key === "ArrowLeft" ? -0.15 : 0.15));
+      },
+      { signal },
+    );
+  }
+
+  onSoftDeactivate() {
+    this.renderer?.pause();
+    this.flushSave();
+    this.dialogElement?.close();
+  }
+  applyEditorTheme() {
+    const theme = document.documentElement.dataset.theme || "light";
+    monaco.editor.setTheme(ThemeManager.THEME_LABELS[theme]?.startsWith("[Dark]") ? "vs-dark" : "vs");
+  }
+  onWarmResume() {
+    this.editor?.layout();
+    if (this.editor) this.applyEditorTheme();
+    if (this.renderer && this.workspace) {
+      if (this.renderer.ready) this.renderer.render(this.activeFile, this.workspace.nodes);
+      else {
+        this.renderer.latest = [this.activeFile, this.workspace.nodes];
+        this.renderer.restart();
+      }
+    }
+  }
+  hasActiveBackgroundWork() {
+    return Boolean(this.loading || this.dirty || this.saving || this.saveFailed);
+  }
+  onUnmount() {
+    this.flushSave();
+    this.sequence++;
+    this.abort?.abort();
+    this.renderer?.destroy();
+    this.preview?.destroy();
+    this.editor?.dispose();
+    this.dialogElement?.remove();
+    for (const model of this.models.values()) model.dispose();
+    this.models.clear();
+    this.views.clear();
+    setCompletionWorkspace([]);
+    void this.store?.close();
+    this.editor = this.renderer = this.preview = this.workspace = this.currentFileId = null;
+    this.saving = 0;
+  }
+}

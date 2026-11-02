@@ -5,6 +5,16 @@
  * tool registry. This module owns the concise usage steps shown beside them.
  */
 export const toolGuides = {
+  plantuml: {
+    summary: "Write PlantUML with a local diagram preview and saved workspace.",
+    howToUse: [
+      "Create or import .puml files and folders.",
+      "Edit the source; local includes resolve inside the workspace.",
+      "Export SVG, PNG, source files, or a workspace ZIP.",
+    ],
+    notes:
+      "Remote includes are disabled. Browser storage belongs to this device and origin; use ZIP export to transfer or back up work. The browser engine may differ from Java PlantUML.",
+  },
   "uuid-generator": {
     summary: "Generate one or many UUID v4 values without extra formatting.",
     howToUse: ["Choose a quantity and output format.", "Generate the UUIDs.", "Copy the result or regenerate a fresh set."],

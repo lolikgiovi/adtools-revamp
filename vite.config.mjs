@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import { plantumlAssets } from "./scripts/plantuml-assets.mjs";
 
 // Production backend URL for Tauri builds
 const WORKER_BASE = "https://adtools.lolik.workers.dev";
@@ -10,6 +11,7 @@ export default defineConfig(({ mode, command }) => {
   return {
     root: "./frontend",
     publicDir: "public",
+    plugins: [plantumlAssets()],
     base: "./",
     // Set VITE_WORKER_BASE for tauri production builds
     define: useProductionApi

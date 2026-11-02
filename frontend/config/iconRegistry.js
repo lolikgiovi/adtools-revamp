@@ -1,3 +1,4 @@
+import { getIconSvg as getPlantUmlIconSvg } from "../tools/plantuml/icon.js";
 import { getIconSvg as getCompressImageIconSvg } from "../tools/compress-image/icon.js";
 import { getIconSvg as getAboutIconSvg } from "../pages/about/icon.js";
 import { getIconSvg as getAnalyticsDashboardIconSvg } from "../pages/analytics-dashboard/icon.js";
@@ -27,6 +28,7 @@ import { getIconSvg as getTlvIconSvg } from "../tools/tlv-viewer/icon.js";
 import { getIconSvg as getUuidIconSvg } from "../tools/uuid-generator/icon.js";
 
 const ICON_REGISTRY = new Map([
+  ["plantuml", getPlantUmlIconSvg],
   ["compress-image", getCompressImageIconSvg],
   ["about", getAboutIconSvg],
   ["analytics-dashboard", getAnalyticsDashboardIconSvg],

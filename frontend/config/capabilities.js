@@ -1,6 +1,12 @@
 // Stable product capabilities, rather than DOM labels or raw click identifiers.
 const define = (tool, id, name, options = {}) => ({ tool, id, name, ...options });
 export const capabilities = [
+  define("plantuml", "local_render", "Render diagrams locally", { uses: ["render"] }),
+  define("plantuml", "export", "Export diagrams and workspaces", {
+    start: '[data-action="svg"], [data-action="png"], [data-action="backup"]',
+    uses: ["export_svg", "export_png", "export_workspace"],
+  }),
+  define("plantuml", "import", "Import diagrams and workspaces", { open: '[data-action="import"]', uses: ["import"] }),
   define("quick-query", "import_excel", "Import rows from Excel", {
     open: "#importExcel",
     start: "#confirmExcelImport",
