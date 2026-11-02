@@ -1,3 +1,5 @@
+import { formatPlantUml } from "./formatter.js";
+
 // Adapted from lolikgiovi/plantuml at 74bc3e7.
 const colorRows = [
   {
@@ -109,65 +111,4 @@ class Diagram {
 Workspace "1" *-- "many" Diagram
 @enduml
 `;
-function formatPlantUml(source, indent = "  ") {
-  if (/^\s*@start(?!uml(?:\s|$))\w+/im.test(source)) return source;
-  const lines = source.replace(/\r\n?/g, "\n").split("\n");
-  let depth = 0;
-  let protectedEnd = null;
-  let multilineComment = false;
-  const output = [];
-  for (const raw of lines) {
-    const line = raw.trim();
-    if (protectedEnd) {
-      output.push(raw);
-      if (protectedEnd.test(line)) protectedEnd = null;
-      continue;
-    }
-    if (multilineComment) {
-      output.push(raw);
-      if (line.includes("'/")) multilineComment = false;
-      continue;
-    }
-    if (/^\/'/.test(line)) {
-      output.push(raw);
-      multilineComment = !line.slice(2).includes("'/");
-      continue;
-    }
-    if (/^:[^;]*$/.test(line)) {
-      protectedEnd = /;$/;
-      output.push(raw);
-      continue;
-    }
-    if (!line) {
-      output.push("");
-      continue;
-    }
-    if (
-      /^(?:note|hnote|rnote|legend|title|header|footer|caption)(?:\s|$)/i.test(line) &&
-      !line.includes(":") &&
-      !/^(?:title|caption)\s+\S/i.test(line)
-    ) {
-      const kind = line.split(/\s/)[0].toLowerCase();
-      const end = /^(?:hnote|rnote)$/.test(kind) ? "(?:h?note|rnote)" : kind;
-      protectedEnd = new RegExp(`^end\\s*${end}$`, "i");
-      output.push(indent.repeat(depth) + line);
-      continue;
-    }
-    if (/^!/.test(line) || /^'/.test(line)) {
-      output.push(indent.repeat(depth) + raw.trimEnd().trimStart());
-      continue;
-    }
-    const closes =
-      /^(?:end(?:\s+(?:box|fork|split|group|partition))?|endbox|endif|endwhile|endswitch|repeat\s+while)\b/i.test(line) || /^}/.test(line);
-    const branch = /^(?:else|elseif|case|fork\s+again|split\s+again)\b/i.test(line);
-    if (closes || branch) depth = Math.max(0, depth - 1);
-    output.push(indent.repeat(depth) + line);
-    const opens =
-      /^(?:alt|opt|loop|par|break|critical|group|box|partition|fork|split|repeat)\b/i.test(line) ||
-      /^(?:if|while|switch)\s*\(/i.test(line) ||
-      /{\s*$/.test(line);
-    if (opens || branch) depth++;
-  }
-  return output.join("\n").replace(/\n*$/, "\n");
-}
 export { classTemplate, colorNames, colorRows, confluencePalette, formatPlantUml, sequenceTemplate, starterSequence };

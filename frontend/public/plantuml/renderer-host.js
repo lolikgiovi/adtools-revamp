@@ -49,14 +49,31 @@ function run() {
         const document = new DOMParser().parseFromString(svg, "image/svg+xml");
         const text = document.documentElement.textContent ?? "";
         if (loaderError) finish({ kind: "error", error: loaderError });
-        else if (/(?:Syntax Error|Error line \d+|No valid diagram found|cannot include)/i.test(text))
-          finish({ kind: "error", error: text.replace(/\s+/g, " ").slice(-1500) });
-        else finish({ kind: "result", svg });
+        else if (
+          /(?:Syntax Error|Error line \d+|No valid diagram found|cannot include)/i.test(text) &&
+          /(?:\[From [^\]]*\(line \d+\)|PlantUML version)/i.test(text)
+        ) {
+          // Engine error SVGs include build/version placeholders and a concatenated source dump.
+          // Report the actionable location instead of presenting that internal diagnostic document.
+          const location = /(?:From textarea\s*\(line\s+|Error line\s+)(\d+)/i.exec(text);
+          const line = location ? Number(location[1]) : null;
+          const error = /No valid diagram found/i.test(text)
+            ? "No diagram found. Wrap the source in @startuml and @enduml."
+            : line
+              ? `Syntax error on line ${line}. Check this line and any unfinished blocks above it.`
+              : "The diagram contains a syntax error. Check the source and any unfinished blocks.";
+          finish({ kind: "error", error, line });
+        } else finish({ kind: "result", svg });
       },
-      (error) => finish({ kind: "error", error: String(error) }),
+      () => finish({ kind: "error", error: "The renderer could not finish. Try again or restart the renderer." }),
     );
   } catch (error) {
-    finish({ kind: "error", error: String(error.message ?? error) });
+    finish({
+      kind: "error",
+      error: /^(?:Remote|Include|Cannot include)/.test(error.message || "")
+        ? error.message
+        : "The renderer could not finish. Try again or restart the renderer.",
+    });
   }
 }
 

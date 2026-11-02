@@ -272,6 +272,11 @@
   display: none;
 }
 .puml-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
   width: min(440px, calc(100vw - 32px));
   padding: 20px;
   border: 1px solid hsl(var(--border));
@@ -559,4 +564,42 @@ body:has(.main-content .plantuml-tool) .workbench-hover {
   .puml-icon-button {
     transition: none;
   }
+}
+
+.puml-command-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 100%;
+  min-height: 56px;
+  padding: 4px 1px;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  font-size: 9px;
+  cursor: pointer;
+}
+.puml-command-button svg {
+  width: 22px;
+  height: 22px;
+}
+.puml-command-button:hover,
+.puml-command-button:focus-visible {
+  color: hsl(var(--foreground));
+  background: hsl(var(--accent));
+}
+.puml-render-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.puml-render-error p {
+  color: hsl(var(--muted-foreground));
+}
+
+#puml-error {
+  white-space: normal;
 }

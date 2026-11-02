@@ -1,6 +1,6 @@
 {
   "passed": true,
-  "timestamp": "2026-11-02T14:39:25.412Z",
+  "timestamp": "2026-11-02T15:16:47.691Z",
   "base": "http://127.0.0.1:1234",
   "checks": [
     "starter renders locally with all external requests blocked",

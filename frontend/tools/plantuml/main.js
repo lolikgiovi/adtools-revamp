@@ -185,7 +185,7 @@ export class PlantUmlTool extends BaseTool {
       };
       setCompletionWorkspace(this.workspace.nodes);
       this.scheduleSave();
-      if (this.isActive) this.renderer?.render(this.activeFile, this.workspace.nodes);
+      if (this.isActive) this.renderer?.render(this.activeFile, this.workspace.nodes, { delay: 2000 });
     });
     this.models.set(file.id, model);
     return model;
@@ -398,6 +398,11 @@ export class PlantUmlTool extends BaseTool {
             this.views.delete(key);
           }
       }
+    } else if (action === "error-line" && this.errorLine) {
+      this.togglePreview(true);
+      this.editor.setPosition({ lineNumber: this.errorLine, column: 1 });
+      this.editor.revealLineInCenter(this.errorLine);
+      this.editor.focus();
     } else if (action === "format") await this.editor.getAction("editor.action.formatDocument").run();
     else if (action === "palette") this.paletteDialog();
     else if (action === "import") this.$("#puml-import").click();
@@ -432,12 +437,35 @@ export class PlantUmlTool extends BaseTool {
     status.textContent = {
       ready: `${result.milliseconds} ms`,
       loading: "Loading engine…",
+      waiting: "Editing…",
       rendering: "Rendering…",
-      error: "Preview outdated",
+      error: "Diagram needs a fix",
       empty: "No file open",
     }[result.state];
     this.$("#puml-error").hidden = result.state !== "error";
-    this.$("#puml-error").textContent = result.error || "";
+    this.$("#puml-error-message").textContent = result.error || "";
+    this.$("#puml-error-context").textContent = this.diagram ? "Showing the last successful diagram." : "";
+    this.errorLine =
+      result.state === "error" && result.line > 0 && result.line <= (this.editor?.getModel()?.getLineCount() || 0) ? result.line : null;
+    this.$('[data-action="error-line"]').hidden = !this.errorLine;
+    const model = this.editor?.getModel();
+    if (model)
+      monaco.editor.setModelMarkers(
+        model,
+        "plantuml",
+        this.errorLine
+          ? [
+              {
+                startLineNumber: this.errorLine,
+                endLineNumber: this.errorLine,
+                startColumn: 1,
+                endColumn: model.getLineMaxColumn(this.errorLine),
+                message: result.error,
+                severity: monaco.MarkerSeverity.Error,
+              },
+            ]
+          : [],
+      );
     if (result.state === "ready") {
       this.diagram = result;
       this.preview?.show(result.svg, this.activeFile?.name || "diagram");
@@ -447,9 +475,13 @@ export class PlantUmlTool extends BaseTool {
       const empty = this.$("#puml-preview-empty");
       empty.hidden = false;
       empty.textContent =
-        result.state === "empty" ? "Open a diagram to preview" : result.state === "error" ? "Unable to render" : status.textContent;
+        result.state === "empty"
+          ? "Open a diagram to preview"
+          : result.state === "error"
+            ? "Check the source to preview this diagram"
+            : status.textContent;
     }
-    this.$("#puml-preview img").classList.toggle("stale", result.state !== "ready");
+    this.$("#puml-preview img").classList.toggle("stale", result.state === "error");
     for (const action of ["svg", "png"]) this.$(`[data-action="${action}"]`).disabled = result.state !== "ready";
   }
 
@@ -464,7 +496,11 @@ export class PlantUmlTool extends BaseTool {
   togglePreview(show = this.$(".puml-workspace").classList.contains("preview-hidden")) {
     this.maximizePreview(false);
     this.$(".puml-workspace").classList.toggle("preview-hidden", !show);
-    this.$('[data-action="preview"]').setAttribute("aria-expanded", String(show));
+    const toggle = this.$('[data-action="preview"]');
+    toggle.setAttribute("aria-expanded", String(show));
+    toggle.setAttribute("aria-label", show ? "Hide preview" : "Show preview");
+    toggle.title = show ? "Hide preview" : "Show preview";
+    toggle.innerHTML = workbenchIcon(show ? "preview" : "previewClosed");
     this.editor.layout();
   }
 
@@ -472,7 +508,11 @@ export class PlantUmlTool extends BaseTool {
     const layout = this.$(".puml-workspace");
     if (maximize) {
       layout.classList.remove("preview-hidden");
-      this.$('[data-action="preview"]').setAttribute("aria-expanded", "true");
+      const toggle = this.$('[data-action="preview"]');
+      toggle.setAttribute("aria-expanded", "true");
+      toggle.setAttribute("aria-label", "Hide preview");
+      toggle.title = "Hide preview";
+      toggle.innerHTML = workbenchIcon("preview");
     }
     layout.classList.toggle("preview-maximized", maximize);
     const button = this.$('[data-action="maximize-preview"]');

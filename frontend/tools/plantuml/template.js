@@ -14,7 +14,9 @@ export const template = `
           ${iconButton("explorer", "Toggle workspace (⌘/Ctrl+B)", "files", 'aria-expanded="true" aria-controls="puml-explorer"')}
           ${iconButton("search-files", "Search files", "search", 'aria-expanded="false" aria-controls="puml-file-search"')}
         </div>
-        ${iconButton("commands", "Commands (⌘/Ctrl+Shift+P)", "commands")}
+        <button type="button" class="puml-command-button" data-action="commands" title="Commands (⌘/Ctrl+Shift+P)">
+          ${workbenchIcon("commands")}<span>Commands</span>
+        </button>
       </nav>
       <aside id="puml-explorer" aria-label="Workspace files">
         <header class="puml-explorer-header">
@@ -42,7 +44,7 @@ export const template = `
             ${iconButton("palette", "Colors", "palette", 'aria-haspopup="dialog"')}
             ${iconButton("source", "Save source (.puml)", "download")}
           </div>
-          ${iconButton("preview", "Toggle preview", "preview", 'aria-expanded="true" aria-controls="puml-preview-pane"')}
+          ${iconButton("preview", "Hide preview", "preview", 'aria-expanded="true" aria-controls="puml-preview-pane"')}
         </header>
         <div id="puml-tabs" role="tablist" aria-label="Open diagrams"></div>
         <div id="puml-editor"></div>
@@ -64,7 +66,13 @@ export const template = `
           <span id="puml-preview-empty">Loading PlantUML…</span>
           <img hidden draggable="false" alt="Rendered diagram"/>
         </div>
-        <div id="puml-error" role="alert" hidden></div>
+        <div id="puml-error" role="alert" hidden>
+          <div class="puml-render-error">
+            <strong id="puml-error-message"></strong>
+            <p id="puml-error-context"></p>
+            ${button("error-line", "Go to error", "hidden")}
+          </div>
+        </div>
         <footer class="puml-preview-footer">
           <span id="puml-status" role="status" data-state="loading">Loading engine…</span>
           <div class="puml-actions">

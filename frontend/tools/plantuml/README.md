@@ -38,3 +38,8 @@ File creation, folder creation, and import live in the Workspace header. The act
 opens file-path search, and opens Commands. Format, font size, colors, and source export live above the source tabs.
 Preview controls include hide and maximize; maximize fills the workbench and Escape restores the split view.
 Workspace ZIP export remains available in Commands (Cmd/Ctrl+Shift+P).
+
+Source edits render after two seconds of inactivity; file opening and explicit renderer restart remain immediate.
+Syntax errors retain the previous diagram and offer navigation to the affected source line. The indentation formatter
+handles nested blocks and preserves relative whitespace inside text blocks; non-UML languages remain untouched.
+See [formatting and feedback checks](../../../docs/verification/plantuml/quality/README.md) for reproducible cases.

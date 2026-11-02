@@ -1,0 +1,33 @@
+{
+  "passed": true,
+  "checks": [
+    "new-file dialog is centered at 1440px",
+    "new-folder dialog is centered at 1440px",
+    "palette dialog is centered at 1440px",
+    "new-file dialog is centered at 900px",
+    "new-folder dialog is centered at 900px",
+    "palette dialog is centered at 900px",
+    "new-file dialog is centered at 390px",
+    "new-folder dialog is centered at 390px",
+    "palette dialog is centered at 390px",
+    "preview icon flips and its accessible action changes",
+    "Commands has a visible label",
+    "format: bundled sequence example",
+    "format: unindented bundled sequence",
+    "format: literal error text is a valid diagram label",
+    "format: nested sequence with notes and else",
+    "format: preprocessor function and conditionals",
+    "format: activity switch and parallel branches",
+    "format: quoted and commented braces with inline notes",
+    "format: one-line headers and protected comment",
+    "format: multiple diagrams reset nesting",
+    "format: multiline activity and nested repeat",
+    "format: non-UML source remains untouched",
+    "format: nested sequence depth 4",
+    "format: nested sequence depth 12",
+    "format: nested sequence depth 32",
+    "editing waits two seconds, preserves the diagram, and explains syntax errors"
+  ],
+  "failures": [],
+  "errors": []
+}

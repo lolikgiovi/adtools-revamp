@@ -23,7 +23,7 @@ export class PlantUmlRenderer {
         } else if (data.kind === "error" && typeof data.error === "string") {
           clearTimeout(this.renderTimeout);
           this.request = null;
-          this.onChange({ state: "error", error: data.error });
+          this.onChange({ state: "error", error: data.error, line: Number.isInteger(data.line) ? data.line : null });
         }
       }
     };
@@ -49,15 +49,16 @@ export class PlantUmlRenderer {
     );
   }
 
-  render(file, nodes) {
+  render(file, nodes, { delay = 0 } = {}) {
     this.cancel();
     this.paused = false;
-    this.latest = [file, nodes];
+    this.latest = [file, nodes, { delay }];
     if (!file) return this.onChange({ state: "empty" });
-    this.onChange({ state: this.ready ? "rendering" : "loading" });
+    this.onChange({ state: this.ready ? (delay ? "waiting" : "rendering") : "loading" });
     if (!this.ready) return;
     const id = this.id;
     this.timer = setTimeout(() => {
+      this.onChange({ state: "rendering" });
       this.request = { fileId: file.id, source: file.content, start: performance.now() };
       this.frame.contentWindow.postMessage(
         {
@@ -73,7 +74,7 @@ export class PlantUmlRenderer {
         this.cancel();
         this.onChange({ state: "error", error: "Rendering timed out. Simplify the diagram or restart the renderer." });
       }, 30000);
-    }, 300);
+    }, delay);
   }
 
   cancel() {
