@@ -1,6 +1,7 @@
 .main-content:has(.plantuml-tool) {
   display: flex;
   flex-direction: column;
+  padding: 0;
   overflow: hidden;
 }
 .tool-root:has(> .plantuml-tool) {
@@ -52,13 +53,12 @@
 }
 .puml-workspace {
   display: grid;
-  grid-template-columns: 190px minmax(0, var(--puml-editor-share, 1fr)) 5px minmax(0, 1fr);
+  grid-template-columns: var(--puml-explorer-width, 190px) 5px minmax(0, var(--puml-editor-share, 1fr)) 5px minmax(0, 1fr);
   flex: 1;
   min-height: 0;
 }
 #puml-explorer {
   overflow: auto;
-  border-right: 1px solid hsl(var(--border));
   padding: 8px 0;
 }
 .puml-root {
@@ -165,12 +165,14 @@
   font-size: 13px;
   color: hsl(var(--muted-foreground));
 }
-.puml-resizer {
+.puml-resizer,
+.puml-explorer-resizer {
   cursor: col-resize;
   background: hsl(var(--border) / 0.4);
   touch-action: none;
 }
-.puml-resizer:is(:hover, :focus-visible) {
+.puml-resizer:is(:hover, :focus-visible),
+.puml-explorer-resizer:is(:hover, :focus-visible) {
   background: hsl(var(--primary));
 }
 .puml-preview-pane {
@@ -259,7 +261,8 @@
 .puml-workspace.explorer-hidden {
   grid-template-columns: minmax(0, var(--puml-editor-share, 1fr)) 5px minmax(0, 1fr);
 }
-.puml-workspace.explorer-hidden #puml-explorer {
+.puml-workspace.explorer-hidden #puml-explorer,
+.puml-workspace.explorer-hidden .puml-explorer-resizer {
   display: none;
 }
 .puml-dialog {
@@ -335,10 +338,55 @@
   outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;
 }
+#puml-font-size {
+  min-height: 28px;
+  padding: 3px 6px;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  font-size: 12px;
+}
+.plantuml-tool .ad-searchable-dropdown-trigger {
+  height: 28px;
+  font-size: 12px;
+}
+.plantuml-tool [data-action="fit"][aria-pressed="true"] {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+.puml-workspace.is-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+.puml-workspace.is-resizing > :is(.puml-editor-pane, .puml-preview-pane, #puml-explorer) {
+  pointer-events: none;
+}
+/* Standalone Monaco has no .monaco-workbench ancestor for its managed-hover styles. */
+body:has(.main-content .plantuml-tool) .workbench-hover {
+  position: relative;
+  font-size: 12px;
+  line-height: 19px;
+  max-width: 500px;
+  background: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: 5px;
+  box-shadow: 0 2px 8px #0002;
+}
 @media (max-width: 1100px) {
   .puml-workspace {
-    grid-template-columns: 155px minmax(0, 1fr) 5px minmax(0, 1fr);
+    grid-template-columns: var(--puml-explorer-width, 155px) 5px minmax(0, var(--puml-editor-share, 1fr)) 5px minmax(0, 1fr);
   }
+}
+.puml-workspace.preview-hidden {
+  grid-template-columns: var(--puml-explorer-width, 190px) 5px minmax(0, 1fr);
+}
+.puml-workspace.preview-hidden.explorer-hidden {
+  grid-template-columns: minmax(0, 1fr);
+}
+.puml-workspace.preview-hidden :is(.puml-preview-pane, .puml-resizer) {
+  display: none;
 }
 @media (max-width: 760px) {
   .puml-workspace,
@@ -346,6 +394,11 @@
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(160px, 1fr) minmax(180px, 1fr);
     position: relative;
+  }
+  .puml-workspace.preview-hidden,
+  .puml-workspace.preview-hidden.explorer-hidden {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
   }
   #puml-explorer {
     position: absolute;
@@ -357,7 +410,8 @@
     background: hsl(var(--card));
     box-shadow: 4px 0 16px #0002;
   }
-  .puml-resizer {
+  .puml-resizer,
+  .puml-explorer-resizer {
     display: none;
   }
   .puml-preview-pane {

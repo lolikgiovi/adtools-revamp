@@ -13,6 +13,10 @@ export const template = `
       </div>
       <div class="puml-actions">
         ${button("format", "Format", 'title="Format document (Shift+Alt+F)"')}
+        <select id="puml-font-size" aria-label="Editor font size" title="Editor font size">
+          ${[10, 11, 12, 13, 14, 16, 18, 20].map((size) => `<option value="${size}" ${size === 12 ? "selected" : ""}>${size} px</option>`).join("")}
+        </select>
+        ${button("preview", "Preview", 'aria-expanded="true" aria-controls="puml-preview-pane"')}
         ${button("palette", "Colors", 'aria-haspopup="dialog"')}
         ${button("source", "Save .puml")}
       </div>
@@ -22,13 +26,14 @@ export const template = `
         <button type="button" class="puml-root" data-action="root">Workspace</button>
         <div id="puml-tree"></div>
       </aside>
+      <div class="puml-explorer-resizer" role="separator" tabindex="0" aria-label="Resize files" aria-orientation="vertical"></div>
       <section class="puml-editor-pane" aria-label="Source editor">
         <div id="puml-tabs" role="tablist" aria-label="Open diagrams"></div>
         <div id="puml-editor"></div>
         <div id="puml-no-file" hidden>Open a file or create a new diagram.</div>
       </section>
       <div class="puml-resizer" role="separator" tabindex="0" aria-label="Resize source editor" aria-orientation="vertical"></div>
-      <section class="puml-preview-pane" aria-label="Diagram preview">
+      <section id="puml-preview-pane" class="puml-preview-pane" aria-label="Diagram preview">
         <header class="puml-preview-header">
           <strong>Preview</strong>
           <div class="puml-actions">
@@ -46,9 +51,9 @@ export const template = `
           <span id="puml-status" role="status" data-state="loading">Loading engine…</span>
           <div class="puml-actions">
             ${button("zoom-out", "−", 'aria-label="Zoom out"')}
-            ${button("actual-size", "100%", 'title="Actual size"')}
+            ${button("actual-size", "100%", 'aria-label="Reset zoom to 100%" title="Reset zoom to 100%"')}
             ${button("zoom-in", "+", 'aria-label="Zoom in"')}
-            ${button("fit", "Fit")}
+            ${button("fit", "Fit", 'aria-pressed="true" title="Fit diagram to available space"')}
           </div>
         </footer>
       </section>

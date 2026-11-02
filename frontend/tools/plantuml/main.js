@@ -66,11 +66,32 @@ export class PlantUmlTool extends BaseTool {
     }
     this.workspace = workspace;
     this.loading = false;
+    let fontSize = 12;
+    try {
+      const saved = Number(localStorage.getItem("plantuml.editorFontSize"));
+      if ([10, 11, 12, 13, 14, 16, 18, 20].includes(saved)) fontSize = saved;
+    } catch {
+      /* The editor remains usable when browser preferences are unavailable. */
+    }
+    this.$("#puml-font-size").value = String(fontSize);
+    this.$("#puml-font-size").addEventListener(
+      "change",
+      (event) => {
+        const size = Number(event.target.value);
+        this.editor.updateOptions({ fontSize: size, lineHeight: Math.round(size * 1.65) });
+        try {
+          localStorage.setItem("plantuml.editorFontSize", String(size));
+        } catch {
+          /* Keep the in-memory preference. */
+        }
+      },
+      { signal },
+    );
     this.editor = monaco.editor.create(this.$("#puml-editor"), {
       model: null,
       automaticLayout: true,
-      fontSize: 13,
-      lineHeight: 22,
+      fontSize,
+      lineHeight: Math.round(fontSize * 1.65),
       tabSize: 2,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
@@ -92,7 +113,10 @@ export class PlantUmlTool extends BaseTool {
       },
       { signal },
     );
-    this.preview = new DiagramPreview(this.$("#puml-preview"), signal);
+    this.preview = new DiagramPreview(this.$("#puml-preview"), signal, (scale, fitting) => {
+      this.$('[data-action="actual-size"]').textContent = `${Math.round(scale * 100)}%`;
+      this.$('[data-action="fit"]').setAttribute("aria-pressed", String(fitting));
+    });
     this.renderer = new PlantUmlRenderer(this.$(".plantuml-tool"), (result) => this.renderChanged(result));
     this.$(".plantuml-tool").addEventListener(
       "click",
@@ -287,7 +311,11 @@ export class PlantUmlTool extends BaseTool {
     const id = button?.dataset.id;
     const file = this.activeFile;
     if (action === "explorer") this.toggleExplorer();
-    else if (action === "root") {
+    else if (action === "preview") {
+      const hidden = this.$(".puml-workspace").classList.toggle("preview-hidden");
+      this.$('[data-action="preview"]').setAttribute("aria-expanded", String(!hidden));
+      this.editor.layout();
+    } else if (action === "root") {
       this.selectedId = null;
       this.renderTree();
     } else if (action === "open") {
@@ -716,47 +744,79 @@ export class PlantUmlTool extends BaseTool {
       },
       { signal },
     );
-    const resizer = this.$(".puml-resizer");
     const layout = this.$(".puml-workspace");
+    const editorDivider = this.$(".puml-resizer");
+    const explorerDivider = this.$(".puml-explorer-resizer");
     const setShare = (share) => {
-      this.share = Math.max(0.35, Math.min(2.8, share));
+      this.share = Math.max(1 / 3, Math.min(3, share));
       layout.style.setProperty("--puml-editor-share", `${this.share}fr`);
+      editorDivider.setAttribute("aria-valuenow", String(Math.round((this.share / (1 + this.share)) * 100)));
     };
-    resizer.addEventListener(
-      "pointerdown",
-      (event) => {
-        resizer.setPointerCapture(event.pointerId);
-        this.resizing = true;
-      },
-      { signal },
-    );
-    resizer.addEventListener(
-      "pointermove",
-      (event) => {
-        if (!this.resizing) return;
-        const editor = this.$(".puml-editor-pane").getBoundingClientRect();
-        const preview = this.$(".puml-preview-pane").getBoundingClientRect();
-        const fraction = Math.max(0.25, Math.min(0.75, (event.clientX - editor.left) / (preview.right - editor.left)));
-        setShare(fraction / (1 - fraction));
-      },
-      { signal },
-    );
-    for (const event of ["pointerup", "pointercancel", "lostpointercapture"])
-      resizer.addEventListener(
-        event,
-        () => {
-          this.resizing = false;
+    const setExplorerWidth = (width) => {
+      this.explorerWidth = Math.max(140, Math.min(Math.min(400, layout.clientWidth * 0.4), width));
+      layout.style.setProperty("--puml-explorer-width", `${this.explorerWidth}px`);
+      explorerDivider.setAttribute("aria-valuenow", String(Math.round(this.explorerWidth)));
+    };
+    const bindResize = (divider, move, step) => {
+      divider.addEventListener(
+        "pointerdown",
+        (event) => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          divider.setPointerCapture(event.pointerId);
+          this.resizing = divider;
+          layout.classList.add("is-resizing");
         },
         { signal },
       );
-    resizer.addEventListener(
-      "keydown",
-      (event) => {
-        if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
-        event.preventDefault();
-        setShare((this.share || 1) + (event.key === "ArrowLeft" ? -0.15 : 0.15));
+      divider.addEventListener(
+        "pointermove",
+        (event) => {
+          if (this.resizing === divider) move(event.clientX);
+        },
+        { signal },
+      );
+      for (const event of ["pointerup", "pointercancel", "lostpointercapture"])
+        divider.addEventListener(
+          event,
+          () => {
+            if (this.resizing !== divider) return;
+            this.resizing = null;
+            layout.classList.remove("is-resizing");
+          },
+          { signal },
+        );
+      divider.addEventListener(
+        "keydown",
+        (event) => {
+          if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+          event.preventDefault();
+          step(event.key === "ArrowLeft" ? -1 : 1);
+        },
+        { signal },
+      );
+    };
+    editorDivider.setAttribute("aria-valuemin", "25");
+    editorDivider.setAttribute("aria-valuemax", "75");
+    setShare(this.share || 1);
+    bindResize(
+      editorDivider,
+      (x) => {
+        const editor = this.$(".puml-editor-pane").getBoundingClientRect();
+        const preview = this.$(".puml-preview-pane").getBoundingClientRect();
+        const available = preview.right - editor.left - editorDivider.offsetWidth;
+        const fraction = Math.max(0.25, Math.min(0.75, (x - editor.left) / available));
+        setShare(fraction / (1 - fraction));
       },
-      { signal },
+      (direction) => setShare((this.share || 1) + direction * 0.15),
+    );
+    explorerDivider.setAttribute("aria-valuemin", "140");
+    explorerDivider.setAttribute("aria-valuemax", "400");
+    explorerDivider.setAttribute("aria-valuenow", "190");
+    bindResize(
+      explorerDivider,
+      (x) => setExplorerWidth(x - layout.getBoundingClientRect().left),
+      (direction) => setExplorerWidth(this.$("#puml-explorer").offsetWidth + direction * 16),
     );
   }
 

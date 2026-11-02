@@ -188,7 +188,7 @@
     {
       "id": "plantuml",
       "name": "PlantUML",
-      "category": "general",
+      "category": "template",
       "icon": "plantuml",
       "order": 42
     }

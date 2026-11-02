@@ -27,3 +27,9 @@ Alt+N creates a file, Alt+Z toggles wrapping, Shift+Alt+F formats, and Cmd/Ctrl+
 Monaco also provides its editor context menu and command palette.
 
 For reproducible browser checks, see [verification instructions](../../../docs/verification/plantuml/README.md).
+
+The workspace fills the application content area. Files and Preview can be toggled independently; both
+vertical dividers support dragging and arrow keys. The font-size selector changes source text only (12 px
+by default) and remembers the preference. The preview percentage always reports the effective scale;
+click it for 100% or choose Fit to keep the whole diagram visible as the pane changes size.
+Interaction verification is recorded in [UX checks](../../../docs/verification/plantuml/ux/README.md).

@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "base": "http://127.0.0.1:1234",
+  "checks": [
+    "zoom percentage reflects actual scale; actual size and Fit have distinct states",
+    "PlantUML fills the shell without outer padding and expands when the app sidebar collapses",
+    "editor font size is adjustable and survives reload",
+    "Find hover is a compact opaque tooltip rather than bare overlapping text",
+    "both dividers resize at desktop and intermediate widths without replacing the diagram",
+    "preview and files toggle independently; editor expands fully; keyboard resizing works",
+    "narrow layouts fit the viewport and support preview toggling",
+    "other tools retain their shell padding"
+  ],
+  "errors": []
+}

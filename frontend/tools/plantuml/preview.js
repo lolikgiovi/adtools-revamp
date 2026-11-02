@@ -1,5 +1,6 @@
 export class DiagramPreview {
-  constructor(viewport, signal) {
+  constructor(viewport, signal, onScaleChange = () => {}) {
+    this.onScaleChange = onScaleChange;
     this.viewport = viewport;
     this.image = viewport.querySelector("img");
     this.size = { width: 600, height: 500 };
@@ -100,6 +101,7 @@ export class DiagramPreview {
   }
 
   layout() {
+    this.onScaleChange(this.currentScale(), this.scale === null);
     this.image.style.transform = `translate(${this.x}px, ${this.y}px) scale(${this.currentScale()})`;
   }
 
