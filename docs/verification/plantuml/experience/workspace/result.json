@@ -1,0 +1,22 @@
+{
+  "passed": true,
+  "timestamp": "2026-11-02T15:35:37.944Z",
+  "base": "http://127.0.0.1:1234",
+  "checks": [
+    "starter renders locally with all external requests blocked",
+    "remote includes rejected; last preview retained; stale export blocked",
+    "relative workspace includes render",
+    "SVG, PNG, and compatible workspace ZIP exported",
+    "edits survive reload",
+    "file/folder CRUD, unsafe-name rejection, drag move, formatting, and 36-color palette",
+    "rapid edits discard stale render results",
+    "shared Monaco tool switch, warm resume, hard disposal, and saved-state restoration",
+    "workspace ZIP round trip restores files, source, and active tab",
+    "Go to File and command palette keyboard navigation",
+    "editor and workspace follow light and dark themes",
+    "malformed ZIP import retains current files",
+    "responsive workspace fits at 900, 620, and 390 pixels",
+    "conflicting window save is rejected visibly"
+  ],
+  "errors": []
+}

@@ -39,8 +39,8 @@ try {
   assert.equal(await page.locator('[data-action="backup"]').count(), 0);
   assert.equal(await page.locator(".puml-editor-pane #puml-font-size").count(), 1);
   const icon = await page.locator('[data-action="explorer"] svg').boundingBox();
-  assert.ok(icon.width >= 20);
-  checks.push("file controls live in Workspace; source controls live in the editor; large panel icons replace toolbar text");
+  assert.equal(icon.width, 18);
+  checks.push("file controls live in Workspace; source controls live in the editor; compact panel icons match the app toolbar");
   await page.locator('[data-action="search-files"]').click();
   await page.getByRole("searchbox", { name: "Search files", exact: true }).fill("confluence");
   assert.equal(await page.locator("#puml-tree .puml-node").count(), 1);
@@ -66,7 +66,8 @@ try {
   assert.equal(await page.locator("#puml-preview img").getAttribute("src"), imageBeforeMaximize);
   await page.locator('[data-action="hide-preview"]').click();
   assert.equal(await page.locator(".puml-preview-pane").isVisible(), false);
-  await page.locator('[data-action="commands"]').click();
+  await page.locator("#puml-editor").click();
+  await page.keyboard.press("ControlOrMeta+Shift+p");
   await page.getByRole("searchbox", { name: "Find a command", exact: true }).fill("Maximize preview");
   await page.keyboard.press("Enter");
   await page.waitForTimeout(100);
@@ -136,7 +137,7 @@ try {
   assert.equal(await page.locator(".puml-preview-pane").isVisible(), false);
   const editorOnly = await page.locator(".puml-editor-pane").boundingBox();
   const workspace = await page.locator(".puml-workspace").boundingBox();
-  assert.ok(Math.abs(editorOnly.width + 44 - workspace.width) < 1);
+  assert.ok(Math.abs(editorOnly.width + 36 - workspace.width) < 1);
   await page.locator('[data-action="explorer"]').click();
   await page.locator('[data-action="preview"]').click();
   const divider = page.locator(".puml-resizer");

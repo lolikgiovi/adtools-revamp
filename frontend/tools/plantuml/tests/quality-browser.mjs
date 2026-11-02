@@ -75,8 +75,8 @@ try {
     assert.match(await button.getAttribute("aria-label"), /Hide preview/);
   });
   if (await page.locator(".puml-preview-pane").isHidden()) await page.locator('[data-action="preview"]').click();
-  await check("Commands has a visible label", async () => {
-    assert.match(await page.locator('[data-action="commands"]').innerText(), /Commands/);
+  await check("activity rail omits Commands", async () => {
+    assert.equal(await page.locator('[data-action="commands"]').count(), 0);
   });
   const results = [];
   for (const fixture of [

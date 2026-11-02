@@ -8,7 +8,7 @@ native dialogs, shared Monaco workers, IndexedDB, and the already installed JSZi
 - `main.js`: workspace UI, editor models, autosave coordination, and tool lifecycle.
 - `service.js`: serialized IndexedDB saves with revision conflict detection.
 - `workspace.js`: validated files/folders, moves, paths, and ZIP session format.
-- `editor.js`, `completions.js`, `plantuml.js`: language support, snippets, templates, palette, and formatter.
+- `editor.js`, `language.js`, `completions.js`, `plantuml.js`: language support, snippets, templates, palette, and formatter.
 - `renderer.js`: debounced render requests, readiness, stale results, timeouts, and restart.
 - `preview.js`, `files.js`: image-document preview, pan/zoom, source/SVG/PNG/ZIP import/export.
 - `../../public/plantuml/`: separate rendering document with restrictive CSP and a local-only file loader.
@@ -30,12 +30,13 @@ For reproducible browser checks, see [verification instructions](../../../docs/v
 
 The workspace fills the application content area. Files and Preview can be toggled independently; both
 vertical dividers support dragging and arrow keys. The font-size selector changes source text only (12 px
-by default) and remembers the preference. The preview percentage always reports the effective scale;
+by default) and remembers the preference. The adjacent editor-theme selector offers Follow app, Light, Dark, and High contrast;
+its preference persists independently of the app theme. The preview percentage always reports the effective scale;
 click it for 100% or choose Fit to keep the whole diagram visible as the pane changes size.
 Interaction verification is recorded in [UX checks](../../../docs/verification/plantuml/ux/README.md).
 
 File creation, folder creation, and import live in the Workspace header. The activity rail toggles the workspace,
-opens file-path search, and opens Commands. Format, font size, colors, and source export live above the source tabs.
+and opens file-path search. Format, font size, editor theme, colors, and source export live above the source tabs.
 Preview controls include hide and maximize; maximize fills the workbench and Escape restores the split view.
 Workspace ZIP export remains available in Commands (Cmd/Ctrl+Shift+P).
 
@@ -43,3 +44,13 @@ Source edits render after two seconds of inactivity; file opening and explicit r
 Syntax errors retain the previous diagram and offer navigation to the affected source line. The indentation formatter
 handles nested blocks and preserves relative whitespace inside text blocks; non-UML languages remain untouched.
 See [formatting and feedback checks](../../../docs/verification/plantuml/quality/README.md) for reproducible cases.
+
+The activity rail is 36 px wide with 18 px icons. Commands remain available through Cmd/Ctrl+Shift+P.
+Syntax colors distinguish participant roles (including aliases from local includes), variables, constants, functions,
+request/response labels, node members, SQL keywords, and note content. Symbol highlighting updates when workspace source changes.
+The tokenizer provides visual guidance rather than evaluating preprocessor branches or inferring runtime types.
+
+Pinch zoom follows the cursor or the two-finger midpoint. Toolbar and keyboard zoom use the viewport center.
+Panning permits 30% overscroll of the visible diagram span on each axis; dragging, scrolling, zooming, and pane resizing
+all apply the same bounds. Two-finger touch gestures support simultaneous zoom and pan.
+See [experience verification](../../../docs/verification/plantuml/experience/README.md) for reproducible browser checks.

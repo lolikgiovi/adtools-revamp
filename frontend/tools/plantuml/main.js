@@ -101,10 +101,32 @@ export class PlantUmlTool extends BaseTool {
       quickSuggestions: { other: true, comments: false, strings: false },
       suggest: { showWords: false },
       editContext: false,
+      "semanticHighlighting.enabled": true,
       // Monaco 0.54 leaves a rejected highlight delay when switching models while focused.
       // PlantUML has completion providers but no document-highlight provider.
       occurrencesHighlight: "off",
     });
+    this.editorTheme = "auto";
+    try {
+      const saved = localStorage.getItem("plantuml.editorTheme");
+      if (["auto", "light", "dark", "contrast"].includes(saved)) this.editorTheme = saved;
+    } catch {
+      /* Keep the app theme when preferences are unavailable. */
+    }
+    this.$("#puml-editor-theme").value = this.editorTheme;
+    this.$("#puml-editor-theme").addEventListener(
+      "change",
+      (event) => {
+        this.editorTheme = event.target.value;
+        this.applyEditorTheme();
+        try {
+          localStorage.setItem("plantuml.editorTheme", this.editorTheme);
+        } catch {
+          /* Keep the in-memory preference. */
+        }
+      },
+      { signal },
+    );
     this.applyEditorTheme();
     document.addEventListener(
       "themeChange",
@@ -941,7 +963,9 @@ export class PlantUmlTool extends BaseTool {
   }
   applyEditorTheme() {
     const theme = document.documentElement.dataset.theme || "light";
-    monaco.editor.setTheme(ThemeManager.THEME_LABELS[theme]?.startsWith("[Dark]") ? "vs-dark" : "vs");
+    const selected =
+      this.editorTheme === "auto" ? (ThemeManager.THEME_LABELS[theme]?.startsWith("[Dark]") ? "dark" : "light") : this.editorTheme;
+    monaco.editor.setTheme(`plantuml-${selected}`);
   }
   onWarmResume() {
     this.editor?.layout();

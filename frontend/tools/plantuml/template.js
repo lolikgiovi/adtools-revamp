@@ -14,9 +14,6 @@ export const template = `
           ${iconButton("explorer", "Toggle workspace (⌘/Ctrl+B)", "files", 'aria-expanded="true" aria-controls="puml-explorer"')}
           ${iconButton("search-files", "Search files", "search", 'aria-expanded="false" aria-controls="puml-file-search"')}
         </div>
-        <button type="button" class="puml-command-button" data-action="commands" title="Commands (⌘/Ctrl+Shift+P)">
-          ${workbenchIcon("commands")}<span>Commands</span>
-        </button>
       </nav>
       <aside id="puml-explorer" aria-label="Workspace files">
         <header class="puml-explorer-header">
@@ -40,6 +37,12 @@ export const template = `
             ${iconButton("format", "Format document (Shift+Alt+F)", "format")}
             <select id="puml-font-size" aria-label="Editor font size" title="Editor font size">
               ${[10, 11, 12, 13, 14, 16, 18, 20].map((size) => `<option value="${size}" ${size === 12 ? "selected" : ""}>${size} px</option>`).join("")}
+            </select>
+            <select id="puml-editor-theme" aria-label="Editor theme" title="Editor theme">
+              <option value="auto">Follow app</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+              <option value="contrast">High contrast</option>
             </select>
             ${iconButton("palette", "Colors", "palette", 'aria-haspopup="dialog"')}
             ${iconButton("source", "Save source (.puml)", "download")}

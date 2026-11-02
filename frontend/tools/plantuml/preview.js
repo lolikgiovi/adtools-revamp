@@ -4,6 +4,7 @@ export class DiagramPreview {
     this.viewport = viewport;
     this.image = viewport.querySelector("img");
     this.size = { width: 600, height: 500 };
+    this.pointers = new Map();
     this.reset();
     viewport.addEventListener("dblclick", () => this.reset(), { signal });
     viewport.addEventListener(
@@ -11,7 +12,7 @@ export class DiagramPreview {
       (event) => {
         event.preventDefault();
         const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? viewport.clientHeight : 1;
-        if (event.ctrlKey || event.metaKey) this.zoom(Math.exp(-event.deltaY * unit * 0.01));
+        if (event.ctrlKey || event.metaKey) this.zoom(Math.exp(-event.deltaY * unit * 0.01), event.clientX, event.clientY);
         else {
           this.x -= event.deltaX * unit;
           this.y -= event.deltaY * unit;
@@ -25,28 +26,27 @@ export class DiagramPreview {
       (event) => {
         if (event.button !== 0) return;
         viewport.setPointerCapture(event.pointerId);
-        this.drag = { x: event.clientX, y: event.clientY, panX: this.x, panY: this.y };
+        this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
       },
       { signal },
     );
     viewport.addEventListener(
       "pointermove",
       (event) => {
-        if (!this.drag) return;
-        this.x = this.drag.panX + event.clientX - this.drag.x;
-        this.y = this.drag.panY + event.clientY - this.drag.y;
-        this.layout();
+        if (!this.pointers.has(event.pointerId)) return;
+        const before = this.gesture();
+        this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        const after = this.gesture();
+        // Move the pinch midpoint first; zoom preserves the diagram point beneath that midpoint.
+        this.x += after.x - before.x;
+        this.y += after.y - before.y;
+        if (before.distance > 0 && after.distance > 0) this.zoom(after.distance / before.distance, after.x, after.y);
+        else this.layout();
       },
       { signal },
     );
     for (const event of ["pointerup", "pointercancel", "lostpointercapture"])
-      viewport.addEventListener(
-        event,
-        () => {
-          this.drag = null;
-        },
-        { signal },
-      );
+      viewport.addEventListener(event, (event) => this.pointers.delete(event.pointerId), { signal });
     viewport.addEventListener(
       "keydown",
       (event) => {
@@ -83,6 +83,7 @@ export class DiagramPreview {
   }
 
   reset() {
+    this.pointers?.clear();
     this.scale = null;
     this.x = this.y = 0;
     this.layout();
@@ -95,14 +96,38 @@ export class DiagramPreview {
     );
   }
 
-  zoom(factor) {
-    this.scale = Math.max(0.05, Math.min(4, this.currentScale() * factor));
+  gesture() {
+    const [first, second] = [...this.pointers.values()];
+    if (!second) return { ...first, distance: 0 };
+    return {
+      x: (first.x + second.x) / 2,
+      y: (first.y + second.y) / 2,
+      distance: Math.hypot(second.x - first.x, second.y - first.y),
+    };
+  }
+
+  zoom(factor, clientX, clientY) {
+    const previous = this.currentScale();
+    this.scale = Math.max(0.05, Math.min(4, previous * factor));
+    const rect = this.viewport.getBoundingClientRect();
+    const x = clientX === undefined ? 0 : clientX - rect.left - rect.width / 2;
+    const y = clientY === undefined ? 0 : clientY - rect.top - rect.height / 2;
+    const ratio = this.scale / previous;
+    this.x = x - (x - this.x) * ratio;
+    this.y = y - (y - this.y) * ratio;
     this.layout();
   }
 
   layout() {
-    this.onScaleChange(this.currentScale(), this.scale === null);
-    this.image.style.transform = `translate(${this.x}px, ${this.y}px) scale(${this.currentScale()})`;
+    const scale = this.currentScale();
+    // Allow 30% overscroll past each edge, keeping the diagram reachable at every scale.
+    const limit = (image, viewport) => Math.max(0, (image * scale - viewport) / 2) + Math.min(image * scale, viewport) * 0.3;
+    const maxX = limit(this.size.width, this.viewport.clientWidth);
+    const maxY = limit(this.size.height, this.viewport.clientHeight);
+    this.x = Math.max(-maxX, Math.min(maxX, this.x));
+    this.y = Math.max(-maxY, Math.min(maxY, this.y));
+    this.onScaleChange(scale, this.scale === null);
+    this.image.style.transform = `translate(${this.x}px, ${this.y}px) scale(${scale})`;
   }
 
   destroy() {

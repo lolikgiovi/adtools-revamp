@@ -2,15 +2,18 @@
 import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.main.js";
 import { collectSymbols, completionContext, matchingSymbols } from "./completions.js";
-import { nodePath } from "./workspace.js";
+import { plantUmlLanguage, participantLegend, participantTokens, definePlantUmlThemes } from "./language.js";
+import { nodePath, resolvePath } from "./workspace.js";
 import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import { confluencePalette, formatPlantUml, sequenceTemplate } from "./plantuml.js";
 globalThis.__plantumlEditorRegistrations?.forEach((registration) => registration.dispose());
 const registrations = [];
 globalThis.__plantumlEditorRegistrations = registrations;
 let completionWorkspace = [];
+const semanticListeners = new Set();
 function setCompletionWorkspace(nodes) {
   completionWorkspace = nodes;
+  for (const listener of semanticListeners) listener();
 }
 if (import.meta.hot) import.meta.hot.dispose(() => registrations.forEach((registration) => registration.dispose()));
 configureMonacoWorkers(globalThis, { editor: EditorWorker });
@@ -35,33 +38,51 @@ registrations.push(
     folding: { markers: { start: /^\s*'\s*#region\b/, end: /^\s*'\s*#endregion\b/ } },
   }),
 );
+definePlantUmlThemes(monaco);
+registrations.push(monaco.languages.setMonarchTokensProvider("plantuml", plantUmlLanguage));
 registrations.push(
-  monaco.languages.setMonarchTokensProvider("plantuml", {
-    defaultToken: "",
-    tokenizer: {
-      root: [
-        [/\/'/, "comment", "@comment"],
-        [/'.*$/, "comment"],
-        [/@(?:start|end)\w+/, "keyword.directive"],
-        [/!\w+/, "keyword.directive"],
-        [/#(?:[\da-fA-F]{8}|[\da-fA-F]{6}|[\da-fA-F]{3})\b/, "number.hex"],
-        [/\bCOLOR_[A-Z_]+\b/, "constant"],
-        [/"[^"\n]*"/, "string"],
-        [
-          /\b(?:actor|participant|boundary|control|entity|database|collections|queue|class|interface|enum|abstract|package|namespace|component|node|cloud|rectangle|usecase|state|object|artifact|folder|frame|agent|card|port|storage|as|title|skinparam|hide|show|autonumber|activate|deactivate|destroy|create|return|newpage|ref|over|note|hnote|rnote|legend|end|alt|else|opt|loop|par|break|critical|group|box|if|then|elseif|endif|while|endwhile|repeat|fork|again|split|partition|start|stop)\b/,
-          "keyword",
-        ],
-        [/[ox]?[<>]?[.-]+(?:\[[^\]\r\n]+\])?[.-]*[<>]?(?:[ox](?!\w))?/, "operator"],
-        [/[A-Za-z_]\w*/, ""],
-        [/[<>*+.#{}|-]+/, "operator"],
-        [/\b\d+\b/, "number"],
-      ],
-      comment: [
-        [/[^']+/, "comment"],
-        [/'\//, "comment", "@pop"],
-        [/'/, "comment"],
-      ],
+  monaco.languages.registerDocumentSemanticTokensProvider("plantuml", {
+    getLegend: () => participantLegend,
+    onDidChange(listener) {
+      semanticListeners.add(listener);
+      return { dispose: () => semanticListeners.delete(listener) };
     },
+    provideDocumentSemanticTokens(model) {
+      const source = model.getValue();
+      const active = completionWorkspace.find((node) => model.uri.path === `/${node.id}.puml`);
+      const files = new Map(
+        completionWorkspace.filter((node) => node.kind === "file").map((node) => [nodePath(completionWorkspace, node.id), node.content]),
+      );
+      const included = [];
+      const visited = new Set(active ? [nodePath(completionWorkspace, active.id)] : []);
+      const visit = (text, path) => {
+        const lexical = monaco.editor.tokenize(text, "plantuml");
+        text.split(/\r?\n/).forEach((line, index) => {
+          const match = /^\s*!include(?:_once|_many)?\s+(?:"([^"]+)"|(\S+))/i.exec(line);
+          if (!match || !lexical[index].some((token) => token.type === "keyword.directive.plantuml")) return;
+          try {
+            const target = resolvePath((match[1] || match[2]).split("!")[0], path);
+            if (visited.has(target) || !files.has(target)) return;
+            visited.add(target);
+            const content = files.get(target);
+            included.push(content);
+            visit(content, target);
+          } catch {
+            // Rendering reports invalid includes; highlighting skips them.
+          }
+        });
+      };
+      if (active) visit(source, nodePath(completionWorkspace, active.id));
+      return {
+        data: participantTokens(
+          source,
+          monaco.editor.tokenize(source, "plantuml"),
+          included,
+          collectSymbols(source, active ? nodePath(completionWorkspace, active.id) : model.uri.path, files),
+        ),
+      };
+    },
+    releaseDocumentSemanticTokens() {},
   }),
 );
 registrations.push(

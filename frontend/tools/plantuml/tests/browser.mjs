@@ -67,7 +67,8 @@ try {
   const png = await pngDownload;
   assert.equal((await readFile(await png.path())).subarray(1, 4).toString(), "PNG");
   const zipDownload = page.waitForEvent("download");
-  await page.locator('[data-action="commands"]').click();
+  await page.locator("#puml-editor").click();
+  await page.keyboard.press("ControlOrMeta+Shift+p");
   await page.getByRole("searchbox", { name: "Find a command", exact: true }).fill("Export workspace ZIP");
   await page.keyboard.press("Enter");
   const zip = await zipDownload;
