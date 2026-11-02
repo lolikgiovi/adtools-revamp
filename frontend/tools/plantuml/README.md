@@ -33,3 +33,8 @@ vertical dividers support dragging and arrow keys. The font-size selector change
 by default) and remembers the preference. The preview percentage always reports the effective scale;
 click it for 100% or choose Fit to keep the whole diagram visible as the pane changes size.
 Interaction verification is recorded in [UX checks](../../../docs/verification/plantuml/ux/README.md).
+
+File creation, folder creation, and import live in the Workspace header. The activity rail toggles the workspace,
+opens file-path search, and opens Commands. Format, font size, colors, and source export live above the source tabs.
+Preview controls include hide and maximize; maximize fills the workbench and Escape restores the split view.
+Workspace ZIP export remains available in Commands (Cmd/Ctrl+Shift+P).

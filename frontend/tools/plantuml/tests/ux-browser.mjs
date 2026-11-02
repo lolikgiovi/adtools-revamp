@@ -30,6 +30,50 @@ async function drag(selector, delta) {
 }
 try {
   await open();
+  for (const action of ["new-file", "new-folder", "import"]) {
+    assert.equal(await page.locator(`#puml-explorer [data-action="${action}"]`).count(), 1);
+  }
+  for (const action of ["format", "palette", "source"]) {
+    assert.equal(await page.locator(`.puml-editor-pane [data-action="${action}"]`).count(), 1);
+  }
+  assert.equal(await page.locator('[data-action="backup"]').count(), 0);
+  assert.equal(await page.locator(".puml-editor-pane #puml-font-size").count(), 1);
+  const icon = await page.locator('[data-action="explorer"] svg').boundingBox();
+  assert.ok(icon.width >= 20);
+  checks.push("file controls live in Workspace; source controls live in the editor; large panel icons replace toolbar text");
+  await page.locator('[data-action="search-files"]').click();
+  await page.getByRole("searchbox", { name: "Search files", exact: true }).fill("confluence");
+  assert.equal(await page.locator("#puml-tree .puml-node").count(), 1);
+  await page.locator('#puml-tree [data-action="open"]').click();
+  assert.match(await page.locator("#puml-path").innerText(), /confluence-colors/);
+  await page.getByRole("searchbox", { name: "Search files", exact: true }).fill("nothing-matches-this");
+  assert.equal(await page.locator("#puml-tree .puml-node").count(), 0);
+  await page.locator('[data-action="close-search"]').click();
+  assert.ok((await page.locator("#puml-tree .puml-node").count()) > 1);
+  await page.locator('#puml-tree [data-action="open"]').filter({ hasText: "api-sequence.puml" }).click();
+  await page.waitForFunction(() => document.querySelector("#puml-status").dataset.state === "ready");
+  checks.push("workspace search filters file paths, opens results, handles no results, and restores the tree");
+  const imageBeforeMaximize = await page.locator("#puml-preview img").getAttribute("src");
+  await page.locator('[data-action="maximize-preview"]').click();
+  assert.equal(await page.locator(".puml-editor-pane").isVisible(), false);
+  assert.equal(await page.locator("#puml-explorer").isVisible(), false);
+  const maximized = await page.locator(".puml-preview-pane").boundingBox();
+  const workbench = await page.locator(".puml-workspace").boundingBox();
+  assert.ok(Math.abs(maximized.width - workbench.width) < 1);
+  await page.screenshot({ path: `${output}/preview-maximized.png` });
+  await page.keyboard.press("Escape");
+  assert.equal(await page.locator(".puml-editor-pane").isVisible(), true);
+  assert.equal(await page.locator("#puml-preview img").getAttribute("src"), imageBeforeMaximize);
+  await page.locator('[data-action="hide-preview"]').click();
+  assert.equal(await page.locator(".puml-preview-pane").isVisible(), false);
+  await page.locator('[data-action="commands"]').click();
+  await page.getByRole("searchbox", { name: "Find a command", exact: true }).fill("Maximize preview");
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(100);
+  assert.equal(await page.locator(".puml-preview-pane").isVisible(), true);
+  assert.equal(await page.locator(".puml-editor-pane").isVisible(), false);
+  await page.keyboard.press("Escape");
+  checks.push("preview maximizes across the workbench, restores with Escape, closes, and reopens without rerendering");
   const scale = await page.evaluate(() => window.app.currentTool.preview.currentScale());
   await page.locator('[data-action="zoom-in"]').click();
   const zoom = await page.locator('[data-action="actual-size"]').innerText();
@@ -92,7 +136,7 @@ try {
   assert.equal(await page.locator(".puml-preview-pane").isVisible(), false);
   const editorOnly = await page.locator(".puml-editor-pane").boundingBox();
   const workspace = await page.locator(".puml-workspace").boundingBox();
-  assert.ok(Math.abs(editorOnly.width - workspace.width) < 1);
+  assert.ok(Math.abs(editorOnly.width + 44 - workspace.width) < 1);
   await page.locator('[data-action="explorer"]').click();
   await page.locator('[data-action="preview"]').click();
   const divider = page.locator(".puml-resizer");

@@ -24,7 +24,8 @@
 .puml-dialog [hidden] {
   display: none !important;
 }
-.puml-toolbar,
+.puml-editor-toolbar,
+.puml-explorer-header,
 .puml-preview-header,
 .puml-preview-footer,
 .puml-statusbar {
@@ -36,8 +37,11 @@
   background: hsl(var(--card));
   border-bottom: 1px solid hsl(var(--border));
 }
-.puml-toolbar {
+.puml-editor-toolbar {
   flex-wrap: wrap;
+  min-height: 40px;
+  padding: 5px 8px;
+  flex-shrink: 0;
 }
 .puml-actions {
   display: flex;
@@ -53,16 +57,17 @@
 }
 .puml-workspace {
   display: grid;
-  grid-template-columns: var(--puml-explorer-width, 190px) 5px minmax(0, var(--puml-editor-share, 1fr)) 5px minmax(0, 1fr);
+  grid-template-columns: 44px var(--puml-explorer-width, 190px) 5px minmax(0, var(--puml-editor-share, 1fr)) 5px minmax(0, 1fr);
   flex: 1;
   min-height: 0;
 }
 #puml-explorer {
   overflow: auto;
-  padding: 8px 0;
+  min-width: 0;
+  background: hsl(var(--card));
 }
 .puml-root {
-  padding: 4px 12px 10px;
+  padding: 0;
   font-size: 12px;
   font-weight: 600;
   color: hsl(var(--muted-foreground));
@@ -159,7 +164,7 @@
 }
 #puml-no-file {
   position: absolute;
-  inset: 40px 0 0;
+  inset: 79px 0 0;
   display: grid;
   place-items: center;
   font-size: 13px;
@@ -182,8 +187,9 @@
   min-width: 0;
 }
 .puml-preview-header {
-  min-height: 39px;
-  padding: 4px 8px 4px 12px;
+  min-height: 40px;
+  flex-wrap: wrap;
+  padding: 5px 8px 5px 12px;
   font-size: 12px;
 }
 #puml-preview {
@@ -259,7 +265,7 @@
   flex-shrink: 0;
 }
 .puml-workspace.explorer-hidden {
-  grid-template-columns: minmax(0, var(--puml-editor-share, 1fr)) 5px minmax(0, 1fr);
+  grid-template-columns: 44px minmax(0, var(--puml-editor-share, 1fr)) 5px minmax(0, 1fr);
 }
 .puml-workspace.explorer-hidden #puml-explorer,
 .puml-workspace.explorer-hidden .puml-explorer-resizer {
@@ -376,14 +382,14 @@ body:has(.main-content .plantuml-tool) .workbench-hover {
 }
 @media (max-width: 1100px) {
   .puml-workspace {
-    grid-template-columns: var(--puml-explorer-width, 155px) 5px minmax(0, var(--puml-editor-share, 1fr)) 5px minmax(0, 1fr);
+    grid-template-columns: 44px var(--puml-explorer-width, 155px) 5px minmax(0, var(--puml-editor-share, 1fr)) 5px minmax(0, 1fr);
   }
 }
 .puml-workspace.preview-hidden {
-  grid-template-columns: var(--puml-explorer-width, 190px) 5px minmax(0, 1fr);
+  grid-template-columns: 44px var(--puml-explorer-width, 190px) 5px minmax(0, 1fr);
 }
 .puml-workspace.preview-hidden.explorer-hidden {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: 44px minmax(0, 1fr);
 }
 .puml-workspace.preview-hidden :is(.puml-preview-pane, .puml-resizer) {
   display: none;
@@ -391,21 +397,33 @@ body:has(.main-content .plantuml-tool) .workbench-hover {
 @media (max-width: 760px) {
   .puml-workspace,
   .puml-workspace.explorer-hidden {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 44px minmax(0, 1fr);
     grid-template-rows: minmax(160px, 1fr) minmax(180px, 1fr);
     position: relative;
   }
   .puml-workspace.preview-hidden,
   .puml-workspace.preview-hidden.explorer-hidden {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 44px minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
+  }
+  .puml-activity {
+    grid-column: 1;
+    grid-row: 1 / -1;
+  }
+  .puml-editor-pane {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .puml-preview-pane {
+    grid-column: 2;
+    grid-row: 2;
   }
   #puml-explorer {
     position: absolute;
-    left: 0;
+    left: 44px;
     top: 0;
     bottom: 0;
-    width: 210px;
+    width: min(250px, calc(100% - 44px));
     z-index: 10;
     background: hsl(var(--card));
     box-shadow: 4px 0 16px #0002;
@@ -417,10 +435,6 @@ body:has(.main-content .plantuml-tool) .workbench-hover {
   .puml-preview-pane {
     border-top: 1px solid hsl(var(--border));
   }
-  .puml-toolbar {
-    padding: 6px;
-    gap: 4px;
-  }
   .plantuml-tool .btn {
     padding-inline: 6px;
   }
@@ -428,5 +442,121 @@ body:has(.main-content .plantuml-tool) .workbench-hover {
 @media (hover: none) {
   .puml-node .puml-node-action {
     opacity: 1;
+  }
+}
+
+.puml-activity {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+  border-right: 1px solid hsl(var(--border));
+  background: hsl(var(--muted) / 0.3);
+}
+.puml-activity > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.puml-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  transition:
+    background-color 120ms ease-out,
+    color 120ms ease-out;
+}
+.puml-icon-button svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.puml-icon-button:hover:not(:disabled),
+.puml-icon-button[aria-expanded="true"],
+.puml-icon-button[aria-pressed="true"] {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+.puml-icon-button:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: -2px;
+}
+.puml-icon-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.puml-activity .puml-icon-button {
+  width: 36px;
+  height: 36px;
+}
+.puml-activity svg {
+  width: 22px;
+  height: 22px;
+}
+.puml-explorer-header {
+  min-height: 40px;
+  padding: 5px 6px 5px 10px;
+  gap: 4px;
+  flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.puml-explorer-header .puml-actions {
+  gap: 0;
+}
+#puml-file-search {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 8px;
+}
+#puml-search {
+  min-width: 0;
+  width: 100%;
+  font-size: 12px;
+  padding: 6px 8px;
+}
+.puml-search-empty {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+}
+#puml-tree {
+  padding-block: 5px;
+}
+.puml-node > button:first-child > span:first-child {
+  display: flex;
+}
+.puml-node svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+.puml-workspace.preview-maximized {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+.puml-workspace.preview-maximized > :not(.puml-preview-pane) {
+  display: none;
+}
+.puml-workspace.preview-maximized > .puml-preview-pane {
+  grid-column: 1;
+  grid-row: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .puml-icon-button {
+    transition: none;
   }
 }

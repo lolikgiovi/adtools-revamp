@@ -9,7 +9,9 @@ PLAYWRIGHT_MODULE=/tmp/adtools-plantuml-e2e/node_modules/playwright/index.mjs \
 
 Use an existing Playwright module and installed Chrome. No dependencies are installed by the suite.
 Each run uses an isolated browser profile. `result.json` records the result; screenshots capture the
-Find tooltip, collapsed application sidebar, desktop, and narrow layouts.
+Find tooltip, collapsed application sidebar, maximized preview, desktop, and narrow layouts.
+The suite also checks control placement, file-path search and empty results, opening search results,
+large panel icons, and maximizing from a hidden preview through Commands.
 
 The regression suite was also run successfully:
 

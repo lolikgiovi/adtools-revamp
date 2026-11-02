@@ -1,33 +1,49 @@
+import { workbenchIcon } from "./icon.js";
+
 const button = (action, label, extra = "") =>
   `<button type="button" class="btn btn-secondary btn-sm" data-action="${action}" ${extra}>${label}</button>`;
 
+const iconButton = (action, label, icon, extra = "") =>
+  `<button type="button" class="puml-icon-button" data-action="${action}" aria-label="${label}" title="${label}" ${extra}>${workbenchIcon(icon)}</button>`;
+
 export const template = `
   <div class="plantuml-tool tool-container">
-    <header class="puml-toolbar">
-      <div class="puml-actions">
-        ${button("explorer", "Files", 'aria-expanded="true" aria-controls="puml-explorer"')}
-        ${button("new-file", "+ File", 'title="New file (Alt+N)"')}
-        ${button("new-folder", "+ Folder")}
-        ${button("import", "Import")}
-        ${button("backup", "Export ZIP")}
-      </div>
-      <div class="puml-actions">
-        ${button("format", "Format", 'title="Format document (Shift+Alt+F)"')}
-        <select id="puml-font-size" aria-label="Editor font size" title="Editor font size">
-          ${[10, 11, 12, 13, 14, 16, 18, 20].map((size) => `<option value="${size}" ${size === 12 ? "selected" : ""}>${size} px</option>`).join("")}
-        </select>
-        ${button("preview", "Preview", 'aria-expanded="true" aria-controls="puml-preview-pane"')}
-        ${button("palette", "Colors", 'aria-haspopup="dialog"')}
-        ${button("source", "Save .puml")}
-      </div>
-    </header>
     <div class="puml-workspace">
+      <nav class="puml-activity" aria-label="Workspace panels">
+        <div>
+          ${iconButton("explorer", "Toggle workspace (⌘/Ctrl+B)", "files", 'aria-expanded="true" aria-controls="puml-explorer"')}
+          ${iconButton("search-files", "Search files", "search", 'aria-expanded="false" aria-controls="puml-file-search"')}
+        </div>
+        ${iconButton("commands", "Commands (⌘/Ctrl+Shift+P)", "commands")}
+      </nav>
       <aside id="puml-explorer" aria-label="Workspace files">
-        <button type="button" class="puml-root" data-action="root">Workspace</button>
+        <header class="puml-explorer-header">
+          <button type="button" class="puml-root" data-action="root">Workspace</button>
+          <div class="puml-actions">
+            ${iconButton("new-file", "New file (Alt+N)", "filePlus")}
+            ${iconButton("new-folder", "New folder", "folderPlus")}
+            ${iconButton("import", "Import files", "upload")}
+          </div>
+        </header>
+        <div id="puml-file-search" hidden>
+          <input type="search" id="puml-search" aria-label="Search files" placeholder="Search files…" autocomplete="off" spellcheck="false"/>
+          ${iconButton("close-search", "Close file search", "close")}
+        </div>
         <div id="puml-tree"></div>
       </aside>
       <div class="puml-explorer-resizer" role="separator" tabindex="0" aria-label="Resize files" aria-orientation="vertical"></div>
       <section class="puml-editor-pane" aria-label="Source editor">
+        <header class="puml-editor-toolbar">
+          <div class="puml-actions">
+            ${iconButton("format", "Format document (Shift+Alt+F)", "format")}
+            <select id="puml-font-size" aria-label="Editor font size" title="Editor font size">
+              ${[10, 11, 12, 13, 14, 16, 18, 20].map((size) => `<option value="${size}" ${size === 12 ? "selected" : ""}>${size} px</option>`).join("")}
+            </select>
+            ${iconButton("palette", "Colors", "palette", 'aria-haspopup="dialog"')}
+            ${iconButton("source", "Save source (.puml)", "download")}
+          </div>
+          ${iconButton("preview", "Toggle preview", "preview", 'aria-expanded="true" aria-controls="puml-preview-pane"')}
+        </header>
         <div id="puml-tabs" role="tablist" aria-label="Open diagrams"></div>
         <div id="puml-editor"></div>
         <div id="puml-no-file" hidden>Open a file or create a new diagram.</div>
@@ -37,9 +53,11 @@ export const template = `
         <header class="puml-preview-header">
           <strong>Preview</strong>
           <div class="puml-actions">
-            ${button("restart", "↻", 'aria-label="Restart renderer" title="Restart renderer"')}
+            ${iconButton("restart", "Restart renderer", "restart")}
             ${button("svg", "SVG", "disabled")}
             ${button("png", "PNG", "disabled")}
+            ${iconButton("maximize-preview", "Maximize preview", "maximize", 'aria-pressed="false"')}
+            ${iconButton("hide-preview", "Hide preview", "close")}
           </div>
         </header>
         <div id="puml-preview" tabindex="0" aria-label="Diagram canvas. Drag to pan, pinch to zoom, double-click to fit.">

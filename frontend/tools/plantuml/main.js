@@ -9,12 +9,12 @@ import { DiagramPreview } from "./preview.js";
 import { downloadBlob, exportPng, exportWorkspace, readWorkspaceZip } from "./files.js";
 import { addNode, deleteNode, initialWorkspace, moveNode, nodePath, renameNode, validateWorkspace } from "./workspace.js";
 import { colorNames, colorRows, confluencePalette, starterSequence } from "./plantuml.js";
-import { getIconSvg } from "./icon.js";
+import { getIconSvg, workbenchIcon } from "./icon.js";
 import { template } from "./template.js";
 import "./styles.css";
 
 // Composition: a quiet file rail, persistent source tabs, and a dominant diagram canvas.
-// Content: workspace actions above the editor; render/export actions beside the preview.
+// Content: file management in the explorer, source controls in the editor, and diagram controls in the preview.
 // Interaction: direct tab/file manipulation, immediate stale feedback, and pan/zoom without animation.
 export class PlantUmlTool extends BaseTool {
   constructor(eventBus) {
@@ -155,6 +155,17 @@ export class PlantUmlTool extends BaseTool {
       },
       { signal },
     );
+    this.$("#puml-search").addEventListener("input", () => this.renderTree(), { signal });
+    this.$("#puml-search").addEventListener(
+      "keydown",
+      (event) => {
+        if (event.key === "Escape") {
+          event.stopPropagation();
+          this.closeFileSearch();
+        }
+      },
+      { signal },
+    );
     this.bindDragAndResize(signal);
     const compact = matchMedia("(max-width: 760px)");
     if (compact.matches) this.toggleExplorer(false);
@@ -210,9 +221,14 @@ export class PlantUmlTool extends BaseTool {
   renderTree() {
     const tree = this.$("#puml-tree");
     tree.replaceChildren();
+    const query = this.$("#puml-search").value.trim().toLowerCase();
     const append = (parentId, depth) => {
       const children = this.workspace.nodes
-        .filter((node) => node.parentId === parentId)
+        .filter((node) =>
+          query
+            ? node.kind === "file" && nodePath(this.workspace.nodes, node.id).toLowerCase().includes(query)
+            : node.parentId === parentId,
+        )
         .sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "folder" ? -1 : 1));
       for (const node of children) {
         const row = document.createElement("div");
@@ -228,10 +244,13 @@ export class PlantUmlTool extends BaseTool {
         open.title = nodePath(this.workspace.nodes, node.id);
         if (node.kind === "folder") open.setAttribute("aria-expanded", String(this.workspace.expanded.includes(node.id)));
         const icon = document.createElement("span");
-        icon.textContent = node.kind === "folder" ? (this.workspace.expanded.includes(node.id) ? "▾" : "▸") : "◇";
+        icon.innerHTML =
+          node.kind === "folder"
+            ? workbenchIcon(this.workspace.expanded.includes(node.id) ? "chevronDown" : "chevronRight") + workbenchIcon("folder")
+            : workbenchIcon("file");
         icon.setAttribute("aria-hidden", "true");
         const name = document.createElement("span");
-        name.textContent = node.name;
+        name.textContent = query ? nodePath(this.workspace.nodes, node.id) : node.name;
         open.append(icon, name);
         row.append(open);
         for (const [action, text, label] of [
@@ -249,10 +268,17 @@ export class PlantUmlTool extends BaseTool {
           row.append(button);
         }
         tree.append(row);
-        if (node.kind === "folder" && this.workspace.expanded.includes(node.id)) append(node.id, depth + 1);
+        if (!query && node.kind === "folder" && this.workspace.expanded.includes(node.id)) append(node.id, depth + 1);
       }
     };
     append(null, 0);
+    if (query && !tree.children.length) {
+      const empty = document.createElement("div");
+      empty.className = "puml-search-empty";
+      empty.setAttribute("role", "status");
+      empty.textContent = "No files found";
+      tree.append(empty);
+    }
   }
 
   renderTabs() {
@@ -311,11 +337,19 @@ export class PlantUmlTool extends BaseTool {
     const id = button?.dataset.id;
     const file = this.activeFile;
     if (action === "explorer") this.toggleExplorer();
-    else if (action === "preview") {
-      const hidden = this.$(".puml-workspace").classList.toggle("preview-hidden");
-      this.$('[data-action="preview"]').setAttribute("aria-expanded", String(!hidden));
-      this.editor.layout();
-    } else if (action === "root") {
+    else if (action === "search-files") {
+      this.toggleExplorer(true);
+      this.$("#puml-file-search").hidden = false;
+      this.$('[data-action="search-files"]').setAttribute("aria-expanded", "true");
+      this.$("#puml-search").focus();
+    } else if (action === "close-search") this.closeFileSearch();
+    else if (action === "commands") this.quickPick(true);
+    else if (action === "preview") this.togglePreview();
+    else if (action === "hide-preview") {
+      this.togglePreview(false);
+      this.$('[data-action="preview"]').focus();
+    } else if (action === "maximize-preview") this.maximizePreview();
+    else if (action === "root") {
       this.selectedId = null;
       this.renderTree();
     } else if (action === "open") {
@@ -417,6 +451,38 @@ export class PlantUmlTool extends BaseTool {
     }
     this.$("#puml-preview img").classList.toggle("stale", result.state !== "ready");
     for (const action of ["svg", "png"]) this.$(`[data-action="${action}"]`).disabled = result.state !== "ready";
+  }
+
+  closeFileSearch() {
+    this.$("#puml-search").value = "";
+    this.$("#puml-file-search").hidden = true;
+    this.$('[data-action="search-files"]').setAttribute("aria-expanded", "false");
+    this.renderTree();
+    this.$('[data-action="search-files"]').focus();
+  }
+
+  togglePreview(show = this.$(".puml-workspace").classList.contains("preview-hidden")) {
+    this.maximizePreview(false);
+    this.$(".puml-workspace").classList.toggle("preview-hidden", !show);
+    this.$('[data-action="preview"]').setAttribute("aria-expanded", String(show));
+    this.editor.layout();
+  }
+
+  maximizePreview(maximize = !this.$(".puml-workspace").classList.contains("preview-maximized")) {
+    const layout = this.$(".puml-workspace");
+    if (maximize) {
+      layout.classList.remove("preview-hidden");
+      this.$('[data-action="preview"]').setAttribute("aria-expanded", "true");
+    }
+    layout.classList.toggle("preview-maximized", maximize);
+    const button = this.$('[data-action="maximize-preview"]');
+    const label = maximize ? "Restore split view (Esc)" : "Maximize preview";
+    button.setAttribute("aria-pressed", String(maximize));
+    button.setAttribute("aria-label", label);
+    button.title = label;
+    button.innerHTML = workbenchIcon(maximize ? "restore" : "maximize");
+    if (maximize) this.$("#puml-preview").focus();
+    this.editor.layout();
   }
 
   toggleExplorer(show = this.$(".puml-workspace").classList.contains("explorer-hidden")) {
@@ -561,6 +627,9 @@ export class PlantUmlTool extends BaseTool {
           ["Export SVG", () => this.action("svg")],
           ["Export PNG", () => this.action("png")],
           ["Restart renderer", () => this.action("restart")],
+          ["Toggle preview", () => this.action("preview")],
+          ["Maximize preview", () => this.action("maximize-preview")],
+          ["Search files", () => this.action("search-files")],
           ["Fit diagram", () => this.action("fit")],
         ]
       : this.workspace.nodes
@@ -674,7 +743,12 @@ export class PlantUmlTool extends BaseTool {
 
   keydown(event) {
     const command = event.ctrlKey || event.metaKey;
-    if (command && event.key.toLowerCase() === "p") {
+    if (event.key === "Escape" && this.$(".puml-workspace").classList.contains("preview-maximized")) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.maximizePreview(false);
+      this.$('[data-action="maximize-preview"]').focus();
+    } else if (command && event.key.toLowerCase() === "p") {
       event.preventDefault();
       event.stopPropagation();
       this.quickPick(event.shiftKey);
@@ -815,7 +889,7 @@ export class PlantUmlTool extends BaseTool {
     explorerDivider.setAttribute("aria-valuenow", "190");
     bindResize(
       explorerDivider,
-      (x) => setExplorerWidth(x - layout.getBoundingClientRect().left),
+      (x) => setExplorerWidth(x - this.$("#puml-explorer").getBoundingClientRect().left),
       (direction) => setExplorerWidth(this.$("#puml-explorer").offsetWidth + direction * 16),
     );
   }

@@ -2,6 +2,9 @@
   "passed": true,
   "base": "http://127.0.0.1:1234",
   "checks": [
+    "file controls live in Workspace; source controls live in the editor; large panel icons replace toolbar text",
+    "workspace search filters file paths, opens results, handles no results, and restores the tree",
+    "preview maximizes across the workbench, restores with Escape, closes, and reopens without rerendering",
     "zoom percentage reflects actual scale; actual size and Fit have distinct states",
     "PlantUML fills the shell without outer padding and expands when the app sidebar collapses",
     "editor font size is adjustable and survives reload",
