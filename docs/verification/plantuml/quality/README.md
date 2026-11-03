@@ -21,7 +21,7 @@ The browser checks verify:
 - File, folder, and color dialogs are centered at 1440, 900, and 390 px.
 - The preview toggle changes its icon, action label, and expanded state.
 - Commands has a visible label.
-- Edits wait for two seconds of inactivity, reset the delay on further edits, and retain the last valid diagram.
+- Edits wait for one second of inactivity, reset the delay on further edits, and retain the last valid diagram.
 - Syntax errors show the source line and allow keyboard focus/navigation to that line.
 - Typing clears the previous error, and valid input recovers without restarting the renderer.
 - A valid diagram containing the literal label `Syntax Error` is rendered normally.

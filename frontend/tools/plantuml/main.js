@@ -212,7 +212,7 @@ export class PlantUmlTool extends BaseTool {
       };
       setCompletionWorkspace(this.workspace.nodes);
       this.scheduleSave();
-      if (this.isActive) this.renderer?.render(this.activeFile, this.workspace.nodes, { delay: 2000 });
+      if (this.isActive) this.renderer?.render(this.activeFile, this.workspace.nodes, { delay: 1000 });
     });
     this.models.set(file.id, model);
     return model;

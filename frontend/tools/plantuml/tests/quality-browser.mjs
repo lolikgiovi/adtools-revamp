@@ -110,14 +110,14 @@ try {
   await source("@startuml\nAlice -> Bob: valid\n@enduml");
   await page.waitForFunction(() => document.querySelector("#puml-status").dataset.state === "ready", null, { timeout: 60000 });
   const previous = await page.locator("#puml-preview img").getAttribute("src");
-  await check("editing waits two seconds, preserves the diagram, and explains syntax errors", async () => {
+  await check("editing waits one second, preserves the diagram, and explains syntax errors", async () => {
     await source("@startuml\nAlice -> Bob: valid\nthis is definitely invalid $$$\n@enduml");
-    await page.waitForTimeout(900);
+    await page.waitForTimeout(400);
     assert.equal(await page.locator("#puml-status").getAttribute("data-state"), "waiting");
     assert.equal(await page.locator("#puml-error").isVisible(), false);
     assert.equal(await page.locator("#puml-preview img").getAttribute("src"), previous);
     await source("@startuml\nAlice -> Bob: valid\nthis is definitely invalid $$$ again\n@enduml");
-    await page.waitForTimeout(900);
+    await page.waitForTimeout(400);
     assert.equal(await page.locator("#puml-status").getAttribute("data-state"), "waiting");
     await page.waitForFunction(() => document.querySelector("#puml-status").dataset.state === "error", null, { timeout: 10000 });
     const message = await page.locator("#puml-error").innerText();
