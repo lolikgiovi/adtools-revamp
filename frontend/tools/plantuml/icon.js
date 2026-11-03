@@ -11,6 +11,7 @@ const workbenchPaths = {
   chevronDown: '<path d="m6 9 6 6 6-6"/>',
   files: '<path d="M15 2H6a2 2 0 0 0-2 2v12"/><rect x="8" y="6" width="12" height="16" rx="2"/>',
   sidebar: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18m7-13-4 4 4 4"/>',
+  sidebarClosed: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18m3-13 4 4-4 4"/>',
   search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
   filePlus: '<path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4m10-6v6h6M3 15h6m-3-3v6"/>',
   folderPlus: '<path d="M20 20H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2m-8-10v6m-3-3h6"/>',

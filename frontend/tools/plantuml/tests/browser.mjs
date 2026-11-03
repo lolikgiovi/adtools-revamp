@@ -98,7 +98,7 @@ try {
   await page.getByRole("textbox", { name: "Name", exact: true }).fill("renamed.puml");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   const moved = page.locator(".puml-node").filter({ has: page.getByRole("button", { name: "renamed.puml", exact: true }) });
-  await moved.dragTo(page.locator(".puml-root"));
+  await moved.dragTo(page.locator('[data-action="root"]'));
   await page.waitForFunction(() => document.querySelector("#puml-path").textContent === "renamed.puml");
   await page.getByRole("button", { name: "Delete test-folder", exact: true }).click();
   await page.getByRole("button", { name: "Delete", exact: true }).click();

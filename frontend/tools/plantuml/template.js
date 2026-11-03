@@ -10,16 +10,11 @@ const iconButton = (action, label, icon, extra = "") =>
 export const template = `
   <div class="plantuml-tool tool-container">
     <div class="puml-workspace">
-      <nav class="puml-activity" aria-label="Workspace panels">
-        <div>
-          ${iconButton("explorer", "Toggle workspace (⌘/Ctrl+B)", "files", 'aria-expanded="true" aria-controls="puml-explorer"')}
-          ${iconButton("search-files", "Search files", "search", 'aria-expanded="false" aria-controls="puml-file-search"')}
-        </div>
-      </nav>
       <aside id="puml-explorer" aria-label="Workspace files">
         <header class="puml-explorer-header">
-          <button type="button" class="puml-root" data-action="root">Workspace</button>
           <div class="puml-actions">
+            ${iconButton("root", "Select workspace root", "folder")}
+            ${iconButton("search-files", "Search files", "search", 'aria-expanded="false" aria-controls="puml-file-search"')}
             ${iconButton("new-file", "New file (Alt+N)", "filePlus")}
             ${iconButton("new-folder", "New folder", "folderPlus")}
             ${iconButton("import", "Import files", "upload")}
@@ -35,6 +30,7 @@ export const template = `
       <section class="puml-editor-pane" aria-label="Source editor">
         <header class="puml-editor-toolbar">
           <div class="puml-actions">
+            ${iconButton("explorer", "Hide workspace (⌘/Ctrl+B)", "sidebar", 'aria-expanded="true" aria-controls="puml-explorer"')}
             ${iconButton("format", "Format document (Shift+Alt+F)", "format")}
             <select id="puml-font-size" aria-label="Editor font size" title="Editor font size">
               ${[10, 11, 12, 13, 14, 16, 18, 20].map((size) => `<option value="${size}" ${size === 12 ? "selected" : ""}>${size} px</option>`).join("")}

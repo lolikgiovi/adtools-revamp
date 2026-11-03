@@ -31,9 +31,19 @@ async function open() {
 }
 try {
   await open();
-  await check("compact rail has workspace/search and no Commands button", async () => {
+  await check("workspace controls belong to the editor and workspace headers", async () => {
     assert.equal(await page.locator('[data-action="commands"]').count(), 0);
-    assert.equal(Math.round((await page.locator(".puml-activity").boundingBox()).width), 36);
+    assert.equal(await page.locator(".puml-activity").count(), 0);
+    assert.equal(await page.locator('.puml-editor-toolbar [data-action="explorer"]').count(), 1);
+    assert.equal(await page.locator('.puml-explorer-header [data-action="search-files"]').count(), 1);
+    assert.equal(await page.locator('.puml-explorer-header [data-action="root"]').getAttribute("aria-label"), "Select workspace root");
+    const toggle = page.locator('[data-action="explorer"]');
+    const openIcon = await toggle.innerHTML();
+    await toggle.click();
+    assert.equal(await toggle.getAttribute("aria-label"), "Show workspace (⌘/Ctrl+B)");
+    assert.notEqual(await toggle.innerHTML(), openIcon);
+    await toggle.click();
+    assert.equal(await toggle.innerHTML(), openIcon);
     assert.equal(Math.round((await page.locator('[data-action="explorer"] svg').boundingBox()).width), 18);
   });
   await check("trackpad pinch holds the diagram point under the cursor", async () => {

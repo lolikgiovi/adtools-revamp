@@ -565,7 +565,12 @@ export class PlantUmlTool extends BaseTool {
 
   toggleExplorer(show = this.$(".puml-workspace").classList.contains("explorer-hidden")) {
     this.$(".puml-workspace").classList.toggle("explorer-hidden", !show);
-    this.$('[data-action="explorer"]').setAttribute("aria-expanded", String(show));
+    const toggle = this.$('[data-action="explorer"]');
+    const label = `${show ? "Hide" : "Show"} workspace (⌘/Ctrl+B)`;
+    toggle.setAttribute("aria-expanded", String(show));
+    toggle.setAttribute("aria-label", label);
+    toggle.title = label;
+    toggle.innerHTML = workbenchIcon(show ? "sidebar" : "sidebarClosed");
   }
 
   dialog(title) {
