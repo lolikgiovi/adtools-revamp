@@ -66,6 +66,8 @@ function run() {
         } else finish({ kind: "result", svg });
       },
       () => finish({ kind: "error", error: "The renderer could not finish. Try again or restart the renderer." }),
+      // The engine rejects diagrams over 8192 px by default; render any size. PNG export downsizes separately.
+      { maxSvgSize: 0 },
     );
   } catch (error) {
     finish({

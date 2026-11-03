@@ -1,9 +1,13 @@
-# AD Tools 1.3.14
+# AD Tools 1.3.15
+
+- **PlantUML** — Render large diagrams at full size. Long sequence diagrams that previously failed with "The renderer could not finish" now preview; PNG export still scales very large diagrams to fit.
+
+## Earlier release notes
+
+### AD Tools 1.3.14
 
 - **Projects** — Create and switch projects to keep testing environments and Quick Query schemas, saved data, and tabs separate. Existing work remains in the default project.
 - **PlantUML** — Write and preview diagrams locally, organize source files and folders, import files, export workspace ZIPs, and save diagrams as SVG or PNG.
-
-## Earlier release notes
 
 ### AD Tools 1.3.13
 
