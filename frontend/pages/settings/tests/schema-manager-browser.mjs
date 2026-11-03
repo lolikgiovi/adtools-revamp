@@ -63,6 +63,29 @@ try {
     await manager.locator('.schema-manager-row[data-table="APP.MOVE_ME"]').waitFor();
     await page.screenshot({ path: resolve(output, `${width}-settings-schemas.png`), animations: "disabled" });
     const row = (name) => manager.locator(`.schema-manager-row[data-table="${name}"]`);
+    // Reproduce the empty destination picker and keyboard-focused dialog/close button.
+    await page.evaluate(() => {
+      window.schemaManagerRegistry = localStorage.getItem("config.projects");
+      const registry = JSON.parse(window.schemaManagerRegistry);
+      registry.projects = registry.projects.filter((project) => project.name !== "Payments");
+      localStorage.setItem("config.projects", JSON.stringify(registry));
+    });
+    await row("APP.COPY_ME").getByRole("button", { name: "Copy…", exact: true }).click();
+    const unavailable = page.getByRole("dialog", { name: "Copy APP.COPY_ME", exact: true });
+    await unavailable.getByText("Create another project first.").waitFor();
+    assert.equal(await unavailable.getByRole("button", { name: "Copy schema", exact: true }).isDisabled(), true);
+    assert.equal(await unavailable.evaluate((element) => getComputedStyle(element).outlineStyle), "none");
+    await page.keyboard.press("Tab");
+    const close = unavailable.getByRole("button", { name: "Close schema manager", exact: true });
+    await close.focus();
+    assert.equal(await close.evaluate((element) => getComputedStyle(element).outlineStyle), "none");
+    assert.equal(await close.evaluate((element) => getComputedStyle(element).boxShadow), "none");
+    await page.screenshot({ path: resolve(output, `${width}-no-project-focus.png`), animations: "disabled" });
+    await page.keyboard.press("Escape");
+    await manager.evaluate((element) => element.focus());
+    assert.equal(await manager.evaluate((element) => getComputedStyle(element).outlineStyle), "none");
+    await page.screenshot({ path: resolve(output, `${width}-dialog-focus.png`), animations: "disabled" });
+    await page.evaluate(() => localStorage.setItem("config.projects", window.schemaManagerRegistry));
     await row("APP.COPY_ME").getByRole("button", { name: "Copy…", exact: true }).click();
     const copy = page.getByRole("dialog", { name: "Copy APP.COPY_ME", exact: true });
     assert.equal(await copy.locator("select option").count(), 1);
@@ -174,7 +197,7 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     assert.deepEqual(errors, []);
     checks.push(
-      `${width}px: Settings manager stays in Settings without loading Query; search, copy, move, return to legacy project, saved data and query type preserved, drafts retained, collision and transaction failure safe, import/export/delete, Query transfer actions, no overflow/errors`,
+      `${width}px: Settings manager stays in Settings without loading Query; search, copy, move, return to legacy project, saved data and query type preserved, drafts retained, collision and transaction failure safe, import/export/delete, Query transfer actions, no dialog or close-button rings, no overflow/errors`,
     );
     await context.close();
   }

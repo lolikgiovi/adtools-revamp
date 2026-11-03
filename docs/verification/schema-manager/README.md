@@ -57,3 +57,14 @@ Validation: 75 Settings/project/import tests and the full Quick Query suite
 Targeted ESLint has no errors; existing warnings remain. The design detector
 reported only two existing Quick Query CSS warnings outside the changed rules
 (the thick left border and width animation).
+
+## Quiet focus states
+
+The browser scenario also reproduces the single-project state with no valid
+transfer destination. The disabled destination picker gives initial focus to the
+dialog without outlining the dialog itself. Keyboard focus on the close button
+uses a muted background; ordinary buttons use their existing border. No external
+focus ring or focus shadow is added. `1440-no-project-focus.png`,
+`390-no-project-focus.png`, `1440-dialog-focus.png`, and `390-dialog-focus.png`
+record these states. Both viewport scenarios, lint, diff, and the targeted design
+scan passed after this adjustment.

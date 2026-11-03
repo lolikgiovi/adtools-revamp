@@ -15,6 +15,7 @@ function createDialog(root, title, className = "", canClose = () => true) {
   const trigger = document.activeElement;
   const dialog = document.createElement("dialog");
   dialog.className = `schema-manager-dialog app-overlay-surface ${className}`;
+  dialog.tabIndex = -1;
   const header = document.createElement("header");
   header.className = "schema-manager-header";
   const heading = document.createElement("h2");
@@ -93,7 +94,8 @@ export function openSchemaTransfer({ root = document.body, storage, fullName, mo
   });
   dialog.append(form);
   dialog.showModal();
-  select.focus();
+  if (select.disabled) dialog.focus();
+  else select.focus();
   return {
     dispose: () => {
       dialog.close();

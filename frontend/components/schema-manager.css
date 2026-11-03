@@ -75,9 +75,21 @@ body .schema-transfer-dialog {
   border-color: hsl(var(--ring)) !important;
 }
 
-.schema-manager-dialog button:focus-visible {
-  outline: 2px solid hsl(var(--ring));
-  outline-offset: 2px;
+body .schema-manager-dialog:is(:focus, :focus-visible) {
+  outline: none;
+}
+
+body .schema-manager-dialog button:focus-visible {
+  outline: none;
+  box-shadow: none;
+  border-color: hsl(var(--muted-foreground));
+}
+
+body .schema-manager-dialog button.app-overlay-close:focus-visible {
+  outline: none;
+  box-shadow: none;
+  background: hsl(var(--muted) / 0.5);
+  color: hsl(var(--foreground));
 }
 
 .schema-manager-list {
