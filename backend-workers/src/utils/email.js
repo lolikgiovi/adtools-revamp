@@ -234,6 +234,7 @@ export async function sendOtpEmail(env, to, code) {
         "Content-Type": "application/json",
         "User-Agent": "AD-Tools-OTP/1.0",
       },
+      signal: AbortSignal.timeout(20_000),
       body: JSON.stringify({
         from: `${fromName} <${fromEmail}>`,
         to: [to],

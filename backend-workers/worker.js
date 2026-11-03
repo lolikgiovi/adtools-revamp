@@ -93,11 +93,11 @@ export default {
     }
     if (url.pathname === "/register/request-otp") {
       if (method !== "POST") return methodNotAllowed();
-      return handleRegisterRequestOtp(request, env);
+      return handleRegisterRequestOtp(request, env, ctx);
     }
     if (url.pathname === "/register/verify") {
       if (method !== "POST") return methodNotAllowed();
-      return handleRegisterVerify(request, env);
+      return handleRegisterVerify(request, env, ctx);
     }
     if (url.pathname === "/register/request-manual-approval") {
       if (method !== "POST") return methodNotAllowed();

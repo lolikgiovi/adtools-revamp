@@ -61,6 +61,26 @@ describe("OTP-first fallback routes", () => {
     expect(await response.json()).toMatchObject({ ok: false, manualApprovalAvailable: true });
     expect((await handleManualApprovalRequest(request("request-manual-approval"), env)).status).toBe(201);
   });
+  it("returns the OTP step before a slow provider answers and finishes delivery in the background", async () => {
+    vi.useFakeTimers();
+    const env = environment();
+    let answer;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise((resolve) => (answer = resolve))),
+    );
+    const background = [];
+    const ctx = { waitUntil: vi.fn((promise) => background.push(promise)) };
+    const pending = handleRegisterRequestOtp(request("request-otp"), env, ctx);
+    await vi.advanceTimersByTimeAsync(1_500);
+    const response = await pending;
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ok: true, manualApprovalAvailable: false });
+    expect(ctx.waitUntil).toHaveBeenCalledOnce();
+    answer(new Response("{}", { status: 500 }));
+    await Promise.all(background);
+    expect((await handleManualApprovalRequest(request("request-manual-approval"), env)).status).toBe(201);
+  });
   it("offers manual approval when the provider throws", async () => {
     const env = environment();
     vi.stubGlobal(

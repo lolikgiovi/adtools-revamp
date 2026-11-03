@@ -16,6 +16,7 @@ import { registrationDepartment } from "../utils/registrationDepartment.js";
 import { readOtpFlow, saveOtpFlow, OTP_RETRY_MS, OTP_MANUAL_WAIT_MS } from "../utils/otpRequestFlow.js";
 
 const OTP_EXPIRY_MS = OTP_EXPIRY_MINUTES * 60 * 1000;
+const OTP_SEND_WAIT_MS = 1_500;
 
 export async function handleRegistrationAuthMode(env) {
   return new Response(JSON.stringify({ ok: true, mode: await getRegistrationAuthMode(env) }), {
@@ -113,7 +114,7 @@ export async function handleRegister(request, env) {
 /**
  * Handle POST /register/request-otp - request OTP code for email verification
  */
-export async function handleRegisterRequestOtp(request, env) {
+export async function handleRegisterRequestOtp(request, env, ctx) {
   try {
     if ((await getRegistrationAuthMode(env)) !== "otp") {
       return new Response(JSON.stringify({ ok: false, mode: "manual", error: "Email OTP is disabled. Request manual approval." }), {
@@ -165,28 +166,32 @@ export async function handleRegisterRequestOtp(request, env) {
     };
     await saveOtpFlow(env, normalized, data.deviceId, state);
 
-    // Resend must return exactly 200 before we report delivery acceptance.
-    let sendResult = null;
-    try {
-      sendResult = await sendOtpEmail(env, normalized, code);
-    } catch (e) {
-      sendResult = { ok: false, error: String(e) };
-    }
-    const sent = sendResult?.status === 200 && sendResult?.ok === true;
-    if (!sent) {
+    // Resend must return exactly 200 before we report delivery acceptance. Wait briefly so the common
+    // fast path still reports failures inline; a slower provider finishes in the background.
+    const markUndelivered = async () => {
       state.manualApprovalAvailable = true;
       state.manualAvailableAt = Date.now();
       await saveOtpFlow(env, normalized, data.deviceId, state);
+    };
+    const delivery = sendOtpEmail(env, normalized, code)
+      .catch((e) => ({ ok: false, error: String(e) }))
+      .then((result) => ({ result, sent: result?.status === 200 && result?.ok === true }));
+    const settled = ctx?.waitUntil
+      ? await Promise.race([delivery, new Promise((resolve) => setTimeout(resolve, OTP_SEND_WAIT_MS, null))])
+      : await delivery;
+    if (!settled) {
+      ctx.waitUntil(delivery.then(({ sent }) => (sent ? undefined : markUndelivered())));
+    } else if (!settled.sent) {
+      await markUndelivered();
       return new Response(JSON.stringify({ ok: false, error: "Email could not be sent. Request manual approval instead.", ...state }), {
         status: 502,
         headers: { "Content-Type": "application/json", ...corsHeaders(), "Cache-Control": "no-store" },
       });
     }
-    await saveOtpFlow(env, normalized, data.deviceId, state);
 
     const payload =
       String(env.DEV_MODE || "") === "true"
-        ? { ok: true, devCode: code, mailSent: sent, mailStatus: sendResult, expiresAt: expiresTs }
+        ? { ok: true, devCode: code, mailSent: settled?.sent ?? "pending", mailStatus: settled?.result, expiresAt: expiresTs }
         : { ok: true, expiresAt: expiresTs };
 
     return new Response(JSON.stringify({ ...payload, ...state }), {
@@ -203,7 +208,7 @@ export async function handleRegisterRequestOtp(request, env) {
 /**
  * Handle POST /register/verify - verify OTP and create/link user
  */
-export async function handleRegisterVerify(request, env) {
+export async function handleRegisterVerify(request, env, ctx) {
   try {
     const data = await request.json();
     registrationDepartment(data.department, true);
@@ -287,18 +292,22 @@ export async function handleRegisterVerify(request, env) {
       throw error;
     }
     const { userId, token } = registration;
-    await clearRateLimit(env.adtools, verifyLimitKey);
+    // Cleanup and the admin email do not change the reply, so they run after it when the runtime allows.
+    const afterResponse = (promise) => (ctx?.waitUntil ? ctx.waitUntil(promise) : promise);
+    await afterResponse(clearRateLimit(env.adtools, verifyLimitKey));
     if (registration.isNewUser) {
-      await sendRegistrationNotification(env, {
-        email,
-        displayName: data.displayName,
-        department: data.department,
-        role: data.role,
-        platform: registration.platform,
-        requestId: userId,
-        mode: "otp",
-        approvalUrl: `${new URL(request.url).origin}/#approval`,
-      });
+      await afterResponse(
+        sendRegistrationNotification(env, {
+          email,
+          displayName: data.displayName,
+          department: data.department,
+          role: data.role,
+          platform: registration.platform,
+          requestId: userId,
+          mode: "otp",
+          approvalUrl: `${new URL(request.url).origin}/#approval`,
+        }),
+      );
     }
 
     return new Response(JSON.stringify({ ok: true, userId, token }), {
