@@ -496,6 +496,7 @@ class SettingsPage {
     const initiallyExpanded = localStorage.getItem(expandedKey) ?? (cat.initiallyExpanded ? "true" : "false");
     const wrapper = document.createElement("section");
     wrapper.className = "settings-category";
+    if (cat.id === "project-settings") wrapper.classList.add("settings-project");
     wrapper.setAttribute("aria-expanded", initiallyExpanded === "true" ? "true" : "false");
 
     const heading = document.createElement(`h${Math.min(headingLevel, 6)}`);
@@ -544,11 +545,6 @@ class SettingsPage {
     }
 
     let actions = content.querySelector(":scope > .setting-item-oracle > .oracle-connections-header");
-    const kafkaHeader = content.querySelector(":scope > .setting-item-kafka-brokers > .kafka-brokers-header");
-    if (kafkaHeader) {
-      actions = kafkaHeader.querySelector(".setting-row-actions");
-      kafkaHeader.remove();
-    }
     if (actions) {
       actions.classList.add("settings-category-actions");
       heading.classList.add("settings-category-heading-with-actions");
@@ -967,7 +963,9 @@ class SettingsPage {
           const details = document.createElement("details");
           details.className = "environment-connections";
           const summary = document.createElement("summary");
-          summary.textContent = "Oracle connections";
+          summary.innerHTML = `<span>Oracle connections</span>
+            <svg class="settings-category-toggle" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" stroke-width="2"><path d="m9 5 7 7-7 7" /></svg>`;
           details.append(summary, this.renderItem({ ...oracleItem, environmentId: environment.id }));
           entry.append(details);
         }
@@ -1164,7 +1162,11 @@ class SettingsPage {
   renderItem(item) {
     const service = item.environmentId === undefined ? this.service : this.service.forEnvironment(item.environmentId);
     if (item.type === "project-manager") {
-      return renderProjectManager({ eventBus: this.eventBus, refresh: () => this.renderCategories(this.currentConfig.categories) });
+      return renderProjectManager({
+        eventBus: this.eventBus,
+        refresh: () => this.renderCategories(this.currentConfig.categories),
+        registerDispose: (dispose) => this.settingDisposers.add(dispose),
+      });
     }
     if (item.type === "project-schema") return renderProjectSchemaLink({ router: globalThis.app?.router });
     if (item.type === "kafka-brokers") return this.renderKafkaBrokersItem(item);

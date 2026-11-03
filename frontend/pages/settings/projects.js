@@ -1,23 +1,32 @@
+import { mountEditDialog } from "./edit-dialog.js";
 import { listSharedProjects, publishProjectName, useSharedProject } from "../../core/ProjectDirectory.js";
 import { createProject, getActiveProject, listProjects, renameProject } from "../../core/Projects.js";
 
-export function renderProjectManager({ eventBus, refresh }) {
+export function renderProjectManager({ eventBus, refresh, registerDispose }) {
   const wrapper = document.createElement("div");
   wrapper.className = "setting-item project-manager";
   wrapper.dataset.setting = "config.projects";
   wrapper.dataset.searchText = "Project department name save create rename publish shared choose directory";
   wrapper.innerHTML = `
-    <form class="project-name-form project-controls">
+    <div class="project-controls">
       <select class="setting-input project-settings-select" aria-label="Choose project"></select>
+    </div>
+    <form class="project-name-form" hidden>
+      <label class="integration-field">
+        <span>Project name</span>
       <input class="setting-input project-name-input" aria-label="Project name" placeholder="Project name"
         required maxlength="80" autocomplete="off" />
-      <button type="submit" class="btn btn-primary btn-sm project-name-save">Save name</button>
+      </label>
+      <div class="project-status" role="status" aria-live="polite"></div>
+      <div class="setting-actions">
+        <button type="button" class="btn btn-secondary btn-sm project-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm project-name-save">Create project</button>
+      </div>
     </form>
     <div class="project-directory-feedback">
       <div class="project-directory-status" role="status" aria-live="polite"></div>
       <button type="button" class="btn btn-secondary btn-sm project-directory-retry" hidden>Retry</button>
-    </div>
-    <div class="project-status" role="status" aria-live="polite"></div>`;
+    </div>`;
   const select = wrapper.querySelector("select");
   const form = wrapper.querySelector("form");
   const input = wrapper.querySelector("input");
@@ -43,7 +52,8 @@ export function renderProjectManager({ eventBus, refresh }) {
       }
     }
     select.add(new Option("New project…", "__new__"));
-    select.value = creating ? "__new__" : active.id;
+    select.add(new Option("Rename project…", "__rename__"));
+    select.value = active.id;
   };
   const setBusy = (value) => {
     busy = value;
@@ -51,6 +61,23 @@ export function renderProjectManager({ eventBus, refresh }) {
     input.disabled = value;
     saveButton.disabled = value;
   };
+  const closeEditor = () => {
+    if (busy) return;
+    modal.close();
+    form.hidden = true;
+    creating = false;
+    savedProject = null;
+    fillOptions();
+  };
+  const modal = mountEditDialog({
+    root: wrapper,
+    form,
+    onCancel: closeEditor,
+    isBusy: () => busy,
+    fallbackFocus: () => wrapper.querySelector(".ad-searchable-dropdown-trigger") || select,
+  });
+  registerDispose?.(() => modal.dispose());
+  wrapper.querySelector(".project-cancel").addEventListener("click", closeEditor);
   const loadDirectory = async () => {
     retryButton.hidden = true;
     directoryStatus.textContent = "";
@@ -71,8 +98,12 @@ export function renderProjectManager({ eventBus, refresh }) {
     status.textContent = "";
     savedProject = null;
     creating = select.value === "__new__";
-    if (creating) {
-      input.value = "";
+    if (creating || select.value === "__rename__") {
+      input.value = creating ? "" : active.name;
+      saveButton.textContent = creating ? "Create project" : "Save name";
+      form.hidden = false;
+      fillOptions();
+      modal.open(creating ? "New project" : "Rename project");
       input.focus();
       return;
     }
@@ -87,7 +118,7 @@ export function renderProjectManager({ eventBus, refresh }) {
       fillOptions();
       if (shared) window.dispatchEvent(new Event("adtools:projects-updated"));
     } catch (error) {
-      status.textContent = error.message;
+      eventBus?.emit?.("notification:error", { message: error.message });
       fillOptions();
     } finally {
       setBusy(false);
@@ -124,12 +155,14 @@ export function renderProjectManager({ eventBus, refresh }) {
       try {
         await publishProjectName(project.name);
       } catch (error) {
-        status.textContent = `Name saved on this device. Could not publish: ${error.message} Select Save name to retry.`;
+        status.textContent = `Name saved on this device. Could not publish: ${error.message} Try saving again to publish it.`;
         fillOptions();
         window.dispatchEvent(new Event("adtools:projects-updated"));
         return;
       }
       creating = false;
+      modal.close();
+      form.hidden = true;
       if (project.id !== active.id) {
         if (await globalThis.app?.switchProject(project.id)) return;
         window.dispatchEvent(new Event("adtools:projects-updated"));
@@ -147,7 +180,7 @@ export function renderProjectManager({ eventBus, refresh }) {
       status.textContent = error.message;
     } finally {
       setBusy(false);
-      saveButton.textContent = "Save name";
+      saveButton.textContent = creating ? "Create project" : "Save name";
     }
   });
   return wrapper;

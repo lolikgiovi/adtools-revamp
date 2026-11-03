@@ -1059,7 +1059,7 @@ body .settings-edit-dialog-wide {
 
 .project-controls {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 8px;
 }
@@ -1091,7 +1091,7 @@ body .settings-edit-dialog-wide {
 
 .project-section-heading {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 600;
 }
 
@@ -1122,7 +1122,7 @@ body .settings-edit-dialog-wide {
 
 @media (max-width: 600px) {
   .project-controls {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .project-controls > .ad-searchable-dropdown,
@@ -1136,17 +1136,66 @@ body .settings-edit-dialog-wide {
 }
 
 .environment-connections {
-  padding: 0 12px 12px;
+  padding-bottom: 12px;
 }
 
 .environment-connections > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   cursor: pointer;
-  padding: 8px 0;
-  font-weight: 500;
+  padding: 10px 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  list-style: none;
+}
+
+.environment-connections > summary::-webkit-details-marker {
+  display: none;
+}
+
+.environment-connections[open] > summary .settings-category-toggle {
+  transform: rotate(90deg);
+}
+
+.environment-connections > summary:hover {
+  background: hsl(var(--muted) / 0.5);
+}
+
+.environment-connections > summary:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
 }
 
 .environment-connections .oracle-connections-header {
   display: flex;
   gap: 8px;
   margin-bottom: 8px;
+}
+
+/* Project settings share one reading edge; only expanded contents are inset. */
+.settings-project > .settings-category-content > .settings-category {
+  margin-inline-start: 0;
+}
+
+.settings-project > .settings-category-content > :is(.project-schema, .setting-item:not(.project-manager)) {
+  min-height: 44px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  padding-block: 8px;
+}
+
+.settings-project > .settings-category-content > .setting-item > .setting-row {
+  width: 100%;
+  align-items: center;
+}
+
+.settings-project > .settings-category-content > .settings-category > .settings-category-heading > .settings-category-header {
+  min-height: 44px;
+}
+
+.project-name-form .integration-field {
+  margin: 0;
 }

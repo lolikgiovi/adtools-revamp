@@ -107,3 +107,26 @@ platforms. The browser scenario opens the narrow sidebar before checking its
 menu, verifies project state there, and confirms it remains below the native
 header in the desktop layout simulation. See `../compact-header/README.md` for
 the platform header, centered search, and keyboard verification.
+
+## Consistent project settings (2026-11-03)
+
+Settings now shows one full-width project selector. “New project…” opens a focused
+name dialog; “Rename project…” preserves renaming through the same dialog.
+Cancel and Escape leave the active project unchanged. Failed publication retains
+local data and permits retry without creating another project.
+
+Quick Query schemas, Jira Project Key, and the service section headings share the
+same left edge, font size, and row rhythm. Kafka actions appear inside its expanded
+section. Oracle connection disclosures use the same right-aligned chevron and
+heading typography as other expandable sections.
+
+The browser commands above verify creation, renaming, cancellation, publication
+retry, shared project names, isolation, and equal heading alignment at 1440px and
+390px. New artifacts: `1440-create-project.png` and `390-create-project.png`.
+The related `frontend/core/tests/project-settings-browser.mjs` scenario also
+passed, including desktop Oracle editing and project-specific connection scopes;
+see `../project-settings/result.json` and screenshots.
+
+Validation: 63 settings tests and 9 project/switching tests passed; direct Vite
+production bundling passed. Targeted ESLint reported no errors (existing warnings
+remain). The design detector reported no findings. No dependencies were installed.

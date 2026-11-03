@@ -10,7 +10,7 @@
   ],
   "snapshot": {
     "redis": {
-      "credentialScope": "fc8f8555-071f-4279-8b32-e66c9735799d",
+      "credentialScope": "522dba24-5a95-4235-9331-a93518c6445a",
       "host": "second-cache",
       "port": 6379,
       "database": 0,

@@ -103,7 +103,7 @@ try {
     await page.goto(base);
     await page.waitForFunction(() => Boolean(window.app));
     await page.evaluate(() => window.app.router.navigate("settings"));
-    await page.locator(".project-name-save").waitFor();
+    await page.locator(".project-controls .ad-searchable-dropdown-trigger").waitFor();
     assert.match(await page.locator(".environments-list").innerText(), /legacy.example/);
     const firstId = await page.locator("select.project-settings-select").inputValue();
     await chooseProject(page, "__new__");
@@ -115,11 +115,11 @@ try {
     await page.route("**/api/settings/projects?*", failPublish);
     await page.locator(".project-name-save").click();
     await page.getByText(/Name saved on this device.*Offline fixture/).waitFor();
-    assert.equal(await page.locator("select.project-settings-select").inputValue(), "__new__");
+    assert.equal(await page.locator("select.project-settings-select").inputValue(), firstId);
     assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("config.projects")).projects.length), 2);
     await page.unroute("**/api/settings/projects?*", failPublish);
     await Promise.all([page.waitForEvent("load"), page.locator(".project-name-save").click()]);
-    await page.locator(".project-name-save").waitFor();
+    await page.locator(".project-controls .ad-searchable-dropdown-trigger").waitFor();
     assert.equal(await page.locator(".project-settings-select option:checked").innerText(), "Payments");
     assert.match(await page.locator(".environments-list").innerText(), /No environments/);
     await page.locator(".environment-add-btn").click();
@@ -127,9 +127,10 @@ try {
     await page.locator(".environment-public-url").fill("https://payments.example");
     await page.locator(".environment-save").click();
     const secondId = await page.locator("select.project-settings-select").inputValue();
+    await chooseProject(page, "__rename__");
     await page.locator(".project-name-input").fill("Payments v2");
     await page.locator(".project-name-save").click();
-    await page.getByText("Name saved and published.", { exact: true }).waitFor();
+    await page.locator(".settings-edit-dialog[open]").waitFor({ state: "hidden" });
     assert.equal(await page.locator(".project-settings-select option:checked").innerText(), "Payments v2");
     const catalogs = await page.evaluate(async () => {
       const { IndexedDBStorageService } = await import("/tools/quick-query/services/IndexedDBStorageService.js");
@@ -141,7 +142,7 @@ try {
     });
     assert.deepEqual(catalogs, ["APP.PAYMENTS"]);
     await Promise.all([page.waitForEvent("load"), chooseProject(page, firstId)]);
-    await page.locator(".project-name-save").waitFor();
+    await page.locator(".project-controls .ad-searchable-dropdown-trigger").waitFor();
     assert.match(await page.locator(".environments-list").innerText(), /legacy.example/);
     const first = await page.evaluate(async () => {
       const { IndexedDBStorageService } = await import("/tools/quick-query/services/IndexedDBStorageService.js");
@@ -152,7 +153,7 @@ try {
     assert.deepEqual(first.tables, []);
     assert.equal(first.draft, null);
     await Promise.all([page.waitForEvent("load"), chooseProject(page, secondId)]);
-    await page.locator(".project-name-save").waitFor();
+    await page.locator(".project-controls .ad-searchable-dropdown-trigger").waitFor();
     assert.match(await page.locator(".environments-list").innerText(), /payments.example/);
     assert.equal(await page.locator(".sidebar-header .sidebar-project select").inputValue(), secondId);
     assert.equal(await page.locator(".sidebar-project").count(), 1);
@@ -185,21 +186,28 @@ try {
         window.app.placeHeaderControls(false);
       });
     }
-    const sections = await page.locator(".project-section-heading").evaluateAll((headings) =>
-      headings.map((heading) => ({
-        text: heading.textContent,
-        x: heading.getBoundingClientRect().x,
-        font: getComputedStyle(heading).font,
-        parent: heading.closest(".settings-category").querySelector("h3").textContent.trim(),
-      })),
-    );
-    assert.deepEqual(
-      sections.map((heading) => heading.text),
-      ["Quick Query schemas", "Testing Environments"],
-    );
-    assert.equal(sections[0].x, sections[1].x);
-    assert.equal(sections[0].font, sections[1].font);
-    assert.ok(sections.every((heading) => heading.parent === "Project"));
+    const sections = await page
+      .locator(
+        `.settings-project > .settings-category-content > .project-schema h4,
+      .settings-project > .settings-category-content > .setting-item .setting-name,
+      .settings-project > .settings-category-content > .settings-category > h4 > button`,
+      )
+      .evaluateAll((headings) =>
+        headings.map((heading) => ({
+          text: heading.textContent.trim(),
+          x: heading.getBoundingClientRect().x,
+          fontSize: getComputedStyle(heading).fontSize,
+        })),
+      );
+    assert.ok(sections.length >= 6);
+    assert.ok(sections.every((heading) => heading.x === sections[0].x && heading.fontSize === sections[0].fontSize));
+    assert.equal(await page.locator(".project-name-input").isVisible(), false);
+    await chooseProject(page, "__new__");
+    await page.getByRole("dialog", { name: "New project", exact: true }).waitFor();
+    assert.equal(await page.locator("select.project-settings-select").inputValue(), secondId);
+    await page.screenshot({ path: resolve(output, `${width}-create-project.png`), animations: "disabled" });
+    await page.keyboard.press("Escape");
+    await page.locator(".settings-edit-dialog[open]").waitFor({ state: "hidden" });
     await page.screenshot({ path: resolve(output, `${width}-projects.png`), fullPage: true, animations: "disabled" });
     await page.locator(".project-schema-manage").click();
     await page.locator("#schemaOverlay:not(.hidden)").waitFor();
@@ -208,7 +216,7 @@ try {
     await page.screenshot({ path: resolve(output, `${width}-schemas.png`), fullPage: true, animations: "disabled" });
     await page.locator("#closeSchemaOverlay").click();
     await page.evaluate(() => window.app.router.navigate("settings"));
-    await page.locator(".project-name-save").waitFor();
+    await page.locator(".project-controls .ad-searchable-dropdown-trigger").waitFor();
     await Promise.all([page.waitForEvent("load"), chooseProject(page, firstId)]);
     await page.locator(".project-schema-manage").click();
     await page.locator("#schemaOverlay:not(.hidden)").waitFor();
@@ -220,9 +228,10 @@ try {
     );
     await page.locator("#closeSchemaOverlay").click();
     await page.evaluate(() => window.app.router.navigate("settings"));
-    await page.locator(".project-name-save").waitFor();
+    await page.locator(".project-controls .ad-searchable-dropdown-trigger").waitFor();
     // Duplicate names must not publish or mutate local project identity.
     const requestCount = directoryRequests.length;
+    await chooseProject(page, "__rename__");
     await page.locator(".project-name-input").fill("Payments v2");
     await page.locator(".project-name-save").click();
     await page.getByText("That project name is already saved. Choose it from the project list.", { exact: true }).waitFor();
@@ -245,11 +254,11 @@ try {
     assert.match(await page.locator(".environments-list").innerText(), /legacy.example/);
     await page.unroute("**/api/settings/projects?*");
     await page.locator(".project-name-save").click();
-    await page.getByText("Name saved and published.", { exact: true }).waitFor();
+    await page.locator(".settings-edit-dialog[open]").waitFor({ state: "hidden" });
     checks.push(`${width}px: equal section hierarchy, duplicate rejection, local save on publication failure and successful retry`);
     // Publish from one user, choose from a separate user's context, preserve private data.
     await page.evaluate(() => window.app.router.navigate("settings"));
-    await page.locator(".project-name-save").waitFor();
+    await page.locator(".project-controls .ad-searchable-dropdown-trigger").waitFor();
     await Promise.all([page.waitForEvent("load"), chooseProject(page, secondId)]);
     // Creation and rename have already published automatically.
     assert.equal(await page.locator(".project-publish, .project-use-shared, .project-rename, .project-add").count(), 0);
@@ -275,7 +284,7 @@ try {
     await teammate.locator('select.project-settings-select option[value^="shared:"]').first().waitFor({ state: "attached" });
     await teammate.locator(".project-controls .ad-searchable-dropdown-trigger").click();
     await Promise.all([teammate.waitForEvent("load"), teammate.getByRole("option", { name: "Payments v2", exact: true }).click()]);
-    await teammate.locator(".project-name-save").waitFor();
+    await teammate.locator(".project-controls .ad-searchable-dropdown-trigger").waitFor();
     assert.equal(await teammate.locator(".project-settings-select option:checked").innerText(), "Payments v2");
     assert.match(await teammate.locator(".environments-list").innerText(), /No environments/);
     await teammate.locator(".project-schema-manage").click();

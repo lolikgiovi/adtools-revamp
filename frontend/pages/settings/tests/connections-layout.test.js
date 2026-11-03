@@ -39,16 +39,16 @@ it("nests Oracle under environments and keeps Redis and Kafka under Project", ()
   oracle.querySelector(".oracle-cancel-btn").click();
   const kafka = content.querySelector("#settings-category-kafka").closest(".settings-category");
   const kafkaHeading = kafka.querySelector(".settings-category-heading");
-  expect(kafkaHeading.querySelector(".kafka-broker-add")).not.toBeNull();
-  expect(kafkaHeading.querySelector(".settings-bulk-edit")).not.toBeNull();
-  expect(kafka.querySelector(".kafka-brokers-header")).toBeNull();
+  expect(kafkaHeading.querySelector(".kafka-broker-add")).toBeNull();
+  expect(kafkaHeading.querySelector(".settings-bulk-edit")).toBeNull();
+  expect(kafka.querySelector(".kafka-brokers-header")).not.toBeNull();
   kafkaHeading.querySelector(".settings-category-header").click();
-  kafkaHeading.querySelector(".kafka-broker-add").click();
+  kafka.querySelector(".kafka-broker-add").click();
   expect(kafka.getAttribute("aria-expanded")).toBe("true");
   expect(kafka.querySelector("dialog[open] h2").textContent).toBe("Add broker");
   kafka.querySelector(".kafka-broker-cancel").click();
   page.focusRequestedSetting("kafka.brokers");
-  expect(document.activeElement).toBe(kafkaHeading.querySelector(".kafka-broker-add"));
+  expect(document.activeElement).toBe(kafka.querySelector(".kafka-broker-add"));
 });
 it("keeps Kafka available on Web while Oracle and Redis remain desktop-only", () => {
   mount(false);
