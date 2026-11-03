@@ -1,0 +1,15 @@
+{
+  "status": "PASS",
+  "url": "http://localhost:1235/?release-tour=preview",
+  "method": "Codex in-app browser",
+  "checks": [
+    "Opening slide identifies release 1.3.14",
+    "Projects slide and Settings action present",
+    "PlantUML slide and action present",
+    "Four slides including Web closing slide",
+    "Back returns to previous slide",
+    "Done dismisses dialog",
+    "Preview reopens dialog",
+    "Escape dismisses dialog"
+  ]
+}

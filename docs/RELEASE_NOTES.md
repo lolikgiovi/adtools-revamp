@@ -1,10 +1,15 @@
-# AD Tools 1.3.13
+# AD Tools 1.3.14
+
+- **Projects** — Create and switch projects to keep testing environments and Quick Query schemas, saved data, and tabs separate. Existing work remains in the default project.
+- **PlantUML** — Write and preview diagrams locally, organize source files and folders, import files, export workspace ZIPs, and save diagrams as SVG or PNG.
+
+## Earlier release notes
+
+### AD Tools 1.3.13
 
 - **Run Query and Run Batch** — Restore navigation for all desktop users, including devices with missing saved department details after an update.
 
 - **HTML Template** — Focus mode expands the editor and preview, with Escape or Exit focus to return to the normal workspace.
-
-## Earlier release notes
 
 ### AD Tools 1.3.12
 
