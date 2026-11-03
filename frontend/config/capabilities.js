@@ -1,12 +1,51 @@
 // Stable product capabilities, rather than DOM labels or raw click identifiers.
 const define = (tool, id, name, options = {}) => ({ tool, id, name, ...options });
 export const capabilities = [
-  define("plantuml", "local_render", "Render diagrams locally", { uses: ["render"] }),
+  define("plantuml", "local_render", "Render diagrams locally", {
+    expose: "#puml-editor",
+    uses: ["render"],
+    events: { render_result: "outcome" },
+  }),
   define("plantuml", "export", "Export diagrams and workspaces", {
     start: '[data-action="svg"], [data-action="png"], [data-action="backup"]',
     uses: ["export_svg", "export_png", "export_workspace"],
   }),
-  define("plantuml", "import", "Import diagrams and workspaces", { open: '[data-action="import"]', uses: ["import"] }),
+  define("plantuml", "import", "Import diagrams and workspaces", {
+    open: '[data-action="import"]',
+    uses: ["import"],
+    events: { import_result: "outcome" },
+  }),
+  define("plantuml", "workspace", "Organize diagram files", {
+    open: '[data-action="new-file"], [data-action="new-folder"], [data-action="search-files"], [data-action="commands"]',
+    events: { workspace_create_result: "outcome" },
+  }),
+  define("plantuml", "format", "Format diagram source", {
+    start: '[data-action="format"]',
+    events: { format_result: "outcome" },
+  }),
+  define("plantuml", "palette", "Choose diagram colors", { open: '[data-action="palette"]' }),
+  define("plantuml", "editor_theme", "Choose an editor theme", { change: "#puml-editor-theme" }),
+  define("plantuml", "preview_layout", "Adjust diagram preview", {
+    start: '[data-action="preview"], [data-action="maximize-preview"], [data-action="fit"], [data-action="actual-size"]',
+  }),
+  define("settings", "create_project", "Create projects", {
+    expose: ".project-settings-select",
+    events: { project_create_open: "opened", project_create_result: "outcome" },
+  }),
+  define("settings", "rename_project", "Rename projects", {
+    events: { project_rename_open: "opened", project_rename_result: "outcome" },
+  }),
+  define("settings", "publish_project", "Publish project names", { events: { project_publish_result: "outcome" } }),
+  define("settings", "switch_project", "Switch projects", { events: { project_switch_result: "outcome" } }),
+  define("settings", "manage_schemas", "Manage saved schemas", {
+    expose: ".project-schema-manage",
+    events: { schema_manager_open: "opened" },
+  }),
+  ...["import", "export", "copy", "move", "delete"].map((action) =>
+    define("settings", `schema_${action}`, `${action[0].toUpperCase() + action.slice(1)} saved schemas`, {
+      events: { [`schema_${action}_result`]: "outcome" },
+    }),
+  ),
   define("quick-query", "import_excel", "Import rows from Excel", {
     open: "#importExcel",
     start: "#confirmExcelImport",
@@ -126,7 +165,7 @@ export const capabilities = [
   define("compress-image", "lossy_png", "Opt into smaller lossy PNGs", { change: '[data-ci="lossy-png"]' }),
   define("compress-image", "compare", "Compare original and compressed images", { open: '[data-ci="pair"], [data-ci="overlay"]' }),
   define("char-counter", "count", "Count text", { expose: "#charCounterInput", uses: ["count"] }),
-  define("char-counter", "per_row", "Inspect counts per row", { open: "#charCounterRowMode" }),
+  define("char-counter", "per_row", "Inspect counts per row", { open: "#charCounterRowMode", events: { mode_changed: "row_mode" } }),
   define("qr-tools", "generate_qr", "Generate and download QR codes", {
     start: "#qrDownloadPng, #qrDownloadSvg",
     uses: ["download_png", "download_svg"],
@@ -197,7 +236,11 @@ export const capabilities = [
     events: { history_load: "succeeded" },
   }),
   define("run-batch", "run", "Run a Jenkins batch", { start: "#rb-run-btn", desktop: true, uses: ["run"] }),
-  define("run-batch", "saved_batches", "Save reusable batch requests", { open: "#rb-save-btn", desktop: true }),
+  define("run-batch", "saved_batches", "Save reusable batch requests", {
+    open: "#rb-save-btn",
+    desktop: true,
+    events: { config_saved: "succeeded", config_updated: "succeeded", config_loaded: "opened" },
+  }),
   define("html-template", "format", "Format HTML", { start: "#btnFormatHtml", uses: ["format"] }),
   define("html-template", "minify", "Minify HTML", { start: "#btnMinifyHtml", uses: ["minify"] }),
   define("html-template", "velocity_fields", "Extract and fill Velocity variables", {
@@ -207,7 +250,10 @@ export const capabilities = [
   define("html-template", "import", "Import an HTML template", { open: "#btnImportHtml" }),
   define("splunk-template", "format", "Format Splunk templates", { start: "#btnFormatVtl", uses: ["format"] }),
   define("splunk-template", "minify", "Minify Splunk templates", { start: "#btnMinifyVtl", uses: ["minify"] }),
-  define("splunk-template", "parameters", "Generate template parameters", { start: "#btnGenerateParameters" }),
+  define("splunk-template", "parameters", "Generate template parameters", {
+    start: "#btnGenerateParameters",
+    events: { sync_fields_result: "outcome" },
+  }),
   define("sql-in-clause", "generate", "Create a SQL IN clause", { start: "#sqlInCopyBtn", uses: ["copy"] }),
   define("merge-sql", "merge", "Merge SQL files", {
     open: "#merge-sql-add-files, #merge-sql-add-folder",

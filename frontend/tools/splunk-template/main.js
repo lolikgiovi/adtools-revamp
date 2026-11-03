@@ -936,9 +936,13 @@ class SplunkVTLEditor extends BaseTool {
 
     btnGenerateParameters?.addEventListener("click", () => {
       if (!this.syncContextFields()) {
+        this.trackAnalytics("sync_fields_result", { outcome: "blocked", reason: "invalid_context" });
         this.setContextError("Context Data must be valid JSON before fields can be synchronized.");
         this.showError("Fix the Context Data JSON, then try Sync fields again.");
-      } else this.showSuccess("Context fields synchronized");
+      } else {
+        this.trackAnalytics("sync_fields_result", { outcome: "success" });
+        this.showSuccess("Context fields synchronized");
+      }
     });
 
     btnFormatParameters?.addEventListener("click", () => {

@@ -1,6 +1,6 @@
 # Capability adoption and import sources
 
-This extends shared click tracking into named product capabilities. The catalogue in `frontend/config/capabilities.js` covers 79 capabilities across 22 registered tools, including Quick Query and Velocity Template. A capability can have exposure, exploration and/or completion signals; `completion_measured` in the reports states whether completion is instrumented.
+This extends shared click tracking into named product capabilities. The catalogue in `frontend/config/capabilities.js` covers 97 capabilities across all 22 registered tools, Monitoring Query and Settings, including project and schema management. A capability can have exposure, exploration and/or completion signals; `completion_measured` in the reports states whether completion is instrumented.
 
 ## Source identifiers
 

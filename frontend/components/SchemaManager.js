@@ -1,3 +1,4 @@
+import { trackWorkflowEvent } from "../core/WorkflowAnalytics.js";
 import { getActiveProject, listProjects } from "../core/Projects.js";
 import { IndexedDBStorageService } from "../tools/quick-query/services/IndexedDBStorageService.js";
 import { confirmAction } from "./ConfirmationDialog.js";
@@ -79,12 +80,16 @@ export function openSchemaTransfer({ root = document.body, storage, fullName, mo
     select.disabled = submit.disabled = cancel.disabled = true;
     submit.textContent = move ? "Moving…" : "Copying…";
     status.textContent = "";
+    let transferred = false;
     try {
       await storage.transferSchema(fullName, select.value, { move });
+      transferred = true;
+      trackWorkflowEvent("settings", `schema_${move ? "move" : "copy"}_result`, { outcome: "success", table_count: 1 });
       busy = false;
       finish();
       await onTransferred?.({ fullName, destinationId: select.value, move });
     } catch (error) {
+      if (!transferred) trackWorkflowEvent("settings", `schema_${move ? "move" : "copy"}_result`, { outcome: "failure" });
       status.textContent = error.message;
     } finally {
       busy = false;
@@ -116,6 +121,7 @@ export function mountSchemaManager({ root, project = getActiveProject() }) {
       manager.dialog.showModal();
       return;
     }
+    trackWorkflowEvent("settings", "schema_manager_open");
     manager = createDialog(root, `${project.name} — Saved schemas`, "", () => !busy);
     const { dialog } = manager;
     const body = document.createElement("div");
@@ -185,10 +191,14 @@ export function mountSchemaManager({ root, project = getActiveProject() }) {
           )
             return;
           setBusy(true);
+          let deleted = false;
           try {
             if (!(await storage.deleteSchema(table.fullName))) throw new Error("Could not delete the schema. Try again.");
+            deleted = true;
+            trackWorkflowEvent("settings", "schema_delete_result", { outcome: "success", table_count: 1 });
             await render();
           } catch (error) {
+            if (!deleted) trackWorkflowEvent("settings", "schema_delete_result", { outcome: "failure" });
             status.textContent = error.message;
           } finally {
             setBusy(false);
@@ -225,7 +235,12 @@ export function mountSchemaManager({ root, project = getActiveProject() }) {
         link.download = "quick_query_saved_schemas.json";
         link.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
+        trackWorkflowEvent("settings", "schema_export_result", {
+          outcome: "success",
+          table_count: Object.values(payload).reduce((count, tables) => count + Object.keys(tables).length, 0),
+        });
       } catch (error) {
+        trackWorkflowEvent("settings", "schema_export_result", { outcome: "failure" });
         status.textContent = error.message;
       } finally {
         setBusy(false);
@@ -259,8 +274,10 @@ export function mountSchemaManager({ root, project = getActiveProject() }) {
           if (!(await storage.saveSchema(table.fullName, table.rows))) throw new Error(`Could not save ${table.fullName}.`);
           imported++;
         }
+        trackWorkflowEvent("settings", "schema_import_result", { outcome: "success", table_count: imported });
         status.textContent = `Imported ${imported} schema${imported === 1 ? "" : "s"}.`;
       } catch (error) {
+        trackWorkflowEvent("settings", "schema_import_result", { outcome: "failure", table_count: imported });
         status.textContent = `${imported ? `Imported ${imported} schemas. ` : ""}${error.message}`;
       } finally {
         fileInput.value = "";

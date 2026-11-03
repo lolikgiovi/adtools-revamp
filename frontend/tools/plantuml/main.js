@@ -1,3 +1,4 @@
+import { trackWorkflowEvent } from "../../core/WorkflowAnalytics.js";
 import { BaseTool } from "../../core/BaseTool.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { ThemeManager } from "../../core/ThemeManager.js";
@@ -155,7 +156,10 @@ export class PlantUmlTool extends BaseTool {
       (event) => {
         const files = [...event.target.files];
         event.target.value = "";
-        void this.importFiles(files).catch((error) => this.showError(error.message));
+        void this.importFiles(files).catch((error) => {
+          trackWorkflowEvent("plantuml", "import_result", { outcome: "failure", file_count: files.length });
+          this.showError(error.message);
+        });
       },
       { signal },
     );
@@ -396,6 +400,7 @@ export class PlantUmlTool extends BaseTool {
         const next = addNode(this.workspace, name, parentId, kind, kind === "file" ? starterSequence : "");
         this.selectedId = next.nodes.at(-1).id;
         this.update(next);
+        trackWorkflowEvent("plantuml", "workspace_create_result", { outcome: "success", kind });
       });
     } else if (action === "rename") {
       const node = this.workspace.nodes.find((node) => node.id === id);
@@ -426,8 +431,15 @@ export class PlantUmlTool extends BaseTool {
       this.editor.setPosition({ lineNumber: this.errorLine, column: 1 });
       this.editor.revealLineInCenter(this.errorLine);
       this.editor.focus();
-    } else if (action === "format") await this.editor.getAction("editor.action.formatDocument").run();
-    else if (action === "palette") this.paletteDialog();
+    } else if (action === "format") {
+      try {
+        await this.editor.getAction("editor.action.formatDocument").run();
+        trackWorkflowEvent("plantuml", "format_result", { outcome: "success" });
+      } catch (error) {
+        trackWorkflowEvent("plantuml", "format_result", { outcome: "failure" });
+        throw error;
+      }
+    } else if (action === "palette") this.paletteDialog();
     else if (action === "import") this.$("#puml-import").click();
     else if (action === "backup") {
       await exportWorkspace(this.workspace);
@@ -455,6 +467,9 @@ export class PlantUmlTool extends BaseTool {
   renderChanged(result) {
     if (!this.container) return;
     this.renderState = result.state;
+    if (result.state === "error") {
+      trackWorkflowEvent("plantuml", "render_result", { outcome: "failure", reason: "render_error" });
+    }
     const status = this.$("#puml-status");
     status.dataset.state = result.state;
     status.textContent = {
@@ -492,7 +507,7 @@ export class PlantUmlTool extends BaseTool {
     if (result.state === "ready") {
       this.diagram = result;
       this.preview?.show(result.svg, this.activeFile?.name || "diagram");
-      UsageTracker.trackToolUse("plantuml", "render", { input_size: result.source.length });
+      UsageTracker.trackToolUse("plantuml", "render", { input_size: result.source.length, duration_ms: result.milliseconds });
     }
     if (!this.diagram) {
       const empty = this.$("#puml-preview-empty");
@@ -747,8 +762,10 @@ export class PlantUmlTool extends BaseTool {
           description: "Current files will be replaced. Export a ZIP first to keep a backup.",
           confirmLabel: "Replace workspace",
         }))
-      )
+      ) {
+        trackWorkflowEvent("plantuml", "import_result", { outcome: "cancelled", file_count: files.length });
         return;
+      }
       if (sequence !== this.sequence) return;
       this.editor.setModel(null);
       for (const model of this.models.values()) model.dispose();

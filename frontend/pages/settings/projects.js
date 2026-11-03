@@ -1,3 +1,4 @@
+import { trackWorkflowEvent } from "../../core/WorkflowAnalytics.js";
 import { mountSchemaManager } from "../../components/SchemaManager.js";
 import { mountEditDialog } from "./edit-dialog.js";
 import { listSharedProjects, publishProjectName, useSharedProject } from "../../core/ProjectDirectory.js";
@@ -90,6 +91,7 @@ export function renderProjectManager({ eventBus, refresh, registerDispose }) {
     savedProject = null;
     creating = select.value === "__new__";
     if (creating || select.value === "__rename__") {
+      trackWorkflowEvent("settings", `project_${creating ? "create" : "rename"}_open`);
       input.value = creating ? "" : active.name;
       saveButton.textContent = creating ? "Create project" : "Save name";
       form.hidden = false;
@@ -122,6 +124,7 @@ export function renderProjectManager({ eventBus, refresh, registerDispose }) {
     status.textContent = "";
     status.dataset.state = "error";
     if (!name || name.length > 80) {
+      trackWorkflowEvent("settings", `project_${creating ? "create" : "rename"}_result`, { outcome: "blocked", reason: "invalid_name" });
       status.textContent = "Enter a project name between 1 and 80 characters.";
       input.focus();
       return;
@@ -132,6 +135,7 @@ export function renderProjectManager({ eventBus, refresh, registerDispose }) {
           ((creating && !savedProject) || project.id !== (savedProject || active).id) && normalized(project.name) === normalized(name),
       )
     ) {
+      trackWorkflowEvent("settings", `project_${creating ? "create" : "rename"}_result`, { outcome: "blocked", reason: "duplicate_name" });
       status.textContent = "That project name is already saved. Choose it from the project list.";
       input.focus();
       return;
@@ -140,12 +144,19 @@ export function renderProjectManager({ eventBus, refresh, registerDispose }) {
     saveButton.textContent = "Saving…";
     try {
       // Persist locally first so a connection failure cannot discard a name or project data.
-      const project = creating && !savedProject ? createProject(name) : renameProject((savedProject || active).id, name);
+      const isNew = creating && !savedProject;
+      const previousName = (savedProject || active).name;
+      const project = isNew ? createProject(name) : renameProject((savedProject || active).id, name);
       savedProject = project;
+      if (isNew || project.name !== previousName) {
+        trackWorkflowEvent("settings", `project_${isNew ? "create" : "rename"}_result`, { outcome: "success" });
+      }
       // Keep the saved project selected for a publication retry without creating it again.
       try {
         await publishProjectName(project.name);
+        trackWorkflowEvent("settings", "project_publish_result", { outcome: "success" });
       } catch (error) {
+        trackWorkflowEvent("settings", "project_publish_result", { outcome: "failure" });
         status.textContent = `Name saved on this device. Could not publish: ${error.message} Try saving again to publish it.`;
         fillOptions();
         window.dispatchEvent(new Event("adtools:projects-updated"));
@@ -168,6 +179,7 @@ export function renderProjectManager({ eventBus, refresh, registerDispose }) {
       status.textContent = "Name saved and published.";
       await loadDirectory();
     } catch (error) {
+      trackWorkflowEvent("settings", `project_${creating ? "create" : "rename"}_result`, { outcome: "failure" });
       status.textContent = error.message;
     } finally {
       setBusy(false);

@@ -54,6 +54,7 @@ class SettingsPage {
     // Render base template
     root.innerHTML = SettingsTemplate;
     this.container = root.querySelector(".settings-page");
+    this.container.dataset.toolRoot = "settings";
     this.categoriesRoot = root.querySelector(".settings-categories");
     this.searchInput = root.querySelector("#settings-search");
     this.searchStatus = root.querySelector("#settings-search-status");

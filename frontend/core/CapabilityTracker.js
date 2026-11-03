@@ -42,7 +42,7 @@ export class CapabilityTracker {
       else this.scan();
     };
     this.unsubscribers = [
-      eventBus.on("page:changed", ({ toolId }) => this.visit(toolId)),
+      eventBus.on("page:changed", ({ page, toolId }) => this.visit(toolId || page)),
       eventBus.on("usage:event", (event) => this.outcome(event)),
       eventBus.on("usage:toolUse", (use) => this.completedUse(use)),
     ];
@@ -196,6 +196,7 @@ export class CapabilityTracker {
     for (const definition of capabilities) {
       if ((definition.useTool || definition.tool) !== featureId) continue;
       let stage = definition.events?.[action];
+      if (stage === "row_mode") stage = meta.mode === "rows" ? "configured" : null;
       if (stage === "outcome")
         stage = { success: "succeeded", failure: "failed", failed: "failed", blocked: "blocked", cancelled: "cancelled" }[meta.outcome];
       if (stage === "render_failure") stage = meta.outcome === "empty" ? "blocked" : meta.outcome !== "valid" ? "failed" : null;

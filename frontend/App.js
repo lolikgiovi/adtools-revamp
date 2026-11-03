@@ -1,3 +1,4 @@
+import { trackWorkflowEvent } from "./core/WorkflowAnalytics.js";
 import { ProjectSelector } from "./components/ProjectSelector.js";
 import { getActiveProject, selectProject } from "./core/Projects.js";
 /**
@@ -2015,19 +2016,23 @@ class App {
   async switchProject(id) {
     if (this._switchingProject || id === getActiveProject().id) return false;
     this._switchingProject = true;
+    let reason = "switch_error";
     try {
       const tools = [...this.tools.values()];
       if (tools.some((tool) => this.toolHasActiveBackgroundWork(tool))) {
+        reason = "running_jobs";
         throw new Error("Wait for running jobs to finish before switching projects.");
       }
       const ui = this.tools.get("quick-query")?.ui;
       if (ui) {
         await ui.ready;
         if (ui.isGenerating || ui._tabOperation || ui._oracleDataBusy || ui._queryPreparationPending || ui._receivingImages) {
+          reason = "query_busy";
           throw new Error("Wait for Quick Query to finish before switching projects.");
         }
         const flushed = await ui.flushPendingDataAutosave();
         if (flushed === false || !(await ui.saveActiveTabDraft())) {
+          reason = "draft_save_failed";
           throw new Error("Your query could not be saved. Save it before switching projects.");
         }
       }
@@ -2041,9 +2046,11 @@ class App {
         }
       }
       selectProject(id);
+      trackWorkflowEvent("settings", "project_switch_result", { outcome: "success" });
       this.reloadForProjectChange();
       return true;
     } catch (error) {
+      trackWorkflowEvent("settings", "project_switch_result", { outcome: reason === "switch_error" ? "failure" : "blocked", reason });
       this.eventBus?.emit?.("notification:error", { message: error.message });
       return false;
     } finally {
