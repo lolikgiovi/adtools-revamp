@@ -166,6 +166,18 @@ export async function handleRegisterRequestOtp(request, env, ctx) {
     };
     await saveOtpFlow(env, normalized, data.deviceId, state);
 
+    const adminAlert = sendRegistrationNotification(env, {
+      email: normalized,
+      displayName: data.displayName,
+      department: data.department,
+      role: data.role,
+      platform: detectRegistrationPlatform(data, request),
+      requestId: `${normalized}-${now}`,
+      mode: "otp-request",
+    });
+    if (ctx?.waitUntil) ctx.waitUntil(adminAlert);
+    else await adminAlert;
+
     // Resend must return exactly 200 before we report delivery acceptance. Wait briefly so the common
     // fast path still reports failures inline; a slower provider finishes in the background.
     const markUndelivered = async () => {

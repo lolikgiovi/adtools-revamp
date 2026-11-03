@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { handleManualApprovalRequest } from "../src/routes/approval.js";
+import { handleRegisterRequestOtp } from "../src/routes/auth.js";
 import { sendRegistrationNotification } from "../src/utils/registrationNotification.js";
 
 const env = { REGISTRATION_ADMIN_EMAIL: "admin@example.com", RESEND_API_KEY: "test-key", MAIL_FROM: "otp@example.com" };
@@ -28,6 +29,27 @@ describe("admin registration notifications", () => {
     const repeat = await handleManualApprovalRequest(request(), { ...env, DB: db({ id: "request-1", status: "pending" }) });
     expect(repeat.status).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it("alerts the admin on every email OTP request without the code or blocking the reply", async () => {
+    const fetchMock = vi.fn(async () => new Response('{"id":"mail"}', { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const values = {};
+    const kv = { get: async (key) => values[key] ?? null, put: async (key, value) => (values[key] = value) };
+    const background = [];
+    const ctx = { waitUntil: vi.fn((promise) => background.push(promise)) };
+    const otpRequest = () => new Request("https://example.test/register/request-otp", { method: "POST", body: JSON.stringify(identity) });
+    const otpEnv = { ...env, REGISTRATION_AUTH_MODE: "otp", adtools: kv, DB: db() };
+    expect((await handleRegisterRequestOtp(otpRequest(), otpEnv, ctx)).status).toBe(200);
+    await Promise.all(background);
+    const calls = fetchMock.mock.calls.map(([, options]) => JSON.parse(options.body));
+    const userMail = calls.find((mail) => mail.to[0] === identity.email);
+    const adminMail = calls.find((mail) => mail.to[0] === "admin@example.com");
+    const code = userMail.text.match(/verification code is (\d{6})/)[1];
+    expect(adminMail.subject).toContain("OTP requested");
+    expect(adminMail.text).toContain(identity.email);
+    expect(adminMail.text).toContain("SME");
+    expect(JSON.stringify(adminMail)).not.toContain(code);
+    expect(ctx.waitUntil).toHaveBeenCalled();
   });
   it.each([{ department: "" }, { role: "" }])("rejects missing required metadata %j before storing a request", async (metadata) => {
     const database = db();

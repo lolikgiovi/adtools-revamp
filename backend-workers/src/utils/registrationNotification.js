@@ -5,9 +5,14 @@ export async function sendRegistrationNotification(env, details) {
   try {
     const apiKey = String(env.RESEND_API_KEY || "").trim();
     if (!apiKey) throw new Error("RESEND_API_KEY is not configured");
-    const manual = details.mode !== "otp";
+    const otpRequest = details.mode === "otp-request";
+    const manual = details.mode !== "otp" && !otpRequest;
     const text = [
-      manual ? "A new registration request is awaiting approval." : "A new user completed email OTP registration.",
+      otpRequest
+        ? "A user requested an email OTP."
+        : manual
+          ? "A new registration request is awaiting approval."
+          : "A new user completed email OTP registration.",
       `Name: ${details.displayName || "Not provided"}`,
       `Email: ${details.email}`,
       `Department: ${details.department || "Not provided"}`,
@@ -15,7 +20,7 @@ export async function sendRegistrationNotification(env, details) {
       `Platform: ${details.platform || "Not provided"}`,
       `Request ID: ${details.requestId}`,
       manual && details.approvalUrl ? `Review requests: ${details.approvalUrl}` : "",
-      manual ? "Sign in to the approval dashboard to review this request." : "No manual approval is required.",
+      otpRequest ? "" : manual ? "Sign in to the approval dashboard to review this request." : "No manual approval is required.",
     ]
       .filter(Boolean)
       .join("\n");
@@ -30,7 +35,7 @@ export async function sendRegistrationNotification(env, details) {
       body: JSON.stringify({
         from: `${env.MAIL_FROM_NAME || "AD Tools"} <${env.MAIL_FROM || "no-reply@adtools.local"}>`,
         to: [to],
-        subject: `${env.MAIL_SUBJECT_PREFIX || "[AD Tools]"} ${manual ? "New registration request" : "New registered user"}`,
+        subject: `${env.MAIL_SUBJECT_PREFIX || "[AD Tools]"} ${otpRequest ? "OTP requested" : manual ? "New registration request" : "New registered user"}`,
         text,
         tags: [{ name: "category", value: "registration_admin" }],
       }),

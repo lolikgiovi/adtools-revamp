@@ -76,7 +76,7 @@ describe("OTP-first fallback routes", () => {
     const response = await pending;
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ ok: true, manualApprovalAvailable: false });
-    expect(ctx.waitUntil).toHaveBeenCalledOnce();
+    expect(ctx.waitUntil).toHaveBeenCalled();
     answer(new Response("{}", { status: 500 }));
     await Promise.all(background);
     expect((await handleManualApprovalRequest(request("request-manual-approval"), env)).status).toBe(201);
