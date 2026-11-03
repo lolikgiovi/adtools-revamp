@@ -1,3 +1,4 @@
+import { readProjectConnections } from "../../../core/Environments.js";
 // @vitest-environment jsdom
 import { beforeEach, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
@@ -9,7 +10,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 // a phantom connection; failed keychain writes close the editor; teardown reopens stale dialogs.
 let page;
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-const find = (selector) => document.querySelector(selector);
+const find = (selector) => document.querySelector(selector.startsWith(".oracle-") ? `dialog[open] ${selector}` : selector);
 function openFlow(slot) {
   find(".environment-add-btn").click();
   find(".environment-name").value = "Draft environment";
@@ -47,7 +48,7 @@ beforeEach(() => {
   document.body.append(page.categoriesRoot);
   page.service.shouldShowCategory = () => true;
   page.service.shouldShowItem = () => true;
-  page.renderCategories(config.categories.filter((category) => ["environments", "connections"].includes(category.id)));
+  page.renderCategories(config.categories.filter((category) => ["project-settings"].includes(category.id)));
 });
 it.each(["critical", "complementary"])("creates a reusable connection for the %s slot and resumes the intact draft", async (slot) => {
   const select = openFlow(slot);
@@ -57,22 +58,27 @@ it.each(["critical", "complementary"])("creates a reusable connection for the %s
   find(".oracle-save-btn").click();
   await settle();
   expect(find("dialog[open] h2").textContent).toBe("Add Environment");
-  expect(select.value).toBe("NEW_DB");
+  expect(select.selectedOptions[0].textContent).toBe("NEW_DB");
   expect(find(".environment-name").value).toBe("Draft environment");
   expect(find(".environment-public-url").value).toBe("https://public.example.test/env/");
   expect(find(".environment-direct-url").value).toBe("https://direct.example.test/env/");
   expect(find(`.environment-${slot === "critical" ? "complementary" : "critical"}`).value).toBe("");
   expect(localStorage.getItem("config.environments")).toBe("[]");
-  expect(JSON.parse(localStorage.getItem("config.oracle.connections")).map((entry) => entry.name)).toEqual(["EXISTING", "NEW_DB"]);
+  expect(readProjectConnections().map((entry) => entry.name)).toEqual(["EXISTING", "NEW_DB"]);
   expect(localStorage.getItem("config.oracle.connections")).not.toContain("fixture-password");
-  expect(invoke).toHaveBeenCalledWith("set_oracle_credentials", { name: "NEW_DB", username: "fixture-user", password: "fixture-password" });
+  expect(invoke).toHaveBeenCalledWith("set_oracle_credentials", {
+    name: expect.stringMatching(/^oracle:/),
+    username: "fixture-user",
+    password: "fixture-password",
+  });
   find(".environment-save").click();
-  expect(JSON.parse(localStorage.getItem("config.environments"))[0][`${slot}Connection`]).toBe("NEW_DB");
+  expect(JSON.parse(localStorage.getItem("config.environments"))[0][`${slot}Connection`]).toBe(select.value);
 });
 it("returns on cancel without changing the selected connection or saving the environment", () => {
   find(".environment-add-btn").click();
   const select = find(".environment-critical");
-  select.value = "EXISTING";
+  const existingId = [...select.options].find((option) => option.textContent.startsWith("EXISTING")).value;
+  select.value = existingId;
   select.dispatchEvent(new Event("change", { bubbles: true }));
   const option = [...select.options].find((entry) => entry.dataset.action === "add-connection");
   expect(option).toBeDefined();
@@ -80,7 +86,7 @@ it("returns on cancel without changing the selected connection or saving the env
   select.dispatchEvent(new Event("change", { bubbles: true }));
   find(".oracle-cancel-btn").click();
   expect(find("dialog[open] h2").textContent).toBe("Add Environment");
-  expect(select.value).toBe("EXISTING");
+  expect(select.value).toBe(existingId);
   expect(localStorage.getItem("config.environments")).toBe("[]");
   expect(invoke).not.toHaveBeenCalled();
 });
@@ -95,7 +101,7 @@ it("keeps Oracle open on a failed keychain write and lets the user retry", async
   expect(find(".oracle-form-status").textContent).toContain("Keychain unavailable");
   find(".oracle-save-btn").click();
   await settle();
-  expect(select.value).toBe("NEW_DB");
+  expect(select.selectedOptions[0].textContent).toBe("NEW_DB");
   expect(find("dialog[open] h2").textContent).toBe("Add Environment");
 });
 it("does not restore either dialog after the page is deactivated during saving", async () => {

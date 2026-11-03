@@ -6,7 +6,7 @@ export function shell(connections, desktop) {
   return `<section class="mq-tool" aria-label="Monitoring Config">
     <div class="mq-toolbar">
       <label class="mq-connection">Connection<select id="mq-connection" aria-label="Oracle connection" ${!desktop ? "disabled" : ""}>
-        <option value="">Select a connection…</option>${connections.map((item, i) => `<option value="${i}">${escapeHtml(item.name)}</option>`).join("")}
+        <option value="">Select a connection…</option>${connections.map((item, i) => `<option value="${i}">${escapeHtml(item.label || item.name)}</option>`).join("")}
       </select></label>
       <span class="mq-schema" translate="no">MONITORING</span>
       ${button("load", "Load", !desktop)}

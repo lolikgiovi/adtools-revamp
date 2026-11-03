@@ -1,3 +1,5 @@
+import { isProjectSetting } from "../../shared/project-settings.js";
+export { isProjectSetting };
 /** Project identity is shared by tools; active selection is pinned per browser tab. */
 const REGISTRY_KEY = "config.projects";
 const ACTIVE_KEY = "config.project.active";
@@ -107,13 +109,48 @@ export function getQuickQueryDatabaseName(target = localStorage) {
 
 /** Capture project identity once so asynchronous work cannot follow a later selection. */
 export function projectEnvironmentStorage(target = localStorage, projectId = getActiveProject(target).id) {
+  if (target.projectId) return target;
   const keyFor = (key) => (SCOPED_KEYS.has(key) ? getProjectStorageKey(key, target, projectId) : key);
   return {
     getItem: (key) => target.getItem(keyFor(key)),
     setItem: (key, value) => target.setItem(keyFor(key), value),
+    removeItem: (key) => target.removeItem(keyFor(key)),
   };
 }
 
+/** Legacy project retains original keys: no destructive copy or fallback into other projects. */
+export function projectSettingsStorage(target = localStorage, projectId) {
+  if (target.projectId && (projectId === undefined || projectId === target.projectId)) return target;
+  if (target.sourceStorage) target = target.sourceStorage;
+  projectId ??= getActiveProject(target).id;
+  const keyFor = (key) => (isProjectSetting(key) ? getProjectStorageKey(key, target, projectId) : key);
+  return {
+    projectId,
+    sourceStorage: target,
+    keyFor,
+    getItem: (key) => target.getItem(keyFor(key)),
+    setItem: (key, value) => target.setItem(keyFor(key), value),
+    removeItem: (key) => target.removeItem(keyFor(key)),
+  };
+}
+
+export function readJiraProjectKey(target = localStorage) {
+  const scoped = projectSettingsStorage(target);
+  const selected = scoped.getItem("config.jira.projectKey");
+  if (selected !== null) return selected.trim();
+  try {
+    const keys = JSON.parse(scoped.getItem("config.jira.projectKeys") || "[]");
+    return Array.isArray(keys) && keys.length === 1 ? String(keys[0]).trim() : "";
+  } catch {
+    return "";
+  }
+}
+
+/** Empty scope identifies the original Keychain entry, retained for legacy compatibility. */
+export function projectCredentialScope(target = localStorage, projectId = getActiveProject(target).id) {
+  return projectId === getLegacyProjectId(target) ? "" : projectId;
+}
+
 export function allProjectEnvironmentStores(target = localStorage) {
-  return registry(target).projects.map((project) => projectEnvironmentStorage(target, project.id));
+  return registry(target).projects.map((project) => projectSettingsStorage(target, project.id));
 }

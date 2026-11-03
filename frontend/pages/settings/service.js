@@ -1,11 +1,20 @@
+import { projectSettingsStorage, readJiraProjectKey } from "../../core/Projects.js";
 import { getRuntime } from "../../core/Runtime.js";
-import { normalizePath, readEnvironments, writeEnvironments } from "../../core/Environments.js";
+import {
+  normalizePath,
+  readEnvironments,
+  writeEnvironments,
+  readEnvironmentConnections,
+  saveEnvironmentConnections,
+} from "../../core/Environments.js";
 
 class SettingsService {
   constructor({ eventBus, themeManager } = {}) {
+    this.storage = projectSettingsStorage();
+    this.oracleEnvironmentId = "";
     this.eventBus = eventBus;
     this.themeManager = themeManager;
-    this.userRole = localStorage.getItem("user.role") || "user";
+    this.userRole = this.storage.getItem("user.role") || "user";
   }
 
   async loadConfig() {
@@ -42,14 +51,22 @@ class SettingsService {
     return true;
   }
 
+  forEnvironment(environmentId) {
+    const service = Object.create(this);
+    service.oracleEnvironmentId = environmentId;
+    return service;
+  }
+
   getValue(key, type, defaultValue) {
-    if (type === "environments") return readEnvironments();
-    if (key === "config.lockeyPath") return normalizePath(localStorage.getItem(key) ?? "");
-    if (key === "config.jira.projectKeys" && localStorage.getItem(key) === null) {
-      const legacy = localStorage.getItem("config.jira.projectKey");
+    if (key === "config.jira.projectKey") return readJiraProjectKey(this.storage);
+    if (key === "config.oracle.connections") return readEnvironmentConnections(this.oracleEnvironmentId, this.storage);
+    if (type === "environments") return readEnvironments(this.storage);
+    if (key === "config.lockeyPath") return normalizePath(this.storage.getItem(key) ?? "");
+    if (key === "config.jira.projectKeys" && this.storage.getItem(key) === null) {
+      const legacy = this.storage.getItem("config.jira.projectKey");
       if (legacy?.trim()) return [legacy.trim()];
     }
-    const raw = localStorage.getItem(key);
+    const raw = this.storage.getItem(key);
     if (raw === null || raw === "null") {
       if (type === "boolean" && defaultValue === "system") {
         try {
@@ -120,8 +137,9 @@ class SettingsService {
   }
 
   setValue(key, type, value, applyHint, { notify = true } = {}) {
+    if (key === "config.oracle.connections") return saveEnvironmentConnections(this.oracleEnvironmentId, value, this.storage);
     if (type === "environments") {
-      const environments = writeEnvironments(Array.isArray(value) ? value : []);
+      const environments = writeEnvironments(Array.isArray(value) ? value : [], this.storage);
       if (notify) this.eventBus?.emit?.("notification:success", { message: "Setting saved", duration: 1000 });
       return environments;
     }
@@ -154,7 +172,7 @@ class SettingsService {
         break;
     }
 
-    localStorage.setItem(key, storeVal);
+    this.storage.setItem(key, storeVal);
     if (key === "config.oracle.connections" || key.startsWith("config.redis.")) {
       globalThis.dispatchEvent?.(new Event("adtools:connection-settings-changed"));
     }

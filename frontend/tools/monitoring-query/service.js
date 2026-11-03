@@ -1,8 +1,9 @@
+import { readOracleToolConnections } from "../../core/Environments.js";
 import { OracleConnectionService } from "../../core/OracleConnectionService.js";
 export class MonitoringService {
   connections() {
     try {
-      return JSON.parse(localStorage.getItem("config.oracle.connections") || "[]").filter((item) => item.name && item.connect_string);
+      return readOracleToolConnections().filter((item) => item.name && item.connect_string);
     } catch {
       return [];
     }

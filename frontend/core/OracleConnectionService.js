@@ -60,22 +60,44 @@ export class OracleConnectionService {
   }
 
   static async getOracleUsername(name) {
+    name = await this.credentialIdentity(name);
     return this.invokeTauri("get_oracle_username", { name });
   }
 
   static async setOracleCredentials(name, username, password) {
+    name = await this.credentialIdentity(name, !password);
     return this.invokeTauri("set_oracle_credentials", { name, username, password });
   }
 
   static async deleteOracleCredentials(name) {
+    name = await this.credentialIdentity(name, false);
     return this.invokeTauri("delete_oracle_credentials", { name });
   }
 
   static async hasOracleCredentials(name) {
+    name = await this.credentialIdentity(name);
     return this.invokeTauri("has_oracle_credentials", { name });
   }
 
   static async invokeTauri(command, args) {
+    // Translate before awaiting so execution and pools use the captured connection identity.
+    if (args?.config?.id) {
+      const connection = args.config;
+      const identity = await this.credentialIdentity(connection, !(args.username && args.password));
+      args = { ...args, connectionName: identity, config: { ...connection, name: identity } };
+    }
+    if (args?.queries) {
+      args = {
+        ...args,
+        queries: await Promise.all(
+          args.queries.map(async (query) => {
+            if (!query.config?.id) return query;
+            const identity = await this.credentialIdentity(query.config);
+            return { ...query, connection_name: identity, config: { ...query.config, name: identity } };
+          }),
+        ),
+      };
+    }
     const { invoke } = await import("@tauri-apps/api/core");
     try {
       return await invoke(command, args);
@@ -86,6 +108,15 @@ export class OracleConnectionService {
     }
   }
 
+  static async credentialIdentity(connection, migrate = true) {
+    if (!connection || typeof connection === "string") return connection;
+    const identity = connection.id ? `oracle:${connection.projectId || "legacy"}:${connection.id}` : connection.name;
+    if (migrate && connection.id && connection.legacyCredentialName) {
+      await this.invokeTauri("migrate_oracle_credentials", { source: connection.legacyCredentialName, destination: identity });
+    }
+    return identity;
+  }
+
   static async testConnectionWithCredentials(connection) {
     const started = await this.ensureSidecarStarted();
     if (!started) {
@@ -93,7 +124,7 @@ export class OracleConnectionService {
     }
     return this.invokeTauri("oracle_sidecar_test_connection", {
       connectionName: connection.name,
-      config: { name: connection.name, connect_string: connection.connect_string },
+      config: connection,
       username: connection.username || null,
       password: connection.password || null,
     });
@@ -147,7 +178,7 @@ export class OracleConnectionService {
     if (!started) throw new OracleSidecarError("Oracle bridge did not start");
     return this.invokeTauri("oracle_sidecar_monitoring", {
       connectionName: connection.name,
-      config: { name: connection.name, connect_string: connection.connect_string },
+      config: connection,
       request,
     });
   }

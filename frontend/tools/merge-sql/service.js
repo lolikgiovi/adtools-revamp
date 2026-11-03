@@ -1,3 +1,5 @@
+import { projectSettingsStorage } from "../../core/Projects.js";
+const projectStorage = () => projectSettingsStorage();
 /**
  * Merge SQL Service
  * Handles SQL file parsing, merging, and deduplication logic
@@ -12,8 +14,7 @@ const DEFAULT_MERGE_SQL_SQUAD_NAMES = [
   "phoebe",
   "regulus",
   "canopus",
-  "antares",
-];
+  "antares"];
 
 export class MergeSqlService {
   static SELECT_FILTERED_NOTE = "-- No select statement get since the where clause is not by specific key";
@@ -917,7 +918,8 @@ export class MergeSqlService {
 
     for (const row of rows) {
       const key = row
-        .map((condition) => `${condition.column.replace(/^"|"$/g, "").toUpperCase()}=${condition.valueSql === null ? "NULL" : condition.valueSql}`)
+        .map((condition) => `${condition.column.replace(/^"|"$/g, "").toUpperCase()}=${condition.valueSql === null ? "NULL" : condition.valueSql}`,
+        )
         .sort()
         .join("|");
 
@@ -1753,7 +1755,7 @@ export class MergeSqlService {
     if (/^\s*SELECT\b/i.test(stmt)) {
       return stmt.replace(
         new RegExp(`(\\bFROM\\s+)${TABLE_REF}`, "i"),
-        (_, from, tableRef) => from + this.uppercaseUnquotedTableRef(tableRef)
+        (_, from, tableRef) => from + this.uppercaseUnquotedTableRef(tableRef),
       );
     }
 
@@ -1973,7 +1975,7 @@ export class MergeSqlService {
         return defaults;
       }
 
-      const raw = localStorage.getItem(MERGE_SQL_SQUAD_NAMES_STORAGE_KEY);
+      const raw = projectStorage().getItem(MERGE_SQL_SQUAD_NAMES_STORAGE_KEY);
       if (!raw) {
         return defaults;
       }

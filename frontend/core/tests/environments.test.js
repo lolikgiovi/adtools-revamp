@@ -81,8 +81,8 @@ describe("environment resolution", () => {
     localStorage.setItem(ORACLE_KEY, JSON.stringify([connection("CORE"), connection("EXTRA")]));
     const environment = { criticalConnection: "CORE", complementaryConnection: "EXTRA" };
 
-    expect(resolveConnection(environment, "critical")).toEqual(connection("CORE"));
-    expect(resolveConnection(environment, "complementary")).toEqual(connection("EXTRA"));
+    expect(resolveConnection(environment, "critical")).toMatchObject(connection("CORE"));
+    expect(resolveConnection(environment, "complementary")).toMatchObject(connection("EXTRA"));
     expect(resolveConnection({ criticalConnection: "", complementaryConnection: "" }, "critical")).toBeNull();
   });
 

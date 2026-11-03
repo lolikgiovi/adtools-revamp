@@ -1,3 +1,5 @@
+import { getActiveProject, projectSettingsStorage, isProjectSetting } from "../../core/Projects.js";
+import { readProjectConnections } from "../../core/Environments.js";
 import { DEPARTMENTS, PUBLISHABLE_SETTINGS, validatePublication } from "../../../shared/published-settings.js";
 import { SETTINGS_API_BASE } from "../../core/PublishedSettings.js";
 
@@ -15,7 +17,9 @@ const escape = (value) =>
       })[char],
   );
 function initialValue(item) {
-  const raw = localStorage.getItem(item.storageKey);
+  if (item.storageKey === "config.oracle.environment.catalog")
+    return readProjectConnections().map(({ id, environmentId, name, connect_string }) => ({ id, environmentId, name, connect_string }));
+  const raw = projectSettingsStorage().getItem(item.storageKey);
   if (raw === null) return item.default ?? [];
   if (["boolean", "number", "environments", "oracle-connections", "kafka-brokers", "string-list"].includes(item.type)) {
     try {
@@ -52,10 +56,14 @@ export class SettingsPublisher {
               <input type="checkbox" value="${department}">${department}</label>`,
             ).join("")}</div>
           </fieldset>
+          <label for="publish-project">Project</label>
+          <input id="publish-project" maxlength="80" value="${escape(getActiveProject().name)}" autocomplete="off">
           <fieldset><legend>Settings</legend>
             <p class="publish-note">Only selected settings change. Selected lists replace the recipient’s list. Theme, Updates and credentials stay personal.</p>
-            <div class="publish-setting-list">${PUBLISHABLE_SETTINGS.map(
-              (item, index) => `<div class="publish-setting">
+            <div class="publish-setting-list">${PUBLISHABLE_SETTINGS.map((item, index) =>
+              item.storageKey === "project.name" || item.storageKey === "config.jira.projectKeys"
+                ? ""
+                : `<div class="publish-setting">
               <label class="publish-choice"><input type="checkbox" data-setting="${escape(item.storageKey)}" data-index="${index}">
                 ${escape(item.label)}</label><div class="publish-value" id="publish-value-${index}" hidden></div></div>`,
             ).join("")}</div>
@@ -213,6 +221,11 @@ export class SettingsPublisher {
       }
       settings[item.storageKey] = value;
     }
+    if (Object.keys(settings).some(isProjectSetting)) {
+      const name = this.root.querySelector("#publish-project").value.trim();
+      if (!name) throw new Error("Enter the destination project name.");
+      settings["project.name"] = name;
+    }
     const type = this.root.querySelector("#publish-audience").value;
     const values =
       type === "emails"
@@ -336,6 +349,7 @@ export class SettingsPublisher {
     if (!publication || this.busy) return;
     this.invalidate();
     this.root.querySelector("#publish-title").value = publication.title;
+    this.root.querySelector("#publish-project").value = publication.settings["project.name"] || getActiveProject().name;
     this.root.querySelector("#publish-audience").value = publication.target.type;
     this.root.querySelector(".publish-emails").hidden = publication.target.type !== "emails";
     this.root.querySelector(".publish-departments").hidden = publication.target.type !== "departments";

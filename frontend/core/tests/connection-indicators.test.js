@@ -40,7 +40,8 @@ describe("connection indicators", () => {
     oracle.pools = [];
     document.body.innerHTML = `<div class="connection-indicators">${["oracle", "kafka", "redis"].map((service) =>
       `<button data-connection="${service}" class="connection-indicator"><span class="connection-detail"></span></button>
-      <div id="${service}-connection-menu" hidden></div>`).join("")}</div>`;
+      <div id="${service}-connection-menu" hidden></div>`,
+      ).join("")}</div>`;
     indicators = new ConnectionIndicators(document.querySelector(".connection-indicators"));
   });
 
@@ -52,23 +53,32 @@ describe("connection indicators", () => {
     expect(detail("redis")).toBe("On demand");
     window.dispatchEvent(new CustomEvent("adtools:connection-activity", {
       detail: { service: "kafka", command: "kafka_start_listener", phase: "finish", success: true },
-    }));
+    }),
+    );
     expect(detail("kafka")).toBe("Listening");
     window.dispatchEvent(new CustomEvent("adtools:connection-activity", {
       detail: { service: "kafka", command: "kafka_stop_listener", phase: "finish", success: true },
-    }));
+    }),
+    );
     expect(detail("kafka")).toBe("On demand");
   });
 
   it("uses the names of active Oracle pools", async () => {
     oracle.ready = true;
+    localStorage.setItem(
+      "config.oracle.connections",
+      JSON.stringify([
+        { name: "U81", connect_string: "one" },
+        { name: "U82", connect_string: "two" },
+      ]),
+    );
     oracle.pools = ["U81", "U82"];
     await indicators.refreshOracle();
     expect(detail("oracle")).toBe("U81, U82");
     expect(document.querySelector('[data-connection="oracle"]').dataset.state).toBe("active");
     oracle.pools = [];
     await indicators.refreshOracle();
-    expect(detail("oracle")).toBe("Not configured");
+    expect(detail("oracle")).toBe("Disconnected");
   });
 
   it("connects two saved Oracle names and blocks a third until one disconnects", async () => {
@@ -76,7 +86,8 @@ describe("connection indicators", () => {
       { name: "U81", connect_string: "db-one" },
       { name: "U82", connect_string: "db-two" },
       { name: "U83", connect_string: "db-three" },
-    ]));
+    ]),
+    );
     oracle.ready = true;
     document.querySelector('[data-connection="oracle"]').click();
     document.querySelector('[data-connection-action="oracle-connect"][data-connection-name="U81"]').click();

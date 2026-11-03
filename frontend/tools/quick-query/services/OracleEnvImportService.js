@@ -1,3 +1,4 @@
+import { readOracleToolConnections } from "../../../core/Environments.js";
 import { OracleConnectionService } from "../../../core/OracleConnectionService.js";
 
 const SYSTEM_SCHEMAS = [
@@ -63,7 +64,7 @@ export class OracleEnvImportService {
    */
   static loadConnections() {
     try {
-      const raw = localStorage.getItem("config.oracle.connections");
+      const raw = JSON.stringify(readOracleToolConnections());
       if (!raw) return [];
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) return [];

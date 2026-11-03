@@ -1,3 +1,4 @@
+import { readOracleToolConnections } from "../../core/Environments.js";
 import { isTauri } from "../../core/Runtime.js";
 import { OracleConnectionService } from "../../core/OracleConnectionService.js";
 import { listBaseUrls } from "../../core/Environments.js";
@@ -265,7 +266,7 @@ export class ImageOracleService {
 
   static loadConnections() {
     try {
-      const connections = JSON.parse(localStorage.getItem("config.oracle.connections") || "[]");
+      const connections = readOracleToolConnections();
       return Array.isArray(connections) ? connections.filter((c) => c?.name && c.connect_string) : [];
     } catch {
       return [];

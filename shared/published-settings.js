@@ -8,6 +8,7 @@ function collect(categories) {
     return [
       ...(category.items || []).filter(
         (item) =>
+          item.storageKey &&
           !["secret", "action"].includes(item.type) &&
           item.storageKey !== "theme" &&
           !item.storageKey.startsWith("update.") &&
@@ -18,7 +19,18 @@ function collect(categories) {
   });
 }
 
-export const PUBLISHABLE_SETTINGS = collect(config.categories);
+export const PUBLISHABLE_SETTINGS = [
+  ...collect(config.categories),
+  { key: "project.name", storageKey: "project.name", label: "Project", type: "string", default: "" },
+  {
+    key: "config.oracle.environment.catalog",
+    storageKey: "config.oracle.environment.catalog",
+    label: "Environment Oracle Connections",
+    type: "oracle-connections",
+    default: [],
+  },
+  { key: "config.jira.projectKeys", storageKey: "config.jira.projectKeys", label: "Legacy Jira Project Keys", type: "string-list" },
+];
 const byKey = new Map(PUBLISHABLE_SETTINGS.map((item) => [item.storageKey, item]));
 
 function fail(message) {
@@ -51,7 +63,7 @@ function rows(value, fields, required, label) {
     }
     for (const [key, val] of Object.entries(row)) text(val, `${label} ${key}`);
     for (const key of required) if (!row[key]?.trim()) fail(`${label}: ${key} is required.`);
-    const name = row.name.trim().toLowerCase();
+    const name = `${row.environmentId || ""}:${row.name.trim().toLowerCase()}`;
     if (names.has(name)) fail(`${label}: duplicate name.`);
     names.add(name);
   }
@@ -65,6 +77,11 @@ export function validateSettings(settings) {
     const item = byKey.get(key);
     if (!item) fail(`Setting cannot be published: ${key}`);
     const label = item.label;
+    if (key === "project.name") {
+      text(value, label, 80);
+      if (!value.trim()) fail("Enter a destination project name.");
+      continue;
+    }
     if (item.type === "boolean") {
       if (typeof value !== "boolean") fail(`${label}: use true or false.`);
     } else if (item.type === "number") {
@@ -84,7 +101,13 @@ export function validateSettings(settings) {
         url(row.cdnDirectUrl || "", label);
       }
     } else if (item.type === "oracle-connections") {
-      rows(value, ["name", "connect_string"], ["name", "connect_string"], label);
+      rows(value, ["id", "environmentId", "name", "connect_string"], ["name", "connect_string"], label);
+      if (
+        key === "config.oracle.environment.catalog" &&
+        (value.some((row) => !row.id?.trim()) || new Set(value.map((row) => row.id)).size !== value.length)
+      ) {
+        fail(`${label}: every connection needs a unique ID.`);
+      }
       for (const row of value) {
         if (/@|\b(?:password|user|userid)\s*=|:\/\//i.test(row.connect_string)) {
           fail(`${label}: use a connection address without credentials.`);

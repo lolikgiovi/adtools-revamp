@@ -1130,3 +1130,23 @@ body .settings-edit-dialog-wide {
     grid-column: 1 / -1;
   }
 }
+
+.environment-entry {
+  min-width: 0;
+}
+
+.environment-connections {
+  padding: 0 12px 12px;
+}
+
+.environment-connections > summary {
+  cursor: pointer;
+  padding: 8px 0;
+  font-weight: 500;
+}
+
+.environment-connections .oracle-connections-header {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}

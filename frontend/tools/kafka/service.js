@@ -1,3 +1,4 @@
+import { projectSettingsStorage } from "../../core/Projects.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 
 export const KAFKA_CONFIG_KEY = "tool:kafka:connection";
@@ -46,10 +47,13 @@ function migrateKafkaBrokerProfiles(storage) {
     id: stableBrokerId(brokers),
     name: brokers.split(",")[0].trim() || `Broker ${index + 1}`,
     brokers,
-  }, index));
+  }, index,
+    ),
+  );
 }
 
 export function readKafkaBrokerProfiles(storage = localStorage) {
+  storage = projectSettingsStorage(storage);
   try {
     let raw = storage.getItem(KAFKA_BROKERS_KEY);
     if (raw === null) {
@@ -68,6 +72,7 @@ export function readKafkaBrokerProfiles(storage = localStorage) {
 }
 
 export function readKafkaActiveBrokerId(storage = localStorage) {
+  storage = projectSettingsStorage(storage);
   const profiles = readKafkaBrokerProfiles(storage);
   try {
     const selected = storage.getItem(KAFKA_ACTIVE_BROKER_KEY);
@@ -78,6 +83,7 @@ export function readKafkaActiveBrokerId(storage = localStorage) {
 }
 
 export function saveKafkaBrokerProfiles(value, storage = localStorage) {
+  storage = projectSettingsStorage(storage);
   const profiles = (Array.isArray(value) ? value : []).map(profileFrom).filter(Boolean);
   storage.setItem(KAFKA_BROKERS_KEY, JSON.stringify(profiles));
   const selected = storage.getItem(KAFKA_ACTIVE_BROKER_KEY);
@@ -91,6 +97,7 @@ export function saveKafkaBrokerProfiles(value, storage = localStorage) {
 }
 
 export function saveKafkaActiveBroker(id, storage = localStorage) {
+  storage = projectSettingsStorage(storage);
   const profiles = readKafkaBrokerProfiles(storage);
   const selected = profiles.find((profile) => profile.id === id);
   if (selected) storage.setItem(KAFKA_ACTIVE_BROKER_KEY, selected.id);
@@ -174,6 +181,7 @@ export function receivedMessageToDraft(message) {
 }
 
 export function readKafkaConfig(storage = localStorage) {
+  storage = projectSettingsStorage(storage);
   try {
     const profiles = readKafkaBrokerProfiles(storage);
     const selectedId = readKafkaActiveBrokerId(storage);
@@ -185,6 +193,7 @@ export function readKafkaConfig(storage = localStorage) {
 }
 
 export function readKafkaRequests(storage = localStorage) {
+  storage = projectSettingsStorage(storage);
   try {
     const requests = JSON.parse(storage.getItem(KAFKA_REQUESTS_KEY) || "[]");
     return Array.isArray(requests) ? requests.filter((item) => item && typeof item.name === "string").slice(0, 30) : [];
@@ -194,6 +203,7 @@ export function readKafkaRequests(storage = localStorage) {
 }
 
 export function readKafkaTopicFavorites(storage = localStorage) {
+  storage = projectSettingsStorage(storage);
   try {
     const topics = JSON.parse(storage.getItem(KAFKA_TOPIC_FAVORITES_KEY) || "[]");
     return Array.isArray(topics) ? topics.filter((topic) => typeof topic === "string" && topic.trim()).slice(0, 100) : [];
@@ -263,14 +273,16 @@ export class KafkaService {
       if (command === "kafka_stop_listener") this.listenerContext = {};
       globalThis.dispatchEvent?.(new CustomEvent("adtools:connection-activity", {
         detail: { ...detail, phase: "finish", success: true },
-      }));
+      }),
+      );
       return result;
     } catch (error) {
       metadata.outcome = "failure";
       metadata.error_category = kafkaErrorCategory(error);
       globalThis.dispatchEvent?.(new CustomEvent("adtools:connection-activity", {
         detail: { ...detail, phase: "finish", success: false },
-      }));
+      }),
+      );
       throw error;
     } finally {
       metadata.duration_ms = Math.max(0, Math.round(performance.now() - started));

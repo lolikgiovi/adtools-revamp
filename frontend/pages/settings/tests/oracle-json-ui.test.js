@@ -98,7 +98,7 @@ describe("Oracle JSON editor", () => {
     expect(document.querySelector(".settings-bulk-apply").hidden).toBe(false);
     click(".settings-bulk-apply");
     await settle();
-    expect(credentials).toHaveBeenCalledWith("DEV", "app", "fake-test-secret");
+    expect(credentials).toHaveBeenCalledWith(expect.objectContaining({ name: "DEV" }), "app", "fake-test-secret");
     expect(connections).toEqual([{ name: "DEV", connect_string: "other:1521/DEV" }]);
     expect(input()).toBeNull();
     expect(document.querySelector(".settings-bulk-form").hidden).toBe(true);

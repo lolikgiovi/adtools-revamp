@@ -1,3 +1,4 @@
+import { readOracleToolConnections } from "../core/Environments.js";
 import { createOracleEditor } from "../core/MonacoOracle.js";
 import { OracleConnectionService } from "../core/OracleConnectionService.js";
 import {
@@ -80,7 +81,7 @@ export const withTemplateSqlImport = (Base) =>
 
     loadOracleConnections() {
       try {
-        const connections = JSON.parse(localStorage.getItem("config.oracle.connections") || "[]");
+        const connections = readOracleToolConnections();
         return Array.isArray(connections) ? connections.filter((item) => item?.name && item?.connect_string) : [];
       } catch (_) {
         return [];
@@ -99,7 +100,7 @@ export const withTemplateSqlImport = (Base) =>
         ...connections.map((connection) => {
           const option = document.createElement("option");
           option.value = connection.name;
-          option.textContent = `${connection.name} (${connection.connect_string})`;
+          option.textContent = `${connection.label || connection.name} (${connection.connect_string})`;
           return option;
         }),
       );

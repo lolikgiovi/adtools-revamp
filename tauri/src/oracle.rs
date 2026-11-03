@@ -963,6 +963,16 @@ fn csv_escape(value: &serde_json::Value) -> String {
 // commands were removed in Phase 4.10. Oracle operations now use the Python sidecar.
 
 #[tauri::command]
+pub fn migrate_oracle_credentials(source: String, destination: String) -> Result<(), String> {
+    if has_credentials(&destination)? {
+        return Ok(());
+    }
+    // Copy entirely inside secure storage. Legacy entries remain available for retry and other owners.
+    let (username, password) = get_credentials(&source)?;
+    set_credentials(&destination, &username, &password)
+}
+
+#[tauri::command]
 pub fn set_oracle_credentials(name: String, username: String, password: String) -> Result<(), String> {
     let password = if password.is_empty() {
         get_credentials(&name)?.1

@@ -1,3 +1,4 @@
+import { projectSettingsStorage } from "../../core/Projects.js";
 import { BaseTool } from "../../core/BaseTool.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { getIconSvg } from "./icon.js";
@@ -27,6 +28,7 @@ const DEFAULT_KAFKA_VALUE = '{\n  "example": "value"\n}';
 export class KafkaTool extends BaseTool {
   constructor(eventBus, service = new KafkaService()) {
     super({ id: "kafka", eventBus });
+    this.projectStorage = projectSettingsStorage();
     this.service = service;
     this.publishing = false;
     this.listening = false;
@@ -119,9 +121,12 @@ export class KafkaTool extends BaseTool {
       if (!this.field("kafkaTemplatePicker").contains(event.relatedTarget)) this.closeTemplateMenu();
     });
     this.field("kafkaTemplateSearch").addEventListener("focus", () => this.openTemplateMenu());
-    this.field("kafkaTemplateSearch").addEventListener("pointerdown", () => this.field("kafkaTemplatePicker").classList.add("is-pointer-focused"));
-    this.field("kafkaTemplateSearch").addEventListener("click", () => this.field("kafkaTemplatePicker").classList.add("is-pointer-focused"));
-    this.field("kafkaTemplateSearch").addEventListener("blur", () => this.field("kafkaTemplatePicker").classList.remove("is-pointer-focused"));
+    this.field("kafkaTemplateSearch").addEventListener("pointerdown", () => this.field("kafkaTemplatePicker").classList.add("is-pointer-focused"),
+    );
+    this.field("kafkaTemplateSearch").addEventListener("click", () => this.field("kafkaTemplatePicker").classList.add("is-pointer-focused"),
+    );
+    this.field("kafkaTemplateSearch").addEventListener("blur", () => this.field("kafkaTemplatePicker").classList.remove("is-pointer-focused"),
+    );
     this.field("kafkaTemplateFavorite").addEventListener("click", () => this.toggleTemplateFavorite());
     this.headersEscapeHandler = (event) => {
       if (event.key === "Escape" && !this.field("kafkaTemplateSave")?.hidden) {
@@ -204,7 +209,7 @@ export class KafkaTool extends BaseTool {
   restoreTabSession() {
     let session = null;
     try {
-      session = JSON.parse(localStorage.getItem(KAFKA_TABS_KEY) || "null");
+      session = JSON.parse(this.projectStorage.getItem(KAFKA_TABS_KEY) || "null");
     } catch (_) {}
 
     const seenIds = new Set();
@@ -223,7 +228,7 @@ export class KafkaTool extends BaseTool {
 
   normalizeTabDraft(tab) {
     if (!tab || typeof tab !== "object") return null;
-    const text = (value, fallback = "") => typeof value === "string" ? value : fallback;
+    const text = (value, fallback = "") => (typeof value === "string" ? value : fallback);
     const id = text(tab.id);
     if (!/^[\w-]+$/.test(id)) return null;
     const range = Number(tab.historyRange);
@@ -382,7 +387,8 @@ export class KafkaTool extends BaseTool {
       this.field("kafkaMessages").append(Object.assign(document.createElement("p"), {
         className: "kafka-empty",
         textContent: this.config().brokers ? "Choose a topic and start listening." : "Set up a broker, then enter a topic to listen.",
-      }));
+      }),
+      );
       this.field("kafkaHistoryResults").replaceChildren();
       this.message("kafkaPublishStatus", "");
       this.message("kafkaListenStatus", "");
@@ -457,7 +463,8 @@ export class KafkaTool extends BaseTool {
     if (!active) return;
     const title = this.getTabTitle(this.captureCurrentTabDraft());
     const label = Array.from(this.field("kafkaTabList")?.querySelectorAll(".kafka-tab-label") || [])
-      .find((button) => button.dataset.tabId === active.id);
+      .find((button) => button.dataset.tabId === active.id,
+    );
     if (label) {
       label.textContent = title;
       label.title = `${title} · Double-click to rename`;
@@ -484,11 +491,12 @@ export class KafkaTool extends BaseTool {
       if (index !== -1) this.tabs[index] = active;
     }
     try {
-      localStorage.setItem(KAFKA_TABS_KEY, JSON.stringify({
+      this.projectStorage.setItem(KAFKA_TABS_KEY, JSON.stringify({
         version: 1,
         tabs: this.tabs,
         activeTabId: this.activeTabId,
-      }));
+      }),
+      );
       this._tabStorageErrorShown = false;
       return true;
     } catch (_) {
@@ -783,24 +791,28 @@ export class KafkaTool extends BaseTool {
 
   closeOtherTabs(tabId) {
     if (this.tabs.length <= 1 || !this.tabs.some((tab) => tab.id === tabId)) return false;
-    return this.closeTabs(this.tabs.filter((tab) => tab.id !== tabId).map((tab) => tab.id), { nextActiveId: tabId });
+    return this.closeTabs(this.tabs.filter((tab) => tab.id !== tabId).map((tab) => tab.id), { nextActiveId: tabId },
+    );
   }
 
   closeTabsToLeft(tabId) {
     const index = this.tabs.findIndex((tab) => tab.id === tabId);
     if (index <= 0) return false;
-    return this.closeTabs(this.tabs.slice(0, index).map((tab) => tab.id), { nextActiveId: tabId });
+    return this.closeTabs(this.tabs.slice(0, index).map((tab) => tab.id), { nextActiveId: tabId },
+    );
   }
 
   closeTabsToRight(tabId) {
     const index = this.tabs.findIndex((tab) => tab.id === tabId);
     if (index < 0 || index >= this.tabs.length - 1) return false;
-    return this.closeTabs(this.tabs.slice(index + 1).map((tab) => tab.id), { nextActiveId: tabId });
+    return this.closeTabs(this.tabs.slice(index + 1).map((tab) => tab.id), { nextActiveId: tabId },
+    );
   }
 
   closeAllTabs() {
     if (!this.tabs.length) return false;
-    return this.closeTabs(this.tabs.map((tab) => tab.id), { createReplacement: true });
+    return this.closeTabs(this.tabs.map((tab) => tab.id), { createReplacement: true },
+    );
   }
 
   closeTabs(tabIds, { nextActiveId = null, createReplacement = false } = {}) {
@@ -815,9 +827,9 @@ export class KafkaTool extends BaseTool {
     const previousActiveId = this.activeTabId;
     const activeIndex = this.tabs.findIndex((tab) => tab.id === previousActiveId);
     try {
-      const closed = this.tabs.flatMap((tab, index) => idsToClose.has(tab.id)
+      const closed = this.tabs.flatMap((tab, index) => (idsToClose.has(tab.id)
         ? [{ tab: this.cloneTabDraft(tab), index }]
-        : []);
+        : []));
       const remaining = this.tabs.filter((tab) => !idsToClose.has(tab.id));
       const replacement = remaining.length ? null : this.createTabDraft();
       if (replacement) remaining.push(replacement);
@@ -1012,7 +1024,8 @@ export class KafkaTool extends BaseTool {
   }
 
   openBrokerSettings() {
-    try { localStorage.setItem("settings.focus", "kafka.brokers"); } catch (_) {}
+    try {
+      this.projectStorage.setItem("settings.focus", "kafka.brokers"); } catch (_) {}
     if (window.app?.router?.navigate) window.app.router.navigate("settings");
     else this.eventBus?.emit?.("route:change", { path: "settings" });
   }
@@ -1155,7 +1168,8 @@ export class KafkaTool extends BaseTool {
       layout.style.gridTemplateColumns = `${left}px ${RESIZER_WIDTH}px ${right}px`;
       updateAria(left, total);
       if (persist && total > 0) {
-        try { localStorage.setItem("tool:kafka:split-ratio", String(left / total)); } catch (_) {}
+        try {
+          this.projectStorage.setItem("tool:kafka:split-ratio", String(left / total)); } catch (_) {}
       }
     };
     const onMove = (event) => {
@@ -1202,7 +1216,7 @@ export class KafkaTool extends BaseTool {
     const metrics = getMetrics();
     let savedRatio = null;
     try {
-      const parsed = Number.parseFloat(localStorage.getItem("tool:kafka:split-ratio") || "");
+      const parsed = Number.parseFloat(this.projectStorage.getItem("tool:kafka:split-ratio") || "");
       if (Number.isFinite(parsed) && parsed > 0 && parsed < 1) savedRatio = parsed;
     } catch (_) {}
     if (savedRatio !== null) applyLeft(metrics.total * savedRatio, false);
@@ -1603,7 +1617,7 @@ export class KafkaTool extends BaseTool {
     const favorite = this.favoriteTopics.includes(topic);
     this.favoriteTopics = favorite ? this.favoriteTopics.filter((item) => item !== topic) : [topic, ...this.favoriteTopics].slice(0, 100);
     try {
-      localStorage.setItem(KAFKA_TOPIC_FAVORITES_KEY, JSON.stringify(this.favoriteTopics));
+      this.projectStorage.setItem(KAFKA_TOPIC_FAVORITES_KEY, JSON.stringify(this.favoriteTopics));
       const profile = this.brokerProfiles.find((item) => item.id === readKafkaActiveBrokerId());
       UsageTracker.trackEvent("kafka", "topic_favorite_changed", {
         topic, source, favorite: !favorite, ...(profile ? { broker_profile: profile.name } : {}),
@@ -1717,8 +1731,10 @@ export class KafkaTool extends BaseTool {
     if (!picker.open) this.openTemplateMenu();
     if (!this.visibleRequests.length) return;
     const direction = event.key === "ArrowDown" ? 1 : -1;
-    this.activeTemplateIndex = this.activeTemplateIndex < 0 ?
-      (direction > 0 ? 0 : this.visibleRequests.length - 1) :
+    this.activeTemplateIndex = this.activeTemplateIndex < 0 ? direction > 0
+          ? 0
+          : this.visibleRequests.length - 1
+        :
       (this.activeTemplateIndex + direction + this.visibleRequests.length) % this.visibleRequests.length;
     this.updateActiveTemplate();
   }
@@ -1747,7 +1763,8 @@ export class KafkaTool extends BaseTool {
     const request = this.templateForFavorite();
     if (!request) return;
     request.favorite = !request.favorite;
-    try { localStorage.setItem(KAFKA_REQUESTS_KEY, JSON.stringify(this.requests)); } catch (_) {}
+    try {
+      this.projectStorage.setItem(KAFKA_REQUESTS_KEY, JSON.stringify(this.requests)); } catch (_) {}
     this.renderRequests();
     this.showSuccess(request.favorite ? `Added “${request.name}” to favorites.` : `Removed “${request.name}” from favorites.`);
   }
@@ -1808,7 +1825,8 @@ export class KafkaTool extends BaseTool {
         const favorite = document.createElement("span");
         favorite.className = "kafka-topic-option-favorite";
         favorite.setAttribute("aria-label", "Favorite");
-        favorite.innerHTML = "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z\" /></svg>";
+        favorite.innerHTML =
+          '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z" /></svg>';
         option.append(favorite);
       }
       list.append(option);
@@ -1816,9 +1834,11 @@ export class KafkaTool extends BaseTool {
     this.updateActiveTopic(source);
     const status = this.field(ids.status);
     status.textContent = this.topicLoading ? "Loading topics…" : this.topicError ||
-      (this.visibleTopics.length ? `${this.visibleTopics.length} of ${this.topics.length} topics shown` :
-        (this.topicsLoaded ? (this.topics.length ? "No matching topics. You can still enter a topic manually." :
-          "No topics returned. Check broker access or enter a topic manually.") : "Browse topics from the broker."));
+      (this.visibleTopics.length ? `${this.visibleTopics.length} of ${this.topics.length} topics shown` : this.topicsLoaded
+            ? this.topics.length
+              ? "No matching topics. You can still enter a topic manually."
+              : "No topics returned. Check broker access or enter a topic manually."
+            : "Browse topics from the broker.");
   }
 
   updateActiveTopic(source = "publish") {
@@ -1921,8 +1941,8 @@ export class KafkaTool extends BaseTool {
     try {
       const count = this.records().length;
       const ready = this.config().brokers && this.field("kafkaTopic").value.trim();
-      this.message("kafkaCount", ready ? `${count} ${count === 1 ? "message" : "messages"} per click` :
-        (!this.config().brokers ? "Set up a broker to publish." : ""));
+      this.message("kafkaCount", ready ? `${count} ${count === 1 ? "message" : "messages"} per click` : !this.config().brokers ? "Set up a broker to publish." : "",
+      );
       button.textContent = "Publish";
       button.disabled = this.publishing || !ready;
     } catch (_error) {
@@ -1977,7 +1997,8 @@ export class KafkaTool extends BaseTool {
     };
     if (!request.topic) { this.message("kafkaPublishStatus", "Enter a topic before saving.", true); return; }
     const next = [request, ...this.requests.filter((item) => item.name !== name)].slice(0, 30);
-    try { localStorage.setItem(KAFKA_REQUESTS_KEY, JSON.stringify(next)); }
+    try {
+      this.projectStorage.setItem(KAFKA_REQUESTS_KEY, JSON.stringify(next)); }
     catch (_) { this.message("kafkaPublishStatus", "This request is too large to save on this device.", true); return; }
     this.requests = next;
     this.selectedRequestName = name;
@@ -2047,7 +2068,8 @@ export class KafkaTool extends BaseTool {
       favorite.setAttribute("aria-pressed", String(Boolean(request.favorite)));
       favorite.setAttribute("aria-label", request.favorite ? `Remove ${request.name} from favorites` : `Favorite ${request.name}`);
       favorite.title = favorite.getAttribute("aria-label");
-      favorite.innerHTML = "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z\" /></svg>";
+      favorite.innerHTML =
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z" /></svg>';
       const remove = document.createElement("button"); remove.type = "button"; remove.className = "btn btn-ghost btn-sm"; remove.textContent = "Remove"; remove.dataset.action = "delete"; remove.dataset.index = index;
       remove.setAttribute("aria-label", `Remove ${request.name}`);
       row.append(load, favorite, remove); root.append(row);
@@ -2063,12 +2085,13 @@ export class KafkaTool extends BaseTool {
     if (!request) return;
     if (button.dataset.action === "favorite") {
       request.favorite = !request.favorite;
-      localStorage.setItem(KAFKA_REQUESTS_KEY, JSON.stringify(this.requests));
+      this.projectStorage.setItem(KAFKA_REQUESTS_KEY, JSON.stringify(this.requests));
       this.renderRequests();
       return;
     }
     if (button.dataset.action === "delete") {
-      this.requests.splice(index, 1); localStorage.setItem(KAFKA_REQUESTS_KEY, JSON.stringify(this.requests));
+      this.requests.splice(index, 1);
+      this.projectStorage.setItem(KAFKA_REQUESTS_KEY, JSON.stringify(this.requests));
       if (this.selectedRequestName === request.name) {
         this.selectedRequestName = "";
         this.field("kafkaTemplateSearch").value = "";
@@ -2184,7 +2207,8 @@ export class KafkaTool extends BaseTool {
       if (requestId !== this.historyRequestId || !this.container) return;
       for (const match of result.matches) this.showMessage(match, true);
       const count = result.matches.length;
-      this.message("kafkaHistoryStatus", `${count} ${count === 1 ? "match" : "matches"} in ${result.scanned.toLocaleString()} records.${result.limited ? " Search limit reached; narrow the start time to look further." : ""}`);
+      this.message("kafkaHistoryStatus", `${count} ${count === 1 ? "match" : "matches"} in ${result.scanned.toLocaleString()} records.${result.limited ? " Search limit reached; narrow the start time to look further." : ""}`,
+      );
     } catch (error) {
       if (requestId === this.historyRequestId && this.container) this.message("kafkaHistoryStatus", String(error), true);
     } finally {

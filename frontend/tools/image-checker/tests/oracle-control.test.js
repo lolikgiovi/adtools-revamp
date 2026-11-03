@@ -15,6 +15,7 @@ const SETTINGS_FOCUS_KEY = "settings.focus";
 const LAST_VALUE_KEY = "image_checker_last_value";
 
 function saveConnections(names) {
+  localStorage.removeItem("config.oracle.environment.catalog");
   localStorage.setItem(CONNECTIONS_KEY, JSON.stringify(names.map((name) => ({ name, connect_string: name.toLowerCase() }))));
 }
 
@@ -51,6 +52,7 @@ function selectedNames(tool) {
 
 beforeEach(() => {
   localStorage.clear();
+  localStorage.setItem("config.environments", "[]");
   isTauri.mockReturnValue(true);
   window.app = { router: { navigate: vi.fn() } };
 });

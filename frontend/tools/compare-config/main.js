@@ -1,3 +1,4 @@
+import { readOracleToolConnections } from "../../core/Environments.js";
 /**
  * Compare Config Tool
  * Oracle database configuration comparison tool
@@ -141,7 +142,8 @@ class CompareConfigTool extends BaseTool {
       this.renderResults();
       if (focusColumn) {
         const control = [...document.querySelectorAll(".grid-column-filter-input, .grid-column-filter-select")]
-          .find((element) => element.dataset.column === focusColumn);
+          .find((element) => element.dataset.column === focusColumn,
+        );
         control?.focus();
         if (control?.tagName === "INPUT" && cursor !== null) control.setSelectionRange(cursor, cursor);
       }
@@ -336,7 +338,7 @@ class CompareConfigTool extends BaseTool {
    */
   loadSavedConnections() {
     try {
-      const connections = localStorage.getItem("config.oracle.connections");
+      const connections = JSON.stringify(readOracleToolConnections());
       if (connections) {
         this.savedConnections = JSON.parse(connections);
         // Connection dropdowns are populated by initUnifiedModeUI()
@@ -508,7 +510,7 @@ class CompareConfigTool extends BaseTool {
 
     const connectionLabel = document.getElementById(`${prefix}-connection-label`);
     if (connectionLabel) {
-      connectionLabel.textContent = config.connection?.name || "Select connection...";
+      connectionLabel.textContent = config.connection?.label || config.connection?.name || "Select connection...";
     }
 
     const schemaInput = document.getElementById(`${prefix}-schema-search`);
@@ -1250,7 +1252,8 @@ class CompareConfigTool extends BaseTool {
         compareFields,
         showStatus: true,
         allComparisons: (this.results[this.queryMode].rows || []).filter((row) =>
-          this.statusFilter === "match" ? row.status === "match" : row.status !== "match"),
+          this.statusFilter === "match" ? row.status === "match" : row.status !== "match",
+        ),
       });
       this.gridView.attachEventListeners(resultsContent);
     }
@@ -2419,7 +2422,7 @@ class CompareConfigTool extends BaseTool {
 
     // Update label based on current state
     const currentConnection = this.unified[sourceKey].connection;
-    label.textContent = currentConnection?.name || (connections.length > 0 ? "Select connection..." : "No connections saved");
+    label.textContent = currentConnection?.label || currentConnection?.name || (connections.length > 0 ? "Select connection..." : "No connections saved");
     btn.disabled = connections.length === 0;
 
     // Clone button to remove old event listeners
@@ -2441,7 +2444,7 @@ class CompareConfigTool extends BaseTool {
         .map(
           (conn) => `
         <button class="config-dropdown-option ${conn.name === selectedName ? "active" : ""}" data-value="${conn.name}">
-          ${conn.name}
+          ${conn.label || conn.name}
         </button>
       `,
         )
@@ -4139,7 +4142,7 @@ class CompareConfigTool extends BaseTool {
 
     const metadata = await CompareConfigService.fetchTableMetadataViaSidecar(
       config.connection.name,
-      { name: config.connection.name, connect_string: config.connection.connect_string },
+      config.connection,
       config.schema,
       config.table,
     );

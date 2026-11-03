@@ -1,9 +1,11 @@
+import { projectSettingsStorage } from "../../core/Projects.js";
+const projectStorage = () => projectSettingsStorage();
 import { invoke } from "@tauri-apps/api/core";
 import { isTauri } from "../../core/Runtime.js";
 
 export function readVelocityValidatorSettings() {
   return {
-    url: (localStorage.getItem("config.velocityValidator.url") || "").trim(),
+    url: (projectStorage().getItem("config.velocityValidator.url") || "").trim(),
   };
 }
 

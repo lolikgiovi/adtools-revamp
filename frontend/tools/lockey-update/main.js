@@ -1,3 +1,4 @@
+import { readOracleToolConnections } from "../../core/Environments.js";
 import Handsontable from "handsontable";
 import "handsontable/styles/handsontable.css";
 import "handsontable/styles/ht-theme-main.css";
@@ -13,7 +14,6 @@ const DRAFT_STORAGE_KEY = "tool:lockey-update:draft";
 const TAB_STORAGE_KEY = "tool:lockey-update:tab";
 const CONNECTION_STORAGE_KEY = "tool:lockey-update:connection";
 const QUICK_QUERY_AUDIT_KEY = "tool:quick-query:audit-user";
-const ORACLE_CONNECTIONS_KEY = "config.oracle.connections";
 const HISTORY_LIMIT = 500;
 const VERSION_FETCH_LIMIT = 5000;
 const UPDATE_FETCH_LIMIT = 20000;
@@ -604,7 +604,7 @@ export class LockeyUpdate extends BaseTool {
   loadConnections() {
     let connections = [];
     try {
-      const parsed = JSON.parse(localStorage.getItem(ORACLE_CONNECTIONS_KEY) || "[]");
+      const parsed = readOracleToolConnections();
       if (Array.isArray(parsed)) {
         connections = parsed.filter((connection) => connection?.name && connection?.connect_string);
       }
@@ -632,7 +632,7 @@ export class LockeyUpdate extends BaseTool {
     connections.forEach((connection) => {
       const option = document.createElement("option");
       option.value = connection.name;
-      option.textContent = connection.name;
+      option.textContent = connection.label || connection.name;
       this.el.connection.appendChild(option);
     });
 
@@ -666,7 +666,7 @@ export class LockeyUpdate extends BaseTool {
       const started = await OracleConnectionService.ensureSidecarStarted();
       if (!started) throw new Error("Oracle sidecar did not start. Check the connection indicator and try again.");
 
-      const config = { name: connection.name, connect_string: connection.connect_string };
+      const config = connection;
       const [versionResult, updateResult] = await Promise.all([
         OracleConnectionService.queryAsDictViaSidecar(connection.name, config, VERSION_QUERY, VERSION_FETCH_LIMIT),
         OracleConnectionService.queryAsDictViaSidecar(connection.name, config, UPDATE_QUERY, UPDATE_FETCH_LIMIT),

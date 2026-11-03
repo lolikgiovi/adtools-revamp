@@ -36,8 +36,10 @@ import { HomeWorkspace } from "./components/HomeWorkspace.js";
 const ASSET_LOAD_RETRY_DELAY_MS = 3000;
 
 function isLocalDevelopmentSession() {
-  return Boolean(import.meta?.env?.DEV) && !import.meta.env.VITE_WORKER_BASE &&
-    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+  return (
+    Boolean(import.meta?.env?.DEV) && !import.meta.env.VITE_WORKER_BASE &&
+    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+  );
 }
 
 function hasCompletedRegistration() {
@@ -1695,8 +1697,7 @@ class App {
     if (!this.hasPrivilegedSidebarAccess()) return [];
 
     return [
-      { id: "dashboard", name: "Dashboard", icon: "analytics-dashboard", type: "page", requiresTauri: false },
-    ];
+      { id: "dashboard", name: "Dashboard", icon: "analytics-dashboard", type: "page", requiresTauri: false }];
   }
 
   /** Build app-level menu config for dynamic sidebar groups */
@@ -2028,6 +2029,15 @@ class App {
         const flushed = await ui.flushPendingDataAutosave();
         if (flushed === false || !(await ui.saveActiveTabDraft())) {
           throw new Error("Your query could not be saved. Save it before switching projects.");
+        }
+      }
+      if (isTauri()) {
+        const { invoke } = await import("@tauri-apps/api/core");
+        // Manual native sessions survive reloads; close them before adopting another project's configuration.
+        await Promise.all([invoke("redis_disconnect"), invoke("kafka_disconnect")]);
+        if (await invoke("check_oracle_sidecar_status")) {
+          const pools = await invoke("oracle_sidecar_pool_connections");
+          await Promise.all(pools.map((connectionName) => invoke("oracle_sidecar_disconnect", { connectionName })));
         }
       }
       selectProject(id);

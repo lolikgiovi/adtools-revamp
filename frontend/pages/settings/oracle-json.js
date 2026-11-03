@@ -52,12 +52,15 @@ export async function applyOracleJsonPlan(plan, { getConnections, setConnections
         // The existing native command treats an empty password as retain-saved-password.
         await setCredentials(entry.name, entry.username, entry.password ?? "");
       }
-      const profile = { name: entry.name, connect_string: entry.address };
       const index = connections.findIndex((connection) => connection.name === entry.name);
+      const profile = { ...connections[index], name: entry.name, connect_string: entry.address };
       if (index < 0) connections.push(profile);
       else connections[index] = profile;
       setConnections(connections.map((connection) => ({ ...connection })));
-      if (JSON.stringify(getConnections()) !== JSON.stringify(connections)) throw new Error("Storage failed");
+      const saved = getConnections();
+      if (!connections.every((entry) => saved.some((row) => row.name === entry.name && row.connect_string === entry.connect_string)))
+        throw new Error("Storage failed");
+      connections = saved;
       applied += 1;
     } catch {
       throw new Error(

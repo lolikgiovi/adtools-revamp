@@ -27,7 +27,14 @@ describe("Redis cache service helpers", () => {
     localStorage.setItem("config.redis.database", "4");
     localStorage.setItem("config.redis.tls", "true");
     localStorage.setItem("config.redis.username", " cache-user ");
-    expect(readRedisConfig()).toEqual({ host: "cache.internal", port: 6380, database: 4, tls: true, username: "cache-user" });
+    expect(readRedisConfig()).toEqual({
+      credentialScope: "",
+      host: "cache.internal",
+      port: 6380,
+      database: 4,
+      tls: true,
+      username: "cache-user",
+    });
 
     localStorage.setItem("config.redis.port", "0");
     localStorage.setItem("config.redis.database", "-1");

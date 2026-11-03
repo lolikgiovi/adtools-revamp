@@ -1,3 +1,5 @@
+import { projectSettingsStorage } from "../../core/Projects.js";
+const projectStorage = () => projectSettingsStorage();
 import { requestVelocityValidation } from "../velocity-template/validator.js";
 
 const ENDPOINT_KEY = "config.velocityValidator.notificationUrl";
@@ -118,7 +120,7 @@ export class NotificationValidation {
       documentId: this.tool.activeDocumentId,
       template: this.tool.editor.getValue(),
       contextText: this.getContextText(),
-      url: (localStorage.getItem(ENDPOINT_KEY) || "").trim(),
+      url: (projectStorage().getItem(ENDPOINT_KEY) || "").trim(),
     };
   }
 
@@ -157,7 +159,7 @@ export class NotificationValidation {
         link.href = "#settings";
         link.textContent = "Notification Template Endpoint";
         link.addEventListener("click", (event) => {
-          localStorage.setItem("settings.focus", ENDPOINT_KEY);
+          projectStorage().setItem("settings.focus", ENDPOINT_KEY);
           if (window.app?.router) {
             event.preventDefault();
             window.app.router.navigate("settings");

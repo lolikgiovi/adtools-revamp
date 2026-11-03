@@ -68,6 +68,7 @@ pub fn run() {
       oracle::fetch_table_metadata,
       oracle::export_comparison_result,
       oracle::set_oracle_credentials,
+      oracle::migrate_oracle_credentials,
       oracle::get_oracle_username,
       oracle::delete_oracle_credentials,
       oracle::has_oracle_credentials,
@@ -328,6 +329,8 @@ struct UnifiedSecrets {
     jira_pat: Option<String>,
     oracle_credentials: Option<HashMap<String, oracle::CredentialEntry>>,
     redis_credentials: Option<redis_cache::RedisCredentials>,
+    #[serde(default)]
+    project_redis_credentials: HashMap<String, redis_cache::RedisCredentials>,
 }
 
 pub(crate) fn load_unified_secrets() -> Result<UnifiedSecrets, String> {

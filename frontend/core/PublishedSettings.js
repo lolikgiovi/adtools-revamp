@@ -1,4 +1,4 @@
-import { getLegacyProjectId, getProjectStorageKey } from "./Projects.js";
+import { getLegacyProjectId, projectSettingsStorage, listProjects, createProject } from "./Projects.js";
 import { validateSettings } from "../../shared/published-settings.js";
 import { writeEnvironments } from "./Environments.js";
 import { saveKafkaBrokerProfiles } from "../tools/kafka/service.js";
@@ -25,7 +25,7 @@ function restore(values) {
   }
 }
 
-export function applyPublication(publication, userId) {
+export function applyPublication(publication, userId, destinationProjectId) {
   if (!userId || !Number.isSafeInteger(publication?.id) || publication.id < 1) throw new Error("Invalid publication.");
   validateSettings(publication.settings);
   const marker = appliedKey(userId, publication.id);
@@ -35,20 +35,54 @@ export function applyPublication(publication, userId) {
     localStorage.removeItem(journalKey);
   }
   if (localStorage.getItem(marker)) return false;
-  const environmentProjectId = Object.hasOwn(publication.settings, "config.environments") ? getLegacyProjectId() : null;
-  const keys = new Set([...Object.keys(publication.settings), marker]);
-  if (keys.has("config.environments")) {
-    keys.add(getProjectStorageKey("config.environments", localStorage, environmentProjectId));
-    keys.add(getProjectStorageKey("config.baseUrls", localStorage, environmentProjectId));
+  const projectName = publication.settings["project.name"]?.trim();
+  // Older publications keep their original destination. New publications explicitly name the project.
+  const registryBefore = localStorage.getItem("config.projects");
+  if (destinationProjectId && !listProjects().some((project) => project.id === destinationProjectId)) {
+    throw new Error("Choose a project available in your department.");
   }
+  const existing =
+    projectName &&
+    listProjects().find((project) => project.name.normalize("NFKC").toLowerCase() === projectName.normalize("NFKC").toLowerCase());
+  const projectId = destinationProjectId || (projectName ? (existing || createProject(projectName)).id : getLegacyProjectId());
+  const scoped = projectSettingsStorage(localStorage, projectId);
+  const keys = new Set(Object.keys(publication.settings).filter((key) => key !== "project.name"));
+  if (keys.has("config.environments")) keys.add("config.baseUrls");
   if (keys.has("tool:kafka:brokers")) keys.add("tool:kafka:active-broker");
-  const values = Object.fromEntries([...keys].map((key) => [key, localStorage.getItem(key)]));
-  localStorage.setItem(journalKey, JSON.stringify({ marker, values }));
+  if (keys.has("config.jira.projectKeys")) keys.add("config.jira.projectKey");
+  if (keys.has("config.oracle.connections")) keys.add("config.oracle.environment.catalog");
+  const values = Object.fromEntries([...keys].map((key) => [scoped.keyFor(key), scoped.getItem(key)]));
+  values[marker] = localStorage.getItem(marker);
+  if (projectName && !existing && !destinationProjectId) {
+    values["config.projects"] = registryBefore;
+    values[scoped.keyFor("config.environments")] = null;
+  }
   try {
+    localStorage.setItem(journalKey, JSON.stringify({ marker, values }));
     for (const [key, value] of Object.entries(publication.settings)) {
-      if (key === "config.environments") writeEnvironments(value, localStorage, environmentProjectId);
-      else if (key === "tool:kafka:brokers") saveKafkaBrokerProfiles(value);
-      else localStorage.setItem(key, typeof value === "object" ? JSON.stringify(value) : String(value));
+      if (key === "project.name") continue;
+      if (key === "config.environments") writeEnvironments(value, scoped);
+      else if (key === "tool:kafka:brokers") saveKafkaBrokerProfiles(value, scoped);
+      else if (key === "config.oracle.environment.catalog") {
+        scoped.setItem(key, JSON.stringify({ version: 1, connections: value }));
+      } else if (key === "config.oracle.connections") {
+        scoped.setItem(key, JSON.stringify(value));
+        // Legacy payloads are retained as unassigned profiles, ready for explicit environment binding.
+        scoped.setItem(
+          "config.oracle.environment.catalog",
+          JSON.stringify({
+            version: 1,
+            connections: value.map((connection) => ({
+              ...connection,
+              id: crypto.randomUUID(),
+              environmentId: connection.environmentId || "",
+            })),
+          }),
+        );
+      } else {
+        scoped.setItem(key, typeof value === "object" ? JSON.stringify(value) : String(value));
+        if (key === "config.jira.projectKeys") scoped.setItem("config.jira.projectKey", value.length === 1 ? value[0] : "");
+      }
     }
     localStorage.setItem(marker, "1");
     localStorage.removeItem(journalKey);

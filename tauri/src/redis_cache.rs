@@ -94,6 +94,8 @@ pub(crate) struct RedisCredentials {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct RedisConfig {
+    #[serde(default, rename = "credentialScope")]
+    credential_scope: String,
     host: String,
     port: u16,
     database: i64,
@@ -152,10 +154,13 @@ fn validate_config(config: &RedisConfig) -> Result<(), String> {
     Ok(())
 }
 
-fn load_credentials() -> Result<RedisCredentials, String> {
-    Ok(crate::load_unified_secrets()?
-        .redis_credentials
-        .unwrap_or_default())
+fn load_credentials(scope: &str) -> Result<RedisCredentials, String> {
+    let secrets = crate::load_unified_secrets()?;
+    Ok(if scope.is_empty() {
+        secrets.redis_credentials
+    } else {
+        secrets.project_redis_credentials.get(scope).cloned()
+    }.unwrap_or_default())
 }
 
 fn connection_url(config: &RedisConfig, credentials: &RedisCredentials) -> Result<String, String> {
@@ -194,7 +199,7 @@ fn endpoint_label(config: &RedisConfig) -> String {
 }
 
 fn connect(config: &RedisConfig) -> Result<Connection, String> {
-    let credentials = load_credentials()?;
+    let credentials = load_credentials(&config.credential_scope)?;
     let url = connection_url(config, &credentials)?;
     let client = Client::open(url).map_err(redis_error)?;
     let connection = client
@@ -307,25 +312,42 @@ fn should_fallback_to_del(error: &RedisError) -> bool {
 }
 
 #[tauri::command]
-pub fn set_redis_credentials(username: String, password: String) -> Result<(), String> {
+pub fn set_redis_credentials(username: String, password: String, credential_scope: Option<String>) -> Result<(), String> {
     let mut secrets = crate::load_unified_secrets()?;
-    secrets.redis_credentials = Some(RedisCredentials {
+    let credentials = RedisCredentials {
         username: username.trim().to_string(),
         password,
-    });
+    };
+    let scope = credential_scope.unwrap_or_default();
+    if scope.is_empty() {
+        secrets.redis_credentials = Some(credentials);
+    } else {
+        secrets.project_redis_credentials.insert(scope, credentials);
+    }
     crate::save_unified_secrets(&secrets)
 }
 
 #[tauri::command]
-pub fn clear_redis_credentials() -> Result<(), String> {
+pub fn clear_redis_credentials(credential_scope: Option<String>) -> Result<(), String> {
     let mut secrets = crate::load_unified_secrets()?;
-    secrets.redis_credentials = None;
+    let scope = credential_scope.unwrap_or_default();
+    if scope.is_empty() {
+        secrets.redis_credentials = None;
+    } else {
+        secrets.project_redis_credentials.remove(&scope);
+    }
     crate::save_unified_secrets(&secrets)
 }
 
 #[tauri::command]
-pub fn has_redis_credentials() -> Result<bool, String> {
-    Ok(crate::load_unified_secrets()?.redis_credentials.is_some())
+pub fn has_redis_credentials(credential_scope: Option<String>) -> Result<bool, String> {
+    let secrets = crate::load_unified_secrets()?;
+    let scope = credential_scope.unwrap_or_default();
+    Ok(if scope.is_empty() {
+        secrets.redis_credentials.is_some()
+    } else {
+        secrets.project_redis_credentials.contains_key(&scope)
+    })
 }
 
 fn test_connection(config: RedisConfig) -> Result<RedisConnectionStatus, String> {
@@ -734,6 +756,7 @@ mod tests {
     #[test]
     fn builds_plain_and_authenticated_urls() {
         let config = RedisConfig {
+            credential_scope: String::new(),
             host: "localhost".to_string(),
             port: 6379,
             database: 2,
@@ -763,6 +786,7 @@ mod tests {
     #[test]
     fn rejects_invalid_connection_config() {
         let config = RedisConfig {
+            credential_scope: String::new(),
             host: "bad/host".to_string(),
             port: 6379,
             database: 0,

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
 import { SettingsPage } from "../main.js";
-import { readEnvironments, writeEnvironments } from "../../../core/Environments.js";
+import { readEnvironments, writeEnvironments, resolveConnection } from "../../../core/Environments.js";
 
 const ORACLE_KEY = "config.oracle.connections";
 
@@ -60,13 +60,14 @@ describe("Testing Environments editor", () => {
 
     const desktop = mount("tauri");
     desktop.querySelector(".environment-edit").click();
-    expect(
-      [...desktop.querySelector(".environment-critical").options].filter((option) => !option.dataset.action).map((option) => option.value),
-    ).toEqual(["", "CORE", "EXTRA"]);
-    expect(desktop.querySelector(".environment-critical").value).toBe("CORE");
-    desktop.querySelector(".environment-complementary").value = "EXTRA";
+    const options = [...desktop.querySelector(".environment-critical").options].filter((option) => !option.dataset.action);
+    expect(options.map((option) => option.textContent)).toEqual(["None", "CORE", "EXTRA (unassigned)"]);
+    expect(desktop.querySelector(".environment-critical").selectedOptions[0].textContent).toBe("CORE");
+    desktop.querySelector(".environment-complementary").value = options[2].value;
     submit(desktop);
-    expect(readEnvironments()[0]).toMatchObject({ criticalConnection: "CORE", complementaryConnection: "EXTRA" });
+    const bound = readEnvironments()[0];
+    expect(resolveConnection(bound, "critical").name).toBe("CORE");
+    expect(resolveConnection(bound, "complementary").name).toBe("EXTRA");
 
     desktop.remove();
     const web = mount("web");
@@ -74,8 +75,8 @@ describe("Testing Environments editor", () => {
     web.querySelector(".environment-public-url").value = "https://public.uat1b.example/";
     submit(web);
     expect(readEnvironments()[0]).toMatchObject({
-      criticalConnection: "CORE",
-      complementaryConnection: "EXTRA",
+      criticalConnection: bound.criticalConnection,
+      complementaryConnection: bound.complementaryConnection,
       cdnPublicUrl: "https://public.uat1b.example",
     });
   });

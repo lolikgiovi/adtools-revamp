@@ -1,6 +1,6 @@
 # Project settings plan
 
-Status: proposed implementation. This document records the requested ownership model; application behavior has not changed.
+Status: implemented. Verification evidence and reproduction commands are in [project-settings verification](verification/project-settings/README.md).
 
 ## Settings hierarchy
 
@@ -136,3 +136,16 @@ Design any necessary new isolated tests before implementation, first recording t
 
 The visible hierarchy and actual storage ownership agree. Switching projects changes every project-owned setting,
 shared integration credentials remain usable, Oracle targeting follows the testing environment, and existing data migrates without loss.
+
+## Implementation notes
+
+- The original project retains its existing storage keys and Redis Keychain entry. Other projects use explicit namespaces;
+  no blanket copy of global settings is performed. This preserves legacy data without a destructive migration.
+- Oracle connections use a versioned project catalog with an environment owner and stable ID. Legacy name references resolve
+  to those IDs. Credential copying stays inside the native secure store and is retried until it succeeds.
+- Cancelled or deleted environments leave saved Oracle connections available under Unassigned Oracle connections.
+- New publications carry the destination in `project.name` within the existing settings payload, requiring no database migration.
+  They match or create that local project. Older publications retain the original/default project destination.
+- The Desktop Redis/Jenkins/Confluence/Jira tokens remain in secure storage. Redis credentials are isolated by project;
+  the other three integration credentials retain their shared scope. Switching Desktop projects disconnects manual Redis/Kafka sessions and existing Oracle pools.
+- Service connectivity and real Keychain interaction are outside the browser fixture; command routing is verified with mocks.

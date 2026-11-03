@@ -4008,7 +4008,7 @@ export class QuickQueryUI {
       ...connections.map((connection) => {
         const option = document.createElement("option");
         option.value = connection.name;
-        option.textContent = `${connection.name} (${connection.connect_string})`;
+        option.textContent = `${connection.label || connection.name} (${connection.connect_string})`;
         return option;
       }),
     );
@@ -4774,7 +4774,7 @@ export class QuickQueryUI {
 
     // Populate dropdown
     const select = this.elements.oracleEnvConnection;
-    select.innerHTML = connections.map((c) => `<option value="${c.name}">${c.name} (${c.connect_string})</option>`).join("");
+    select.innerHTML = connections.map((c) => `<option value="${c.name}">${c.label || c.name} (${c.connect_string})</option>`).join("");
 
     // Reset to step 1
     this._oracleEnvStep = 1;

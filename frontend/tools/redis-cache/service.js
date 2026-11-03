@@ -1,3 +1,4 @@
+import { projectSettingsStorage } from "../../core/Projects.js";
 const CONFIG_KEYS = {
   host: "config.redis.host",
   port: "config.redis.port",
@@ -18,10 +19,12 @@ export function normalizeRedisPattern(value) {
 }
 
 export function readRedisConfig(storage = localStorage) {
+  storage = projectSettingsStorage(storage);
   const host = String(storage.getItem(CONFIG_KEYS.host) || "").trim();
   const port = Number(storage.getItem(CONFIG_KEYS.port) || 6379);
   const database = Number(storage.getItem(CONFIG_KEYS.database) || 0);
   return {
+    credentialScope: storage.keyFor("config.redis.host") === "config.redis.host" ? "" : storage.projectId,
     host,
     port: Number.isInteger(port) && port >= 1 && port <= 65535 ? port : 6379,
     database: Number.isInteger(database) && database >= 0 && database <= 1024 ? database : 0,
@@ -31,6 +34,7 @@ export function readRedisConfig(storage = localStorage) {
 }
 
 export function readFavorites(storage = localStorage) {
+  storage = projectSettingsStorage(storage);
   try {
     const parsed = JSON.parse(storage.getItem(REDIS_FAVORITES_STORAGE_KEY) || "[]");
     return Array.isArray(parsed) ? [...new Set(parsed.map((key) => String(key || "").trim()).filter(Boolean))].slice(0, 100) : [];
@@ -40,6 +44,7 @@ export function readFavorites(storage = localStorage) {
 }
 
 export function writeFavorites(favorites, storage = localStorage) {
+  storage = projectSettingsStorage(storage);
   const normalized = [...new Set((favorites || []).map((key) => String(key || "").trim()).filter(Boolean))].slice(0, 100);
   storage.setItem(REDIS_FAVORITES_STORAGE_KEY, JSON.stringify(normalized));
   return normalized;
@@ -70,7 +75,9 @@ export class RedisCacheService {
       globalThis.dispatchEvent?.(new CustomEvent("adtools:connection-activity", { detail: { ...detail, phase: "finish", success: true } }));
       return result;
     } catch (error) {
-      globalThis.dispatchEvent?.(new CustomEvent("adtools:connection-activity", { detail: { ...detail, phase: "finish", success: false } }));
+      globalThis.dispatchEvent?.(
+        new CustomEvent("adtools:connection-activity", { detail: { ...detail, phase: "finish", success: false } }),
+      );
       throw error;
     }
   }

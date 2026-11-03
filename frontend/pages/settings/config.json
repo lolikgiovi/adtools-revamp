@@ -126,21 +126,6 @@
       ]
     },
     {
-      "id": "environments",
-      "label": "Environments",
-      "initiallyExpanded": true,
-      "items": [
-        {
-          "key": "config.environments",
-          "storageKey": "config.environments",
-          "label": "Environments",
-          "type": "environments",
-          "default": [],
-          "description": "Each environment pairs a critical database, an optional complementary database, and the CDN public and direct URLs. Tools read this shared model."
-        }
-      ]
-    },
-    {
       "id": "app-integration",
       "label": "App Integration",
       "initiallyExpanded": true,
@@ -223,21 +208,6 @@
                 "minLength": 8
               },
               "requiresTauri": true
-            },
-            {
-              "key": "config.jira.projectKeys",
-              "storageKey": "config.jira.projectKeys",
-              "label": "Jira Project Keys",
-              "type": "string-list",
-              "default": ["EVDEV"],
-              "description": "Jira project keys. Enter one key per line.",
-              "placeholder": "One project key per line",
-              "validation": {
-                "required": true,
-                "itemPattern": "^[A-Za-z][A-Za-z0-9_-]*$",
-                "itemLabel": "project key"
-              },
-              "aliases": ["config.jira.projectKey"]
             }
           ],
           "integration": true
@@ -287,23 +257,54 @@
       ]
     },
     {
-      "id": "connections",
-      "label": "Connections",
+      "id": "project-settings",
+      "label": "Project",
       "initiallyExpanded": true,
+      "items": [
+        {
+          "key": "config.projects",
+          "label": "Project",
+          "type": "project-manager"
+        },
+        {
+          "key": "project.schema",
+          "label": "Quick Query schemas",
+          "type": "project-schema"
+        },
+        {
+          "key": "config.jira.projectKey",
+          "storageKey": "config.jira.projectKey",
+          "label": "Jira Project Key",
+          "type": "string",
+          "default": "",
+          "validation": {
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+          },
+          "aliases": ["config.jira.projectKeys"]
+        }
+      ],
       "categories": [
         {
-          "id": "oracle",
-          "label": "Oracle",
-          "requiresTauri": true,
+          "id": "environments",
+          "label": "Testing Environments",
           "initiallyExpanded": true,
           "items": [
+            {
+              "key": "config.environments",
+              "storageKey": "config.environments",
+              "label": "Environments",
+              "type": "environments",
+              "default": [],
+              "description": "Each environment pairs a critical database, an optional complementary database, and the CDN public and direct URLs. Tools read this shared model."
+            },
             {
               "key": "config.oracle.connections",
               "storageKey": "config.oracle.connections",
               "label": "Database Connections",
               "type": "oracle-connections",
               "default": [],
-              "description": "Manage Oracle database connections for Compare Config tool. Credentials are stored securely in macOS Keychain."
+              "description": "Manage Oracle database connections for Compare Config tool. Credentials are stored securely in macOS Keychain.",
+              "environmentEmbedded": true
             }
           ]
         },
@@ -391,14 +392,7 @@
               "description": "Save named broker connections for the Kafka tool. Connections use PLAINTEXT."
             }
           ]
-        }
-      ]
-    },
-    {
-      "id": "tool-settings",
-      "label": "Tool Settings",
-      "initiallyExpanded": true,
-      "categories": [
+        },
         {
           "id": "lockey",
           "label": "Lockey",

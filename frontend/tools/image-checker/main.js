@@ -367,7 +367,9 @@ class CheckImageTool extends BaseTool {
 
     menu.replaceChildren();
     connections.forEach((connection) => {
-      menu.appendChild(this.createOracleOption(connection.name, connection.name, this.selectedOracleNames.has(connection.name)));
+      menu.appendChild(
+        this.createOracleOption(connection.name, connection.label || connection.name, this.selectedOracleNames.has(connection.name)),
+      );
     });
     this.updateOracleSelectionUi();
   }
@@ -897,7 +899,7 @@ class CheckImageTool extends BaseTool {
           const record = document.createElement("div");
           record.className = "image-oracle-record";
           const name = document.createElement("strong");
-          name.textContent = connection.name;
+          name.textContent = connection.label || connection.name;
           record.appendChild(name);
           ["context", "size"].forEach((field) => {
             const fieldGroup = document.createElement("div");

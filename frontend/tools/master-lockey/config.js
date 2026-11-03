@@ -1,3 +1,4 @@
+import { projectSettingsStorage } from "../../core/Projects.js";
 import { joinUrl, normalizeBaseUrl, normalizePath, readEnvironments } from "../../core/Environments.js";
 
 const PATH_KEY = "config.lockeyPath";
@@ -9,18 +10,22 @@ function storage() {
 }
 
 export function readLockeyPath(target = storage()) {
+  target = projectSettingsStorage(target);
   return normalizePath(target?.getItem(PATH_KEY) ?? "");
 }
 
 export function readBasePreference(target = storage()) {
+  target = projectSettingsStorage(target);
   return target?.getItem(BASE_PREFERENCE_KEY) === "direct" ? "direct" : "public";
 }
 
 export function writeBasePreference(value, target = storage()) {
+  target = projectSettingsStorage(target);
   target?.setItem(BASE_PREFERENCE_KEY, value === "direct" ? "direct" : "public");
 }
 
 export function listLockeyEnvironments(target = storage()) {
+  target = projectSettingsStorage(target);
   return readEnvironments(target).filter((environment) => environment.cdnPublicUrl || environment.cdnDirectUrl);
 }
 
@@ -59,6 +64,7 @@ function suffixAfterBase(url, base) {
  * so a later migration does not silently pick one environment's path.
  */
 export function migrateLegacyLockeyPath(target = storage()) {
+  target = projectSettingsStorage(target);
   const stored = target?.getItem(PATH_KEY);
   if (stored !== null) return normalizePath(stored);
 

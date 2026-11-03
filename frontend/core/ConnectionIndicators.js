@@ -1,3 +1,4 @@
+import { readOracleToolConnections } from "./Environments.js";
 import { isTauri } from "./Runtime.js";
 import { OracleConnectionService, SidecarStatus } from "./OracleConnectionService.js";
 import { readKafkaConfig } from "../tools/kafka/service.js";
@@ -8,7 +9,7 @@ const ORACLE_LIMIT = 2;
 
 function readOracleConnections() {
   try {
-    const value = JSON.parse(localStorage.getItem("config.oracle.connections") || "[]");
+    const value = readOracleToolConnections();
     return Array.isArray(value) ? value.filter((item) => item && typeof item.name === "string" && item.connect_string) : [];
   } catch (_) {
     return [];
@@ -138,8 +139,7 @@ export class ConnectionIndicators {
     const revision = this.manualRevision;
     const results = await Promise.allSettled([
       this.native("kafka_connection_status"),
-      this.native("redis_connection_status"),
-    ]);
+      this.native("redis_connection_status")]);
     if (revision !== this.manualRevision) return;
     this.manual.kafka = results[0].status === "fulfilled" ? results[0].value : null;
     this.manual.redis = results[1].status === "fulfilled" ? results[1].value : null;
@@ -213,12 +213,13 @@ export class ConnectionIndicators {
         for (const config of connections) {
           const row = element("div", "connection-menu-row");
           const identity = element("div", "connection-menu-identity");
-          identity.append(element("div", "connection-menu-name", config.name));
+          identity.append(element("div", "connection-menu-name", config.label || config.name));
           identity.append(element("div", "connection-menu-endpoint", config.connect_string));
           row.append(identity);
-          const active = this.oraclePools.includes(config.name);
+          const active = this.oraclePools.includes(config.name) || this.oraclePools.includes(`oracle:${config.projectId}:${config.id}`);
           this.appendAction(row, active ? "Disconnect" : "Connect", active ? "oracle-disconnect" : "oracle-connect", config.name,
-            !active && this.oraclePools.length >= ORACLE_LIMIT);
+            !active && this.oraclePools.length >= ORACLE_LIMIT,
+          );
           list.append(row);
         }
         if (!connections.length) list.append(element("p", "connection-menu-note", "Add an Oracle connection in Settings."));
@@ -230,7 +231,8 @@ export class ConnectionIndicators {
         const row = element("div", "connection-menu-row");
         const label = connected ? this.manual[service] || endpoint : endpoint || "Not configured";
         row.append(element("span", "connection-menu-name", service === "kafka" ? label.replace(/,\s*/g, ", ") : label));
-        this.appendAction(row, connected ? "Disconnect" : "Connect", `${service}-${connected ? "disconnect" : "connect"}`, "", !connected && !endpoint);
+        this.appendAction(row, connected ? "Disconnect" : "Connect", `${service}-${connected ? "disconnect" : "connect"}`, "", !connected && !endpoint,
+        );
         list.append(row);
       }
       menu.append(list);
@@ -279,7 +281,9 @@ export class ConnectionIndicators {
         await OracleConnectionService.connectPool(name, config);
         await this.refreshOracle();
       } else if (action === "oracle-disconnect") {
-        await OracleConnectionService.disconnectPool(name);
+        const config = readOracleConnections().find((item) => item.name === name);
+        const identity = config && !this.oraclePools.includes(name) ? `oracle:${config.projectId}:${config.id}` : name;
+        await OracleConnectionService.disconnectPool(identity);
         await this.refreshOracle();
       } else if (action === "kafka-connect") {
         const config = readKafkaConfig();
@@ -309,17 +313,23 @@ export class ConnectionIndicators {
 
   render() {
     if (!this.container) return;
-    const names = [...new Set(this.oraclePools)];
+    const configs = readOracleConnections();
+    const names = [...new Set(this.oraclePools)]
+      .filter((name) => configs.some((config) => name === config.name || name === `oracle:${config.projectId}:${config.id}`))
+      .map((name) => configs.find((config) => name === config.name || name === `oracle:${config.projectId}:${config.id}`)?.label || name);
     const kafka = readKafkaConfig();
     const redis = readRedisConfig();
     const states = [
       { service: "oracle", name: "Oracle", state: names.length ? "active" : "idle",
-        detail: names.join(", ") || (readOracleConnections().length ? "Disconnected" : "Not configured") },
+        detail: names.join(", ") || (readOracleConnections().length ? "Disconnected" : "Not configured"),
+      },
       { service: "kafka", name: "Kafka", state: this.manual.kafka || this.kafkaListening ? "active" : this.busy.kafka ? "busy" : "idle",
         detail: this.kafkaListening ? `Listening${this.kafkaListenerLabel ? ` · ${this.kafkaListenerLabel}` : ""}`
-          : this.manual.kafka || (this.busy.kafka ? "Working" : kafka.brokers ? "On demand" : "Not configured") },
+          : this.manual.kafka || (this.busy.kafka ? "Working" : kafka.brokers ? "On demand" : "Not configured"),
+      },
       { service: "redis", name: "Redis", state: this.manual.redis ? "active" : this.busy.redis ? "busy" : "idle",
-        detail: this.manual.redis || (this.busy.redis ? "Working" : redis.host ? "On demand" : "Not configured") },
+        detail: this.manual.redis || (this.busy.redis ? "Working" : redis.host ? "On demand" : "Not configured"),
+      },
     ];
     for (const item of states) {
       const trigger = this.container.querySelector(`[data-connection="${item.service}"]`);

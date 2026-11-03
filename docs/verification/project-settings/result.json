@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "checks": [
+    "multiple legacy Jira keys require an explicit choice",
+    "project fields, pinned saves, shared credentials, environment migration and rename, targeted publication",
+    "reload, desktop and mobile hierarchy without horizontal overflow",
+    "actual project switch refreshes Redis, Kafka, Lockey, and validator consumers",
+    "nested Desktop Oracle creation restores environment draft; Oracle batch and Redis commands use project-specific secure identities; saved connections remain assignable",
+    "Desktop project switching closes native Redis/Kafka sessions and existing Oracle pools before reload"
+  ],
+  "snapshot": {
+    "redis": {
+      "credentialScope": "fc8f8555-071f-4279-8b32-e66c9735799d",
+      "host": "second-cache",
+      "port": 6379,
+      "database": 0,
+      "tls": false,
+      "username": ""
+    },
+    "kafka": {
+      "brokers": "second:9092",
+      "securityProtocol": "PLAINTEXT"
+    },
+    "path": "/second",
+    "validator": {
+      "url": "https://second.invalid/validate"
+    }
+  },
+  "errors": []
+}

@@ -1,4 +1,4 @@
-import { projectEnvironmentStorage, allProjectEnvironmentStores } from "./Projects.js";
+import { projectEnvironmentStorage, allProjectEnvironmentStores, projectSettingsStorage } from "./Projects.js";
 
 /**
  * Shared testing-environment model.
@@ -114,7 +114,7 @@ function normalizeList(list) {
   return environments;
 }
 
-function readOracleConnections(target = storage()) {
+function readLegacyOracleConnections(target = storage()) {
   return parseArray(target?.getItem(ORACLE_CONNECTIONS_KEY)).filter(
     (connection) => connection && typeof connection.name === "string" && connection.connect_string,
   );
@@ -153,7 +153,7 @@ function migrateLegacyEnvironments(target = storage()) {
     add({ name, cdnPublicUrl: String(pair?.value ?? "").trim() });
   }
 
-  for (const connection of readOracleConnections(target)) {
+  for (const connection of readLegacyOracleConnections(target)) {
     const environment = add({ name: connection.name });
     environment.criticalConnection = connection.name;
   }
@@ -165,7 +165,132 @@ function migrateLegacyEnvironments(target = storage()) {
 }
 
 export function readEnvironments(target = storage()) {
-  return migrateLegacyEnvironments(projectEnvironmentStorage(target));
+  const environments = migrateLegacyEnvironments(projectEnvironmentStorage(target));
+  const raw = projectSettingsStorage(target).getItem("config.oracle.environment.catalog");
+  const connections = raw ? JSON.parse(raw).connections : [];
+  return environments.map((environment) => {
+    const result = { ...environment };
+    for (const field of ["criticalConnection", "complementaryConnection"]) {
+      const connection = connections.find(
+        (entry) =>
+          entry.environmentId === environment.id &&
+          (entry.id === result[field] || entry.name === result[field] || entry.legacyCredentialName === result[field]),
+      );
+      if (connection) result[field] = connection.id;
+    }
+    return result;
+  });
+}
+
+const CATALOG_KEY = "config.oracle.environment.catalog";
+
+/** A single versioned write preserves legacy profiles and makes migration retryable on storage failure. */
+export function readProjectConnections(target = storage()) {
+  const scoped = projectSettingsStorage(target);
+  const raw = scoped.getItem(CATALOG_KEY);
+  if (raw !== null) {
+    const catalog = JSON.parse(raw);
+    if (catalog.version !== 1 || !Array.isArray(catalog.connections)) throw new Error("Invalid Oracle connection catalog.");
+    return catalog.connections.map((connection) => ({ ...connection, projectId: scoped.projectId }));
+  }
+  const environments = migrateLegacyEnvironments(projectEnvironmentStorage(target));
+  const legacy =
+    scoped.getItem(ORACLE_CONNECTIONS_KEY) !== null
+      ? readLegacyOracleConnections(scoped)
+      : readLegacyOracleConnections(scoped.sourceStorage);
+  const connections = [];
+  for (const connection of legacy) {
+    const bound = environments.filter((environment) =>
+      [environment.criticalConnection, environment.complementaryConnection].includes(connection.name),
+    );
+    // Nonlegacy projects receive only their explicit legacy bindings, never the entire global catalog.
+    const owners = bound.length
+      ? bound.map((environment) => environment.id)
+      : scoped.keyFor(ORACLE_CONNECTIONS_KEY) === ORACLE_CONNECTIONS_KEY
+        ? [""]
+        : [];
+    for (const environmentId of owners)
+      connections.push({
+        ...connection,
+        id: crypto.randomUUID(),
+        environmentId,
+        legacyCredentialName: connection.name,
+      });
+  }
+  if (connections.length) scoped.setItem(CATALOG_KEY, JSON.stringify({ version: 1, connections }));
+  return connections.map((connection) => ({ ...connection, projectId: scoped.projectId }));
+}
+
+export function readEnvironmentConnections(environmentId, target = storage()) {
+  const connections = readProjectConnections(target);
+  if (environmentId) return connections.filter((connection) => connection.environmentId === environmentId);
+  const environments = new Set(readEnvironments(target).map((environment) => environment.id));
+  return connections.filter((connection) => !connection.environmentId || !environments.has(connection.environmentId));
+}
+
+/** Tool selection values are stable IDs; labels retain environment and connection names. */
+export function readOracleToolConnections(target = storage()) {
+  const connections = readProjectConnections(target);
+  const environments = readEnvironments(target);
+  return connections.map((connection) => ({
+    ...connection,
+    label: [environments.find((environment) => environment.id === connection.environmentId)?.name, connection.name]
+      .filter(Boolean)
+      .join(" / "),
+    name: connection.environmentId ? connection.id : connection.name,
+  }));
+}
+
+export function saveEnvironmentConnections(environmentId, list, target = storage()) {
+  const scoped = projectSettingsStorage(target);
+  const current = readProjectConnections(target);
+  const previous = readEnvironmentConnections(environmentId, target);
+  const next = list.map((connection) => {
+    const saved = previous.find((entry) => entry.id === connection.id || entry.name === connection.name);
+    return { ...saved, ...connection, id: saved?.id || connection.id || crypto.randomUUID(), environmentId };
+  });
+  const names = new Set(next.map((connection) => connection.name));
+  if (names.size !== next.length) throw new Error("Connection names must be unique within an environment.");
+  const previousIds = new Set(previous.map((connection) => connection.id));
+  const connections = [...current.filter((connection) => !previousIds.has(connection.id)), ...next];
+  scoped.setItem(CATALOG_KEY, JSON.stringify({ version: 1, connections }));
+  globalThis.dispatchEvent?.(new Event("adtools:connection-settings-changed"));
+  return next;
+}
+
+export function bindEnvironmentConnection(environmentId, connectionId, target = storage()) {
+  const connections = readProjectConnections(target);
+  const connection = connections.find((entry) => entry.id === connectionId);
+  if (!connection || connection.environmentId === environmentId) return connectionId;
+  if (connection.environmentId && readEnvironments(target).some((environment) => environment.id === connection.environmentId)) {
+    throw new Error("Choose a connection belonging to this environment.");
+  }
+  const existing = readEnvironmentConnections(environmentId, target).find((entry) => entry.sourceConnectionId === connection.id);
+  if (existing) return existing.id;
+  const owned = {
+    ...connection,
+    id: crypto.randomUUID(),
+    environmentId,
+    sourceConnectionId: connection.id,
+    legacyCredentialName: connection.legacyCredentialName || `oracle:${connection.projectId}:${connection.id}`,
+  };
+  saveEnvironmentConnections(environmentId, [...readEnvironmentConnections(environmentId, target), owned], target);
+  return owned.id;
+}
+
+/** Cancelling/deleting an environment must not strand connections already saved in its editor. */
+export function unassignEnvironmentConnections(environmentId, target = storage()) {
+  const scoped = projectSettingsStorage(target);
+  const connections = readProjectConnections(target);
+  const names = new Set(connections.filter((connection) => !connection.environmentId).map((connection) => connection.name));
+  for (const connection of connections.filter((entry) => entry.environmentId === environmentId)) {
+    const base = connection.name;
+    let suffix = 2;
+    while (names.has(connection.name)) connection.name = `${base} (${suffix++})`;
+    names.add(connection.name);
+    connection.environmentId = "";
+  }
+  scoped.setItem(CATALOG_KEY, JSON.stringify({ version: 1, connections }));
 }
 
 export function writeEnvironments(list, target = storage(), projectId) {
@@ -210,7 +335,12 @@ export function mergeLegacyBaseUrls(pairs, target = storage()) {
 export function resolveConnection(environment, role, target = storage()) {
   const name = role === ROLE_COMPLEMENTARY ? environment?.complementaryConnection : environment?.criticalConnection;
   if (!name) return null;
-  return readOracleConnections(target).find((connection) => connection.name === name) || null;
+  return (
+    readProjectConnections(target).find(
+      (connection) =>
+        (!environment.id || connection.environmentId === environment.id) && (connection.id === name || connection.name === name),
+    ) || null
+  );
 }
 
 function replaceConnectionReference(environment, previousName, nextName) {
@@ -233,8 +363,18 @@ function changeConnectionReference(previousName, nextName, target) {
     const raw = scoped.getItem(STORAGE_KEY);
     if (raw === null) continue;
     const environments = normalizeList(parseArray(raw));
+    const catalog = JSON.parse(scoped.getItem(CATALOG_KEY) || '{"connections":[]}');
+    const connection = catalog.connections.find((entry) => entry.id === previousName);
     let projectChanged = false;
     for (const environment of environments) {
+      if (connection && connection.environmentId === environment.id) {
+        for (const field of ["criticalConnection", "complementaryConnection"]) {
+          if ([connection.id, connection.name, connection.legacyCredentialName].filter(Boolean).includes(environment[field])) {
+            environment[field] = nextName;
+            projectChanged = true;
+          }
+        }
+      }
       if (replaceConnectionReference(environment, previousName, nextName)) projectChanged = true;
     }
     if (projectChanged) {

@@ -1,3 +1,10 @@
+import { projectCredentialScope } from "../../core/Projects.js";
+import {
+  readEnvironmentConnections,
+  resolveConnection,
+  bindEnvironmentConnection,
+  unassignEnvironmentConnections,
+} from "../../core/Environments.js";
 import { renderProjectManager, renderProjectSchemaLink } from "./projects.js";
 import { SettingsTemplate } from "./template.js";
 import { buildOracleJsonPlan, applyOracleJsonPlan } from "./oracle-json.js";
@@ -8,7 +15,7 @@ import { buildListPlan, buildKafkaPlan, applyListPlan } from "./bulk-list.js";
 import "./styles.css";
 import { SettingsService } from "./service.js";
 import { SettingsSearch } from "./search.js";
-import { clearConnectionReference, mergeLegacyBaseUrls, updateConnectionReference } from "../../core/Environments.js";
+import { clearConnectionReference, mergeLegacyBaseUrls } from "../../core/Environments.js";
 import { confirmAction } from "../../components/ConfirmationDialog.js";
 import { openOtpOverlay } from "../../components/OtpOverlay.js";
 import { invoke } from "@tauri-apps/api/core";
@@ -34,6 +41,7 @@ class SettingsPage {
     this._runtimeRetrySettings = false;
     this.settingDisposers = new Set();
     this.oracleConnectionEditor = null;
+    this.oracleEditors = new Map();
   }
 
   async mount(root, routeData = null) {
@@ -174,6 +182,7 @@ class SettingsPage {
       category = category.parentElement?.closest(".settings-category");
     }
 
+    for (let details = setting.closest("details"); details; details = details.parentElement?.closest("details")) details.open = true;
     setting.classList.add("settings-focus-highlight");
     setting.scrollIntoView?.({ behavior: "smooth", block: "center" });
     const groupedControl = Array.from(setting.querySelectorAll("[data-setting-key]")).find(
@@ -292,20 +301,25 @@ class SettingsPage {
                 pairs = [];
               }
             }
-            mergeLegacyBaseUrls(Array.isArray(pairs) ? pairs : []);
+            mergeLegacyBaseUrls(Array.isArray(pairs) ? pairs : [], this.service.storage);
+            continue;
+          }
+          if (k === "config.oracle.connections" || k === "config.environments") {
+            const rows = typeof v === "string" ? JSON.parse(v) : v;
+            this.service.setValue(k, k === "config.environments" ? "environments" : "oracle-connections", rows);
             continue;
           }
           if (Array.isArray(v)) {
             try {
-              localStorage.setItem(k, JSON.stringify(v));
+              this.service.storage.setItem(k, JSON.stringify(v));
             } catch (_) {}
           } else if (v && typeof v === "object") {
             try {
-              localStorage.setItem(k, JSON.stringify(v));
+              this.service.storage.setItem(k, JSON.stringify(v));
             } catch (_) {}
           } else {
             try {
-              localStorage.setItem(k, sanitize(v));
+              this.service.storage.setItem(k, sanitize(v));
             } catch (_) {}
           }
         }
@@ -330,7 +344,7 @@ class SettingsPage {
       };
       for (const [key, value] of Object.entries(data)) {
         if (key === "config.baseUrls") {
-          mergeLegacyBaseUrls(Array.isArray(value) ? value : []);
+          mergeLegacyBaseUrls(Array.isArray(value) ? value : [], this.service.storage);
           continue;
         }
         if (key === "config.lockeyDomains") {
@@ -343,7 +357,7 @@ class SettingsPage {
             }
           }
           try {
-            localStorage.setItem(key, JSON.stringify(Array.isArray(domains) ? domains : []));
+            this.service.storage.setItem(key, JSON.stringify(Array.isArray(domains) ? domains : []));
           } catch (_) {}
           continue;
         }
@@ -462,19 +476,7 @@ class SettingsPage {
     this.categoriesRoot.innerHTML = "";
 
     const frag = document.createDocumentFragment();
-    const environmentCategory = categories.find((category) => category.id === "environments");
-    const projectCategory = {
-      id: "project-settings",
-      label: "Project",
-      initiallyExpanded: true,
-      items: [
-        { key: "config.projects", type: "project-manager" },
-        { key: "project.schema", type: "project-schema" },
-        ...(environmentCategory?.items || []).map((item) => ({ ...item, projectSection: true })),
-      ],
-    };
-    const projectCategories = categories.map((category) => (category.id === "environments" ? projectCategory : category));
-    for (const cat of projectCategories) {
+    for (const cat of categories) {
       if (!this.service.shouldShowCategory(cat)) continue;
       const el = this.renderCategory(cat);
       frag.appendChild(el);
@@ -522,7 +524,7 @@ class SettingsPage {
     // Items
     let updatesRendered = false;
     for (const item of cat.items || []) {
-      if (!this.service.shouldShowItem(item)) continue;
+      if (item.environmentEmbedded || !this.service.shouldShowItem(item)) continue;
       if (item.group === "updates") {
         if (!updatesRendered) {
           content.appendChild(
@@ -614,6 +616,9 @@ class SettingsPage {
   }
 
   renderKafkaBrokersItem(item) {
+    const storage = this.service.storage;
+    const readProfiles = () => readKafkaBrokerProfiles(storage);
+    const saveProfiles = (profiles) => saveKafkaBrokerProfiles(profiles, storage);
     const wrapper = document.createElement("div");
     wrapper.className = "setting-item setting-item-kafka-brokers";
     wrapper.dataset.setting = item.key;
@@ -661,7 +666,7 @@ class SettingsPage {
     this.settingDisposers.add(() => modal.dispose());
 
     const renderList = () => {
-      const profiles = readKafkaBrokerProfiles();
+      const profiles = readProfiles();
       list.replaceChildren();
       if (!profiles.length) {
         const empty = document.createElement("p");
@@ -721,9 +726,9 @@ class SettingsPage {
         form.hidden = true;
         modal.close();
       },
-      load: () => ({ value: readKafkaBrokerProfiles().map(({ name, brokers }) => ({ name, brokers })) }),
-      plan: (text) => buildKafkaPlan(text, readKafkaBrokerProfiles()),
-      apply: (plan) => applyListPlan(plan, readKafkaBrokerProfiles, saveKafkaBrokerProfiles),
+      load: () => ({ value: readProfiles().map(({ name, brokers }) => ({ name, brokers })) }),
+      plan: (text) => buildKafkaPlan(text, readProfiles()),
+      apply: (plan) => applyListPlan(plan, readProfiles, saveProfiles),
       onBusy: (busy) => {
         addButton.disabled = busy;
         if (busy)
@@ -751,7 +756,7 @@ class SettingsPage {
         (!name ? nameInput : addressesInput).focus();
         return;
       }
-      const profiles = readKafkaBrokerProfiles();
+      const profiles = readProfiles();
       if (profiles.some((profile) => profile.id !== editingId && profile.name.toLowerCase() === name.toLowerCase())) {
         formStatus.textContent = "That connection name is already in use.";
         formStatus.dataset.state = "error";
@@ -762,7 +767,7 @@ class SettingsPage {
       const next = editingId
         ? profiles.map((profile) => (profile.id === editingId ? { id, name, brokers } : profile))
         : [...profiles, { id, name, brokers }];
-      saveKafkaBrokerProfiles(next);
+      saveProfiles(next);
       form.hidden = true;
       modal.close();
       renderList();
@@ -772,13 +777,13 @@ class SettingsPage {
     list.addEventListener("click", async (event) => {
       const edit = event.target.closest(".kafka-broker-edit");
       if (edit) {
-        const profile = readKafkaBrokerProfiles().find((entry) => entry.id === edit.dataset.profileId);
+        const profile = readProfiles().find((entry) => entry.id === edit.dataset.profileId);
         if (profile) showForm(profile);
         return;
       }
       const remove = event.target.closest(".kafka-broker-delete");
       if (!remove) return;
-      const profiles = readKafkaBrokerProfiles();
+      const profiles = readProfiles();
       const profile = profiles.find((entry) => entry.id === remove.dataset.profileId);
       if (!profile) return;
       const confirmed = await confirmAction({
@@ -787,7 +792,7 @@ class SettingsPage {
         confirmLabel: "Delete broker",
       });
       if (!confirmed) return;
-      saveKafkaBrokerProfiles(profiles.filter((entry) => entry.id !== profile.id));
+      saveProfiles(profiles.filter((entry) => entry.id !== profile.id));
       renderList();
       this.eventBus?.emit?.("notification:success", { message: `Broker "${profile.name}" deleted` });
     });
@@ -852,6 +857,15 @@ class SettingsPage {
     const addButton = wrapper.querySelector(".environment-add-btn");
     const isDesktop = this.runtime === "tauri";
     let editingId = "";
+    let draftEnvironmentId = "";
+    let draftConnections = null;
+    let unassignedDetails = null;
+    const oracleItem = {
+      key: "config.oracle.connections",
+      storageKey: "config.oracle.connections",
+      type: "oracle-connections",
+      default: [],
+    };
 
     const readList = () => {
       const value = this.service.getValue(item.storageKey || item.key, "environments", []);
@@ -867,16 +881,23 @@ class SettingsPage {
     }
 
     const connections = () => {
-      const value = this.service.getValue("config.oracle.connections", "oracle-connections", []);
+      const value = this.service
+        .forEnvironment(editingId || draftEnvironmentId)
+        .getValue("config.oracle.connections", "oracle-connections", []);
       return Array.isArray(value) ? value.filter((entry) => entry?.name) : [];
     };
 
     const selectedConnections = new Map();
     const fillConnectionOptions = (select, selected) => {
-      const options = connections();
+      const options = [
+        ...new Map(
+          [...connections(), ...readEnvironmentConnections("", this.service.storage)].map((connection) => [connection.id, connection]),
+        ).values(),
+      ];
       select.replaceChildren(new Option("None", ""));
-      for (const connection of options) select.appendChild(new Option(connection.name, connection.name));
-      if (selected && !options.some((connection) => connection.name === selected)) {
+      for (const connection of options)
+        select.appendChild(new Option(`${connection.name}${connection.environmentId ? "" : " (unassigned)"}`, connection.id));
+      if (selected && !options.some((connection) => connection.id === selected)) {
         select.appendChild(new Option(`${selected} (not configured)`, selected));
       }
       if (isDesktop) {
@@ -908,8 +929,8 @@ class SettingsPage {
         identity.appendChild(name);
         const database = document.createElement("span");
         database.className = "environment-meta";
-        database.textContent = `Critical: ${environment.criticalConnection || "—"} · Complementary: ${
-          environment.complementaryConnection || "—"
+        database.textContent = `Critical: ${resolveConnection(environment, "critical")?.name || environment.criticalConnection || "—"} · Complementary: ${
+          resolveConnection(environment, "complementary")?.name || environment.complementaryConnection || "—"
         }`;
         identity.appendChild(database);
         if (environment.cdnPublicUrl) {
@@ -939,7 +960,18 @@ class SettingsPage {
         remove.textContent = "Delete";
         actions.append(edit, remove);
         row.append(identity, actions);
-        list.appendChild(row);
+        const entry = document.createElement("div");
+        entry.className = "environment-entry";
+        entry.append(row);
+        if (isDesktop) {
+          const details = document.createElement("details");
+          details.className = "environment-connections";
+          const summary = document.createElement("summary");
+          summary.textContent = "Oracle connections";
+          details.append(summary, this.renderItem({ ...oracleItem, environmentId: environment.id }));
+          entry.append(details);
+        }
+        list.appendChild(entry);
       }
     };
 
@@ -965,16 +997,18 @@ class SettingsPage {
           modal.resume();
           select.focus();
         };
-        if (!this.oracleConnectionEditor) {
+        const editor = this.oracleEditors.get(editingId || draftEnvironmentId);
+        if (!editor) {
           status.textContent = "Oracle connection editor is unavailable. Reopen Settings and try again.";
           select.focus();
           return;
         }
         modal.suspend();
-        const opened = this.oracleConnectionEditor.openCreate({
+        const opened = editor.openCreate({
           onSaved: (name) => {
-            fillConnectionOptions(criticalSelect, select === criticalSelect ? name : criticalSelect.value);
-            fillConnectionOptions(complementarySelect, select === complementarySelect ? name : complementarySelect.value);
+            const id = connections().find((connection) => connection.name === name)?.id || name;
+            fillConnectionOptions(criticalSelect, select === criticalSelect ? id : criticalSelect.value);
+            fillConnectionOptions(complementarySelect, select === complementarySelect ? id : complementarySelect.value);
             resume();
           },
           onCancel: resume,
@@ -985,6 +1019,12 @@ class SettingsPage {
 
     const showForm = (environment = null) => {
       editingId = environment?.id || "";
+      draftEnvironmentId = environment?.id || crypto.randomUUID();
+      if (!environment && isDesktop) {
+        draftConnections?.remove();
+        draftConnections = this.renderItem({ ...oracleItem, environmentId: draftEnvironmentId });
+        wrapper.append(draftConnections);
+      }
       formTitle.textContent = environment ? "Edit Environment" : "Add Environment";
       nameInput.value = environment?.name || "";
       fillConnectionOptions(criticalSelect, environment?.criticalConnection || "");
@@ -1000,6 +1040,12 @@ class SettingsPage {
     };
 
     const hideForm = () => {
+      if (!editingId && draftEnvironmentId) {
+        unassignEnvironmentConnections(draftEnvironmentId, this.service.storage);
+        draftConnections?.remove();
+        draftConnections = null;
+        renderUnassigned();
+      }
       form.hidden = true;
       editingId = "";
       modal.close();
@@ -1043,24 +1089,36 @@ class SettingsPage {
         }
       }
 
-      const existing = environments.find((environment) => environment.id === editingId);
-      const next = {
-        name,
-        criticalConnection: isDesktop ? criticalSelect.value : existing?.criticalConnection || "",
-        complementaryConnection: isDesktop ? complementarySelect.value : existing?.complementaryConnection || "",
-        cdnPublicUrl: publicInput.value.trim(),
-        cdnDirectUrl: directInput.value.trim(),
-      };
-      const updated = editingId
-        ? environments.map((environment) => (environment.id === editingId ? { ...environment, ...next } : environment))
-        : [...environments, next];
+      try {
+        const existing = environments.find((environment) => environment.id === editingId);
+        const next = {
+          id: editingId || draftEnvironmentId,
+          name,
+          criticalConnection: isDesktop
+            ? bindEnvironmentConnection(editingId || draftEnvironmentId, criticalSelect.value, this.service.storage)
+            : existing?.criticalConnection || "",
+          complementaryConnection: isDesktop
+            ? bindEnvironmentConnection(editingId || draftEnvironmentId, complementarySelect.value, this.service.storage)
+            : existing?.complementaryConnection || "",
+          cdnPublicUrl: publicInput.value.trim(),
+          cdnDirectUrl: directInput.value.trim(),
+        };
+        const updated = editingId
+          ? environments.map((environment) => (environment.id === editingId ? { ...environment, ...next } : environment))
+          : [...environments, next];
 
-      saveList(updated);
-      form.hidden = true;
-      editingId = "";
-      renderList();
-      modal.close();
-      this.eventBus?.emit?.("notification:success", { message: `Environment "${name}" saved` });
+        saveList(updated);
+        draftConnections?.remove();
+        draftConnections = null;
+        form.hidden = true;
+        editingId = "";
+        renderList();
+        modal.close();
+        this.eventBus?.emit?.("notification:success", { message: `Environment "${name}" saved` });
+      } catch (error) {
+        status.textContent = error.message || String(error);
+        status.dataset.state = "error";
+      }
     });
 
     list.addEventListener("click", async (event) => {
@@ -1081,16 +1139,30 @@ class SettingsPage {
         confirmLabel: "Delete environment",
       });
       if (!confirmed) return;
+      unassignEnvironmentConnections(environment.id, this.service.storage);
       saveList(readList().filter((entry) => entry.id !== environment.id));
       renderList();
+      renderUnassigned();
       this.eventBus?.emit?.("notification:success", { message: `Environment "${environment.name}" deleted` });
     });
 
+    const renderUnassigned = () => {
+      unassignedDetails?.remove();
+      unassignedDetails = null;
+      if (!isDesktop || !readEnvironmentConnections("", this.service.storage).length) return;
+      unassignedDetails = document.createElement("details");
+      const summary = document.createElement("summary");
+      summary.textContent = "Unassigned Oracle connections";
+      unassignedDetails.append(summary, this.renderItem({ ...oracleItem, environmentId: "" }));
+      wrapper.append(unassignedDetails);
+    };
     renderList();
+    renderUnassigned();
     return wrapper;
   }
 
   renderItem(item) {
+    const service = item.environmentId === undefined ? this.service : this.service.forEnvironment(item.environmentId);
     if (item.type === "project-manager") {
       return renderProjectManager({ eventBus: this.eventBus, refresh: () => this.renderCategories(this.currentConfig.categories) });
     }
@@ -1098,7 +1170,26 @@ class SettingsPage {
     if (item.type === "kafka-brokers") return this.renderKafkaBrokersItem(item);
     if (item.type === "environments") return this.renderEnvironmentsItem(item);
     const storageKey = item.storageKey || item.key;
-    const current = this.service.getValue(storageKey, item.type, item.default);
+    const current = service.getValue(storageKey, item.type, item.default);
+    if (item.key === "config.jira.projectKey" && !current) {
+      const legacyKeys = service.getValue("config.jira.projectKeys", "string-list", []);
+      if (legacyKeys.length > 1) {
+        const row = document.createElement("div");
+        row.className = "setting-item";
+        row.dataset.setting = item.key;
+        const select = document.createElement("select");
+        select.className = "setting-input";
+        select.setAttribute("aria-label", "Jira Project Key");
+        select.append(new Option("Choose Jira project key…", ""), ...legacyKeys.map((key) => new Option(key, key)));
+        select.addEventListener("change", () => {
+          if (!select.value) return;
+          service.setValue(storageKey, "string", select.value);
+          row.replaceWith(this.renderItem(item));
+        });
+        row.append(select);
+        return row;
+      }
+    }
 
     const wrapper = document.createElement("div");
     wrapper.className = "setting-item";
@@ -1131,13 +1222,13 @@ class SettingsPage {
     if (item.type === "boolean") {
       row.innerHTML = `
         <div class="setting-name">${item.label}</div>
-        <div class="setting-control">${this.service.inputForType("boolean", item)}</div>
+        <div class="setting-control">${service.inputForType("boolean", item)}</div>
       `;
       const input = row.querySelector(".setting-input");
       this.applyInitialInputValue(input, "boolean", current);
       input.addEventListener("change", () => {
         const newVal = !!input.checked;
-        this.service.setValue(storageKey, "boolean", newVal, item.apply);
+        service.setValue(storageKey, "boolean", newVal, item.apply);
       });
       decorateRow();
       wrapper.appendChild(row);
@@ -1148,13 +1239,13 @@ class SettingsPage {
     if (item.type === "enum") {
       row.innerHTML = `
         <div class="setting-name">${item.label}</div>
-        <div class="setting-control">${this.service.inputForType("enum", item)}</div>
+        <div class="setting-control">${service.inputForType("enum", item)}</div>
       `;
       const select = row.querySelector(".setting-input");
       // Set initial value
       select.value = current || item.default || "";
       select.addEventListener("change", () => {
-        this.service.setValue(storageKey, "enum", select.value, item.apply);
+        service.setValue(storageKey, "enum", select.value, item.apply);
       });
       decorateRow();
       wrapper.appendChild(row);
@@ -1229,6 +1320,11 @@ class SettingsPage {
         </form>
       `;
 
+      for (const input of wrapper.querySelectorAll("input[id]")) {
+        const label = wrapper.querySelector(`label[for="${input.id}"]`);
+        input.id += `-${item.environmentId || "unassigned"}`;
+        if (label) label.htmlFor = input.id;
+      }
       const listEl = wrapper.querySelector(".oracle-connections-list");
       const formEl = wrapper.querySelector(".oracle-connection-form");
       const addBtn = wrapper.querySelector(".oracle-add-btn");
@@ -1254,7 +1350,7 @@ class SettingsPage {
         String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m]);
 
       const renderList = () => {
-        const conns = this.service.getValue(storageKey, "oracle-connections", []);
+        const conns = service.getValue(storageKey, "oracle-connections", []);
         if (!conns || conns.length === 0) {
           listEl.innerHTML = '<div class="oracle-empty">No connections configured</div>';
           return;
@@ -1303,7 +1399,7 @@ class SettingsPage {
         if (conn) {
           (async () => {
             try {
-              const user = await OracleConnectionService.getOracleUsername(conn.name);
+              const user = await OracleConnectionService.getOracleUsername(conn);
               if (generation === formGeneration && !formEl.querySelector(".oracle-username").value) {
                 formEl.querySelector(".oracle-username").value = user || "";
               }
@@ -1347,11 +1443,14 @@ class SettingsPage {
         },
       };
       this.oracleConnectionEditor = controller;
+      this.oracleEditors.set(item.environmentId || "", controller);
       this.settingDisposers.add(() => {
         connectionFlow = null;
+        if (this.oracleEditors.get(item.environmentId || "") === controller) this.oracleEditors.delete(item.environmentId || "");
         if (this.oracleConnectionEditor === controller) this.oracleConnectionEditor = null;
       });
 
+      const pendingOracleIdentities = new Map();
       const bulk = mountBulkEditor({
         root: wrapper,
         button: wrapper.querySelector(".settings-bulk-edit"),
@@ -1362,10 +1461,10 @@ class SettingsPage {
           hideForm();
         },
         load: async () => {
-          const connections = this.service.getValue(storageKey, "oracle-connections", []);
+          const connections = service.getValue(storageKey, "oracle-connections", []);
           const users = new Map(
             await Promise.all(
-              connections.map(async (connection) => [connection.name, await OracleConnectionService.getOracleUsername(connection.name)]),
+              connections.map(async (connection) => [connection.name, await OracleConnectionService.getOracleUsername(connection)]),
             ),
           );
           return {
@@ -1377,12 +1476,22 @@ class SettingsPage {
             context: users,
           };
         },
-        plan: (text, users) => buildOracleJsonPlan(text, this.service.getValue(storageKey, "oracle-connections", []), users),
+        plan: (text, users) => buildOracleJsonPlan(text, service.getValue(storageKey, "oracle-connections", []), users),
         apply: (plan) =>
           applyOracleJsonPlan(plan, {
-            getConnections: () => this.service.getValue(storageKey, "oracle-connections", []),
-            setConnections: (connections) => this.service.setValue(storageKey, "oracle-connections", connections),
-            setCredentials: (name, username, password) => OracleConnectionService.setOracleCredentials(name, username, password),
+            getConnections: () => service.getValue(storageKey, "oracle-connections", []),
+            setConnections: (connections) =>
+              service.setValue(
+                storageKey,
+                "oracle-connections",
+                connections.map((entry) => ({ ...pendingOracleIdentities.get(entry.name), ...entry })),
+              ),
+            setCredentials: async (name, username, password) => {
+              const existing = service.getValue(storageKey, "oracle-connections", []).find((entry) => entry.name === name);
+              const identity = existing || { id: crypto.randomUUID(), name, projectId: service.storage.projectId };
+              await OracleConnectionService.setOracleCredentials(identity, username, password);
+              pendingOracleIdentities.set(name, identity);
+            },
           }),
         onBusy: (busy) => {
           addBtn.disabled = busy;
@@ -1416,9 +1525,10 @@ class SettingsPage {
             ?.focus();
           return;
         }
-        const savedConnections = this.service.getValue(storageKey, "oracle-connections", []);
+        const savedConnections = service.getValue(storageKey, "oracle-connections", []);
+        const newConnectionId = crypto.randomUUID();
         const oldName = editingIndex >= 0 && Array.isArray(savedConnections) ? savedConnections[editingIndex]?.name : null;
-        if ((!oldName || oldName !== name) && !password) {
+        if (!oldName && !password) {
           statusEl.textContent = oldName ? "Password is required when renaming a connection" : "Password is required for a new connection";
           statusEl.className = "oracle-form-status error";
           return;
@@ -1439,7 +1549,11 @@ class SettingsPage {
         try {
           // Save credentials to keychain
           try {
-            await OracleConnectionService.setOracleCredentials(name, username, password);
+            await OracleConnectionService.setOracleCredentials(
+              savedConnections[editingIndex] || { id: newConnectionId, name, projectId: service.storage.projectId },
+              username,
+              password,
+            );
           } catch (err) {
             statusEl.textContent = `Failed to save credentials: ${err}`;
             statusEl.className = "oracle-form-status error";
@@ -1447,19 +1561,16 @@ class SettingsPage {
           }
 
           // Update connections list in localStorage
-          let conns = this.service.getValue(storageKey, "oracle-connections", []);
+          let conns = service.getValue(storageKey, "oracle-connections", []);
           if (!Array.isArray(conns)) conns = [];
 
-          const connData = { name, connect_string: connectString };
+          const connData = {
+            ...savedConnections[editingIndex],
+            id: savedConnections[editingIndex]?.id || newConnectionId,
+            name,
+            connect_string: connectString,
+          };
           if (editingIndex >= 0) {
-            // If name changed, delete old credentials
-            const previousName = conns[editingIndex]?.name;
-            if (previousName && previousName !== name) {
-              try {
-                await invoke("delete_oracle_credentials", { name: previousName });
-              } catch (_) {}
-              updateConnectionReference(previousName, name);
-            }
             conns[editingIndex] = connData;
           } else {
             // Check for duplicate name
@@ -1471,7 +1582,7 @@ class SettingsPage {
             conns.push(connData);
           }
 
-          this.service.setValue(storageKey, "oracle-connections", conns);
+          service.setValue(storageKey, "oracle-connections", conns);
           hideForm(name);
           renderList();
           this.eventBus?.emit?.("notification:success", { message: `Connection "${name}" saved` });
@@ -1502,6 +1613,7 @@ class SettingsPage {
         try {
           const connName = name || "test";
           await OracleConnectionService.testConnectionWithCredentials({
+            ...service.getValue(storageKey, "oracle-connections", [])[editingIndex],
             name: connName,
             connect_string: connectString,
             username,
@@ -1526,7 +1638,7 @@ class SettingsPage {
         if (checkBtn) {
           const idx = parseInt(checkBtn.dataset.index, 10);
           const connName = checkBtn.dataset.name;
-          const statusEl = document.getElementById(`oracle-conn-status-${idx}`);
+          const statusEl = wrapper.querySelector(`[id="oracle-conn-status-${idx}"]`);
 
           // Disable button during check
           checkBtn.disabled = true;
@@ -1544,7 +1656,7 @@ class SettingsPage {
 
           try {
             // Get connection config
-            const conns = this.service.getValue(storageKey, "oracle-connections", []);
+            const conns = service.getValue(storageKey, "oracle-connections", []);
             const conn = conns[idx];
             if (!conn) throw new Error("Connection not found");
 
@@ -1573,13 +1685,13 @@ class SettingsPage {
 
         if (editBtn) {
           const idx = parseInt(editBtn.dataset.index, 10);
-          const conns = this.service.getValue(storageKey, "oracle-connections", []);
+          const conns = service.getValue(storageKey, "oracle-connections", []);
           if (conns[idx]) showForm(conns[idx], idx);
         }
 
         if (deleteBtn) {
           const idx = parseInt(deleteBtn.dataset.index, 10);
-          let conns = this.service.getValue(storageKey, "oracle-connections", []);
+          let conns = service.getValue(storageKey, "oracle-connections", []);
           const conn = conns[idx];
           if (
             conn &&
@@ -1591,11 +1703,14 @@ class SettingsPage {
           ) {
             // Delete credentials from keychain
             try {
-              await invoke("delete_oracle_credentials", { name: conn.name });
-            } catch (_) {}
-            clearConnectionReference(conn.name);
+              await OracleConnectionService.deleteOracleCredentials(conn);
+            } catch (error) {
+              this.eventBus?.emit?.("notification:error", { message: `Could not delete saved credentials: ${error.message || error}` });
+              return;
+            }
+            clearConnectionReference(conn.id || conn.name);
             conns.splice(idx, 1);
-            this.service.setValue(storageKey, "oracle-connections", conns);
+            service.setValue(storageKey, "oracle-connections", conns);
             renderList();
             this.eventBus?.emit?.("notification:success", { message: `Connection "${conn.name}" deleted` });
           }
@@ -1639,7 +1754,7 @@ class SettingsPage {
     panel.style.display = "none";
     panel.innerHTML = `
       <div class="setting-edit-row">
-        ${this.service.inputForType(item.type, item)}
+        ${service.inputForType(item.type, item)}
       </div>
       <div class="setting-error" id="${fieldId}-error" aria-live="polite"></div>
       <div class="setting-actions">
@@ -1681,7 +1796,7 @@ class SettingsPage {
 
     const validateAndToggle = () => {
       const value = getCurrentEditValue();
-      const { valid, message } = this.service.validate(value, item.type, item.validation || {});
+      const { valid, message } = service.validate(value, item.type, item.validation || {});
       errorEl.textContent = valid ? "" : message;
       input?.setAttribute("aria-invalid", String(!valid));
     };
@@ -1751,9 +1866,9 @@ class SettingsPage {
 
       if (action === "cancel") {
         if (item.type === "kvlist") {
-          this.applyInitialInputValue(kvContainer, "kvlist", this.service.getValue(storageKey, item.type, item.default), item);
+          this.applyInitialInputValue(kvContainer, "kvlist", service.getValue(storageKey, item.type, item.default), item);
         } else {
-          const resetVal = this.service.getValue(storageKey, item.type, item.default);
+          const resetVal = service.getValue(storageKey, item.type, item.default);
           this.applyInitialInputValue(input, item.type, resetVal);
           if (item.type === "secret") {
             input.type = "password";
@@ -1764,7 +1879,7 @@ class SettingsPage {
       }
       if (action === "confirm") {
         const value = getCurrentEditValue();
-        const { valid } = this.service.validate(value, item.type, item.validation || {});
+        const { valid } = service.validate(value, item.type, item.validation || {});
         if (!valid) {
           validateAndToggle();
           (input || panel.querySelector(".kv-key"))?.focus();
@@ -1780,18 +1895,24 @@ class SettingsPage {
           if (storageKey === "secure.redis.password") {
             try {
               if (value) {
-                const username = localStorage.getItem("config.redis.username") || "";
-                await invoke("set_redis_credentials", { username, password: value });
+                const username = service.storage.getItem("config.redis.username") || "";
+                await invoke("set_redis_credentials", {
+                  username,
+                  password: value,
+                  credentialScope: projectCredentialScope(localStorage, service.storage.projectId),
+                });
               } else {
-                await invoke("clear_redis_credentials");
+                await invoke("clear_redis_credentials", {
+                  credentialScope: projectCredentialScope(localStorage, service.storage.projectId),
+                });
               }
             } catch (err) {
               errorEl.textContent = String(err);
               return;
             }
-            stored = this.service.setValue(storageKey, "secret", value ? "set" : "", item.apply);
+            stored = service.setValue(storageKey, "secret", value ? "set" : "", item.apply);
           } else {
-            stored = this.service.setValue(storageKey, item.type, value, item.apply);
+            stored = service.setValue(storageKey, item.type, value, item.apply);
           }
 
           let display = "";
@@ -1831,7 +1952,7 @@ class SettingsPage {
       actions.className = "setting-row-actions";
       actions.append(valueEl, button);
       row.querySelector(".setting-value").appendChild(actions);
-      const read = () => this.service.getValue(storageKey, item.type, item.default);
+      const read = () => service.getValue(storageKey, item.type, item.default);
       bulk = mountBulkEditor({
         root: wrapper,
         button,
@@ -1839,8 +1960,8 @@ class SettingsPage {
         hint: "Replaces this list. Review removals before applying.",
         onOpen: closeEditor,
         load: () => ({ value: read() }),
-        plan: (text) => buildListPlan(text, read(), item.type, (value) => this.service.validate(value, item.type, item.validation || {})),
-        apply: (plan) => applyListPlan(plan, read, (value) => this.service.setValue(storageKey, item.type, value, item.apply)),
+        plan: (text) => buildListPlan(text, read(), item.type, (value) => service.validate(value, item.type, item.validation || {})),
+        apply: (plan) => applyListPlan(plan, read, (value) => service.setValue(storageKey, item.type, value, item.apply)),
         onBusy: (busy) => {
           valueEl.disabled = busy;
         },
