@@ -16,9 +16,8 @@ import { buildListPlan, buildKafkaPlan, applyListPlan } from "./bulk-list.js";
 import "./styles.css";
 import { SettingsService } from "./service.js";
 import { SettingsSearch } from "./search.js";
-import { clearConnectionReference, mergeLegacyBaseUrls } from "../../core/Environments.js";
+import { clearConnectionReference } from "../../core/Environments.js";
 import { confirmAction } from "../../components/ConfirmationDialog.js";
-import { openOtpOverlay } from "../../components/OtpOverlay.js";
 import { invoke } from "@tauri-apps/api/core";
 import { ensureUnifiedKeychain } from "../../core/KeychainMigration.js";
 import { OracleConnectionService } from "../../core/OracleConnectionService.js";
@@ -127,8 +126,6 @@ class SettingsPage {
       }
     } catch (_) {}
 
-    // Bind toolbar actions
-    root.querySelector(".settings-load-defaults")?.addEventListener("click", () => this.openOtpModal());
     const showSyncStatus = () => {
       const status = root.querySelector(".settings-sync-status");
       status.textContent = publishedSettingsSync.status === "error" ? publishedSettingsSync.message : "";
@@ -227,154 +224,6 @@ class SettingsPage {
     } catch (err) {
       // Silent fail - user may not have any credentials yet
       console.debug("[Settings] No Jenkins username in keychain to migrate:", err);
-    }
-  }
-
-  async openOtpModal() {
-    const email = localStorage.getItem("user.email") || "";
-    if (!email) {
-      this.eventBus?.emit?.("notification:error", { message: "No registered email found. Please register first." });
-      return;
-    }
-    try {
-      const BASE = (import.meta?.env?.VITE_WORKER_BASE || "").trim();
-      const kvUrl = BASE ? `${BASE}/api/kv/get?key=default-config` : "/api/kv/get?key=default-config";
-
-      const { token, kvValue } = await openOtpOverlay({
-        email,
-        requestEndpoint: "/register/request-otp",
-        verifyEndpoint: "/register/verify",
-        rateLimitMs: 60_000,
-        storageScope: "settings-defaults",
-        kvKey: "default-config",
-        // centralized overlay will try cached token first
-        preferCachedToken: true,
-      });
-
-      let defaults = kvValue;
-      if (defaults === undefined && token) {
-        const res2 = await fetch(kvUrl, { headers: { Authorization: `Bearer ${token}` } });
-        const j2 = await res2.json().catch(() => ({}));
-        if (!res2.ok || !j2?.ok) throw new Error(j2?.error || "KV access failure");
-        defaults = j2.value;
-      }
-
-      await this.applyDefaultsFromKv(defaults);
-      await this.reloadConfig();
-      this.eventBus?.emit?.("notification:success", { message: "Default settings loaded." });
-    } catch (e) {
-      // Closed or error
-      if (String(e?.message || e) !== "Closed") {
-        this.eventBus?.emit?.("notification:error", { message: String(e?.message || e || "Failed to load defaults") });
-      }
-    }
-  }
-
-  async applyDefaultsFromKv(val) {
-    if (!val) return;
-
-    // Normalize KV value: it may be a JSON string or a structured object/array
-    let data = val;
-    if (typeof data === "string") {
-      try {
-        data = JSON.parse(data);
-      } catch (_) {
-        return; // invalid JSON payload
-      }
-    }
-
-    // Helper to sanitize simple string values (trim stray backticks/spaces)
-    const sanitize = (s) => {
-      try {
-        let x = String(s ?? "").trim();
-        x = x.replace(/^`+|`+$/g, "");
-        return x;
-      } catch (_) {
-        return String(s ?? "");
-      }
-    };
-
-    // If KV value is an array of objects, store each entry by its key.
-    // If the value itself is an array, store it directly (JSON) under the parent key.
-    if (Array.isArray(data)) {
-      for (const entry of data) {
-        if (!entry || typeof entry !== "object") continue;
-        for (const [k, v] of Object.entries(entry)) {
-          if (k === "config.baseUrls") {
-            let pairs = v;
-            if (typeof pairs === "string") {
-              try {
-                pairs = JSON.parse(pairs);
-              } catch (_) {
-                pairs = [];
-              }
-            }
-            mergeLegacyBaseUrls(Array.isArray(pairs) ? pairs : [], this.service.storage);
-            continue;
-          }
-          if (k === "config.oracle.connections" || k === "config.environments") {
-            const rows = typeof v === "string" ? JSON.parse(v) : v;
-            this.service.setValue(k, k === "config.environments" ? "environments" : "oracle-connections", rows);
-            continue;
-          }
-          if (Array.isArray(v)) {
-            try {
-              this.service.storage.setItem(k, JSON.stringify(v));
-            } catch (_) {}
-          } else if (v && typeof v === "object") {
-            try {
-              this.service.storage.setItem(k, JSON.stringify(v));
-            } catch (_) {}
-          } else {
-            try {
-              this.service.storage.setItem(k, sanitize(v));
-            } catch (_) {}
-          }
-        }
-      }
-      return;
-    }
-
-    // Fallback: object mapping { key: value } -> persist via SettingsService with type awareness
-    if (data && typeof data === "object") {
-      const getType = (key) => {
-        const findInCats = (cats) => {
-          for (const cat of cats || []) {
-            for (const item of cat.items || []) {
-              if (item.key === key) return item.type || "string";
-            }
-            const t = findInCats(cat.categories || []);
-            if (t) return t;
-          }
-          return null;
-        };
-        return findInCats(this.currentConfig?.categories || []) || "string";
-      };
-      for (const [key, value] of Object.entries(data)) {
-        if (key === "config.baseUrls") {
-          mergeLegacyBaseUrls(Array.isArray(value) ? value : [], this.service.storage);
-          continue;
-        }
-        if (key === "config.lockeyDomains") {
-          let domains = value;
-          if (typeof domains === "string") {
-            try {
-              domains = JSON.parse(domains);
-            } catch (_) {
-              domains = [];
-            }
-          }
-          try {
-            this.service.storage.setItem(key, JSON.stringify(Array.isArray(domains) ? domains : []));
-          } catch (_) {}
-          continue;
-        }
-        const type = getType(key);
-        if (type === "secret") continue;
-        try {
-          this.service.setValue(key, type, value);
-        } catch (_) {}
-      }
     }
   }
 

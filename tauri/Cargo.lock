@@ -12,10 +12,14 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 name = "adtools"
 version = "0.1.0"
 dependencies = [
+ "block2 0.6.2",
  "chrono",
  "httpmock",
  "keyring",
  "log",
+ "objc2 0.6.3",
+ "objc2-app-kit",
+ "objc2-foundation 0.3.2",
  "open",
  "oracle",
  "rdkafka",

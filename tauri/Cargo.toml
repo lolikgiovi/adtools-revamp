@@ -38,9 +38,14 @@ tauri-plugin-fs = "2"
 tauri-plugin-shell = "2"
 redis = { version = "0.27.6", features = ["tls-native-tls"] }
 rdkafka = "0.39"
-
 # Oracle database connectivity
 oracle = { version = "0.6", optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6"
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["NSWindow"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["NSNotification", "NSOperation", "NSString", "block2"] }
 
 [features]
 default = []

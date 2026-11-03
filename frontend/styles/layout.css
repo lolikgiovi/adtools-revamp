@@ -636,6 +636,10 @@ button.connection-indicator:focus-visible,
   gap: 6px;
 }
 
+html[data-tauri="true"][data-fullscreen="true"] .window-titlebar-leading {
+  padding-left: 0;
+}
+
 .window-titlebar-actions {
   position: relative;
   display: flex;

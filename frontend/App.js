@@ -1976,6 +1976,37 @@ class App {
       // one; CSS keys its layout offsets off this attribute.
       document.documentElement.setAttribute("data-tauri", String(tauriRuntime));
       this.placeHeaderControls(tauriRuntime);
+      if (tauriRuntime && !this._fullscreenTrackingStarted) {
+        this._fullscreenTrackingStarted = true;
+        let requestId = 0;
+        const trackFullscreen = async () => {
+          try {
+            const { getCurrentWindow } = await import("@tauri-apps/api/window");
+            const nativeWindow = getCurrentWindow();
+            let transitioning = false;
+            const syncFullscreen = async () => {
+              const currentRequest = ++requestId;
+              try {
+                const fullscreen = await nativeWindow.isFullscreen();
+                if (currentRequest === requestId && !transitioning) document.documentElement.dataset.fullscreen = String(fullscreen);
+              } catch (_) {
+                // Keep the current inset if native window state is unavailable.
+              }
+            };
+            await nativeWindow.listen("titlebar-fullscreen-transition", ({ payload }) => {
+              if (!["will-enter", "did-enter", "will-exit", "did-exit"].includes(payload)) return;
+              ++requestId;
+              transitioning = payload.startsWith("will-");
+              document.documentElement.dataset.fullscreen = String(payload.endsWith("enter"));
+            });
+            await nativeWindow.onResized(syncFullscreen);
+            void syncFullscreen();
+          } catch (_) {
+            // Keep the traffic-light inset if native window events are unavailable.
+          }
+        };
+        void trackFullscreen();
+      }
     };
 
     // Initial runtime set + delayed re-check to handle late Tauri init

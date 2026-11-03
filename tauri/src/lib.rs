@@ -131,6 +131,10 @@ pub fn run() {
       // Set default zoom level to 90%
       if let Some(window) = app.get_webview_window("main") {
         let _ = window.set_zoom(ZOOM_DEFAULT);
+        #[cfg(target_os = "macos")]
+        if let Err(error) = observe_fullscreen_transitions(&window) {
+          log::warn!("Failed to observe fullscreen transitions: {}", error);
+        }
       }
 
       Ok(())
@@ -192,6 +196,41 @@ pub fn run() {
         oracle_sidecar::kill_sidecar_by_port();
       }
     });
+}
+
+#[cfg(target_os = "macos")]
+fn observe_fullscreen_transitions(window: &tauri::WebviewWindow) -> tauri::Result<()> {
+  use block2::RcBlock;
+  use objc2::runtime::AnyObject;
+  use objc2_app_kit::{
+    NSWindowDidEnterFullScreenNotification, NSWindowDidExitFullScreenNotification,
+    NSWindowWillEnterFullScreenNotification, NSWindowWillExitFullScreenNotification,
+  };
+  use objc2_foundation::{NSNotification, NSNotificationCenter};
+  use std::ptr::NonNull;
+
+  let native_window = window.ns_window()? as *mut AnyObject;
+  let center = NSNotificationCenter::defaultCenter();
+  // AppKit posts these notifications on the main thread for this window.
+  unsafe {
+    let object = native_window.as_ref();
+    for (name, phase) in [
+      (NSWindowWillEnterFullScreenNotification, "will-enter"),
+      (NSWindowDidEnterFullScreenNotification, "did-enter"),
+      (NSWindowWillExitFullScreenNotification, "will-exit"),
+      (NSWindowDidExitFullScreenNotification, "did-exit"),
+    ] {
+      let app = window.app_handle().clone();
+      let handler = RcBlock::new(move |_: NonNull<NSNotification>| {
+        if let Err(error) = app.emit_to("main", "titlebar-fullscreen-transition", phase) {
+          log::warn!("Failed to send fullscreen transition: {}", error);
+        }
+      });
+      // The notification center retains each observer until the app exits.
+      let _observer = center.addObserverForName_object_queue_usingBlock(Some(name), object, None, &handler);
+    }
+  }
+  Ok(())
 }
 
 fn build_menu(handle: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, tauri::Error> {
