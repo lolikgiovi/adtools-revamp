@@ -69,9 +69,11 @@ export const template = `
         </div>
         <div id="puml-error" role="alert" hidden>
           <div class="puml-render-error">
-            <strong id="puml-error-message"></strong>
+            <div class="puml-error-heading">
+              <strong id="puml-error-message"></strong>
+              <button type="button" class="puml-error-link" data-action="error-line" hidden>Go to error</button>
+            </div>
             <p id="puml-error-context"></p>
-            ${button("error-line", "Go to error", "hidden")}
           </div>
         </div>
         <footer class="puml-preview-footer">
