@@ -1,9 +1,9 @@
-# Node / Vite / Vitest / macOS
-
 # Dependencies
 node_modules/
+venv/
+venv-x64/
 
-#REFERENCE
+# Reference
 reference/
 
 # Build output
@@ -16,11 +16,19 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-
+# Env / secrets
 .env*
 !.env.tauri
 !.env.jira.example
 jira-discovery*.json
+backend-workers/.dev.vars
+keys/
+*.key
+*.p12
+*.pem
+*.cer
+*.mobileprovision
+*.provisionprofile
 
 # Editor/OS
 .DS_Store
@@ -34,52 +42,27 @@ coverage/
 # Misc
 *.local
 
-# Tauri / Cargo build artifacts
-tauri/target/
-# Tauri generated schemas (dev-time only)
-tauri/gen/
-
-# macOS signing/notarization artifacts (never commit secrets)
-*.p12
-*.pem
-*.cer
-*.key
-*.mobileprovision
-*.provisionprofile
-
-# Optional: avoid committing packaged binaries if copied out of target
-*.dmg
-
-# Wrangler local state (dev-time)
+# Wrangler local state
 .wrangler/
 
-# keys
-keys/
-*.key
-
-# releases app
-tauri/releases/
-
-# rust analyzer
+# Tauri / Cargo build artifacts
 target/
+tauri/gen/
+tauri/releases/
+*.dmg
 
-# PyInstaller build artifacts
+# Python sidecar build artifacts
 tauri/sidecar/build/
 tauri/sidecar/*.spec
-
-# Sidecar binaries (large, built locally)
-tauri/oracle-sidecar-*
-tauri/binaries/oracle-sidecar-*
 tauri/sidecar-dist/
 tauri/_internal
+tauri/oracle-sidecar-*
+tauri/binaries/
 
-#macOS
-.DS_Store
-backend-workers/.dev.vars
-venv-x64/
-venv/
-tauri/gen/schemas/capabilities.json
-.DS_Store
+# Agent scratch (design critiques, question logs, caches)
+.impeccable/critique/
+.impeccable/questions/
+.impeccable/hook.cache.json
 
 # Compress Image benchmark inputs (user-supplied, not committed)
 frontend/tools/compress-image/tests/bench-images/*
