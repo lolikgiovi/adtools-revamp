@@ -15,6 +15,8 @@ import { editorThemeOptions } from "./themes.js";
 import { template } from "./template.js";
 import "./styles.css";
 
+const USAGE_COUNTED_KEY = "plantuml.usage.counted";
+
 // Composition: a quiet file rail, persistent source tabs, and a dominant diagram canvas.
 // Content: file management in the explorer, source controls in the editor, and diagram controls in the preview.
 // Interaction: direct tab/file manipulation, immediate stale feedback, and pan/zoom without animation.
@@ -23,6 +25,7 @@ export class PlantUmlTool extends BaseTool {
     super({ id: "plantuml", eventBus, isHeavyTool: true });
     this.models = new Map();
     this.views = new Map();
+    this.editedFiles = new Set();
     this.workspace = null;
     this.sequence = 0;
   }
@@ -211,6 +214,7 @@ export class PlantUmlTool extends BaseTool {
         nodes: this.workspace.nodes.map((node) => (node.id === file.id ? { ...node, content: model.getValue() } : node)),
       };
       setCompletionWorkspace(this.workspace.nodes);
+      this.editedFiles.add(file.id);
       this.scheduleSave();
       if (this.isActive) this.renderer?.render(this.activeFile, this.workspace.nodes, { delay: 1000 });
     });
@@ -464,6 +468,23 @@ export class PlantUmlTool extends BaseTool {
     }
   }
 
+  // Renders follow typing pauses, file switches and resumes, so a diagram counts once per day as viewed and once as edited.
+  trackDailyUse(action, fileId, meta) {
+    const day = new Date().toLocaleDateString("en-CA");
+    let counted = this.usageCounted;
+    try {
+      counted = JSON.parse(localStorage.getItem(USAGE_COUNTED_KEY)) || counted;
+    } catch (_) {}
+    if (counted?.day !== day || !Array.isArray(counted.keys)) counted = { day, keys: [] };
+    const key = `${action}:${fileId}`;
+    if (counted.keys.includes(key)) return;
+    this.usageCounted = { day, keys: [...counted.keys, key] };
+    try {
+      localStorage.setItem(USAGE_COUNTED_KEY, JSON.stringify(this.usageCounted));
+    } catch (_) {}
+    UsageTracker.trackToolUse("plantuml", action, meta);
+  }
+
   renderChanged(result) {
     if (!this.container) return;
     this.renderState = result.state;
@@ -507,7 +528,9 @@ export class PlantUmlTool extends BaseTool {
     if (result.state === "ready") {
       this.diagram = result;
       this.preview?.show(result.svg, this.activeFile?.name || "diagram");
-      UsageTracker.trackToolUse("plantuml", "render", { input_size: result.source.length, duration_ms: result.milliseconds });
+      const meta = { input_size: result.source.length, duration_ms: result.milliseconds };
+      this.trackDailyUse("view", result.fileId, meta);
+      if (this.editedFiles.has(result.fileId)) this.trackDailyUse("edit", result.fileId, meta);
     }
     if (!this.diagram) {
       const empty = this.$("#puml-preview-empty");
