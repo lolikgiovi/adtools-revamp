@@ -145,14 +145,18 @@ try {
     await one.locator('.publish-departments input[value="RETAIL"]').check();
     await one.locator('[data-setting="config.redis.port"]').check();
     await one.locator('[data-value-key="config.redis.port"]').fill("6380");
-    await one.locator('.publish-setting-list [data-setting="config.oracle.connections"]').check();
+    await one.locator('.publish-setting-list [data-setting="config.oracle.environment.catalog"]').check();
+    await one.locator('[data-setting="config.oracle.environment.catalog"]').locator("xpath=../..").locator("summary").click();
     await one
-      .locator('[data-value-key="config.oracle.connections"]')
-      .fill(JSON.stringify([{ name: "Retail UAT", connect_string: "db.test:1521/UAT" }]));
+      .locator('[data-value-key="config.oracle.environment.catalog"]')
+      .fill(JSON.stringify([{ id: "retail-core", environmentId: "retail-uat", name: "Retail UAT", connect_string: "db.test:1521/UAT" }]));
     await one.locator('.publish-setting-list [data-setting="config.environments"]').check();
+    await one.locator('[data-setting="config.environments"]').locator("xpath=../..").locator("summary").click();
     await one
       .locator('[data-value-key="config.environments"]')
-      .fill(JSON.stringify([{ id: "retail-uat", name: "Retail UAT", criticalConnection: "Retail UAT", cdnPublicUrl: "https://cdn.test" }]));
+      .fill(
+        JSON.stringify([{ id: "retail-uat", name: "Retail UAT", criticalConnection: "retail-core", cdnPublicUrl: "https://cdn.test" }]),
+      );
     assert.equal(
       await one
         .locator(
@@ -225,6 +229,7 @@ try {
     await one.goto("http://127.0.0.1:1244/#dashboard/publish-settings");
     await one.locator(".publish-workspace").waitFor({ state: "visible" });
     await one.locator("#publish-title").fill("Selected user setup");
+    await one.locator("#publish-audience").selectOption("emails");
     await one.locator("#publish-emails").fill(users[1].email);
     await one.locator('[data-setting="config.redis.port"]').check();
     await one.locator('[data-value-key="config.redis.port"]').fill("6382");
@@ -276,7 +281,7 @@ try {
     await one.goto("http://127.0.0.1:1244/#settings");
     await one.locator(".settings-categories").waitFor();
     assert.equal(await one.locator(".settings-sync-verify").count(), 0);
-    await one.locator(".settings-category").last().scrollIntoViewIfNeeded();
+    await one.locator(".settings-category:visible").last().scrollIntoViewIfNeeded();
     await one.screenshot({ path: resolve(output, "narrow-bottom.png"), animations: "disabled" });
     await one.evaluate(() => window.app.themeManager.setTheme("light"));
     await one.locator(".settings-header").scrollIntoViewIfNeeded();

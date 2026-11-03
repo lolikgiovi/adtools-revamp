@@ -22,7 +22,13 @@ The preview lists the exact recipient emails and selected values. Any edit inval
 ## Operation
 
 Open **Dashboard → Publish Settings** and unlock with the existing analytics dashboard password. This is the existing global administrator
-permission, not a new department-admin role. Choose emails or departments, select settings, edit their values, and preview. The preview lists
+permission, not a new department-admin role. Choose the local source project and the project name to use on recipient devices.
+Departments are the default audience, with the source project's department selected when registered. Specific people remains available.
+**Use project settings** loads non-empty project settings and scalar defaults from that source without changing the active project;
+shared integrations remain opt-in. Changing the source clears the selection and invalidates the preview. Empty lists are opt-in and
+explicitly shown as clearing the recipient's list. Settings use the current Settings groups and environment-bound database catalog;
+structured values are readable by default, with JSON editing available on demand. Older publications retain their legacy fields when reused.
+Quick Query schemas, theme, updates, usernames, and credentials are not included. Select settings, review their values, and preview. The preview lists
 the exact registered users and values. Publishing refuses an audience that changed since preview. No publication can target everyone implicitly.
 
 Each publication captures its recipients at publish time. New department members need a new publication. Email comparisons are case insensitive.
@@ -146,3 +152,28 @@ Development flag verification (26 October 2026): 21 focused test files / 104 tes
 set with both configured exclusions and persisted flags. Production Vite build passed. Existing browser-to-local-Worker verification
 passed all 11 checks with no browser errors; reproduce using the command above. Evidence and command logs:
 `.wrangler/settings-publishing-verification/2026-10-26T06-59-13-321Z/result.json`.
+
+## Publisher UI verification — 2026-11-03
+
+- Department-first audience, explicit source/destination project, current Settings groups, readable environment/connection values,
+  and opt-in JSON editing. Source changes clear draft values without changing the active project.
+- Focused regression scope: 4 files, 44 tests passed (publishing API, synchronization, project settings, Dashboard navigation).
+- Local browser-to-Worker verification: all 11 checks passed, including department/email isolation, current environment catalog delivery,
+  preserved local edits, acknowledgements, stop delivery, offline recovery, and responsive layout. No browser errors.
+  Saved result: `docs/verification/settings-publisher/delivery-result.json`. Full local evidence:
+  `.wrangler/settings-publishing-verification/2026-11-03T01-14-40-438Z/`.
+- Publisher browser verification at 1440px and 390px covers source isolation, secret exclusion, readable values,
+  preview invalidation, legacy Jira-key compatibility, failed-publish retry, and history reuse. Screenshots and result: `docs/verification/settings-publisher/`.
+- Production Vite build, Prettier, and `git diff --check` passed. No deployment, remote migration, or packaged Desktop execution.
+
+Reproduce the publisher UI checks using installed Playwright and Chrome (the API is mocked; no real publications are sent):
+
+```sh
+./node_modules/.bin/vite --host 127.0.0.1 --port 1253
+# In a second terminal:
+PUBLISHING_TEST_URL=http://127.0.0.1:1253 \
+  PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs \
+  node frontend/pages/dashboard/tests/publishing-browser.mjs
+```
+
+The existing browser-to-Worker command above remains the delivery/access-isolation check and manages its own local servers.
