@@ -102,8 +102,8 @@ export function getLegacyProjectId(target = localStorage) {
   return registry(target).legacyProjectId;
 }
 
-export function getQuickQueryDatabaseName(target = localStorage) {
-  const id = getActiveProject(target).id;
+export function getQuickQueryDatabaseName(target = localStorage, projectId = getActiveProject(target).id) {
+  const id = projectId;
   return id === registry(target).legacyProjectId ? "QuickQueryDatabase" : `QuickQueryDatabase-project-${id}`;
 }
 

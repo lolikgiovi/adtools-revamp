@@ -1,4 +1,4 @@
-import { getQuickQueryDatabaseName } from "../../../core/Projects.js";
+import { getActiveProject, getQuickQueryDatabaseName, listProjects } from "../../../core/Projects.js";
 import { UsageTracker } from "../../../core/UsageTracker.js";
 import { scoreFuzzyTerm } from "../../../core/FuzzySearch.js";
 
@@ -26,8 +26,9 @@ const MAX_CACHED_ROWS = 1000;
  * Maintains the same public API but with async methods.
  */
 export class IndexedDBStorageService {
-  constructor() {
-    this.databaseName = getQuickQueryDatabaseName();
+  constructor({ projectId = getActiveProject().id } = {}) {
+    this.projectId = projectId;
+    this.databaseName = getQuickQueryDatabaseName(localStorage, projectId);
     this.db = null;
     this._initPromise = null;
 
@@ -480,6 +481,71 @@ export class IndexedDBStorageService {
         message: error.message,
       });
       return false;
+    }
+  }
+
+  /** Copy committed records first; remove the source only after the destination commits. */
+  async transferSchema(fullName, destinationId, { move = false } = {}) {
+    if (destinationId === this.projectId) throw new Error("Choose a different project.");
+    if (!listProjects().some((project) => project.id === destinationId)) throw new Error("Destination project is unavailable.");
+    await this.init();
+    const destination = new IndexedDBStorageService({ projectId: destinationId });
+    try {
+      await destination.init();
+      const snapshot = await new Promise((resolve, reject) => {
+        const transaction = this.db.transaction([SCHEMA_STORE, DATA_STORE], "readonly");
+        const schema = transaction.objectStore(SCHEMA_STORE).get(fullName);
+        const data = transaction.objectStore(DATA_STORE).get(fullName);
+        transaction.oncomplete = () => resolve({ schema: schema.result, data: data.result });
+        transaction.onabort = () => reject(transaction.error || new Error("Could not read the source schema."));
+      });
+      if (!snapshot.schema) throw new Error("This schema is no longer saved. Refresh the list and try again.");
+      await new Promise((resolve, reject) => {
+        const transaction = destination.db.transaction([SCHEMA_STORE, DATA_STORE], "readwrite");
+        transaction.objectStore(SCHEMA_STORE).add(snapshot.schema);
+        // add(), rather than put(), also protects any existing saved table data.
+        if (snapshot.data) transaction.objectStore(DATA_STORE).add(snapshot.data);
+        transaction.oncomplete = resolve;
+        transaction.onabort = () =>
+          reject(
+            new Error(
+              transaction.error?.name === "ConstraintError"
+                ? "This table already exists in the destination project. Nothing was overwritten."
+                : "Could not save to the destination project. The original is unchanged.",
+            ),
+          );
+      });
+      if (move) {
+        await new Promise((resolve, reject) => {
+          const transaction = this.db.transaction([SCHEMA_STORE, DATA_STORE], "readwrite");
+          const schemas = transaction.objectStore(SCHEMA_STORE);
+          const data = transaction.objectStore(DATA_STORE);
+          const schema = schemas.get(fullName);
+          const rows = data.get(fullName);
+          rows.onsuccess = () => {
+            if (
+              JSON.stringify(schema.result) !== JSON.stringify(snapshot.schema) ||
+              JSON.stringify(rows.result) !== JSON.stringify(snapshot.data)
+            ) {
+              transaction.abort();
+              return;
+            }
+            schemas.delete(fullName);
+            data.delete(fullName);
+          };
+          transaction.oncomplete = resolve;
+          transaction.onabort = () =>
+            reject(
+              new Error(
+                "Copied to the destination, but the original could not be removed or changed during the move. Both copies were kept.",
+              ),
+            );
+        });
+      }
+      this._index.dirty = true;
+      globalThis.dispatchEvent?.(new CustomEvent("adtools:schemas-updated", { detail: { sourceId: this.projectId, destinationId } }));
+    } finally {
+      destination.db?.close();
     }
   }
 

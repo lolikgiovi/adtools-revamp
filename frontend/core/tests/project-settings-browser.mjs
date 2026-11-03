@@ -42,6 +42,7 @@ try {
   await page.waitForFunction(() => Boolean(window.app));
   await page.evaluate(() => window.app.router.navigate("settings"));
   await page.locator("select.project-settings-select").waitFor({ state: "attached" });
+  await page.locator('.project-settings-nav button[data-project-section="jira-project"]').click();
   await page.locator('select[aria-label="Jira Project Key"]').selectOption("TWO", { force: true });
   checks.push("multiple legacy Jira keys require an explicit choice");
   const ids = await page.evaluate(
@@ -119,6 +120,7 @@ try {
   await page.waitForFunction(() => Boolean(window.app));
   await page.evaluate(() => window.app.router.navigate("settings"));
   await page.locator("select.project-settings-select").waitFor({ state: "attached" });
+  await page.locator('.project-settings-nav button[data-project-section="lockey"]').click();
   assert.equal(
     await page
       .locator('.setting-item[data-setting="config.lockeyPath"]')
@@ -177,6 +179,7 @@ try {
     settings.renderCategories(config.categories);
     window.fixtureSettings = settings;
   });
+  await page.locator('.project-settings-nav button[data-project-section="environments"]').click();
   await page.locator(".environment-add-btn").click();
   await page.locator(".environment-name").fill("New environment");
   const critical = page.locator("select.environment-critical");
@@ -190,6 +193,7 @@ try {
   await oracle.locator(".oracle-save-btn").click();
   await page.getByRole("dialog", { name: "Add Environment", exact: true }).waitFor();
   await page.locator(".environment-save").click();
+  await page.locator('.project-settings-nav button[data-project-section="redis"]').click();
   await page.locator('[data-setting="secure.redis.password"] .setting-edit').click();
   await page.locator('dialog[open] input[type="password"]').fill("fixture-cache-password");
   await page.locator("dialog[open] .setting-confirm").click();

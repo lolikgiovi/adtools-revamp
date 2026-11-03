@@ -2,10 +2,10 @@
   "passed": true,
   "checks": [
     "1440px: migrated legacy environment, created/renamed/switched projects, isolated schemas and drafts, restored environments, no overflow/errors",
-    "1440px: equal section hierarchy, duplicate rejection, local save on publication failure and successful retry",
+    "1440px: single panel navigation, duplicate rejection, local save on publication failure and successful retry",
     "1440px: actual Worker API shares names across users and departments without sharing schemas or environments",
     "390px: migrated legacy environment, created/renamed/switched projects, isolated schemas and drafts, restored environments, no overflow/errors",
-    "390px: equal section hierarchy, duplicate rejection, local save on publication failure and successful retry",
+    "390px: single panel navigation, duplicate rejection, local save on publication failure and successful retry",
     "390px: actual Worker API shares names across users and departments without sharing schemas or environments"
   ]
 }

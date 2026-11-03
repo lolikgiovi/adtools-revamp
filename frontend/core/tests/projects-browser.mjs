@@ -10,6 +10,7 @@ const output = resolve("docs/verification/projects");
 const release = JSON.parse(await readFile("frontend/config/release-content.json", "utf8"));
 await mkdir(output, { recursive: true });
 async function chooseProject(page, id) {
+  await page.locator('.project-settings-nav button[data-project-section="environments"]').click();
   const name = await page.locator(`select.project-settings-select option[value="${id}"]`).innerText();
   await page.locator(".project-controls .ad-searchable-dropdown-trigger").click();
   await page.getByRole("option", { name, exact: true }).click();
@@ -186,21 +187,8 @@ try {
         window.app.placeHeaderControls(false);
       });
     }
-    const sections = await page
-      .locator(
-        `.settings-project > .settings-category-content > .project-schema h4,
-      .settings-project > .settings-category-content > .setting-item .setting-name,
-      .settings-project > .settings-category-content > .settings-category > h4 > button`,
-      )
-      .evaluateAll((headings) =>
-        headings.map((heading) => ({
-          text: heading.textContent.trim(),
-          x: heading.getBoundingClientRect().x,
-          fontSize: getComputedStyle(heading).fontSize,
-        })),
-      );
-    assert.ok(sections.length >= 6);
-    assert.ok(sections.every((heading) => heading.x === sections[0].x && heading.fontSize === sections[0].fontSize));
+    assert.equal(await page.locator(".project-settings-panel:visible").count(), 1);
+    assert.ok((await page.locator(".project-settings-nav button").count()) >= 6);
     assert.equal(await page.locator(".project-name-input").isVisible(), false);
     await chooseProject(page, "__new__");
     await page.getByRole("dialog", { name: "New project", exact: true }).waitFor();
@@ -209,24 +197,28 @@ try {
     await page.keyboard.press("Escape");
     await page.locator(".settings-edit-dialog[open]").waitFor({ state: "hidden" });
     await page.screenshot({ path: resolve(output, `${width}-projects.png`), fullPage: true, animations: "disabled" });
+    await page.locator('.project-settings-nav button[data-project-section="schemas"]').click();
     await page.locator(".project-schema-manage").click();
-    await page.locator("#schemaOverlay:not(.hidden)").waitFor();
-    assert.equal(await page.locator("#schemaOverlay h3").innerText(), "Payments v2 — Saved schemas");
-    assert.match(await page.locator("#savedSchemasList").innerText(), /PAYMENTS/);
+    await page.locator(".schema-manager-dialog:not(.schema-transfer-dialog)[open]").waitFor();
+    assert.equal(await page.locator(".schema-manager-dialog h2").innerText(), "Payments v2 — Saved schemas");
+    await page.locator('.schema-manager-row[data-table="APP.PAYMENTS"]').waitFor();
+    assert.match(await page.locator(".schema-manager-list").innerText(), /PAYMENTS/);
     await page.screenshot({ path: resolve(output, `${width}-schemas.png`), fullPage: true, animations: "disabled" });
-    await page.locator("#closeSchemaOverlay").click();
+    await page.locator(".schema-manager-header button").click();
     await page.evaluate(() => window.app.router.navigate("settings"));
     await page.locator(".project-controls .ad-searchable-dropdown-trigger").waitFor();
     await Promise.all([page.waitForEvent("load"), chooseProject(page, firstId)]);
+    await page.locator('.project-settings-nav button[data-project-section="schemas"]').click();
     await page.locator(".project-schema-manage").click();
-    await page.locator("#schemaOverlay:not(.hidden)").waitFor();
-    assert.match(await page.locator("#schemaOverlay h3").innerText(), /Default project/);
-    assert.doesNotMatch(await page.locator("#savedSchemasList").innerText(), /PAYMENTS/);
+    await page.locator(".schema-manager-dialog:not(.schema-transfer-dialog)[open]").waitFor();
+    assert.match(await page.locator(".schema-manager-dialog h2").innerText(), /Default project/);
+    await page.locator(".schema-manager-empty").waitFor();
+    assert.doesNotMatch(await page.locator(".schema-manager-list").innerText(), /PAYMENTS/);
     assert.deepEqual(errors, []);
     checks.push(
       `${width}px: migrated legacy environment, created/renamed/switched projects, isolated schemas and drafts, restored environments, no overflow/errors`,
     );
-    await page.locator("#closeSchemaOverlay").click();
+    await page.locator(".schema-manager-header button").click();
     await page.evaluate(() => window.app.router.navigate("settings"));
     await page.locator(".project-controls .ad-searchable-dropdown-trigger").waitFor();
     // Duplicate names must not publish or mutate local project identity.
@@ -255,7 +247,7 @@ try {
     await page.unroute("**/api/settings/projects?*");
     await page.locator(".project-name-save").click();
     await page.locator(".settings-edit-dialog[open]").waitFor({ state: "hidden" });
-    checks.push(`${width}px: equal section hierarchy, duplicate rejection, local save on publication failure and successful retry`);
+    checks.push(`${width}px: single panel navigation, duplicate rejection, local save on publication failure and successful retry`);
     // Publish from one user, choose from a separate user's context, preserve private data.
     await page.evaluate(() => window.app.router.navigate("settings"));
     await page.locator(".project-controls .ad-searchable-dropdown-trigger").waitFor();
@@ -287,9 +279,11 @@ try {
     await teammate.locator(".project-controls .ad-searchable-dropdown-trigger").waitFor();
     assert.equal(await teammate.locator(".project-settings-select option:checked").innerText(), "Payments v2");
     assert.match(await teammate.locator(".environments-list").innerText(), /No environments/);
+    await teammate.locator('.project-settings-nav button[data-project-section="schemas"]').click();
     await teammate.locator(".project-schema-manage").click();
-    await teammate.locator("#schemaOverlay:not(.hidden)").waitFor();
-    assert.doesNotMatch(await teammate.locator("#savedSchemasList").innerText(), /PAYMENTS/);
+    await teammate.locator(".schema-manager-dialog:not(.schema-transfer-dialog)[open]").waitFor();
+    await teammate.locator(".schema-manager-empty").waitFor();
+    assert.doesNotMatch(await teammate.locator(".schema-manager-list").innerText(), /PAYMENTS/);
     await teammate.screenshot({ path: resolve(output, `${width}-shared-project.png`), fullPage: true, animations: "disabled" });
     checks.push(`${width}px: actual Worker API shares names across users and departments without sharing schemas or environments`);
     assert.deepEqual(errors, []);

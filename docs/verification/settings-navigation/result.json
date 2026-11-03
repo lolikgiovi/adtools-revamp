@@ -1,0 +1,7 @@
+{
+  "passed": true,
+  "checks": [
+    "1440px: eight peer sections, one visible panel, compact environments, unified editor, single-border field and JSON focus, project overlay without divider, no retry button, connection creation and binding, safe deletion, saved edits, search, deep links, no overflow or JS errors",
+    "390px: eight peer sections, one visible panel, compact environments, unified editor, single-border field and JSON focus, project overlay without divider, no retry button, connection creation and binding, safe deletion, saved edits, search, deep links, no overflow or JS errors"
+  ]
+}

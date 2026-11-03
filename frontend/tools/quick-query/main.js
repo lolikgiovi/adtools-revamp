@@ -1,3 +1,4 @@
+import { openSchemaTransfer } from "../../components/SchemaManager.js";
 import { getActiveProject } from "../../core/Projects.js";
 import { IndexedDBStorageService } from "./services/IndexedDBStorageService.js";
 import { columnIndexToLetter, findReferencedBlobAttachments, findImportedBlobValues } from "./services/QueryGenerationService.js";
@@ -4500,6 +4501,23 @@ export class QuickQueryUI {
 
         actionsDiv.appendChild(timestampDiv);
         actionsDiv.appendChild(loadBtn);
+        for (const move of [true, false]) {
+          const transfer = document.createElement("button");
+          transfer.type = "button";
+          transfer.className = "btn btn-secondary btn-xs";
+          transfer.textContent = move ? "Move…" : "Copy…";
+          transfer.addEventListener("click", async () => {
+            await this.flushPendingDataAutosave();
+            openSchemaTransfer({
+              root: this.elements.schemaOverlay,
+              storage: this.storageService,
+              fullName: table.fullName,
+              move,
+              onTransferred: () => this.updateSavedSchemasList(),
+            });
+          });
+          actionsDiv.append(transfer);
+        }
         actionsDiv.appendChild(deleteBtn);
 
         itemDiv.appendChild(infoDiv);

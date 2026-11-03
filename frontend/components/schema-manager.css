@@ -1,0 +1,136 @@
+body .schema-manager-dialog {
+  width: min(820px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+body .schema-transfer-dialog {
+  width: min(440px, calc(100vw - 32px));
+}
+
+.schema-manager-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.schema-manager-header h2 {
+  margin: 0;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.schema-manager-body,
+.schema-transfer-form {
+  padding: 16px;
+  min-width: 0;
+}
+
+.schema-manager-toolbar,
+.schema-manager-row,
+.schema-manager-row-actions,
+.schema-manager-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.schema-manager-toolbar {
+  flex-wrap: wrap;
+}
+
+.schema-manager-toolbar > .schema-manager-input {
+  flex: 1;
+  min-width: 140px;
+}
+
+.schema-manager-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font: inherit;
+  font-size: 0.8125rem;
+}
+
+.schema-manager-dialog .schema-manager-input:focus {
+  outline: none;
+  box-shadow: none;
+  border-color: hsl(var(--ring));
+}
+
+.schema-manager-dialog .ad-searchable-dropdown-trigger:focus-visible {
+  outline: none !important;
+  border-color: hsl(var(--ring)) !important;
+}
+
+.schema-manager-dialog button:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+.schema-manager-list {
+  margin-top: 12px;
+}
+
+.schema-manager-row {
+  justify-content: space-between;
+  padding-block: 12px;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.schema-manager-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.8125rem;
+}
+
+.schema-manager-row-actions {
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.schema-manager-status,
+.schema-manager-empty {
+  margin: 12px 0;
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.schema-manager-status:empty {
+  display: none;
+}
+
+.schema-manager-empty {
+  color: hsl(var(--muted-foreground));
+}
+
+.schema-transfer-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.8125rem;
+}
+
+.schema-manager-actions {
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+@media (max-width: 600px) {
+  .schema-manager-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

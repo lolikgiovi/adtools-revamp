@@ -5,6 +5,7 @@ import {
   bindEnvironmentConnection,
   unassignEnvironmentConnections,
 } from "../../core/Environments.js";
+import { mountProjectNavigation } from "./project-navigation.js";
 import { renderProjectManager, renderProjectSchemaLink } from "./projects.js";
 import { SettingsTemplate } from "./template.js";
 import { buildOracleJsonPlan, applyOracleJsonPlan } from "./oracle-json.js";
@@ -169,31 +170,37 @@ class SettingsPage {
     }
     if (!settingKey || !this.categoriesRoot) return;
 
-    const setting = Array.from(this.categoriesRoot.querySelectorAll(".setting-item")).find(
-      (item) => item.dataset.setting === settingKey || item.dataset.settingKeys?.split(" ").includes(settingKey),
-    );
+    const setting =
+      Array.from(this.categoriesRoot.querySelectorAll(".setting-item")).find(
+        (item) => item.dataset.setting === settingKey || item.dataset.settingKeys?.split(" ").includes(settingKey),
+      ) ||
+      (settingKey === "config.oracle.connections" && this.categoriesRoot.querySelector('[data-setting="config.environments"]'));
     if (!setting) return;
 
+    const projectPanel = setting.closest(".project-settings-panel");
+    if (projectPanel) {
+      projectPanel
+        .closest(".settings-project")
+        .dispatchEvent(new CustomEvent("settings:reveal", { detail: projectPanel.dataset.projectSection }));
+    }
     let category = setting.closest(".settings-category");
     while (category) {
       if (category.getAttribute("aria-expanded") !== "true") {
-        category.querySelector(".settings-category-header")?.click();
+        category.querySelector("button.settings-category-header")?.click();
       }
       category = category.parentElement?.closest(".settings-category");
     }
 
     for (let details = setting.closest("details"); details; details = details.parentElement?.closest("details")) details.open = true;
-    setting.classList.add("settings-focus-highlight");
     setting.scrollIntoView?.({ behavior: "smooth", block: "center" });
     const groupedControl = Array.from(setting.querySelectorAll("[data-setting-key]")).find(
       (control) => control.dataset.settingKey === settingKey,
     );
     (
       groupedControl ||
-      setting.querySelector(".setting-edit, .kafka-broker-add, .setting-input") ||
+      setting.querySelector(".setting-edit, .kafka-broker-add, .environment-edit, .environment-add-btn, .setting-input") ||
       setting.closest(".settings-category")?.querySelector(".settings-category-actions button")
     )?.focus();
-    window.setTimeout(() => setting.classList.remove("settings-focus-highlight"), 3000);
   }
 
   /**
@@ -456,6 +463,7 @@ class SettingsPage {
   applySearch() {
     const query = this.searchInput?.value || "";
     const result = this.settingsSearch?.apply(query) || { active: false, matches: 0, total: 0 };
+    this.projectNavigation?.sync();
     const message = result.active
       ? result.matches
         ? `${result.matches} of ${result.total} settings`
@@ -474,6 +482,7 @@ class SettingsPage {
     for (const dispose of this.settingDisposers) dispose();
     this.settingDisposers.clear();
     this.categoriesRoot.innerHTML = "";
+    this.projectNavigation = null;
 
     const frag = document.createDocumentFragment();
     for (const cat of categories) {
@@ -483,9 +492,14 @@ class SettingsPage {
     }
     this.categoriesRoot.appendChild(frag);
     this.settingsSearch?.clear();
+    this.projectNavigation?.sync();
   }
 
   renderCategory(cat, headingLevel = 3) {
+    if (cat.id === "project-settings") {
+      this.projectNavigation = mountProjectNavigation(this, cat);
+      return this.projectNavigation.element;
+    }
     if (cat.integration) {
       const { element, dispose } = mountIntegration(cat, this.service);
       this.settingDisposers.add(dispose);
@@ -496,7 +510,6 @@ class SettingsPage {
     const initiallyExpanded = localStorage.getItem(expandedKey) ?? (cat.initiallyExpanded ? "true" : "false");
     const wrapper = document.createElement("section");
     wrapper.className = "settings-category";
-    if (cat.id === "project-settings") wrapper.classList.add("settings-project");
     wrapper.setAttribute("aria-expanded", initiallyExpanded === "true" ? "true" : "false");
 
     const heading = document.createElement(`h${Math.min(headingLevel, 6)}`);
@@ -834,6 +847,7 @@ class SettingsPage {
         </div>
         <div class="environment-form-status" role="status" aria-live="polite"></div>
         <div class="environment-form-actions">
+          <button type="button" class="btn btn-outline btn-sm btn-danger environment-delete" hidden>Delete environment</button>
           <button type="button" class="btn btn-secondary btn-sm environment-cancel">Cancel</button>
           <button type="submit" class="btn btn-primary btn-sm environment-save">Save Environment</button>
         </div>
@@ -855,6 +869,7 @@ class SettingsPage {
     let editingId = "";
     let draftEnvironmentId = "";
     let draftConnections = null;
+    let disposeConnections = () => {};
     let unassignedDetails = null;
     const oracleItem = {
       key: "config.oracle.connections",
@@ -916,59 +931,37 @@ class SettingsPage {
         return;
       }
       for (const environment of environments) {
-        const row = document.createElement("div");
-        row.className = "environment-row";
+        const row = document.createElement("button");
+        row.type = "button";
+        row.className = "environment-row environment-edit";
+        row.dataset.environmentId = environment.id;
+        row.setAttribute("aria-label", `Edit ${environment.name}`);
+        row.setAttribute("aria-haspopup", "dialog");
         const identity = document.createElement("div");
         identity.className = "environment-identity";
         const name = document.createElement("strong");
         name.textContent = environment.name;
         identity.appendChild(name);
-        const database = document.createElement("span");
-        database.className = "environment-meta";
-        database.textContent = `Critical: ${resolveConnection(environment, "critical")?.name || environment.criticalConnection || "—"} · Complementary: ${
-          resolveConnection(environment, "complementary")?.name || environment.complementaryConnection || "—"
-        }`;
-        identity.appendChild(database);
-        if (environment.cdnPublicUrl) {
-          const publicUrl = document.createElement("span");
-          publicUrl.className = "environment-meta";
-          publicUrl.textContent = `Public: ${environment.cdnPublicUrl}`;
-          identity.appendChild(publicUrl);
-        }
-        if (environment.cdnDirectUrl) {
-          const directUrl = document.createElement("span");
-          directUrl.className = "environment-meta";
-          directUrl.textContent = `Direct: ${environment.cdnDirectUrl}`;
-          identity.appendChild(directUrl);
+        const summary = [
+          environment.cdnPublicUrl || environment.cdnDirectUrl,
+          resolveConnection(environment, "critical")?.name || environment.criticalConnection,
+          resolveConnection(environment, "complementary")?.name || environment.complementaryConnection,
+        ].filter(Boolean);
+        if (summary.length) {
+          const meta = document.createElement("span");
+          meta.className = "environment-meta";
+          meta.textContent = summary.join(" · ");
+          identity.append(meta);
         }
 
-        const actions = document.createElement("div");
-        actions.className = "environment-actions";
-        const edit = document.createElement("button");
-        edit.type = "button";
-        edit.className = "btn btn-outline btn-sm environment-edit";
-        edit.dataset.environmentId = environment.id;
-        edit.textContent = "Edit";
-        const remove = document.createElement("button");
-        remove.type = "button";
-        remove.className = "btn btn-outline btn-sm btn-danger environment-delete";
-        remove.dataset.environmentId = environment.id;
-        remove.textContent = "Delete";
-        actions.append(edit, remove);
-        row.append(identity, actions);
+        const chevron = document.createElement("span");
+        chevron.className = "settings-category-toggle";
+        chevron.innerHTML = `<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" stroke-width="2"><path d="m9 5 7 7-7 7" /></svg>`;
+        row.append(identity, chevron);
         const entry = document.createElement("div");
         entry.className = "environment-entry";
         entry.append(row);
-        if (isDesktop) {
-          const details = document.createElement("details");
-          details.className = "environment-connections";
-          const summary = document.createElement("summary");
-          summary.innerHTML = `<span>Oracle connections</span>
-            <svg class="settings-category-toggle" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"
-              fill="none" stroke="currentColor" stroke-width="2"><path d="m9 5 7 7-7 7" /></svg>`;
-          details.append(summary, this.renderItem({ ...oracleItem, environmentId: environment.id }));
-          entry.append(details);
-        }
         list.appendChild(entry);
       }
     };
@@ -1018,11 +1011,39 @@ class SettingsPage {
     const showForm = (environment = null) => {
       editingId = environment?.id || "";
       draftEnvironmentId = environment?.id || crypto.randomUUID();
-      if (!environment && isDesktop) {
-        draftConnections?.remove();
-        draftConnections = this.renderItem({ ...oracleItem, environmentId: draftEnvironmentId });
-        wrapper.append(draftConnections);
+      disposeConnections();
+      draftConnections?.remove();
+      draftConnections = null;
+      if (isDesktop) {
+        const previousDisposers = new Set(this.settingDisposers);
+        draftConnections = this.renderItem({
+          ...oracleItem,
+          environmentId: draftEnvironmentId,
+          dialogRoot: wrapper,
+          onConnectionsChanged: () => {
+            fillConnectionOptions(criticalSelect, criticalSelect.value);
+            fillConnectionOptions(complementarySelect, complementarySelect.value);
+          },
+        });
+        const disposers = [...this.settingDisposers].filter((dispose) => !previousDisposers.has(dispose));
+        disposeConnections = () => {
+          for (const dispose of disposers) {
+            dispose();
+            this.settingDisposers.delete(dispose);
+          }
+        };
+        const title = document.createElement("h3");
+        title.className = "environment-connections-title";
+        title.textContent = "Oracle connections";
+        draftConnections.prepend(title);
+        draftConnections.querySelectorAll("button").forEach((button) => {
+          button.type = "button";
+        });
+        form.insertBefore(draftConnections, form.querySelector(".environment-form-actions"));
       }
+      const deleteButton = form.querySelector(".environment-delete");
+      deleteButton.hidden = !environment;
+      deleteButton.dataset.environmentId = environment?.id || "";
       formTitle.textContent = environment ? "Edit Environment" : "Add Environment";
       nameInput.value = environment?.name || "";
       fillConnectionOptions(criticalSelect, environment?.criticalConnection || "");
@@ -1044,6 +1065,9 @@ class SettingsPage {
         draftConnections = null;
         renderUnassigned();
       }
+      disposeConnections();
+      draftConnections?.remove();
+      draftConnections = null;
       form.hidden = true;
       editingId = "";
       modal.close();
@@ -1106,6 +1130,7 @@ class SettingsPage {
           : [...environments, next];
 
         saveList(updated);
+        disposeConnections();
         draftConnections?.remove();
         draftConnections = null;
         form.hidden = true;
@@ -1119,7 +1144,7 @@ class SettingsPage {
       }
     });
 
-    list.addEventListener("click", async (event) => {
+    wrapper.addEventListener("click", async (event) => {
       const edit = event.target.closest(".environment-edit");
       if (edit) {
         const environment = readList().find((entry) => entry.id === edit.dataset.environmentId);
@@ -1139,6 +1164,7 @@ class SettingsPage {
       if (!confirmed) return;
       unassignEnvironmentConnections(environment.id, this.service.storage);
       saveList(readList().filter((entry) => entry.id !== environment.id));
+      hideForm();
       renderList();
       renderUnassigned();
       this.eventBus?.emit?.("notification:success", { message: `Environment "${environment.name}" deleted` });
@@ -1168,7 +1194,8 @@ class SettingsPage {
         registerDispose: (dispose) => this.settingDisposers.add(dispose),
       });
     }
-    if (item.type === "project-schema") return renderProjectSchemaLink({ router: globalThis.app?.router });
+    if (item.type === "project-schema")
+      return renderProjectSchemaLink({ registerDispose: (dispose) => this.settingDisposers.add(dispose) });
     if (item.type === "kafka-brokers") return this.renderKafkaBrokersItem(item);
     if (item.type === "environments") return this.renderEnvironmentsItem(item);
     const storageKey = item.storageKey || item.key;
@@ -1337,7 +1364,7 @@ class SettingsPage {
       let formGeneration = 0;
       let connectionFlow = null;
       const modal = mountEditDialog({
-        root: wrapper,
+        root: item.dialogRoot || wrapper,
         form: formEl,
         wide: true,
         onCancel: () => cancelBtn.click(),
@@ -1352,6 +1379,7 @@ class SettingsPage {
         String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m]);
 
       const renderList = () => {
+        item.onConnectionsChanged?.();
         const conns = service.getValue(storageKey, "oracle-connections", []);
         if (!conns || conns.length === 0) {
           listEl.innerHTML = '<div class="oracle-empty">No connections configured</div>';
@@ -1454,7 +1482,7 @@ class SettingsPage {
 
       const pendingOracleIdentities = new Map();
       const bulk = mountBulkEditor({
-        root: wrapper,
+        root: item.dialogRoot || wrapper,
         button: wrapper.querySelector(".settings-bulk-edit"),
         label: "Oracle connections",
         hint: "Match by name. Omitted connections and passwords stay unchanged.",

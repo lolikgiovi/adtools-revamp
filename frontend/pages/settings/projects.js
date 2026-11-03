@@ -1,3 +1,4 @@
+import { mountSchemaManager } from "../../components/SchemaManager.js";
 import { mountEditDialog } from "./edit-dialog.js";
 import { listSharedProjects, publishProjectName, useSharedProject } from "../../core/ProjectDirectory.js";
 import { createProject, getActiveProject, listProjects, renameProject } from "../../core/Projects.js";
@@ -22,17 +23,11 @@ export function renderProjectManager({ eventBus, refresh, registerDispose }) {
         <button type="button" class="btn btn-secondary btn-sm project-cancel">Cancel</button>
         <button type="submit" class="btn btn-primary btn-sm project-name-save">Create project</button>
       </div>
-    </form>
-    <div class="project-directory-feedback">
-      <div class="project-directory-status" role="status" aria-live="polite"></div>
-      <button type="button" class="btn btn-secondary btn-sm project-directory-retry" hidden>Retry</button>
-    </div>`;
+    </form>`;
   const select = wrapper.querySelector("select");
   const form = wrapper.querySelector("form");
   const input = wrapper.querySelector("input");
   const status = wrapper.querySelector(".project-status");
-  const directoryStatus = wrapper.querySelector(".project-directory-status");
-  const retryButton = wrapper.querySelector(".project-directory-retry");
   const saveButton = wrapper.querySelector(".project-name-save");
   let active = getActiveProject();
   let sharedProjects = [];
@@ -79,19 +74,15 @@ export function renderProjectManager({ eventBus, refresh, registerDispose }) {
   registerDispose?.(() => modal.dispose());
   wrapper.querySelector(".project-cancel").addEventListener("click", closeEditor);
   const loadDirectory = async () => {
-    retryButton.hidden = true;
-    directoryStatus.textContent = "";
     try {
       sharedProjects = await listSharedProjects();
       fillOptions();
-    } catch (error) {
-      directoryStatus.textContent = error.message;
-      retryButton.hidden = false;
+    } catch {
+      // Shared names are optional; keep the local project picker available offline.
     }
   };
   input.value = active.name;
   fillOptions();
-  retryButton.addEventListener("click", loadDirectory);
   void loadDirectory();
   select.addEventListener("change", async () => {
     if (busy) return;
@@ -186,7 +177,7 @@ export function renderProjectManager({ eventBus, refresh, registerDispose }) {
   return wrapper;
 }
 
-export function renderProjectSchemaLink({ router } = {}) {
+export function renderProjectSchemaLink({ registerDispose } = {}) {
   const row = document.createElement("div");
   row.className = "setting-item project-schema";
   row.dataset.setting = "project.schema";
@@ -198,7 +189,9 @@ export function renderProjectSchemaLink({ router } = {}) {
   button.type = "button";
   button.className = "btn btn-secondary btn-sm project-schema-manage";
   button.textContent = "Manage schemas";
-  button.addEventListener("click", () => router?.navigate("quick-query", { manageSchemas: true }));
+  const manager = mountSchemaManager({ root: row });
+  registerDispose?.(() => manager.dispose());
+  button.addEventListener("click", () => void manager.open());
   row.append(label, button);
   return row;
 }

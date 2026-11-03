@@ -328,7 +328,7 @@
   color: hsl(var(--foreground));
 }
 
-.settings-page :is(button, [role="button"], input, select, textarea):focus-visible,
+.settings-page :is(button, [role="button"]):focus-visible,
 .switch:has(input:focus-visible) {
   outline: 2px solid hsl(var(--ring));
   outline-offset: 3px;
@@ -669,12 +669,6 @@
 
 .environment-desktop-note {
   margin: 0 0 12px;
-}
-
-.setting-item.settings-focus-highlight {
-  outline: 2px solid hsl(var(--ring));
-  outline-offset: 4px;
-  border-radius: var(--radius);
 }
 
 @keyframes spin {
@@ -1103,23 +1097,6 @@ body .settings-edit-dialog-wide {
   margin-inline-start: 0;
 }
 
-.project-directory-feedback {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: hsl(var(--muted-foreground));
-  font-size: 0.8125rem;
-}
-
-.project-directory-feedback:has(.project-directory-status:empty),
-.project-directory-retry[hidden] {
-  display: none;
-}
-
-.project-directory-feedback:has(.project-directory-status:not(:empty)) {
-  margin-top: 8px;
-}
-
 @media (max-width: 600px) {
   .project-controls {
     grid-template-columns: minmax(0, 1fr);
@@ -1174,28 +1151,219 @@ body .settings-edit-dialog-wide {
   margin-bottom: 8px;
 }
 
-/* Project settings share one reading edge; only expanded contents are inset. */
-.settings-project > .settings-category-content > .settings-category {
-  margin-inline-start: 0;
+/* A project owns a small navigator and a single settings panel. */
+.settings-project > .settings-category-heading .settings-category-header,
+.project-settings-panel > .settings-category-heading .settings-category-header {
+  cursor: default;
 }
 
-.settings-project > .settings-category-content > :is(.project-schema, .setting-item:not(.project-manager)) {
-  min-height: 44px;
-  box-sizing: border-box;
+.settings-project > .settings-category-heading .settings-category-header:hover,
+.project-settings-panel > .settings-category-heading .settings-category-header:hover {
+  background: transparent;
+}
+
+.settings-project[aria-expanded="true"] > .settings-category-content {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  padding: 0;
+}
+
+.settings-project > .settings-category-content > .project-manager {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
-  padding-block: 8px;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 12px;
 }
 
-.settings-project > .settings-category-content > .setting-item > .setting-row {
-  width: 100%;
+.settings-project .project-controls {
+  width: min(100%, 360px);
+}
+
+.project-settings-nav {
+  grid-column: 1;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 12px;
+  border-inline-end: 1px solid hsl(var(--border));
+}
+
+.project-settings-nav button {
+  min-height: 36px;
+  padding: 8px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  font: inherit;
+  font-size: 0.8125rem;
+  text-align: start;
+  cursor: pointer;
+}
+
+.project-settings-nav button:hover {
+  background: hsl(var(--muted) / 0.5);
+  color: hsl(var(--foreground));
+}
+
+.project-settings-nav button[aria-current="page"] {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
+
+.project-settings-nav button:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+.settings-project > .settings-category-content > .project-settings-panel {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  min-height: 340px;
+  margin: 0;
+  padding: 16px 20px;
+  border: 0;
+  background: transparent;
+}
+
+.settings-project .project-settings-panel[data-active="false"],
+.project-settings-nav button[hidden] {
+  display: none;
+}
+
+.settings-project .project-settings-panel > .settings-category-heading .settings-category-header {
+  min-height: auto;
+  padding: 0 0 16px;
+  font-size: 0.875rem;
+}
+
+.settings-project .project-settings-panel > .settings-category-content {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.project-settings-panel .project-schema {
+  justify-content: flex-start;
+  padding-top: 0;
+}
+
+.project-settings-panel .environment-row {
   align-items: center;
+  padding-block: 12px;
 }
 
-.settings-project > .settings-category-content > .settings-category > .settings-category-heading > .settings-category-header {
-  min-height: 44px;
+.environment-connections-title {
+  margin: 0 0 12px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.environment-form > .setting-item-oracle {
+  margin-top: 16px;
+  padding-block: 16px;
+  border-top: 1px solid hsl(var(--border));
+  border-bottom: 0;
 }
 
 .project-name-form .integration-field {
   margin: 0;
+}
+
+@media (max-width: 700px) {
+  .settings-project[aria-expanded="true"] > .settings-category-content {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .project-settings-nav {
+    grid-column: 1;
+    grid-row: 2;
+    flex-direction: row;
+    gap: 4px;
+    overflow-x: auto;
+    border-inline-end: 0;
+    border-bottom: 1px solid hsl(var(--border));
+  }
+
+  .project-settings-nav button {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .settings-project > .settings-category-content > .project-settings-panel {
+    grid-column: 1;
+    grid-row: 3;
+    min-height: 240px;
+    padding: 16px 12px;
+  }
+}
+
+.settings-project > .settings-category-content > .project-manager[hidden],
+.settings-project .project-settings-panel[hidden] {
+  display: none;
+}
+
+.environment-row.environment-edit {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  border-top: 1px solid hsl(var(--border));
+  border-radius: 0;
+  background: transparent;
+  color: hsl(var(--foreground));
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.environment-row.environment-edit:hover {
+  background: hsl(var(--muted) / 0.5);
+}
+
+.environment-row.environment-edit:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: -2px;
+}
+
+.environment-form-actions .environment-delete {
+  margin-inline-end: auto;
+}
+
+.environment-form-actions .environment-delete[hidden] {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .environment-row.environment-edit {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+/* Settings fields show focus through their existing border, without a second ring. */
+.settings-page :is(input, select, textarea):is(:focus, :focus-visible) {
+  border-color: hsl(var(--ring));
+  outline: none;
+  box-shadow: none;
+}
+
+.settings-page .ad-searchable-dropdown-trigger:focus-visible {
+  border-color: hsl(var(--ring)) !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.settings-page .settings-bulk-input:focus-within {
+  border-color: hsl(var(--ring));
+}
+
+.settings-edit-dialog .project-name-form .setting-actions {
+  border-top: 0;
 }

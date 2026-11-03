@@ -1,0 +1,7 @@
+{
+  "passed": true,
+  "checks": [
+    "1440px: Settings manager stays in Settings without loading Query; search, copy, move, return to legacy project, saved data and query type preserved, drafts retained, collision and transaction failure safe, import/export/delete, Query transfer actions, no overflow/errors",
+    "390px: Settings manager stays in Settings without loading Query; search, copy, move, return to legacy project, saved data and query type preserved, drafts retained, collision and transaction failure safe, import/export/delete, Query transfer actions, no overflow/errors"
+  ]
+}

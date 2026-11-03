@@ -151,7 +151,7 @@
     },
     {
       "id": "velocity-template",
-      "name": "Velocity Template",
+      "name": "Velocity",
       "category": "template",
       "icon": "velocity-template",
       "order": 71

@@ -1238,6 +1238,7 @@
 
 .schema-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
@@ -2778,7 +2779,6 @@
   display: none;
 }
 
-
 .schema-modal-header {
   flex-wrap: wrap;
   gap: 12px;
@@ -2788,4 +2788,22 @@
   min-width: 0;
   padding-right: 32px;
   overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .schema-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .schema-name {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .schema-actions .schema-timestamp {
+    flex-basis: 100%;
+  }
 }
