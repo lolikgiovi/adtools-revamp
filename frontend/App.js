@@ -33,6 +33,7 @@ import settingsConfig from "./pages/settings/config.json";
 import { buildSettingsSearchEntries } from "./pages/settings/search-entries.js";
 import { ConnectionIndicators } from "./core/ConnectionIndicators.js";
 import { HomeWorkspace } from "./components/HomeWorkspace.js";
+import { openWelcome } from "./core/Welcome.js";
 
 const ASSET_LOAD_RETRY_DELAY_MS = 3000;
 
@@ -89,6 +90,8 @@ class App {
     this._releaseTour = null;
     this._releaseTips = null;
     this._releaseTourPreviewButton = null;
+    this._welcomePending = false;
+    this._releaseTourInitializing = true;
     this._previousAppVersion = null;
     this._previousWebBuildId = null;
     try {
@@ -183,6 +186,10 @@ class App {
 
     // Show a release tour only after a new build has loaded successfully.
     const releaseTourInit = this.initializeReleaseTour(this._previousAppVersion, this._previousWebBuildId);
+    releaseTourInit.finally(() => {
+      this._releaseTourInitializing = false;
+      this.showPendingWelcome();
+    });
 
     // Setup auto-update checks and forced-update handling (Phase 2)
     (async () => {
@@ -472,7 +479,15 @@ class App {
 
     if (this.isNavigationCurrent(navigationId, "home")) {
       this.eventBus.emit("page:changed", { page: "home" });
+      this.showPendingWelcome();
     }
+  }
+
+  showPendingWelcome() {
+    if (!this._welcomePending || this._releaseTourInitializing || this._releaseTour?.overlayEl || this._releaseTour?.tourLayerEl ||
+      this.router.getCurrentRoute() !== "home" || !hasCompletedRegistration()) return;
+    this._welcomePending = false;
+    openWelcome({ onExplore: () => this.router.navigate("home") });
   }
 
   async showTool(toolId, routeData = null, navigationId = null) {
@@ -770,12 +785,18 @@ class App {
 
     // Keep the Home greeting in sync when the user's name changes.
     this.eventBus.on("user:registered", (data) => {
+      this._welcomePending = true;
       const greeting = document.querySelector(".home-greeting");
       if (greeting) greeting.textContent = this.getHomeGreeting(data?.username);
       this.sidebar?.renderMenuGroups?.();
       this.sidebar?.renderTools?.();
       this.updateGlobalSearchIndex();
       this.syncDeviceVersion();
+      this.showPendingWelcome();
+    });
+
+    this.eventBus.on("welcome:open", () => {
+      openWelcome({ force: true, onExplore: () => this.router.navigate("home") });
     });
 
     // Capture route data payloads from navigations
@@ -977,6 +998,7 @@ class App {
         onFinish: ({ startTips } = {}) => {
           if (startTips) this._releaseTips?.startGuided();
           else this._releaseTips?.start();
+          this.showPendingWelcome();
         },
       });
       if (tour.open()) this._releaseTour = tour;

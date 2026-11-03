@@ -20,6 +20,7 @@
 
 /* Post-update release tour and contextual tips */
 @import "./styles/release-tour.css";
+@import "./styles/welcome.css";
 
 /* Responsive breakpoints and animation utilities */
 @import "./styles/utilities.css";

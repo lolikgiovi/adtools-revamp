@@ -1,0 +1,42 @@
+.welcome-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(39rem, calc(100% - 2rem));
+  max-height: calc(100dvh - 2rem);
+  padding: 0;
+  border: 1px solid hsl(var(--border));
+  border-radius: 1rem;
+  background: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  box-shadow: 0 24px 60px hsl(var(--foreground) / 0.2);
+}
+
+.welcome-dialog::backdrop { background: hsl(var(--foreground) / 0.46); }
+.welcome-dialog:focus { outline: none; }
+.welcome-content { position: relative; padding: clamp(1.5rem, 5vw, 2.5rem); }
+.welcome-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+.welcome-close:hover { background: hsl(var(--muted)); }
+.welcome-dialog button:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 3px; }
+.welcome-content h1 { margin: 0 2rem 1rem 0; font-size: clamp(1.55rem, 4vw, 2rem); letter-spacing: -0.035em; }
+.welcome-content p { margin: 0 0 0.85rem; line-height: 1.6; font-size: 0.94rem; }
+.welcome-examples-title { margin: 1.35rem 0 0.75rem; font-size: 1rem; }
+.welcome-examples { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.85rem 1.5rem; margin: 0 0 1.25rem; padding: 0; list-style: none; }
+.welcome-examples li { border-top: 1px solid hsl(var(--border)); padding-top: 0.6rem; }
+.welcome-examples strong, .welcome-examples span { display: block; }
+.welcome-examples strong { margin-bottom: 0.35rem; font-size: 0.9rem; }
+.welcome-examples span, .welcome-content .welcome-hint { color: hsl(var(--muted-foreground)); font-size: 0.85rem; line-height: 1.5; }
+.welcome-actions { display: flex; justify-content: flex-end; margin-top: 1.5rem; }
+@media (max-width: 480px) { .welcome-examples { grid-template-columns: 1fr; gap: 0.65rem; } }

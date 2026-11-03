@@ -74,6 +74,7 @@ class AboutPage {
 
     this.copyInstallButton = this.container.querySelector("#about-copy-install-command");
     this.copyInstallButton?.addEventListener("click", this.handleCopyInstallCommand);
+    this.container.querySelector("#about-open-welcome")?.addEventListener("click", () => this.eventBus?.emit?.("welcome:open"));
 
     this.eventBus?.emit?.("page:changed", { page: "about" });
   }
@@ -85,6 +86,10 @@ class AboutPage {
 
     return `
       <article class="about-document">
+        <section class="about-welcome">
+          <div><h1>About AD Tools</h1><p>Built for Retail's application development work, and open to other teams too.</p></div>
+          <button id="about-open-welcome" class="btn btn-secondary" type="button">View welcome</button>
+        </section>
         <section class="about-install" aria-labelledby="about-install-title">
           <div class="about-install-copy">
             <span class="about-install-eyebrow">AD Tools Desktop · macOS</span>

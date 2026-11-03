@@ -23,6 +23,11 @@
   padding: 0 1rem 2.5rem;
 }
 
+.about-welcome { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.5rem 0 0.5rem; }
+.about-welcome h1 { margin: 0; font-size: 1.2rem; }
+.about-welcome p { margin: 0.4rem 0 0; color: hsl(var(--muted-foreground)); font-size: 0.82rem; }
+@media (max-width: 480px) { .about-welcome { align-items: flex-start; flex-direction: column; } }
+
 .about-install {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(16rem, 0.7fr);
