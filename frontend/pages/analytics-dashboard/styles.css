@@ -888,6 +888,14 @@
   text-align: left;
   cursor: pointer;
 }
+.dashboard-table td.person-use-detail {
+  min-width: 16rem;
+  max-width: 32rem;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
 .person-link:hover {
   text-decoration: underline;
   text-underline-offset: 3px;

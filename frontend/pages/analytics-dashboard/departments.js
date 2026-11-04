@@ -8,7 +8,7 @@ const lastActive = (value) =>
     : "—";
 
 /** Which departments use AD Tools, and which tools each department uses. */
-export function renderDepartmentUsage(page, container, { departments = [], tools = [] }) {
+export function renderDepartmentUsage(page, container, { departments = [], tools = [], people = [] }) {
   const escape = (value) => page.escapeHtml(String(value ?? ""));
   const toolName = (id) => TOOL_NAMES.get(id) || page.formatToolName(id);
   const metric = page.departmentMetric === "actions" ? "actions" : "people";
@@ -27,7 +27,10 @@ export function renderDepartmentUsage(page, container, { departments = [], tools
     </tr></thead><tbody>${departments
       .map((row) => {
         const registered = Math.max(row.registered_people, row.active_people);
-        return `<tr class="department-row${row.active_people ? "" : " is-idle"}"><th scope="row">${escape(row.department)}</th>
+        const picked = page.departmentFilter === row.department;
+        return `<tr class="department-row${row.active_people ? "" : " is-idle"}"><th scope="row">
+          <button type="button" class="department-filter" data-department-filter="${escape(row.department)}" aria-pressed="${picked}">
+          ${escape(row.department)}</button></th>
         <td><span class="department-adoption">
           <span class="department-adoption-track" style="--registered:${(registered / maxRegistered) * 100}%" aria-hidden="true">
             <span style="width:${(row.active_people / maxRegistered) * 100}%"></span></span>
@@ -75,11 +78,45 @@ export function renderDepartmentUsage(page, container, { departments = [], tools
         : '<div class="panel-empty">No tool activity in this period.</div>'
     }</section>`;
 
-  container.innerHTML = `<div class="department-usage">${summary}${matrix}</div>`;
+  const shown = people.filter((row) => !page.departmentFilter || row.department === page.departmentFilter);
+  const role = (value) => (value ? String(value).charAt(0) + String(value).slice(1).toLowerCase() : "—");
+  const directory = `<section class="department-section" aria-labelledby="department-people-heading">
+    <h2 id="department-people-heading">People${page.departmentFilter ? ` · ${escape(page.departmentFilter)}` : ""}</h2>
+    ${
+      shown.length
+        ? `<div class="table-wrapper" tabindex="0" role="region" aria-label="People">
+      <table class="dashboard-table department-people"><thead><tr>
+        <th scope="col">Person</th><th scope="col">Department</th><th scope="col">Role</th><th scope="col" class="numeric">Actions</th>
+        <th scope="col">Top tool</th><th scope="col" class="numeric">Devices</th><th scope="col">Last active</th>
+      </tr></thead><tbody>${shown
+        .map(
+          (row) => `<tr class="${row.uses ? "" : "is-idle"}"><th scope="row">
+          <button type="button" class="person-link" data-person="${escape(row.user_email)}">${escape(row.user_email)}</button></th>
+          <td>${escape(row.department)}</td><td>${escape(role(row.role))}</td><td class="numeric">${number(row.uses)}</td>
+          <td>${row.top_tool ? escape(toolName(row.top_tool)) : "—"}</td><td class="numeric">${number(row.devices)}</td>
+          <td>${escape(lastActive(row.last_active))}</td></tr>`,
+        )
+        .join("")}</tbody></table></div>`
+        : '<div class="panel-empty">No people in this department.</div>'
+    }</section>`;
+
+  container.innerHTML = `<div class="department-usage">${summary}${directory}${matrix}</div>`;
+  const rerender = () => renderDepartmentUsage(page, container, { departments, tools, people });
+  container.querySelectorAll("[data-department-filter]").forEach((button) =>
+    button.addEventListener("click", () => {
+      const department = button.dataset.departmentFilter;
+      page.departmentFilter = page.departmentFilter === department ? null : department;
+      rerender();
+      container.querySelector(`[data-department-filter="${CSS.escape(department)}"]`)?.focus();
+    }),
+  );
+  container
+    .querySelectorAll(".department-people [data-person]")
+    .forEach((button) => button.addEventListener("click", () => page.openPerson(button.dataset.person)));
   container.querySelectorAll("[data-department-metric]").forEach((button) =>
     button.addEventListener("click", () => {
       page.departmentMetric = button.dataset.departmentMetric;
-      renderDepartmentUsage(page, container, { departments, tools });
+      rerender();
       container.querySelector(`[data-department-metric="${page.departmentMetric}"]`)?.focus();
     }),
   );

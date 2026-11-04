@@ -47,8 +47,43 @@
 }
 
 .department-row.is-idle th,
-.department-row.is-idle td {
+.department-row.is-idle td,
+.department-people tr.is-idle th,
+.department-people tr.is-idle td,
+.department-people tr.is-idle .person-link {
   color: hsl(var(--muted-foreground));
+}
+
+/* A department name narrows the People list; pressed shows which one. */
+.department-filter {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.department-filter:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.department-filter[aria-pressed="true"] {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.department-filter:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.department-people .person-link {
+  overflow-wrap: anywhere;
 }
 
 .department-adoption {

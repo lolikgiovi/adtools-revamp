@@ -60,7 +60,27 @@ describe("PlantUML insight", () => {
       input_size: 29,
       duration_ms: 40,
       diagram_type: "mindmap",
+      line_count: 3,
     });
+  });
+
+  // Which diagram a use was about. Only the file's name, never its folder path or contents.
+  it("names the file on views, edits, exports and render failures", () => {
+    const { instance, failures } = tool();
+    instance.workspace = { nodes: [{ id: "f1", kind: "file", name: "payment-flow.puml", parentId: "dir" }] };
+    const source = "@startuml\nAlice -> Bob\n@enduml";
+    expect(instance.renderUseMeta({ fileId: "f1", source, milliseconds: 5 })).toMatchObject({
+      file_name: "payment-flow.puml",
+      line_count: 3,
+    });
+    expect(instance.exportUseMeta({ id: "f1", name: "payment-flow.puml", content: source })).toEqual({
+      file_name: "payment-flow.puml",
+      diagram_type: "sequence",
+      line_count: 3,
+    });
+    instance.trackRenderOutcome({ state: "error", fileId: "f1", source, line: 2 });
+    expect(failures[0].meta).toEqual({ diagram_type: "sequence", file_name: "payment-flow.puml" });
+    expect(JSON.stringify(failures)).not.toContain("Alice");
   });
 
   it("reports failed exports, format and import, but not other actions", () => {

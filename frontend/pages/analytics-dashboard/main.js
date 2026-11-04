@@ -6,12 +6,15 @@
 import { renderTrends, renderDeviceHealth } from "./analysis.js";
 import { renderUsagePatterns } from "./patterns.js";
 import { renderDepartmentUsage } from "./departments.js";
+import toolsConfig from "../../config/tools.json";
 import { AnalyticsDashboardTemplate } from "./template.js";
 import "./styles.css";
 import "./departments.css";
 
 const API_BASE = String(import.meta.env.VITE_WORKER_BASE || (import.meta.env.DEV ? "http://localhost:8787" : "")).replace(/\/$/, "");
 const TOKEN_KEY = "analytics.dashboard.token";
+// Tools added after the label list above still get their product name, e.g. PlantUML.
+const REGISTERED_TOOL_NAMES = new Map(toolsConfig.tools.map((tool) => [tool.id, tool.name]));
 const PRIMARY_VIEWS = [
   { id: "overview", label: "Summary" },
   { id: "opportunities", label: "Tools" },
@@ -844,7 +847,7 @@ class AnalyticsDashboardPage {
         name: "Top users",
         tabLabel: "Users",
         description: "Select a name to inspect behavior. Ranked by activity; up to 200 people.",
-        columns: ["rank", "user", "main_activity", "events", "tools_used", "devices_seen", "errors", "last_activity"],
+        columns: ["rank", "user", "department", "role", "main_activity", "events", "tools_used", "devices_seen", "errors", "last_activity"],
       },
       {
         id: "tools",
@@ -1061,7 +1064,8 @@ class AnalyticsDashboardPage {
     );
     const recentRows = recent.map(
       (row) => `<tr><td>${date(row.created_time)}</td><td>${escape(this.formatToolName(row.tool_id))}</td>
-      <td>${escape(this.formatTitleValue(row.action))}</td><td>${escape(row.device_id)}</td></tr>`,
+      <td>${escape(this.formatTitleValue(row.action))}</td><td class="person-use-detail">${escape(this.formatUseDetail(row.details))}</td>
+      <td>${escape(row.device_id)}</td></tr>`,
     );
     const errorRows = errors.map(
       (row) => `<tr><td>${date(row.created_time)}</td><td>${escape(this.formatToolName(row.tool_id))}</td>
@@ -1070,6 +1074,7 @@ class AnalyticsDashboardPage {
     content.innerHTML = `<article class="person-profile">
       <button type="button" class="btn btn-secondary btn-sm" data-person-back>Back to People</button>
       <header class="person-heading"><h3 tabindex="-1">${escape(summary.user_email || this.selectedPerson)}</h3>
+        ${summary.department ? `<p>${[summary.department, summary.role && this.formatRole(summary.role)].filter(Boolean).map(escape).join(" · ")}</p>` : ""}
         <p>${escape(source)} · dates in Asia/Jakarta</p></header>
       <dl class="person-stats">${[
         ["Recorded Activity", summary.events],
@@ -1097,7 +1102,7 @@ class AnalyticsDashboardPage {
         ${actions.length ? table(["Tool", "Action", "Activity", "Last Used"], actionRows) : "<p>No actions recorded.</p>"}</section>
       <details><summary>Recent Activity · ${number(recent.length)} of ${number(summary.events)} records</summary>
         <p>Latest 100 records. This is an activity sequence, not a session replay.</p>
-        ${recent.length ? table(["Time", "Tool", "Action", "Device"], recentRows) : "<p>No recent activity recorded.</p>"}</details>
+        ${recent.length ? table(["Time", "Tool", "Action", "Detail", "Device"], recentRows) : "<p>No recent activity recorded.</p>"}</details>
       <details><summary>Uncaught Errors · ${number(data.error_count)} reports</summary><p>Latest 50 error reports, counted separately from usage.</p>
         ${errors.length ? table(["Time", "Tool", "Error", "Message"], errorRows) : "<p>No uncaught errors recorded in this period.</p>"}</details>
     </article>`;
@@ -1122,7 +1127,40 @@ class AnalyticsDashboardPage {
     }
     if (key === "tool_id") return this.formatToolName(row.tool_id);
     if (key === "action") return this.formatActionName(row.action);
+    if (key === "role") return this.formatRole(row.role);
     return this.formatCellValue(row[key]);
+  }
+
+  formatRole(role) {
+    return role ? String(role).charAt(0).toUpperCase() + String(role).slice(1).toLowerCase() : "—";
+  }
+
+  // What a use recorded, readable: the file first, then the rest. Values are escaped by the caller.
+  formatUseDetail(details) {
+    let parsed = {};
+    try {
+      parsed = typeof details === "string" ? JSON.parse(details) : details || {};
+    } catch (_) {
+      return "";
+    }
+    const { file_name: fileName, ...rest } = parsed && typeof parsed === "object" ? parsed : {};
+    const count = (item) => new Intl.NumberFormat().format(item);
+    const seconds = (ms) => `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(ms / 1000)}s`;
+    // Common fields read as words; anything else falls back to its key.
+    const known = {
+      diagram_type: (item) => `${this.formatTitleValue(item)} diagram`,
+      line_count: (item) => `${count(item)} lines`,
+      file_count: (item) => `${count(item)} files`,
+      input_size: (item) => `${count(item)} characters`,
+      duration_ms: (item) => `took ${seconds(item)}`,
+      ms_to_first_use: (item) => `first use ${seconds(item)} after opening`,
+    };
+    const value = (item) =>
+      typeof item === "number" ? count(item) : typeof item === "boolean" ? (item ? "Yes" : "No") : this.formatTitleValue(item);
+    const parts = Object.entries(rest)
+      .filter(([, item]) => ["string", "number", "boolean"].includes(typeof item))
+      .map(([key, item]) => (known[key] ? known[key](item) : `${this.formatTitleValue(key)} ${value(item)}`));
+    return [fileName, ...parts].filter(Boolean).join(" · ");
   }
 
   formatToolName(toolId) {
@@ -1143,7 +1181,7 @@ class AnalyticsDashboardPage {
       "tlv-viewer": "TLV Viewer",
       "uuid-generator": "UUID Generator",
     };
-    return labels[toolId] || this.formatTitleValue(toolId);
+    return labels[toolId] || REGISTERED_TOOL_NAMES.get(toolId) || this.formatTitleValue(toolId);
   }
 
   formatActionName(action) {

@@ -42,3 +42,23 @@ Passed in Chrome against a local Vite dev server (`./node_modules/.bin/vite --po
 Dashboard SQL for Tool Adoption, Entry Points, Empty Searches and Tool Failures was run against seeded SQLite through the
 real handlers. Expected values matched: 2 of 3 open-days converted (66.7%), median first use 10s of 4s/10s/20s,
 failure rate 20% (1 failure, 4 uses), and page views recorded before this change are left out of Entry Points.
+
+## People and use detail (2026-11-04)
+
+`frontend/pages/analytics-dashboard/tests/people-detail.test.js` runs every migration into SQLite and calls the real
+authenticated Worker handler. It checks that:
+
+- Departments lists every registered person, including people with no activity in the period, people with no department
+  (shown as Unknown), and each person's role, actions, tool count, top tool and device count. It leaves out the owner of
+  an excluded device and does not count reconstructed (non-client) rows.
+- People rows carry department and role.
+- A person's recent uses carry the detail recorded with each one, such as a PlantUML file name.
+
+Run it with `./node_modules/.bin/vitest run frontend/pages/analytics-dashboard/tests/people-detail.test.js`.
+
+In Chrome, the real dashboard page was fed those handler responses:
+
+- People showed Department and Role columns.
+- Departments showed the People list with the idle person greyed out, and clicking RETAIL narrowed it to RETAIL.
+- Clicking a person opened their profile showing "RETAIL · Engineer". Recent activity read
+  "payment-flow.puml · Sequence diagram · 42 lines · first use 3.2s after opening".

@@ -1642,7 +1642,7 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
     if (tab.id === "departments") {
       await ensureToolUsageSchema(env);
       const normalized = getDashboardRangeConfig(range).id;
-      const result = await coalesceDashboardQuery(env, `tab:departments:${normalized}:v1`, async () => {
+      const result = await coalesceDashboardQuery(env, `tab:departments:${normalized}:v2`, async () => {
         const analysis = await readDepartmentUsage(env, normalized);
         return JSON.stringify({ ok: true, data: analysis.departments, analysis });
       });
@@ -1695,7 +1695,7 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
         if (!person || person.length > 320) return dashboardJson({ ok: false, error: "A valid user identity is required" }, 400);
         return executePersonQuery(env, person, rangeConfig);
       }
-      return executeWhoQuery(env, `tab:who:${rangeConfig.id}:v2`, rangeConfig);
+      return executeWhoQuery(env, `tab:who:${rangeConfig.id}:v3`, rangeConfig);
     }
 
     if (tab.id === "daily" || tab.id === "events") {
@@ -1998,6 +1998,33 @@ async function executePersonQuery(env, person, rangeConfig) {
     ]);
     Object.assign(data, { summary: summary[0] || empty.summary, tools, actions, days, recent });
   }
+  if (tables.has("tool_usage")) {
+    // Recent uses carry what was recorded with them (file name, diagram type, counts); details stay JSON for the client.
+    const recentUses = await env.DB.prepare(
+      `SELECT LOWER(user_email) AS user_email, tool_id, action, device_id, created_time,
+        CASE WHEN json_valid(properties) THEN properties ELSE '{}' END AS details
+      FROM tool_usage
+      WHERE LOWER(user_email) = ?1 AND ${includedAnalyticsEmailSql("user_email")} ${rangeConfig.where("created_time")}
+      ORDER BY datetime(created_time) DESC, id DESC LIMIT 100`,
+    )
+      .bind(person)
+      .all();
+    data.recent = recentUses.results || [];
+  }
+  if (tables.has("users")) {
+    const profile = await env.DB.prepare(
+      `SELECT COALESCE(NULLIF(TRIM(department), ''), 'Unknown') AS department, role, created_time AS registered_at
+      FROM users WHERE LOWER(email) = ?1`,
+    )
+      .bind(person)
+      .first();
+    data.summary = {
+      ...data.summary,
+      department: profile?.department || "Unknown",
+      role: profile?.role || null,
+      registered_at: profile?.registered_at || null,
+    };
+  }
   if (tables.has("error_events")) {
     const where = `WHERE LOWER(user_email) = ?1 AND ${includedAnalyticsEmailSql("user_email")} ${rangeConfig.where("created_time")}`;
     const [errors, count] = await Promise.all([
@@ -2048,6 +2075,9 @@ async function executeWhoQuery(env, cacheKey, rangeConfig) {
     ${rangeConfig.where("created_time")}
   GROUP BY user_email`
       : "SELECT NULL AS user_email, 0 AS errors WHERE 0";
+    const profileSql = tables.has("users")
+      ? "SELECT LOWER(email) AS user_email, COALESCE(NULLIF(TRIM(department), ''), 'Unknown') AS department, role FROM users"
+      : "SELECT NULL AS user_email, NULL AS department, NULL AS role WHERE 0";
     const query = `WITH activity AS (
   ${activityBranches.join("\n  UNION ALL\n  ")}
 ),
@@ -2063,6 +2093,9 @@ clean_activity AS (
 ),
 error_rollup AS (
   ${errorRollup}
+),
+user_profile AS (
+  ${profileSql}
 ),
 user_rollup AS (
   SELECT user_email,
@@ -2124,8 +2157,11 @@ ranked_users AS (
     COUNT(*) OVER () AS active_users_total,
     SUM(ur.events) OVER () AS events_total,
     SUM(COALESCE(er.errors, 0)) OVER () AS errors_total,
-    COALESCE(utl.tools, '-') AS details
+    COALESCE(utl.tools, '-') AS details,
+    COALESCE(up.department, 'Unknown') AS department,
+    up.role
   FROM user_rollup ur
+  LEFT JOIN user_profile up ON up.user_email = ur.user_email
   LEFT JOIN user_tool_counts utc ON utc.user_email = ur.user_email AND utc.tool_rank = 1
   LEFT JOIN user_action_counts uac ON uac.user_email = ur.user_email AND uac.action_rank = 1
   LEFT JOIN error_rollup er ON er.user_email = ur.user_email
@@ -2181,7 +2217,9 @@ SELECT 1 AS section_order,
   active_users_total,
   events_total,
   errors_total,
-  details
+  details,
+  department,
+  role
 FROM ranked_users
 WHERE rank <= 200
 UNION ALL
@@ -2201,7 +2239,9 @@ SELECT 2 AS section_order,
   0 AS active_users_total,
   0 AS events_total,
   0 AS errors_total,
-  details
+  details,
+  NULL AS department,
+  NULL AS role
 FROM ranked_user_tools
 WHERE rank <= 30
 UNION ALL
@@ -2221,7 +2261,9 @@ SELECT 3 AS section_order,
   0 AS active_users_total,
   0 AS events_total,
   0 AS errors_total,
-  details
+  details,
+  NULL AS department,
+  NULL AS role
 FROM ranked_actions
 WHERE rank <= 50
 ORDER BY section_order, rank`;

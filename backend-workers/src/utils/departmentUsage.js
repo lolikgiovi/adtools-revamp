@@ -25,7 +25,7 @@ export async function readDepartmentUsage(env, range) {
     SELECT DISTINCT LOWER(u.email) AS email, ${department("u.department")} AS department FROM users u JOIN device d ON d.user_id = u.id
   ) `;
   const rows = async (sql) => (await env.DB.prepare(cte + sql).all()).results || [];
-  const [departments, tools] = await Promise.all([
+  const [departments, tools, people] = await Promise.all([
     rows(`, names AS (SELECT department FROM registered UNION SELECT department FROM activity),
       totals AS (
         SELECT department, COUNT(DISTINCT email) AS active_people, COUNT(DISTINCT device_id) AS devices, COUNT(*) AS actions,
@@ -38,6 +38,22 @@ export async function readDepartmentUsage(env, range) {
       ORDER BY active_people DESC, actions DESC, registered_people DESC, n.department`),
     rows(`SELECT department, tool_id, COUNT(*) AS actions, COUNT(DISTINCT email) AS people
       FROM activity GROUP BY department, tool_id ORDER BY department, people DESC, actions DESC, tool_id`),
+    // Everyone registered, including people with no activity in the period, plus anyone active without a profile.
+    rows(`, names AS (SELECT email FROM registered UNION SELECT email FROM activity),
+      profile AS (SELECT LOWER(email) AS email, ${department("department")} AS department, role, created_time FROM users),
+      totals AS (
+        SELECT email, COUNT(*) AS uses, COUNT(DISTINCT tool_id) AS tools, COUNT(DISTINCT device_id) AS devices, MAX(at) AS last_at
+        FROM activity GROUP BY email
+      ), ranked AS (
+        SELECT email, tool_id, ROW_NUMBER() OVER (PARTITION BY email ORDER BY COUNT(*) DESC, MAX(at) DESC, tool_id) AS position
+        FROM activity GROUP BY email, tool_id
+      )
+      SELECT n.email AS user_email, COALESCE(p.department, 'Unknown') AS department, p.role, p.created_time AS registered_at,
+        COALESCE(t.uses, 0) AS uses, COALESCE(t.tools, 0) AS tools, COALESCE(t.devices, 0) AS devices, r.tool_id AS top_tool,
+        strftime('%Y-%m-%dT%H:%M:%SZ', t.last_at) AS last_active
+      FROM names n LEFT JOIN profile p USING (email) LEFT JOIN totals t USING (email)
+      LEFT JOIN ranked r ON r.email = n.email AND r.position = 1
+      ORDER BY uses DESC, t.last_at DESC, user_email`),
   ]);
-  return { departments, tools };
+  return { departments, tools, people };
 }

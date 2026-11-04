@@ -561,7 +561,9 @@ export class PlantUmlTool extends BaseTool {
     else if (action === "import") this.$("#puml-import").click();
     else if (action === "backup") {
       await exportWorkspace(this.workspace);
-      UsageTracker.trackToolUse("plantuml", "export_workspace");
+      UsageTracker.trackToolUse("plantuml", "export_workspace", {
+        file_count: this.workspace.nodes.filter((node) => node.kind === "file").length,
+      });
     } else if (action === "source" && file) downloadBlob(new Blob([file.content], { type: "text/plain;charset=utf-8" }), file.name);
     else if (action === "restart") {
       this.renderer.latest = [file, this.workspace.nodes];
@@ -571,7 +573,7 @@ export class PlantUmlTool extends BaseTool {
       const svg = this.diagram.svg;
       if (action === "png") await exportPng(svg, file.name);
       else downloadBlob(new Blob([svg], { type: "image/svg+xml" }), file.name.replace(/\.[^.]+$/, "") + ".svg");
-      UsageTracker.trackToolUse("plantuml", `export_${action}`);
+      UsageTracker.trackToolUse("plantuml", `export_${action}`, this.exportUseMeta(file));
     } else if (action === "zoom-in") this.preview.zoom(1.2);
     else if (action === "zoom-out") this.preview.zoom(1 / 1.2);
     else if (action === "fit") this.preview.reset();
@@ -607,8 +609,24 @@ export class PlantUmlTool extends BaseTool {
     UsageTracker.trackFailure("plantuml", "import", error, { file_count: fileCount });
   }
 
+  // Which diagram a use was about: the file's own name (never its folder path), its type and size.
+  fileName(fileId) {
+    return this.workspace?.nodes?.find((node) => node.id === fileId)?.name;
+  }
+
   renderUseMeta(result) {
-    return { input_size: result.source.length, duration_ms: result.milliseconds, diagram_type: diagramType(result.source) };
+    const fileName = this.fileName(result.fileId);
+    return {
+      input_size: result.source.length,
+      duration_ms: result.milliseconds,
+      diagram_type: diagramType(result.source),
+      line_count: result.source.split("\n").length,
+      ...(fileName ? { file_name: fileName } : {}),
+    };
+  }
+
+  exportUseMeta(file) {
+    return { file_name: file.name, diagram_type: diagramType(file.content), line_count: file.content.split("\n").length };
   }
 
   // Renders repeat on every typing pause, so a broken diagram is one failure until that file renders again.
@@ -620,7 +638,11 @@ export class PlantUmlTool extends BaseTool {
     if (this.brokenRenders.has(result.fileId)) return;
     this.brokenRenders.add(result.fileId);
     const category = result.line > 0 ? "invalid_input" : "internal";
-    UsageTracker.trackFailure("plantuml", "render", category, { diagram_type: diagramType(result.source) });
+    const fileName = this.fileName(result.fileId);
+    UsageTracker.trackFailure("plantuml", "render", category, {
+      diagram_type: diagramType(result.source),
+      ...(fileName ? { file_name: fileName } : {}),
+    });
   }
 
   renderChanged(result) {
@@ -948,7 +970,10 @@ export class PlantUmlTool extends BaseTool {
       for (const file of loaded) next = addNode(next, file.name, parentId, "file", file.content);
       this.update(validateWorkspace(next));
     }
-    UsageTracker.trackToolUse("plantuml", "import");
+    UsageTracker.trackToolUse("plantuml", "import", {
+      file_count: files.length,
+      ...(files.length === 1 ? { file_name: files[0].name } : {}),
+    });
   }
 
   scheduleSave() {
