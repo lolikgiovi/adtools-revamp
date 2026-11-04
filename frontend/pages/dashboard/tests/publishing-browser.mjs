@@ -1,7 +1,8 @@
 // Failure cases: wrong source project; leaked credentials; accidental cross-department audience;
 // stale preview after edits; ambiguous replacement behavior; source switch retaining old values;
 // failed publish losing review; history reuse of another project; overflow on narrow screens;
-// people picker missing registered users, search hiding a selection, or sending unselected emails.
+// people picker missing registered users, search hiding a selection, or sending unselected emails;
+// department toggle missing members, an exclusion re-added, or the toggle misreporting a partial pick.
 import assert from "node:assert/strict";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -75,6 +76,7 @@ try {
               { email: "ana@bankmandiri.co.id", department: "RETAIL" },
               { email: "budi@bankmandiri.co.id", department: "SME" },
               { email: "citra@bankmandiri.co.id", department: null },
+              { email: "dewi@bankmandiri.co.id", department: "RETAIL" },
             ],
           };
         } else if (url.pathname.endsWith("/preview")) {
@@ -133,15 +135,22 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.screenshot({ path: resolve(output, `${width}-review.png`), fullPage: true });
     await page.locator("#publish-audience").selectOption("emails");
-    const people = page.locator(".publish-people-list .publish-choice");
-    assert.equal(await people.count(), 3);
+    const people = page.locator(".publish-people-list [data-person]");
+    const retail = page.locator('.publish-people-list [data-group="RETAIL"]');
+    const person = (name) => page.getByRole("checkbox", { name: new RegExp(`${name}@bankmandiri\\.co\\.id`) });
+    assert.equal(await people.count(), 4);
+    await retail.check();
+    assert.equal(await person("ana").isChecked(), true);
+    assert.equal(await person("dewi").isChecked(), true);
+    await person("dewi").uncheck();
+    assert.equal(await retail.evaluate((input) => input.indeterminate), true);
     await page.locator("#publish-people-search").fill("sme");
     assert.equal(await people.filter({ visible: true }).count(), 1);
-    await page.getByRole("checkbox", { name: /budi@bankmandiri\.co\.id/ }).check();
-    await page.locator("#publish-people-search").fill("ana");
-    await page.getByRole("checkbox", { name: /ana@bankmandiri\.co\.id/ }).check();
+    assert.equal(await retail.isVisible(), false);
+    await person("budi").check();
     await page.locator("#publish-people-search").fill("");
-    assert.equal(await page.locator(".publish-people-list input:checked").count(), 2);
+    assert.equal(await person("dewi").isChecked(), false);
+    assert.equal(await page.locator(".publish-people-list [data-person]:checked").count(), 2);
     assert.equal(await page.locator('[data-summary="recipients"]').innerText(), "2 people");
     expectedTarget = { type: "emails", values: ["ana@bankmandiri.co.id", "budi@bankmandiri.co.id"] };
     await page.getByRole("button", { name: "Preview publication" }).click();
@@ -149,7 +158,7 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.locator(".publish-people").screenshot({ path: resolve(output, `${width}-people.png`) });
     checks.push(
-      `${width}px: department default, source isolation, readable connections, secret exclusion, preview invalidation, publish retry, history reuse, people picker search and selection, no overflow`,
+      `${width}px: department default, source isolation, readable connections, secret exclusion, preview invalidation, publish retry, history reuse, people picker search, department select with exclusions, no overflow`,
     );
     await context.close();
   }

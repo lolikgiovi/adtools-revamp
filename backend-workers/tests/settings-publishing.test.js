@@ -45,13 +45,17 @@ describe("settings publishing API", () => {
     }
     const DB = {
       prepare(sql) {
-        const bound = (args) => ({
-          sql,
-          args,
-          all: async () => ({ results: sqlite.prepare(sql).all(...args) }),
-          first: async () => sqlite.prepare(sql).get(...args) || null,
-          run: async () => ({ meta: { ...sqlite.prepare(sql).run(...args) } }),
-        });
+        const bound = (args) => {
+          // Cloudflare D1 rejects queries with more than 100 bound parameters.
+          if (args.length > 100) throw new Error("D1: too many SQL variables");
+          return {
+            sql,
+            args,
+            all: async () => ({ results: sqlite.prepare(sql).all(...args) }),
+            first: async () => sqlite.prepare(sql).get(...args) || null,
+            run: async () => ({ meta: { ...sqlite.prepare(sql).run(...args) } }),
+          };
+        };
         return { ...bound([]), bind: (...args) => bound(args) };
       },
       async batch(statements) {
@@ -107,6 +111,21 @@ describe("settings publishing API", () => {
       { email: "three@bankmandiri.co.id", department: "RETAIL" },
       { email: "two@bankmandiri.co.id", department: "SME" },
     ]);
+  });
+
+  // Whole-department picks failure cases: >100 emails rejected by validation, D1's 100-parameter
+  // cap breaking the audience query, recipients dropped between chunks, and the 500-user cap bypassed.
+  it("publishes to a department-sized email list beyond 100 people", async () => {
+    const insert = sqlite.prepare("INSERT INTO users (id,email,department,created_time,last_seen) VALUES (?,?,?,?,?)");
+    const emails = Array.from({ length: 250 }, (_, i) => `bulk${String(i).padStart(3, "0")}@bankmandiri.co.id`);
+    emails.forEach((email, i) => insert.run(`bulk-${i}`, email, "RETAIL", "2026-11-04", "2026-11-04"));
+    const target = { type: "emails", values: emails.slice(0, 249) };
+    const preview = await (await call("admin/preview", { ...payload, target })).json();
+    expect(preview.recipients).toHaveLength(249);
+    const published = await publish({ ...payload, target });
+    expect(published.recipientCount).toBe(249);
+    const tooMany = Array.from({ length: 501 }, (_, i) => `x${i}@bankmandiri.co.id`);
+    expect((await call("admin/preview", { ...payload, target: { type: "emails", values: tooMany } })).status).toBe(400);
   });
 
   // Directory failure cases: unauthenticated access, duplicate publication/races,

@@ -156,9 +156,9 @@ export function validatePublication(data) {
     !["emails", "departments"].includes(target?.type) ||
     !Array.isArray(target.values) ||
     !target.values.length ||
-    target.values.length > 100
+    target.values.length > 500
   ) {
-    fail("Select 1–100 emails or departments.");
+    fail("Select 1–500 recipients.");
   }
   const values = [
     ...new Set(

@@ -55,9 +55,10 @@ async function audience(env, target) {
   const column = target.type === "emails" ? "LOWER(email)" : "department";
   const recipients = (
     await env.DB.prepare(
-      `SELECT id, email, department FROM users WHERE ${column} IN (${target.values.map(() => "?").join(",")}) ORDER BY email LIMIT 501`,
+      // One JSON parameter keeps department-sized email lists under D1's 100-parameter cap.
+      `SELECT id, email, department FROM users WHERE ${column} IN (SELECT value FROM json_each(?)) ORDER BY email LIMIT 501`,
     )
-      .bind(...target.values)
+      .bind(JSON.stringify(target.values))
       .all()
   ).results;
   if (!recipients.length) error("No registered users match this audience.");

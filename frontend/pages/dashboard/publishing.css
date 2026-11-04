@@ -55,6 +55,16 @@
   border-color: hsl(var(--foreground));
   background: hsl(var(--foreground));
 }
+.settings-publishing input[type="checkbox"]:indeterminate {
+  border-color: hsl(var(--foreground));
+  background: hsl(var(--foreground));
+}
+.settings-publishing input[type="checkbox"]:indeterminate::after {
+  content: "";
+  width: 8px;
+  height: 2px;
+  background: hsl(var(--background));
+}
 .settings-publishing input[type="checkbox"]:checked::after {
   content: "";
   width: 8px;
@@ -179,7 +189,8 @@
   padding: 0 12px;
   font-size: 0.8125rem;
 }
-.publish-people-list .publish-choice[hidden] {
+.publish-people-list .publish-choice[hidden],
+.publish-people-group[hidden] {
   display: none;
 }
 .publish-people-list .publish-choice:hover {
@@ -188,15 +199,27 @@
 .publish-people-list .publish-note {
   padding: 8px 12px;
 }
+.publish-people-group + .publish-people-group {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid hsl(var(--border) / 0.6);
+}
+.publish-people-head {
+  font-weight: 600;
+}
+.publish-people-count {
+  margin-left: auto;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+.publish-people-list .publish-person {
+  padding-left: 36px;
+}
 .publish-person-email {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.publish-person-dept {
-  margin-left: auto;
-  color: hsl(var(--muted-foreground));
-  font-size: 0.75rem;
 }
 .publish-departments {
   display: flex;

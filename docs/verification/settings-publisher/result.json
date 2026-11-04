@@ -1,8 +1,8 @@
 {
   "passed": true,
   "checks": [
-    "1440px: department default, source isolation, readable connections, secret exclusion, preview invalidation, publish retry, history reuse, people picker search and selection, no overflow",
-    "390px: department default, source isolation, readable connections, secret exclusion, preview invalidation, publish retry, history reuse, people picker search and selection, no overflow"
+    "1440px: department default, source isolation, readable connections, secret exclusion, preview invalidation, publish retry, history reuse, people picker search, department select with exclusions, no overflow",
+    "390px: department default, source isolation, readable connections, secret exclusion, preview invalidation, publish retry, history reuse, people picker search, department select with exclusions, no overflow"
   ],
   "errors": [],
   "command": "PUBLISHING_TEST_URL=http://localhost:1234 PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs node frontend/pages/dashboard/tests/publishing-browser.mjs",

@@ -207,7 +207,9 @@ export class SettingsPublisher {
       if (event.target.matches("[data-person]")) {
         if (event.target.checked) this.selectedEmails.add(event.target.value);
         else this.selectedEmails.delete(event.target.value);
+        this.syncGroups();
       }
+      if (event.target.matches("[data-group]")) this.toggleGroup(event.target);
       if (event.target.matches("[data-setting]")) this.editSetting(event.target);
       this.updateSummary();
     });
@@ -364,29 +366,73 @@ export class SettingsPublisher {
     }
   }
 
-  /** Registered users plus any selected email no longer registered, so a reused draft shows every recipient. */
+  /**
+   * Registered users grouped by department, plus any selected email no longer registered, so a reused draft
+   * shows every recipient. A department toggle selects its members as individual emails; untick any to exclude.
+   */
   renderPeople() {
     const known = new Set(this.users.map((user) => user.email.toLowerCase()));
     const people = [
-      ...this.users.map((user) => ({ email: user.email.toLowerCase(), department: user.department })),
-      ...[...this.selectedEmails].filter((email) => !known.has(email)).map((email) => ({ email, department: null })),
+      ...this.users.map((user) => ({ email: user.email.toLowerCase(), department: user.department || "" })),
+      ...[...this.selectedEmails].filter((email) => !known.has(email)).map((email) => ({ email, department: "" })),
+    ];
+    const groups = new Map();
+    for (const person of people) groups.set(person.department, [...(groups.get(person.department) || []), person]);
+    const order = [
+      ...DEPARTMENTS.filter((department) => groups.has(department)),
+      ...[...groups.keys()].filter((key) => !DEPARTMENTS.includes(key)),
     ];
     this.root.querySelector(".publish-people-list").innerHTML = people.length
-      ? people
-          .map(
-            ({ email, department }) => `<label class="publish-choice" data-search="${escape(`${email} ${department || ""}`.toLowerCase())}">
-              <input type="checkbox" data-person value="${escape(email)}" ${this.selectedEmails.has(email) ? "checked" : ""}>
-              <span class="publish-person-email">${escape(email)}</span>${department ? `<span class="publish-person-dept">${escape(department)}</span>` : ""}</label>`,
-          )
+      ? order
+          .map((department) => {
+            const members = groups.get(department);
+            return `<div class="publish-people-group" data-department="${escape(department)}">
+              <label class="publish-choice publish-people-head"><input type="checkbox" data-group="${escape(department)}">
+                <span>${escape(department || "No department")}</span><span class="publish-people-count">${members.length}</span></label>
+              ${members
+                .map(
+                  ({
+                    email,
+                  }) => `<label class="publish-choice publish-person" data-search="${escape(`${email} ${department}`.toLowerCase())}">
+                <input type="checkbox" data-person value="${escape(email)}" ${this.selectedEmails.has(email) ? "checked" : ""}>
+                <span class="publish-person-email">${escape(email)}</span></label>`,
+                )
+                .join("")}</div>`;
+          })
           .join("")
       : '<p class="publish-note">No registered users.</p>';
+    this.syncGroups();
     this.filterPeople();
+  }
+
+  toggleGroup(toggle) {
+    for (const input of toggle.closest(".publish-people-group").querySelectorAll("[data-person]")) {
+      input.checked = toggle.checked;
+      if (toggle.checked) this.selectedEmails.add(input.value);
+      else this.selectedEmails.delete(input.value);
+    }
+    this.syncGroups();
+  }
+
+  syncGroups() {
+    for (const group of this.root.querySelectorAll(".publish-people-group")) {
+      const members = [...group.querySelectorAll("[data-person]")];
+      const selected = members.filter((input) => input.checked).length;
+      const toggle = group.querySelector("[data-group]");
+      toggle.checked = selected === members.length;
+      toggle.indeterminate = selected > 0 && selected < members.length;
+    }
   }
 
   filterPeople() {
     const query = this.root.querySelector("#publish-people-search").value.trim().toLowerCase();
-    for (const row of this.root.querySelectorAll(".publish-people-list .publish-choice"))
-      row.hidden = Boolean(query) && !row.dataset.search.includes(query);
+    for (const group of this.root.querySelectorAll(".publish-people-group")) {
+      const rows = [...group.querySelectorAll(".publish-person")];
+      for (const row of rows) row.hidden = Boolean(query) && !row.dataset.search.includes(query);
+      group.hidden = rows.every((row) => row.hidden);
+      // While searching, a department toggle would act on members the search hides.
+      group.querySelector(".publish-people-head").hidden = Boolean(query);
+    }
   }
 
   lock() {
