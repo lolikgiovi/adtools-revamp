@@ -30,6 +30,7 @@ import {
   validateExcelHeaders,
 } from "./services/SchemaImportService.js";
 import { splitSqlStatementsSafely, calcUtf8Bytes, groupBySize, groupByQueryCount, deriveBaseName } from "./services/SplitService.js";
+import { collectInputIssues } from "./services/InputValidationService.js";
 import { QueryExecutionService } from "./services/QueryExecutionService.js";
 import { SplitWorkerService } from "./services/SplitWorkerService.js";
 import { analyzeJenkinsSql, convertJenkinsUnsafeLiterals } from "./services/JenkinsSqlSafetyService.js";
@@ -339,6 +340,7 @@ export class QuickQueryUI {
       // Schema editor elements
       schemaContainer: document.getElementById("spreadsheet-schema"),
       dataContainer: document.getElementById("spreadsheet-data"),
+      inputValidation: document.getElementById("quickQueryInputValidation"),
       toggleDataMaximize: document.getElementById("toggleDataMaximize"),
       contentA: document.querySelector(".content-a"),
       contentB: document.querySelector(".content-b"),
@@ -527,6 +529,7 @@ export class QuickQueryUI {
         change: (e) => this.handleSchemaFileInput(e),
       },
       // Query related buttons
+      defaultSysdateToggle: { change: () => this.scheduleInputValidation() },
       generateQuery: {
         click: () => this.handleGenerateQuery(),
       },
@@ -933,6 +936,7 @@ export class QuickQueryUI {
       beforeChange: (changes, source) => this.normalizeDataTablePasteChanges(changes, source),
       beforePaste: (data) => this.restoreDatabaseClipboardJson(data),
       afterChange: (changes, source) => {
+        this.scheduleInputValidation();
         // Persist data only for user edits (skip loadData)
         if (!changes || source === "loadData") return;
 
@@ -945,6 +949,22 @@ export class QuickQueryUI {
           this.scheduleActiveTabDraftSave();
         }
       },
+      afterLoadData: () => this.scheduleInputValidation(),
+      afterRemoveRow: () => this.scheduleInputValidation(),
+      afterCreateRow: () => this.scheduleInputValidation(),
+      afterRemoveCol: () => this.scheduleInputValidation(),
+      afterCreateCol: () => this.scheduleInputValidation(),
+      afterRenderer: (td, row, col) => {
+        const issue = this._inputIssueCells?.get(`${row}:${col}`);
+        td.classList.toggle("qq-invalid-cell", Boolean(issue));
+        if (issue) {
+          td.setAttribute("aria-invalid", "true");
+          td.title = issue.message;
+        } else {
+          td.removeAttribute("aria-invalid");
+          td.removeAttribute("title");
+        }
+      },
       // No height recalculation hooks
     };
 
@@ -953,6 +973,66 @@ export class QuickQueryUI {
     this._handleDataTablePasteCapture ||= (event) => this.captureDataTablePaste(event);
     this.elements.dataContainer.removeEventListener("paste", this._handleDataTablePasteCapture, true);
     this.elements.dataContainer.addEventListener("paste", this._handleDataTablePasteCapture, true);
+  }
+
+  scheduleInputValidation() {
+    clearTimeout(this._inputValidationTimer);
+    if (!this.elements.inputValidation || !this.dataTable || this._isHydratingTab) return;
+    this._inputValidationTimer = setTimeout(() => this.validateInputSheet(), 200);
+  }
+
+  validateInputSheet({ schemaData, inputData, options, excel = false, reveal = false } = {}) {
+    clearTimeout(this._inputValidationTimer);
+    const panel = this.elements.inputValidation;
+    if (!panel) return { issues: [], truncated: false };
+    // Imported Excel rows are kept outside the grid; validate them on Generate.
+    const skipGrid = !inputData && this.excelImportService?.hasData();
+    const result = skipGrid
+      ? { issues: [], truncated: false }
+      : collectInputIssues({
+          schemaData: schemaData || this.schemaTable.getData().filter((row) => row[0]),
+          inputData: inputData || this.dataTable.getData(),
+          queryType: this.getQueryTypeValue(),
+          tableName: this.elements.tableNameInput.value.trim(),
+          options: options || {
+            defaultSysdate: this.elements.defaultSysdateToggle?.checked ?? true,
+            auditUserMode: this.elements.auditUserMode?.value || "off",
+            customAuditUser: this.customAuditUserValue,
+          },
+          attachments: this.processedFiles || [],
+        });
+    this._inputIssueCells = new Map(
+      result.issues.filter((issue) => !excel && issue.col !== null).map((issue) => [`${issue.row}:${issue.col}`, issue]),
+    );
+    panel.hidden = result.issues.length === 0;
+    if (reveal) panel.open = true;
+    const summary = panel.querySelector("summary");
+    summary.textContent =
+      `${result.issues.length}${result.truncated ? "+" : ""} ` +
+      `${result.issues.length === 1 ? "cell needs" : "cells need"} attention${excel ? " in Excel" : ""}`;
+    const list = panel.querySelector(".qq-input-issues");
+    list.replaceChildren();
+    for (const issue of result.issues) {
+      const item = document.createElement(excel || issue.col === null ? "p" : "button");
+      const cell = excel
+        ? `${issue.row ? `Excel row ${issue.row + 1}` : "Excel header"}, ${inputData[0][issue.col] || "field"}`
+        : issue.col === null
+          ? "Header"
+          : `${columnIndexToLetter(issue.col)}${issue.row || " (field)"}`;
+      item.textContent = `${cell}: ${issue.message}`;
+      if (item.tagName === "BUTTON") {
+        item.type = "button";
+        item.addEventListener("click", () => {
+          this.dataTable.selectCell(issue.row, issue.col);
+          this.dataTable.scrollViewportTo({ row: issue.row, col: issue.col });
+          this.dataTable.listen();
+        });
+      }
+      list.appendChild(item);
+    }
+    this.dataTable?.render?.();
+    this.scheduleDataTableLayoutRefresh();
+    return result;
   }
 
   captureDataTablePaste(event) {
@@ -1053,6 +1133,7 @@ export class QuickQueryUI {
       button.setAttribute("aria-pressed", String(selected));
     });
     if (mode !== "custom") this.closeSystemCustomPopover();
+    this.scheduleInputValidation();
   }
 
   restoreAuditUserPreference() {
@@ -1766,6 +1847,7 @@ export class QuickQueryUI {
       this.refreshLayouts();
     } finally {
       this._isHydratingTab = false;
+      this.scheduleInputValidation();
     }
   }
 
@@ -2213,6 +2295,7 @@ export class QuickQueryUI {
     this.elements.dataContainer?.removeEventListener("wheel", this._handleDataWorkspaceWheel);
     this.elements.dataContainer?.removeEventListener("paste", this._handleDataTablePasteCapture, true);
     this._pendingDataTableClipboard = null;
+    clearTimeout(this._inputValidationTimer);
     this.imageWorkflow?.abort();
     this._closeBlobAttachmentChoice?.();
     this.pauseHiddenWork();
@@ -2365,6 +2448,7 @@ export class QuickQueryUI {
       this.elements.queryTypeLabel.textContent = labelMap[queryType];
     }
 
+    this.scheduleInputValidation();
     this.elements.queryTypeDropdown?.querySelectorAll(".query-type-option").forEach((opt) => {
       opt.classList.toggle("active", opt.dataset.value === queryType);
       opt.setAttribute("aria-selected", String(opt.dataset.value === queryType));
@@ -2620,6 +2704,20 @@ export class QuickQueryUI {
       }
 
       const options = { defaultSysdate: this.elements.defaultSysdateToggle.checked, auditUserMode };
+      if (auditUserMode === "custom") options.customAuditUser = customAuditUser;
+      const validation = this.validateInputSheet({
+        schemaData,
+        inputData,
+        options,
+        excel: hasExcelData,
+        reveal: true,
+      });
+      if (validation.issues.length) {
+        UsageTracker.trackFailure("quick-query", queryType, "invalid_input");
+        this.editor.setValue("");
+        this.scheduleActiveTabDraftSave();
+        return;
+      }
       if (this.isConfigIdUpdate(tableName, queryType, schemaData, inputData)) {
         options.updateConfigIds = await confirmAction({
           title: "Update existing CONFIG_IDs?",
@@ -2630,7 +2728,6 @@ export class QuickQueryUI {
           cancelLabel: "Keep existing IDs",
         });
       }
-      if (auditUserMode === "custom") options.customAuditUser = customAuditUser;
       const blobAttachments = findReferencedBlobAttachments(schemaData, inputData, this.processedFiles);
       const importedBlobs = findImportedBlobValues(schemaData, inputData);
       if (blobAttachments.length > 0 || importedBlobs.length > 0) {
@@ -4303,6 +4400,7 @@ export class QuickQueryUI {
 
     // Update UI to show row count
     this._updateExcelImportUI(rowCount);
+    this.scheduleInputValidation();
     this.trackQuickQueryEvent("excel_import_result", {
       outcome: "success",
       row_count: rowCount,
@@ -4336,6 +4434,7 @@ export class QuickQueryUI {
    */
   handleClearExcelImport() {
     this.excelImportService.clear();
+    this.scheduleInputValidation();
     if (this.elements.excelImportInfo) {
       this.elements.excelImportInfo.classList.add("hidden");
     }
@@ -4365,11 +4464,9 @@ export class QuickQueryUI {
       onConvert: (schemaRows) => {
         this.loadDbeaverSchemaRows(schemaRows);
         this.showSuccess(`Converted ${schemaRows.length} columns from DBeaver`);
-        this.trackQuickQueryEvent(
-          "schema_pasted_dbeaver",
-          this.getCurrentQuickQueryContext({ pasted_column_count: schemaRows.length }),
-          { flush: true },
-        );
+        this.trackQuickQueryEvent("schema_pasted_dbeaver", this.getCurrentQuickQueryContext({ pasted_column_count: schemaRows.length }), {
+          flush: true,
+        });
       },
       onFailure: () => {
         UsageTracker.trackEvent("quick-query", "ui_error", {

@@ -285,6 +285,10 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                 <span id="excelImportRowCount">0 rows imported from Excel</span>
                 <button id="clearExcelImport" class="btn btn-outline btn-xs" title="Clear imported data">×</button>
             </div>
+            <details id="quickQueryInputValidation" class="qq-input-validation" hidden>
+                <summary aria-live="polite"></summary>
+                <div class="qq-input-issues"></div>
+            </details>
             <div id="spreadsheet-data"></div>
         </div>
     </div>

@@ -125,9 +125,9 @@ export class SchemaValidationService {
   matchSchemaWithData(schemaData, inputData, { allowPartialData = false } = {}) {
     const hasSchemaData = schemaData.some((row) => row.some((cell) => cell !== null && cell !== ""));
     const hasFieldNames = inputData[0]?.some((cell) => cell !== null && cell !== "");
-    const hasFirstDataRow = inputData[1]?.some((cell) => cell !== null && cell !== "");
+    const hasDataRows = inputData.slice(1).some((row) => row.some((cell) => cell != null && cell !== ""));
 
-    if (!hasSchemaData || !hasFieldNames || !hasFirstDataRow) {
+    if (!hasSchemaData || !hasFieldNames || !hasDataRows) {
       throw new Error("Incomplete data. Please fill in both schema and data sheets.");
     }
 

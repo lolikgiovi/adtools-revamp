@@ -40,6 +40,12 @@ describe("SchemaValidationService", () => {
   });
 
   describe("matchSchemaWithData", () => {
+    // A leading blank row must not hide populated later rows; an entirely blank sheet must still fail.
+    it("accepts populated rows after a blank row and still rejects an empty sheet", () => {
+      const schema = [["ID", "NUMBER", "No"]];
+      expect(service.matchSchemaWithData(schema, [["ID"], [null], ["1"]])).toBe(true);
+      expect(() => service.matchSchemaWithData(schema, [["ID"], [null], [""]])).toThrow(/Incomplete data/);
+    });
     it("should throw error with column letter when field name is empty", () => {
       const schemaData = [["ID", "NUMBER", "No"]];
       // Input data: Header row has empty second column (index 1 -> B)

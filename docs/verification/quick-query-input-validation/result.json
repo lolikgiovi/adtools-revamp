@@ -1,0 +1,26 @@
+{
+  "passed": true,
+  "checks": [
+    "1440: live required/BYTE/CHAR issues, exact coordinates, navigation, generation blocked, input preserved",
+    "1440: corrections clear markers and successful SQL is produced",
+    "1440: blank UPDATE preserves existing value; explicit NULL remains blocked",
+    "1440: header errors render as text",
+    "1440: numeric format, precision, scale and date errors highlighted together; corrected SQL generates",
+    "1440: Excel validation identifies original row and field without highlighting the manual grid",
+    "1440: large error lists are bounded and scroll independently",
+    "1440: screenshot's empty PARAMETER_KEY is highlighted for UPDATE; corrected key generates while blank non-key cells remain allowed",
+    "1440: new tab clears validation from prior data",
+    "390: live required/BYTE/CHAR issues, exact coordinates, navigation, generation blocked, input preserved",
+    "390: corrections clear markers and successful SQL is produced",
+    "390: blank UPDATE preserves existing value; explicit NULL remains blocked",
+    "390: header errors render as text",
+    "390: numeric format, precision, scale and date errors highlighted together; corrected SQL generates",
+    "390: Excel validation identifies original row and field without highlighting the manual grid",
+    "390: large error lists are bounded and scroll independently",
+    "390: screenshot's empty PARAMETER_KEY is highlighted for UPDATE; corrected key generates while blank non-key cells remain allowed",
+    "390: new tab clears validation from prior data"
+  ],
+  "errors": [],
+  "base": "http://127.0.0.1:1249",
+  "reproduce": "node frontend/tools/quick-query/tests/input-validation-browser.mjs"
+}

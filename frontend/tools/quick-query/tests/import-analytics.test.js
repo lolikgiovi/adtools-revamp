@@ -19,6 +19,7 @@ describe("Quick Query import analytics", () => {
   it("records successful Excel import counts without document content", () => {
     const spy = vi.spyOn(UsageTracker, "trackEvent").mockImplementation(() => {});
     const ui = Object.assign(Object.create(QuickQueryUI.prototype), {
+      scheduleInputValidation: vi.fn(),
       schemaTable: { getData: () => [] },
       _updateExcelImportUI: vi.fn(),
       tabs: [],
@@ -35,6 +36,7 @@ describe("Quick Query import analytics", () => {
   it("records failed Excel imports with the filename and no raw error", async () => {
     const spy = vi.spyOn(UsageTracker, "trackEvent").mockImplementation(() => {});
     const ui = Object.assign(Object.create(QuickQueryUI.prototype), {
+      scheduleInputValidation: vi.fn(),
       excelImportService: { processFromFile: vi.fn().mockRejectedValue(new Error("SECRET")) },
       showError: vi.fn(),
     });
@@ -57,6 +59,7 @@ describe("Quick Query import analytics", () => {
     const spy = vi.spyOn(UsageTracker, "trackEvent").mockImplementation(() => {});
     vi.spyOn(OracleDataImportService, "fetch").mockResolvedValue([[1], [2]]);
     const ui = Object.assign(Object.create(QuickQueryUI.prototype), {
+      scheduleInputValidation: vi.fn(),
       elements: {
         tableNameInput: { value: "APP.ITEM" },
         oracleDataConnection: { value: "LOCAL" },
@@ -102,6 +105,7 @@ describe("Quick Query import analytics", () => {
       throw new Error("telemetry");
     });
     const ui = Object.assign(Object.create(QuickQueryUI.prototype), {
+      scheduleInputValidation: vi.fn(),
       schemaTable: { getData: () => [] },
       _updateExcelImportUI: vi.fn(),
       tabs: [],

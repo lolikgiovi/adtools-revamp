@@ -14,6 +14,92 @@ export class ValueProcessorService {
     return String(value);
   }
 
+  normalizeNumber(value) {
+    let normalizedValue = value.trim();
+
+    // 1. Handle multiple commas (e.g. 10,000,000) -> Remove all commas
+    if ((normalizedValue.match(/,/g) || []).length > 1) {
+      normalizedValue = normalizedValue.replace(/,/g, "");
+    }
+    // 2. Handle mixed separators (e.g. 10,000.50 or 10.000,50)
+    else if (normalizedValue.includes(",") && normalizedValue.includes(".")) {
+      const lastCommaIndex = normalizedValue.lastIndexOf(",");
+      const lastDotIndex = normalizedValue.lastIndexOf(".");
+
+      if (lastCommaIndex < lastDotIndex) {
+        // Format: 10,000.50 (Comma is thousands)
+        normalizedValue = normalizedValue.replace(/,/g, "");
+      } else {
+        // Format: 10.000,50 (Dot is thousands)
+        normalizedValue = normalizedValue.replace(/\./g, "").replace(",", ".");
+      }
+    }
+    // 3. Handle single comma
+    else if (normalizedValue.includes(",")) {
+      // Check if it looks like a valid integer with thousands separator
+      // Pattern: Optional minus, 1-3 digits, followed by comma, followed by 3 digits
+      if (/^-?[1-9]\d{0,2},\d{3}$/.test(normalizedValue)) {
+        normalizedValue = normalizedValue.replace(",", "");
+      } else {
+        // Otherwise assume decimal separator
+        normalizedValue = normalizedValue.replace(",", ".");
+      }
+    }
+
+    return normalizedValue;
+  }
+
+  getConstraintIssue(value, dataType, nullable, fieldName, queryType = null, options = {}, parsedType = null) {
+    const field = fieldName.toLowerCase();
+    if (["created_time", "updated_time"].includes(field) && options.defaultSysdate !== false) return null;
+    if (["created_by", "updated_by"].includes(field)) return null;
+
+    const text = this._toString(value);
+    const empty = value === null || value === undefined || value === "";
+    if (empty && queryType === "update") return null;
+    if (empty || text.toLowerCase() === "null") {
+      return nullable?.toLowerCase() === "yes"
+        ? null
+        : {
+            type: "null_not_allowed",
+            message: `NULL value not allowed for non-nullable field "${fieldName}"`,
+          };
+    }
+
+    const type = parsedType || this.parseDataType(dataType);
+    if (type.type === "NUMBER") {
+      if (field === "config_id" && dataType.toUpperCase() === "NUMBER") return null;
+      if (text.toLowerCase().includes("max")) return null;
+      const normalized = this.normalizeNumber(text);
+      const num = Number(normalized);
+      if (!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(normalized) || !Number.isFinite(num)) {
+        return { type: "invalid_number", data_type: type.type, message: `Invalid numeric value for field "${fieldName}"` };
+      }
+      return type.precision ? this.getNumberPrecisionIssue(num, type.precision, type.scale, fieldName) : null;
+    }
+    if (["DATE", "TIMESTAMP"].includes(type.type)) {
+      try {
+        this.formatTimestamp(text, fieldName, { quiet: true });
+        return null;
+      } catch {
+        return { type: "invalid_timestamp", message: `Invalid date/time for field "${fieldName}"` };
+      }
+    }
+    // These tokens are expanded by the generator rather than stored literally.
+    if (dataType.toUpperCase().startsWith("VARCHAR") && text.toLowerCase() === "uuid") return null;
+    if (field === "system_config_id" && text.toLowerCase() === "max") return null;
+    if (!["VARCHAR", "VARCHAR2", "CHAR"].includes(type.type) || !type.maxLength) return null;
+    const length = type.unit === "BYTE" ? new TextEncoder().encode(text).length : text.length;
+    if (length <= type.maxLength) return null;
+    return {
+      type: "max_length_exceeded",
+      maxLength: type.maxLength,
+      length,
+      unit: type.unit,
+      message: `Value exceeds maximum length for field "${fieldName}": ${length} / ${type.maxLength} ${type.unit}`,
+    };
+  }
+
   processValue(value, dataType, nullable, fieldName, tableName, queryType = null, options = {}) {
     // Constants
     const AUDIT_FIELDS = {
@@ -39,6 +125,13 @@ export class ValueProcessorService {
       return strValue ? `'${strValue.replace(/'/g, "''").toUpperCase()}'` : "'SYSTEM'";
     }
 
+    const constraintIssue = this.getConstraintIssue(value, dataType, nullable, fieldName, queryType, options);
+    if (constraintIssue) {
+      const { message, ...meta } = constraintIssue;
+      UsageTracker.trackEvent("quick-query", "value_error", { ...meta, queryType, table_name: tableName });
+      throw new Error(message);
+    }
+
     // Handle NULL values
     const isEmptyValue = value === null || value === undefined || value === "";
     const strValue = this._toString(value);
@@ -49,21 +142,11 @@ export class ValueProcessorService {
       if (queryType === "update") {
         return null;
       }
-      // For other operations, validate nullable constraint
-      if (nullable?.toLowerCase() !== "yes") {
-        UsageTracker.trackEvent("quick-query", "value_error", { type: "null_not_allowed", queryType, table_name: tableName });
-        throw new Error(`NULL value not allowed for non-nullable field "${fieldName}"`);
-      }
       return "NULL";
     }
 
     // Handle explicit NULL string values
     if (isExplicitNull) {
-      // Always validate nullable constraint for explicit NULL values
-      if (nullable?.toLowerCase() !== "yes") {
-        UsageTracker.trackEvent("quick-query", "value_error", { type: "null_not_allowed", queryType, table_name: tableName });
-        throw new Error(`NULL value not allowed for non-nullable field "${fieldName}"`);
-      }
       return "NULL";
     }
 
@@ -97,54 +180,7 @@ export class ValueProcessorService {
 
     switch (fieldDataType.type) {
       case "NUMBER":
-        let normalizedValue = strValue.trim();
-
-        // 1. Handle multiple commas (e.g. 10,000,000) -> Remove all commas
-        if ((normalizedValue.match(/,/g) || []).length > 1) {
-          normalizedValue = normalizedValue.replace(/,/g, "");
-        }
-        // 2. Handle mixed separators (e.g. 10,000.50 or 10.000,50)
-        else if (normalizedValue.includes(",") && normalizedValue.includes(".")) {
-          const lastCommaIndex = normalizedValue.lastIndexOf(",");
-          const lastDotIndex = normalizedValue.lastIndexOf(".");
-
-          if (lastCommaIndex < lastDotIndex) {
-            // Format: 10,000.50 (Comma is thousands)
-            normalizedValue = normalizedValue.replace(/,/g, "");
-          } else {
-            // Format: 10.000,50 (Dot is thousands)
-            normalizedValue = normalizedValue.replace(/\./g, "").replace(",", ".");
-          }
-        }
-        // 3. Handle single comma
-        else if (normalizedValue.includes(",")) {
-          // Check if it looks like a valid integer with thousands separator
-          // Pattern: Optional minus, 1-3 digits, followed by comma, followed by 3 digits
-          if (/^-?[1-9]\d{0,2},\d{3}$/.test(normalizedValue)) {
-            normalizedValue = normalizedValue.replace(",", "");
-          } else {
-            // Otherwise assume decimal separator
-            normalizedValue = normalizedValue.replace(",", ".");
-          }
-        }
-
-        const num = parseFloat(normalizedValue);
-
-        if (isNaN(num)) {
-          UsageTracker.trackEvent("quick-query", "value_error", {
-            type: "invalid_number",
-            data_type: fieldDataType.type,
-            table_name: tableName,
-          });
-          throw new Error(`Invalid numeric value "${value}" for field "${fieldName}"`);
-        }
-
-        // Validate precision and scale if specified
-        if (fieldDataType.precision) {
-          this.validateNumberPrecision(num, fieldDataType.precision, fieldDataType.scale, fieldName, tableName);
-        }
-
-        return normalizedValue;
+        return this.normalizeNumber(strValue);
 
       case "VARCHAR":
       case "VARCHAR2":
@@ -166,20 +202,6 @@ export class ValueProcessorService {
           return `'${crypto.randomUUID()}'`;
         }
 
-        if (fieldDataType.maxLength) {
-          const length = fieldDataType.unit === "BYTE" ? new TextEncoder().encode(strValue).length : strValue.length;
-
-          if (length > fieldDataType.maxLength) {
-            UsageTracker.trackEvent("quick-query", "value_error", {
-              type: "max_length_exceeded",
-              maxLength: fieldDataType.maxLength,
-              length,
-              unit: fieldDataType.unit,
-              table_name: tableName,
-            });
-            throw new Error(`Value exceeds maximum length of ${fieldDataType.maxLength} ${fieldDataType.unit} for field "${fieldName}"`);
-          }
-        }
         return `'${strValue.replace(/'/g, "''")}'`;
 
       case "DATE":
@@ -230,41 +252,42 @@ export class ValueProcessorService {
     return { type: upperType };
   }
 
-  validateNumberPrecision(num, precision, scale, fieldName, tableName) {
-    const numStr = Math.abs(num).toString();
-    const parts = numStr.split(".");
-
+  getNumberPrecisionIssue(num, precision, scale, fieldName) {
+    const parts = Math.abs(num).toString().split(".");
     const integerDigits = parts[0].length;
     const decimalDigits = parts[1]?.length || 0;
-
     if (integerDigits + decimalDigits > precision) {
-      UsageTracker.trackEvent("quick-query", "value_error", {
+      return {
         type: "precision_exceeded",
         precision,
-        table_name: tableName,
-      });
-      throw new Error(`Value ${num} exceeds maximum precision of ${precision} for field "${fieldName}"`);
+        message: `Value ${num} exceeds maximum precision of ${precision} for field "${fieldName}"`,
+      };
     }
-
     if (scale !== undefined && decimalDigits > scale) {
-      UsageTracker.trackEvent("quick-query", "value_error", {
+      return {
         type: "scale_exceeded",
         scale,
         precision,
-        table_name: tableName,
-      });
-      throw new Error(`Value ${num} exceeds maximum scale of ${scale} (${precision},${scale}) for field "${fieldName}"`);
+        message: `Value ${num} exceeds maximum scale of ${scale} (${precision},${scale}) for field "${fieldName}"`,
+      };
     }
-
     if (scale !== undefined && integerDigits > precision - scale) {
-      UsageTracker.trackEvent("quick-query", "value_error", {
+      return {
         type: "integer_digits_exceeded",
         precision,
         scale,
-        table_name: tableName,
-      });
-      throw new Error(`Integer part of ${num} exceeds maximum allowed digits for field "${fieldName}"`);
+        message: `Integer part of ${num} exceeds maximum allowed digits for field "${fieldName}"`,
+      };
     }
+    return null;
+  }
+
+  validateNumberPrecision(num, precision, scale, fieldName, tableName) {
+    const issue = this.getNumberPrecisionIssue(num, precision, scale, fieldName);
+    if (!issue) return;
+    const { message, ...meta } = issue;
+    UsageTracker.trackEvent("quick-query", "value_error", { ...meta, table_name: tableName });
+    throw new Error(message);
   }
 
   findPrimaryKeys(data, tableName) {
@@ -293,7 +316,7 @@ export class ValueProcessorService {
     return uuidV4Regex.test(str);
   }
 
-  formatTimestamp(value, fieldName = null) {
+  formatTimestamp(value, fieldName = null, { quiet = false } = {}) {
     // Handle special cases
     if (!value) return "NULL";
     const upperValue = value.toUpperCase();
@@ -313,7 +336,7 @@ export class ValueProcessorService {
           if (precision > 0) {
             // Reconstruct the timestamp with timezone
             return `TO_TIMESTAMP_TZ('${parsed.format("YYYY-MM-DD HH:mm:ss")}.${fractionalMatch[1].substring(0, precision)}${parsed.format(
-              "Z"
+              "Z",
             )}', 'YYYY-MM-DD HH24:MI:SS.FF${precision}TZH:TZM')`;
           }
           return `TO_TIMESTAMP_TZ('${parsed.format("YYYY-MM-DD HH:mm:ssZ")}', 'YYYY-MM-DD HH24:MI:SSTZH:TZM')`;
@@ -333,7 +356,7 @@ export class ValueProcessorService {
         if (parsed.isValid()) {
           return `TO_TIMESTAMP('${parsed.format("YYYY-MM-DD HH:mm:ss")}.${fractionalPart.substring(
             0,
-            precision
+            precision,
           )}', 'YYYY-MM-DD HH24:MI:SS.FF${precision}')`;
         }
       }
@@ -423,7 +446,7 @@ export class ValueProcessorService {
             const precision = Math.min(fractional.length, 9);
             return `TO_TIMESTAMP('${parsed.format("YYYY-MM-DD HH:mm:ss")}.${fractional.substring(
               0,
-              precision
+              precision,
             )}', 'YYYY-MM-DD HH24:MI:SS.FF${precision}')`;
           }
         }
@@ -432,13 +455,13 @@ export class ValueProcessorService {
       // 5. Last resort: try flexible parsing
       const parsed = moment(value);
       if (parsed.isValid()) {
-        console.warn(`Using flexible date parsing for format: ${value}`);
+        if (!quiet) console.warn(`Using flexible date parsing for format: ${value}`);
         return `TO_TIMESTAMP('${parsed.format("YYYY-MM-DD HH:mm:ss")}', 'YYYY-MM-DD HH24:MI:SS')`;
       }
 
       throw new Error(`Unable to parse date format: ${value}`);
     } catch (error) {
-      console.error(`Error parsing timestamp: ${value}`, error);
+      if (!quiet) console.error(`Error parsing timestamp: ${value}`, error);
       throw new Error(`Invalid timestamp format: "${value}". Please use a valid date/time format.`);
     }
   }
