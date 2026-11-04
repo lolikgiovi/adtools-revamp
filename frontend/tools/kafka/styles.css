@@ -18,8 +18,8 @@
 .kafka-tab-strip {
   display: flex;
   align-items: center;
-  flex: 0 0 38px;
-  height: 38px;
+  flex: 0 0 var(--tool-tab-height);
+  height: var(--tool-tab-height);
   margin: 0;
   border-bottom: 1px solid hsl(var(--border));
   background: transparent;
@@ -41,7 +41,7 @@
   min-width: 86px;
   width: max-content;
   max-width: 500px;
-  height: 38px;
+  height: calc(var(--tool-tab-height) - 1px);
   border-right: 1px solid hsl(var(--border));
   border-bottom: 2px solid transparent;
   color: hsl(var(--muted-foreground));

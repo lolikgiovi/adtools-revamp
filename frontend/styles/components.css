@@ -2560,6 +2560,19 @@ body.global-search-open {
   height: 0.85rem;
 }
 
+/* Match the PlantUML strip while allowing multiple rows on narrow screens. */
+.tabs-container.compact-tool-tabs {
+  min-height: var(--tool-tab-height);
+  flex-shrink: 0;
+}
+
+.compact-tool-tabs .tab-button {
+  height: calc(var(--tool-tab-height) - 1px);
+  padding: 0 12px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 /* Responsive tabs - wrapping on mobile */
 @media (max-width: 768px) {
   .tabs-container {

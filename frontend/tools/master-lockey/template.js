@@ -6,7 +6,7 @@
 export const MasterLockeyTemplate = /* html */ `
 <div class="master-lockey-container">
     <!-- Tab Navigation Row (tabs left, domain controls right) -->
-    <div class="tabs-container ml-tabs">
+    <div class="tabs-container compact-tool-tabs ml-tabs">
         <div class="tabs-left">
             <button class="tab-button active" data-tab="lockey">
                 Search Lockey

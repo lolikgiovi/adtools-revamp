@@ -2,7 +2,7 @@
 
 .quick-query-tool-container {
   --qq-app-header-height: var(--app-header-height, 57px);
-  --qq-tab-strip-space: 46px;
+  --qq-tab-strip-space: calc(var(--tool-tab-height) + 8px);
   display: flex;
   flex-direction: column;
   min-height: calc(100vh - 100px);
@@ -111,9 +111,9 @@
   top: var(--qq-app-header-height);
   z-index: 200;
   display: flex;
-  flex: 0 0 38px;
+  flex: 0 0 var(--tool-tab-height);
   align-items: center;
-  height: 38px;
+  height: var(--tool-tab-height);
   margin: 0 0 8px;
   border-bottom: 1px solid hsl(var(--border));
   background: hsl(var(--background));
@@ -135,7 +135,7 @@
   min-width: 86px;
   width: max-content;
   max-width: 500px;
-  height: 38px;
+  height: calc(var(--tool-tab-height) - 1px);
   border-right: 1px solid hsl(var(--border));
   border-bottom: 2px solid transparent;
   color: hsl(var(--muted-foreground));

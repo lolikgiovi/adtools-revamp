@@ -1,0 +1,278 @@
+{
+  "passed": true,
+  "checks": [
+    {
+      "width": 1440,
+      "tool": "plantuml",
+      "height": 39,
+      "topGap": 40,
+      "overflow": false
+    },
+    {
+      "width": 1440,
+      "tool": "quick-query",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 1440,
+      "tool": "html-template",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 1440,
+      "tool": "splunk-template",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 1440,
+      "tool": "velocity-template",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 1440,
+      "tool": "lockey-update",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 1440,
+      "tool": "master-lockey",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 1440,
+      "tool": "run-query",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 1440,
+      "tool": "run-batch",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 1440,
+      "tool": "kafka",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 1440,
+      "tool": "json-tools",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 1440,
+      "tool": "base64-tools",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 1440,
+      "tool": "qr-tools",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 900,
+      "tool": "plantuml",
+      "height": 39,
+      "topGap": 40,
+      "overflow": false
+    },
+    {
+      "width": 900,
+      "tool": "quick-query",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 900,
+      "tool": "html-template",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 900,
+      "tool": "splunk-template",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 900,
+      "tool": "velocity-template",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 900,
+      "tool": "lockey-update",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 900,
+      "tool": "master-lockey",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 900,
+      "tool": "run-query",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 900,
+      "tool": "run-batch",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 900,
+      "tool": "kafka",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 900,
+      "tool": "json-tools",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 900,
+      "tool": "base64-tools",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 900,
+      "tool": "qr-tools",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "tool": "plantuml",
+      "height": 39,
+      "topGap": 40,
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "tool": "quick-query",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "tool": "html-template",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "tool": "splunk-template",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "tool": "velocity-template",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "tool": "lockey-update",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "tool": "master-lockey",
+      "height": 75,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "tool": "run-query",
+      "height": 69.796875,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "tool": "run-batch",
+      "height": 69.796875,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "tool": "kafka",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "tool": "json-tools",
+      "height": 84,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "tool": "base64-tools",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "tool": "qr-tools",
+      "height": 39,
+      "topGap": 0,
+      "overflow": false
+    }
+  ]
+}

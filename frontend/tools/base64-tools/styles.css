@@ -466,7 +466,7 @@
 /* Responsive Design */
 @media (max-width: 768px) {
   .base64-tools {
-    padding: 1rem;
+    padding: 0 1rem 1rem;
   }
 
   .tab-navigation {
@@ -513,7 +513,7 @@
   }
 
   .base64-tools {
-    padding: 0.75rem;
+    padding: 0 0.75rem 0.75rem;
   }
 
   .section-header h3 {

@@ -1,6 +1,6 @@
 export const RunBatchTemplate = /*html*/ `
   <div class="run-batch">
-    <div class="tabs-container rb-tabs" aria-label="Run Batch tabs">
+    <div class="tabs-container compact-tool-tabs rb-tabs" aria-label="Run Batch tabs">
       <div class="tabs-left" role="tablist">
         <button class="tab-button active" id="rb-tab-run-btn" role="tab" aria-selected="true" aria-controls="rb-tab-run">Run Batch</button>
         <button class="tab-button" id="rb-tab-history-btn" role="tab" aria-selected="false" aria-controls="rb-tab-history">History</button>

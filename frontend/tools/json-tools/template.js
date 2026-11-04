@@ -6,7 +6,7 @@
 export const JSONToolsTemplate = /* html */ `
 <div class="json-tools-container">
     <div class="json-tools-header">
-        <div class="tabs-container json-tools-tabs">
+        <div class="tabs-container compact-tool-tabs json-tools-tabs">
             <div class="tabs-left">
                 <button class="tab-button active" data-tab="prettify">Beautify</button>
                 <button class="tab-button" data-tab="minify">Minify</button>

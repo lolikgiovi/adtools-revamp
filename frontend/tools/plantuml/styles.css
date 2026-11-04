@@ -129,7 +129,7 @@
 }
 #puml-tabs {
   display: flex;
-  flex: 0 0 39px;
+  flex: 0 0 var(--tool-tab-height);
   overflow-x: auto;
   border-bottom: 1px solid hsl(var(--border));
   background: hsl(var(--muted) / 0.25);

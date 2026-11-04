@@ -1,7 +1,7 @@
 .json-tools-container {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 90px);
+  height: calc(100dvh - var(--app-workspace-inset) - var(--window-titlebar-height, 0px));
   background: hsl(var(--background));
   color: hsl(var(--foreground));
   font-family: "IBM Plex Sans Variable", sans-serif;
@@ -345,7 +345,7 @@
   }
 
   .json-tools-header {
-    padding: 1rem;
+    padding: 0;
   }
 
   .json-tools-header h2 {

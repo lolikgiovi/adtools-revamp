@@ -21,7 +21,7 @@ class QRTools extends BaseTool {
   render() {
     return /* html */ `
       <div class="qr-tlv">
-        <div class="tabs-container">
+        <div class="tabs-container compact-tool-tabs">
           <div class="tabs-left" role="tablist" aria-label="QR & TLV">
             <button class="tab-button" id="qr-tlv-qr-tab" type="button" role="tab"
               data-qr-tlv-tab="qr" aria-controls="qr-tlv-qr-panel">QR Generator</button>

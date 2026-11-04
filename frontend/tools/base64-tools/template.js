@@ -5,7 +5,7 @@ export const Base64ToolsTemplate = /* html */ `
   <div class="success-message" style="display: none;"></div>
 
   <!-- Tab Navigation -->
-  <div class="tabs-container tab-navigation">
+  <div class="tabs-container compact-tool-tabs tab-navigation">
     <div class="tabs-left">
       <button class="tab-button active" data-mode="encode">
         <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

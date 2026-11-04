@@ -1,5 +1,6 @@
 :root {
   --app-header-height: 57px;
+  --tool-tab-height: 39px;
   --sidebar-header-height: 57px;
   --app-workspace-inset: calc(var(--app-header-height) + 2rem);
 }
@@ -518,6 +519,15 @@ button.connection-indicator:focus-visible,
   padding: 1rem;
   /* Allow nested flex/grid children to shrink and scroll correctly */
   min-height: 0;
+}
+
+/* Tabbed workspaces start directly below the app header. Keep the content gutters. */
+.main-content:has(
+  :is(.quick-query-tool-container, .html-template, .splunk-vtl-editor, .lockey-update, .master-lockey-container,
+    .jenkins-runner, .run-batch, .kafka-tool, .json-tools-container, .base64-tools, .qr-tlv)
+) {
+  --app-workspace-inset: calc(var(--app-header-height) + 1rem);
+  padding-top: 0;
 }
 
 .main-content.main-content-flush {

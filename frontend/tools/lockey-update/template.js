@@ -3,7 +3,7 @@
  */
 export const LockeyUpdateTemplate = /* html */ `
 <div class="tool-container lockey-update">
-  <div class="tabs-container lu-tabs-row">
+  <div class="tabs-container compact-tool-tabs lu-tabs-row">
     <div class="tabs-left" role="tablist" aria-label="Lockey update views">
       <button id="lu-tab-create" class="tab-button lu-tab-btn active" type="button" role="tab" aria-selected="true" aria-controls="lu-create-panel" tabindex="0" data-tab="create">New update</button>
       <button id="lu-tab-history" class="tab-button lu-tab-btn" type="button" role="tab" aria-selected="false" aria-controls="lu-history-panel" tabindex="-1" data-tab="history">Version history</button>
