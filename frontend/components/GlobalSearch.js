@@ -11,12 +11,13 @@ import { getQuickQueryTableInteractionKey, getSearchInteractionKey, RecentIntera
  * - Accessible dialog semantics and focus management
  */
 class GlobalSearch {
-  constructor({ eventBus, router, app, getIcon, searchQuickQuery, recentInteractionStore } = {}) {
+  constructor({ eventBus, router, app, getIcon, searchQuickQuery, searchPlantUml, recentInteractionStore } = {}) {
     this.eventBus = eventBus;
     this.router = router;
     this.app = app;
     this.getIcon = typeof getIcon === "function" ? getIcon : null;
     this.searchQuickQuery = typeof searchQuickQuery === "function" ? searchQuickQuery : null;
+    this.searchPlantUml = typeof searchPlantUml === "function" ? searchPlantUml : null;
     this.recentInteractionStore = recentInteractionStore || new RecentInteractionStore();
 
     this.index = []; // { id, name, description, route, type, icon }
@@ -67,7 +68,10 @@ class GlobalSearch {
     this.inputEl.type = "text";
     this.inputEl.id = "global-search-input";
     this.inputEl.className = "global-search-input";
-    this.inputEl.placeholder = "Search tools, pages, or qq:schema.table...";
+    this.inputEl.placeholder = "Search tools, tables, or diagrams…";
+    this.inputEl.title =
+      "Search saved Quick Query tables by schema.table, schema, or table name, and PlantUML files by filename. No prefix needed.";
+    this.inputEl.setAttribute("aria-describedby", "global-search-help");
     this.inputEl.setAttribute("autocomplete", "off");
     this.inputEl.setAttribute("aria-controls", "global-search-results");
     container.appendChild(this.inputEl);
@@ -82,7 +86,8 @@ class GlobalSearch {
     // Help footer
     this.helpEl = document.createElement("div");
     this.helpEl.className = "global-search-help";
-    this.helpEl.textContent = "Try qq:c.appc to open Quick Query with config.app_config table • ↑↓ navigate • Enter open • Esc close";
+    this.helpEl.id = "global-search-help";
+    this.helpEl.textContent = "Tables: schema.table or table name · PlantUML: filename · ↑↓ navigate · Enter open · Esc close";
     container.appendChild(this.helpEl);
 
     this.modalEl.appendChild(container);
@@ -197,6 +202,7 @@ class GlobalSearch {
     });
     this.isOpen = false;
     this._filterRequestId += 1;
+    this._cancelCatalogSearch?.();
 
     this.overlayEl.classList.remove("open");
     this.modalEl.classList.remove("open");
@@ -219,6 +225,7 @@ class GlobalSearch {
   _filter(query) {
     const requestId = (this._filterRequestId || 0) + 1;
     this._filterRequestId = requestId;
+    this._cancelCatalogSearch?.();
     const quickMatch = query.match(/^(?:qq|quick):\s*(.*)$/i);
     if (quickMatch) {
       return this._filterQuickQuery(quickMatch[1], requestId);
@@ -237,6 +244,42 @@ class GlobalSearch {
     this.activeIndex = this.filtered.length ? 0 : -1;
     this._renderResults(this.filtered);
     if (!q && !scope) void this._loadRecentQuickQueryResults(requestId);
+    if (q && !scope && (this.searchQuickQuery || this.searchPlantUml)) {
+      return this._filterCatalogs(q, requestId, this.filtered);
+    }
+  }
+
+  _filterCatalogs(query, requestId, staticResults) {
+    // Static results render immediately; cancel catalog work while the user is still typing.
+    return new Promise((resolve) => {
+      const timer = setTimeout(async () => {
+        this._cancelCatalogSearch = null;
+        const matches = await Promise.allSettled([
+          this.searchQuickQuery ? Promise.resolve().then(() => this.searchQuickQuery(query)) : [],
+          this.searchPlantUml ? Promise.resolve().then(() => this.searchPlantUml(query)) : [],
+        ]);
+        if (requestId !== this._filterRequestId) {
+          resolve();
+          return;
+        }
+        const tables =
+          matches[0].status === "fulfilled"
+            ? matches[0].value
+                .slice(0, 8)
+                .map((match) => this._createQuickQueryResult(match))
+                .filter(Boolean)
+            : [];
+        const files = matches[1].status === "fulfilled" ? matches[1].value : [];
+        this.filtered = this._rankCandidates([...staticResults, ...tables, ...files], query).slice(0, 8);
+        this.activeIndex = this.filtered.length ? 0 : -1;
+        this._renderResults(this.filtered);
+        resolve();
+      }, 100);
+      this._cancelCatalogSearch = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+    });
   }
 
   /**
@@ -253,11 +296,14 @@ class GlobalSearch {
         const id = String(item.id || "").toLowerCase();
 
         const nameScore =
-          scoreFuzzyTerm(q, {
-            name,
-            abbrs: getSearchAbbreviations(name),
-            collapsed: collapseSearchName(name),
-          }) + (id.includes(q) ? 1 : 0);
+          Math.max(
+            item.searchScore || 0,
+            scoreFuzzyTerm(q, {
+              name,
+              abbrs: getSearchAbbreviations(name),
+              collapsed: collapseSearchName(name),
+            }),
+          ) + (id.includes(q) ? 1 : 0);
         const compactQ = q.replace(/[\s-]+/g, "");
         const descriptionScore = description.includes(q)
           ? 75
@@ -356,6 +402,7 @@ class GlobalSearch {
       route: "quick-query",
       type: "action",
       icon: "database",
+      searchScore: match.searchScore,
       interactionKey: getQuickQueryTableInteractionKey(fullName),
       data: { tableName: fullName },
     };
@@ -472,7 +519,7 @@ class GlobalSearch {
         const iconSvg = this._getIconSvg(item);
         const idAttr = `global-search-option-${item.type}-${item.id}`;
         return `
-          <li id="${idAttr}" class="global-search-result-item${isActive ? " active" : ""}" role="option" aria-selected="${isActive}">
+          <li id="${this._escapeHtml(idAttr)}" class="global-search-result-item${isActive ? " active" : ""}" role="option" aria-selected="${isActive}">
             <div class="global-search-result-icon">${iconSvg || ""}</div>
             <div class="global-search-result-text">
               <div class="result-title">${this._escapeHtml(item.name)}</div>

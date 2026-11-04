@@ -40,13 +40,13 @@ try {
       window.app.projectSelector.render();
     });
     const webHeader = await page.locator(".main-header").boundingBox();
-    assert.equal(webHeader.height, 57);
+    assert.equal(webHeader.height, 39);
     assert.equal(await page.locator(".connection-indicators").isVisible(), false);
     assert.equal(await page.locator(".header-center .header-search").count(), 1);
     assert.equal(await page.locator(".sidebar-header .sidebar-project").count(), 1);
     assert.equal(await page.locator(".sidebar-header .header-search").count(), 0);
     const webSearch = await page.locator(".header-center .header-search").boundingBox();
-    assert.equal(webSearch.height, width <= 600 ? 32 : 30);
+    assert.equal(webSearch.height, width <= 600 ? 32 : 28);
     assert.ok(Math.abs(webSearch.x + webSearch.width / 2 - webHeader.x - webHeader.width / 2) < 1);
     await page.locator(".header-search").click();
     await page.locator(".global-search-overlay[aria-hidden='false']").waitFor();
@@ -54,7 +54,7 @@ try {
     assert.equal(await page.locator(".header-search").evaluate((node) => node === document.activeElement), true);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.screenshot({ path: resolve(output, `${width}-web.png`), animations: "disabled" });
-    checks.push(`${width}px web: restored 57px header, centered working search, sidebar project selector, no overflow`);
+    checks.push(`${width}px web: compact 39px header, centered working search, sidebar project selector, no overflow`);
     if (width >= 620) {
       await page.evaluate(() => {
         // Layout simulation: native calls are stubbed; no desktop services are contacted.
@@ -178,7 +178,7 @@ try {
       assert.equal(await page.locator(".header-center .header-search").count(), 1);
       assert.equal(await page.locator(".header-context .sidebar-trigger + .breadcrumb").count(), 1);
       assert.equal(await page.locator(".sidebar-header .sidebar-project").count(), 1);
-      assert.equal((await page.locator(".main-header").boundingBox()).height, 57);
+      assert.equal((await page.locator(".main-header").boundingBox()).height, 39);
       checks.push(
         `${width}px desktop simulation: one native toolbar, centered search, sidebar project/menu, native actions and connections, keyboard focus, runtime restoration`,
       );

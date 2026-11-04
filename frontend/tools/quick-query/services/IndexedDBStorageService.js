@@ -1,3 +1,4 @@
+import { catalogRevision, invalidateCatalog } from "../../../core/SearchCatalogRevision.js";
 import { getActiveProject, getQuickQueryDatabaseName, listProjects } from "../../../core/Projects.js";
 import { UsageTracker } from "../../../core/UsageTracker.js";
 import { scoreFuzzyTerm } from "../../../core/FuzzySearch.js";
@@ -200,7 +201,10 @@ export class IndexedDBStorageService {
     return new Promise((resolve, reject) => {
       const tx = this.db.transaction(storeName, "readwrite");
       // Resolve on transaction complete, not request success, to ensure data is persisted
-      tx.oncomplete = () => resolve(true);
+      tx.oncomplete = () => {
+        if (storeName === SCHEMA_STORE) invalidateCatalog(this.databaseName);
+        resolve(true);
+      };
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error || new Error("Transaction aborted"));
 
@@ -225,7 +229,10 @@ export class IndexedDBStorageService {
     return new Promise((resolve, reject) => {
       const tx = this.db.transaction(storeName, "readwrite");
       // Resolve on transaction complete, not request success, to ensure deletion is persisted
-      tx.oncomplete = () => resolve(true);
+      tx.oncomplete = () => {
+        if (storeName === SCHEMA_STORE) invalidateCatalog(this.databaseName);
+        resolve(true);
+      };
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error || new Error("Transaction aborted"));
 
@@ -250,7 +257,10 @@ export class IndexedDBStorageService {
     return new Promise((resolve, reject) => {
       const tx = this.db.transaction(storeName, "readwrite");
       // Resolve on transaction complete, not request success, to ensure clear is persisted
-      tx.oncomplete = () => resolve(true);
+      tx.oncomplete = () => {
+        if (storeName === SCHEMA_STORE) invalidateCatalog(this.databaseName);
+        resolve(true);
+      };
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error || new Error("Transaction aborted"));
 
@@ -515,6 +525,7 @@ export class IndexedDBStorageService {
             ),
           );
       });
+      invalidateCatalog(destination.databaseName);
       if (move) {
         await new Promise((resolve, reject) => {
           const transaction = this.db.transaction([SCHEMA_STORE, DATA_STORE], "readwrite");
@@ -542,6 +553,7 @@ export class IndexedDBStorageService {
             );
         });
       }
+      invalidateCatalog(this.databaseName);
       this._index.dirty = true;
       globalThis.dispatchEvent?.(new CustomEvent("adtools:schemas-updated", { detail: { sourceId: this.projectId, destinationId } }));
     } finally {
@@ -915,7 +927,17 @@ export class IndexedDBStorageService {
    * Build the in-memory index from persisted schemas.
    */
   async rebuildIndex() {
-    const schemaRecords = await this._getAllRecords(SCHEMA_STORE);
+    const revision = catalogRevision(this.databaseName);
+    // Keys carry schema.table identity; schema bodies can be megabytes and are never needed here.
+    const keys = await new Promise((resolve, reject) => {
+      const request = this.db.transaction(SCHEMA_STORE).objectStore(SCHEMA_STORE).getAllKeys();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const schemaRecords = keys.map((fullName) => {
+      const [schemaName, tableName] = String(fullName).split(".");
+      return { fullName, schemaName, tableName };
+    });
     const schemas = new Map();
     const tables = new Map();
     const schemaAbbrIndex = new Map();
@@ -923,6 +945,8 @@ export class IndexedDBStorageService {
 
     for (const record of schemaRecords) {
       const { schemaName, tableName, fullName } = record;
+
+      if (!schemaName || !tableName) continue;
 
       // Index schema if not already
       if (!schemas.has(schemaName)) {
@@ -951,6 +975,7 @@ export class IndexedDBStorageService {
     }
 
     this._index = { dirty: false, schemas, tables, schemaAbbrIndex, tableAbbrIndex };
+    this._catalogRevision = revision;
   }
 
   /**
@@ -960,6 +985,24 @@ export class IndexedDBStorageService {
     if (options?.refresh) this._index.dirty = true;
 
     // Return recent tables when search is empty
+    if (!searchTerm && options.limit) {
+      // The command palette needs a handful of recent identities, never schema bodies or row data.
+      return new Promise((resolve, reject) => {
+        const request = this.db.transaction(SCHEMA_STORE).objectStore(SCHEMA_STORE).index("lastUpdated").openKeyCursor(null, "prev");
+        const recent = [];
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const cursor = request.result;
+          if (!cursor || recent.length >= options.limit) {
+            resolve(recent);
+            return;
+          }
+          const [schemaName, tableName] = String(cursor.primaryKey).split(".");
+          recent.push({ fullName: cursor.primaryKey, schemaName, tableName, lastUpdated: cursor.key });
+          cursor.continue();
+        };
+      });
+    }
     if (!searchTerm) {
       const tables = await this.getAllTables();
       return tables.sort((a, b) => {
@@ -971,7 +1014,12 @@ export class IndexedDBStorageService {
       });
     }
 
-    if (this._index.dirty) await this.rebuildIndex();
+    if (this._index.dirty || this._catalogRevision !== catalogRevision(this.databaseName)) {
+      this._rebuildPromise ||= this.rebuildIndex().finally(() => {
+        this._rebuildPromise = null;
+      });
+      await this._rebuildPromise;
+    }
 
     const results = [];
     const hasDot = searchTerm.includes(".");
@@ -1038,7 +1086,8 @@ export class IndexedDBStorageService {
         if (a.schemaName === b.schemaName) return a.tableName.localeCompare(b.tableName);
         return a.schemaName.localeCompare(b.schemaName);
       })
-      .map(({ _score, ...rest }) => rest);
+      .slice(0, options.limit || Infinity)
+      .map(({ _score, ...rest }) => (options.includeScore ? { ...rest, searchScore: _score } : rest));
   }
 
   validateSchemaFormat(data) {

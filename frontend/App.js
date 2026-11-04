@@ -298,6 +298,7 @@ class App {
       app: this,
       getIcon: this.getToolIcon.bind(this),
       searchQuickQuery: this.searchQuickQueryTables.bind(this),
+      searchPlantUml: this.searchPlantUmlFiles.bind(this),
     });
     document.querySelector(".header-search")?.addEventListener("click", () => this.globalSearch.open("header"));
 
@@ -1688,27 +1689,39 @@ class App {
   /**
    * Search Quick Query's persisted schema catalog without loading the heavy tool UI.
    * The search service is shared across command-palette queries and refreshes its
-   * in-memory index so changes made in Quick Query are visible immediately.
+   * in-memory index only when committed schema metadata changes.
    */
   async searchQuickQueryTables(searchTerm) {
+    const projectId = getActiveProject().id;
+    if (this._quickQuerySearchProjectId !== projectId) {
+      this._quickQuerySearchService?.db?.close();
+      this._quickQuerySearchService = null;
+      this._quickQuerySearchServicePromise = null;
+      this._quickQuerySearchProjectId = projectId;
+    }
     if (!this._quickQuerySearchServicePromise) {
       this._quickQuerySearchServicePromise = import("./tools/quick-query/services/IndexedDBStorageService.js")
         .then(({ IndexedDBStorageService }) => {
-          const service = new IndexedDBStorageService();
+          const service = new IndexedDBStorageService({ projectId });
           return service.init().then(() => {
-            this._quickQuerySearchService = service;
+            if (this._quickQuerySearchProjectId === projectId) this._quickQuerySearchService = service;
             return service;
           });
         })
         .catch((error) => {
-          this._quickQuerySearchServicePromise = null;
+          if (this._quickQuerySearchProjectId === projectId) this._quickQuerySearchServicePromise = null;
           throw error;
         });
     }
 
     const service = this._quickQuerySearchService || (await this._quickQuerySearchServicePromise);
-    return service.searchSavedSchemas(searchTerm, { refresh: true });
+    return service.searchSavedSchemas(searchTerm, { limit: 8, includeScore: true });
   }
+  async searchPlantUmlFiles(searchTerm) {
+    const { searchPlantUmlFiles } = await import("./tools/plantuml/search.js");
+    return searchPlantUmlFiles(searchTerm);
+  }
+
   /**
    * Check whether the current local app state enables the privileged sidebar pages.
    */

@@ -207,6 +207,7 @@ export class PlantUmlTool extends BaseTool {
     compact.addEventListener("change", (event) => this.toggleExplorer(!event.matches), { signal });
     this.refresh();
     this.scheduleSave();
+    if (this.pendingRouteFileId) this.onRouteData({ fileId: this.pendingRouteFileId });
   }
 
   model(file) {
@@ -444,6 +445,16 @@ export class PlantUmlTool extends BaseTool {
       tab.append(button, close);
       tabs.append(tab);
     }
+  }
+
+  onRouteData({ fileId } = {}) {
+    if (!fileId) return;
+    if (this.loading || !this.editor || !this.workspace) {
+      this.pendingRouteFileId = fileId;
+      return;
+    }
+    this.pendingRouteFileId = null;
+    if (this.workspace.nodes.some((node) => node.id === fileId && node.kind === "file")) this.openFile(fileId);
   }
 
   openFile(id) {
@@ -1138,5 +1149,6 @@ export class PlantUmlTool extends BaseTool {
     void this.store?.close();
     this.editor = this.renderer = this.preview = this.workspace = this.currentFileId = null;
     this.saving = 0;
+    this.pendingRouteFileId = null;
   }
 }
