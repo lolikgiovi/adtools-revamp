@@ -86,12 +86,14 @@ class Sidebar {
    * Bind event listeners
    */
   bindEvents() {
+    this.bindSidebarTooltips();
     this.reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     this.reducedMotion.addEventListener("change", ({ matches }) => {
       if (matches) this.sidebarAnimations?.forEach((animation) => animation.cancel());
     });
     if (this.eventBus) {
       this.eventBus.on("route:changed", (data) => {
+        this.hideSidebarTooltip();
         this.updateActiveItem(data.path);
         if (this.state.isMobile) this.close();
       });
@@ -107,6 +109,108 @@ class Sidebar {
     this._handleEducationReposition = () => this.positionPinEducation();
     window.addEventListener("resize", this._handleEducationReposition);
     window.addEventListener("scroll", this._handleEducationReposition, true);
+  }
+
+  bindSidebarTooltips() {
+    const sidebar = document.querySelector(".sidebar");
+    if (!sidebar) return;
+    const selector = ".sidebar-menu-button, .sidebar-pin-action, .ad-searchable-dropdown-trigger, .release-tour-dev-preview";
+    const anchorFor = (event) => event.target.closest(selector);
+    sidebar.addEventListener("pointerover", (event) => {
+      const anchor = anchorFor(event);
+      if (!anchor || anchor.contains(event.relatedTarget) || event.pointerType !== "mouse" || this.state.isMobile) return;
+      this.queueSidebarTooltip(anchor, 240);
+    });
+    sidebar.addEventListener("pointerout", (event) => {
+      const anchor = anchorFor(event);
+      if (anchor && !anchor.contains(event.relatedTarget) && !anchor.matches(":focus-visible")) this.deferHideSidebarTooltip();
+    });
+    sidebar.addEventListener("focusin", (event) => {
+      const anchor = anchorFor(event);
+      if (anchor?.matches(":focus-visible") && !this.state.isMobile) this.queueSidebarTooltip(anchor, 0);
+    });
+    sidebar.addEventListener("focusout", () => this.deferHideSidebarTooltip());
+    sidebar.addEventListener("pointerdown", () => this.hideSidebarTooltip());
+    sidebar.addEventListener("click", () => this.hideSidebarTooltip());
+    this._hideSidebarTooltip = () => this.hideSidebarTooltip();
+    window.addEventListener("scroll", this._hideSidebarTooltip, true);
+    window.addEventListener("resize", this._hideSidebarTooltip);
+  }
+
+  queueSidebarTooltip(anchor, delay) {
+    this.hideSidebarTooltip();
+    const name = anchor.getAttribute("aria-label") || anchor.textContent.trim();
+    const description = anchor.dataset.tooltipDescription || anchor.getAttribute("title") || "";
+    anchor.dataset.tooltipDescription = description;
+    // Dynamic controls such as the project picker may supply their own title.
+    anchor.removeAttribute("title");
+    this.tooltipTimer = setTimeout(() => {
+      if (!anchor.isConnected || this.contextMenuEl) return;
+      const tooltip = document.createElement("div");
+      tooltip.id = "sidebar-navigation-tooltip";
+      tooltip.className = "sidebar-navigation-tooltip app-popover-surface";
+      tooltip.setAttribute("role", "tooltip");
+      const heading = document.createElement("div");
+      heading.className = "sidebar-tooltip-name";
+      heading.textContent = name;
+      tooltip.append(heading);
+      if (description && description !== name && !name.endsWith(`: ${description}`)) {
+        const detail = document.createElement("div");
+        detail.className = "sidebar-tooltip-description";
+        detail.textContent = description;
+        tooltip.append(detail);
+      }
+      document.body.append(tooltip);
+      if (typeof tooltip.showPopover === "function") {
+        tooltip.setAttribute("popover", "manual");
+        tooltip.showPopover();
+      }
+      const bounds = anchor.getBoundingClientRect();
+      const edge = document.querySelector(".sidebar").getBoundingClientRect().right;
+      const below = Boolean(anchor.closest(".sidebar-header"));
+      tooltip.dataset.placement = below ? "bottom" : "right";
+      const left = Math.max(8, Math.min(below ? 8 : edge + 10, window.innerWidth - tooltip.offsetWidth - 8));
+      const headerSelector = document.documentElement.dataset.tauri === "true" ? ".window-titlebar" : ".main-header";
+      const headerBottom = document.querySelector(headerSelector)?.getBoundingClientRect().bottom || 0;
+      const top = Math.max(
+        8,
+        Math.min(
+          below ? Math.max(headerBottom + 8, bounds.bottom + 10) : bounds.top + (bounds.height - tooltip.offsetHeight) / 2,
+          window.innerHeight - tooltip.offsetHeight - 8,
+        ),
+      );
+      tooltip.style.left = `${left}px`;
+      tooltip.style.top = `${top}px`;
+      tooltip.style.setProperty(
+        "--sidebar-tooltip-arrow-top",
+        `${Math.max(12, Math.min(bounds.top + bounds.height / 2 - top, tooltip.offsetHeight - 12))}px`,
+      );
+      tooltip.style.setProperty(
+        "--sidebar-tooltip-arrow-left",
+        `${Math.max(12, Math.min(bounds.left + bounds.width / 2 - left, tooltip.offsetWidth - 12))}px`,
+      );
+      this.tooltipAnchor = anchor;
+      this.tooltipElement = tooltip;
+      anchor.setAttribute("aria-describedby", tooltip.id);
+      tooltip.addEventListener("pointerenter", () => clearTimeout(this.tooltipHideTimer));
+      tooltip.addEventListener("pointerleave", () => this.deferHideSidebarTooltip());
+    }, delay);
+  }
+
+  deferHideSidebarTooltip() {
+    clearTimeout(this.tooltipTimer);
+    clearTimeout(this.tooltipHideTimer);
+    this.tooltipHideTimer = setTimeout(() => this.hideSidebarTooltip(), 100);
+  }
+
+  hideSidebarTooltip() {
+    clearTimeout(this.tooltipTimer);
+    clearTimeout(this.tooltipHideTimer);
+    this.tooltipTimer = null;
+    this.tooltipAnchor?.removeAttribute("aria-describedby");
+    this.tooltipElement?.remove();
+    this.tooltipAnchor = null;
+    this.tooltipElement = null;
   }
 
   /**
@@ -149,6 +253,10 @@ class Sidebar {
   handleKeydown(e) {
     // Nested controls, such as the project picker, handle Escape before the sidebar.
     if (e.defaultPrevented) return;
+
+    if (e.key === "Escape" && (this.tooltipElement || this.tooltipTimer)) {
+      this.hideSidebarTooltip();
+    }
 
     if (this.contextMenuEl) {
       if (e.key === "Escape") {
@@ -208,6 +316,8 @@ class Sidebar {
     const main = document.querySelector(".main");
 
     if (!sidebar) return;
+
+    this.hideSidebarTooltip();
 
     const desktopState = this.state.isCollapsed ? "collapsed" : "expanded";
     const animate =
@@ -428,6 +538,7 @@ class Sidebar {
    * Render tools in the sidebar
    */
   async renderTools() {
+    this.hideSidebarTooltip();
     const sidebarContent = document.querySelector(".sidebar-content");
     if (!sidebarContent) return;
 
@@ -485,11 +596,11 @@ class Sidebar {
           const svg = ensureSvgClass(rawSvg);
           const toolId = this.escapeHtml(tool.id);
           const toolName = this.escapeHtml(tool.name);
-          const toolTitle = this.escapeHtml(tool.description ? `${tool.name}: ${tool.description}` : tool.name);
+          const toolDescription = this.escapeHtml(tool.description || "");
           const isPinned = pinnedToolIds.has(tool.id);
           return `
             <div class="sidebar-menu-item" data-tool="${toolId}" data-pinned="${isPinned ? "true" : "false"}">
-              <button class="sidebar-menu-button" type="button" aria-label="${toolName}" title="${toolTitle}">
+              <button class="sidebar-menu-button" type="button" aria-label="${toolName}" data-tooltip-description="${toolDescription}">
                 ${svg}
                 <span class="sidebar-menu-label">${toolName}</span>
               </button>
@@ -620,11 +731,11 @@ class Sidebar {
           const dataAttr =
             item.type === "tool" ? `data-tool="${itemId}"` : item.type === "action" ? `data-action="${itemId}"` : `data-page="${itemId}"`;
           const itemName = this.escapeHtml(item.name);
-          const itemTitle = this.escapeHtml(item.description ? `${item.name}: ${item.description}` : item.name);
+          const itemDescription = this.escapeHtml(item.description || "");
           const isPinned = item.type === "tool" && this.getPinnedToolIds().has(item.id);
           return `
             <div class=\"sidebar-menu-item\" ${dataAttr} data-pinned=\"${isPinned ? "true" : "false"}\">
-              <button class=\"sidebar-menu-button\" type=\"button\" aria-label=\"${itemName}\" title=\"${itemTitle}\">
+              <button class="sidebar-menu-button" type="button" aria-label="${itemName}" data-tooltip-description="${itemDescription}">
                 ${svg}
                 <span class=\"sidebar-menu-label\">${itemName}</span>
               </button>
@@ -877,6 +988,7 @@ class Sidebar {
   }
 
   handleMenuContextMenu(e) {
+    this.hideSidebarTooltip();
     const button = e.currentTarget;
     const menuItem = button?.closest(".sidebar-menu-item");
     const toolId = menuItem?.getAttribute("data-tool");

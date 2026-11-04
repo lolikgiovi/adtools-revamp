@@ -37,6 +37,8 @@ try {
     await page.goto(base);
     await page.waitForFunction(() => Boolean(window.app?.sidebar));
     await page.locator(".sidebar-project .ad-searchable-dropdown-trigger").waitFor({ state: "attached" });
+    await page.waitForTimeout(300);
+    await page.evaluate(() => document.fonts.ready);
     if (mode === "desktop") {
       await page.evaluate(async () => {
         window.__TAURI__ = {};
@@ -69,11 +71,10 @@ try {
         await new Promise(requestAnimationFrame);
         window.sidebarResizeWidths = [];
       });
-      await trigger.click();
-      assert.equal(await sidebar.getAttribute("data-state"), "collapsed");
       const motion = await page.evaluate(async () => {
         const sidebar = document.querySelector(".sidebar");
         const main = document.querySelector(".main");
+        document.querySelector(".sidebar-trigger").click();
         await new Promise(requestAnimationFrame);
         const animations = [...sidebar.getAnimations({ subtree: true }), ...main.getAnimations()];
         const layout = animations.some((animation) => ["width", "margin-left"].includes(animation.transitionProperty));
@@ -90,6 +91,7 @@ try {
           offset: main.getBoundingClientRect().left,
         };
       });
+      assert.equal(await sidebar.getAttribute("data-state"), "collapsed");
       assert.equal(motion.animated, true);
       assert.ok(motion.width > 52 && motion.width < 192);
       assert.ok(Math.abs(motion.width - motion.offset) < 1);
@@ -117,6 +119,31 @@ try {
         assert.ok(bounds.width >= 36 && bounds.x >= 0 && bounds.x + bounds.width <= 52);
       }
       assert.equal(await page.locator(".sidebar-pin-action:visible").count(), 0);
+      const imageTool = page.locator('[data-tool="compress-image"] .sidebar-menu-button');
+      await imageTool.hover();
+      const tooltip = page.getByRole("tooltip");
+      await tooltip.waitFor();
+      assert.match(await tooltip.textContent(), /Compress Image/);
+      assert.match(await tooltip.textContent(), /losslessly/);
+      assert.equal(await imageTool.getAttribute("title"), null);
+      assert.equal(await imageTool.getAttribute("aria-describedby"), await tooltip.getAttribute("id"));
+      assert.equal(await tooltip.getAttribute("data-placement"), "right");
+      assert.equal(await tooltip.evaluate((el) => getComputedStyle(el, "::before").content), '""');
+      await tooltip.evaluate(async (el) => Promise.all(el.getAnimations().map((animation) => animation.finished)));
+      const tooltipBounds = await tooltip.boundingBox();
+      assert.ok(tooltipBounds.x >= 60 && tooltipBounds.x + tooltipBounds.width <= 1440);
+      await page.screenshot({ path: resolve(output, `${mode}-tooltip.png`), animations: "disabled" });
+      await tooltip.hover();
+      await page.waitForTimeout(200);
+      assert.equal(await tooltip.isVisible(), true);
+      await page.keyboard.press("Escape");
+      await tooltip.waitFor({ state: "detached" });
+      await imageTool.focus();
+      await tooltip.waitFor();
+      await page.locator(".sidebar-content").evaluate((el) => {
+        el.scrollTop += 50;
+      });
+      await tooltip.waitFor({ state: "detached" });
       const tool = page.locator('[data-tool="uuid-generator"] .sidebar-menu-button');
       await tool.click();
       await page.waitForURL(/uuid-generator/);
@@ -157,7 +184,7 @@ try {
         window.app.sidebar.collapse();
         await new Promise((resolve) => setTimeout(resolve, 60));
         window.app.sidebar.expand();
-        await new Promise((resolve) => setTimeout(resolve, 60));
+        await new Promise((resolve) => setTimeout(resolve, 180));
         const edge = getComputedStyle(document.querySelector(".sidebar"), "::after");
         const difference =
           document.querySelector(".main").getBoundingClientRect().left - (parseFloat(edge.left) + new DOMMatrix(edge.transform).m41 + 1);

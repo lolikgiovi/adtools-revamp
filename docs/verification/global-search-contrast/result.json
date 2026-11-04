@@ -1,0 +1,6655 @@
+{
+  "checks": [
+    {
+      "theme": "light",
+      "accent": "theme default",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        }
+      ]
+    },
+    {
+      "theme": "light",
+      "accent": "theme default",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        }
+      ]
+    },
+    {
+      "theme": "light",
+      "accent": "0 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        }
+      ]
+    },
+    {
+      "theme": "light",
+      "accent": "0 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        }
+      ]
+    },
+    {
+      "theme": "light",
+      "accent": "60 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        }
+      ]
+    },
+    {
+      "theme": "light",
+      "accent": "60 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        }
+      ]
+    },
+    {
+      "theme": "light",
+      "accent": "120 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        }
+      ]
+    },
+    {
+      "theme": "light",
+      "accent": "120 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        }
+      ]
+    },
+    {
+      "theme": "light",
+      "accent": "240 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        }
+      ]
+    },
+    {
+      "theme": "light",
+      "accent": "240 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        }
+      ]
+    },
+    {
+      "theme": "light",
+      "accent": "0 0% 0%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        }
+      ]
+    },
+    {
+      "theme": "light",
+      "accent": "0 0% 0%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        }
+      ]
+    },
+    {
+      "theme": "light",
+      "accent": "0 0% 100%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        }
+      ]
+    },
+    {
+      "theme": "light",
+      "accent": "0 0% 100%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(24, 24, 27)",
+          "background": "rgb(244, 244, 245)",
+          "ratio": 16.118381484528566
+        }
+      ]
+    },
+    {
+      "theme": "grey-muted",
+      "accent": "theme default",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        }
+      ]
+    },
+    {
+      "theme": "grey-muted",
+      "accent": "theme default",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        }
+      ]
+    },
+    {
+      "theme": "grey-muted",
+      "accent": "0 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        }
+      ]
+    },
+    {
+      "theme": "grey-muted",
+      "accent": "0 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        }
+      ]
+    },
+    {
+      "theme": "grey-muted",
+      "accent": "60 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        }
+      ]
+    },
+    {
+      "theme": "grey-muted",
+      "accent": "60 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        }
+      ]
+    },
+    {
+      "theme": "grey-muted",
+      "accent": "120 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        }
+      ]
+    },
+    {
+      "theme": "grey-muted",
+      "accent": "120 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        }
+      ]
+    },
+    {
+      "theme": "grey-muted",
+      "accent": "240 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        }
+      ]
+    },
+    {
+      "theme": "grey-muted",
+      "accent": "240 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        }
+      ]
+    },
+    {
+      "theme": "grey-muted",
+      "accent": "0 0% 0%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        }
+      ]
+    },
+    {
+      "theme": "grey-muted",
+      "accent": "0 0% 0%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        }
+      ]
+    },
+    {
+      "theme": "grey-muted",
+      "accent": "0 0% 100%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        }
+      ]
+    },
+    {
+      "theme": "grey-muted",
+      "accent": "0 0% 100%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(40, 44, 52)",
+          "background": "rgb(229, 231, 235)",
+          "ratio": 11.307109504009484
+        }
+      ]
+    },
+    {
+      "theme": "grey-paper",
+      "accent": "theme default",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        }
+      ]
+    },
+    {
+      "theme": "grey-paper",
+      "accent": "theme default",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        }
+      ]
+    },
+    {
+      "theme": "grey-paper",
+      "accent": "0 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        }
+      ]
+    },
+    {
+      "theme": "grey-paper",
+      "accent": "0 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        }
+      ]
+    },
+    {
+      "theme": "grey-paper",
+      "accent": "60 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        }
+      ]
+    },
+    {
+      "theme": "grey-paper",
+      "accent": "60 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        }
+      ]
+    },
+    {
+      "theme": "grey-paper",
+      "accent": "120 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        }
+      ]
+    },
+    {
+      "theme": "grey-paper",
+      "accent": "120 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        }
+      ]
+    },
+    {
+      "theme": "grey-paper",
+      "accent": "240 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        }
+      ]
+    },
+    {
+      "theme": "grey-paper",
+      "accent": "240 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        }
+      ]
+    },
+    {
+      "theme": "grey-paper",
+      "accent": "0 0% 0%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        }
+      ]
+    },
+    {
+      "theme": "grey-paper",
+      "accent": "0 0% 0%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        }
+      ]
+    },
+    {
+      "theme": "grey-paper",
+      "accent": "0 0% 100%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        }
+      ]
+    },
+    {
+      "theme": "grey-paper",
+      "accent": "0 0% 100%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 50, 46)",
+          "background": "rgb(240, 238, 234)",
+          "ratio": 10.892236755554178
+        }
+      ]
+    },
+    {
+      "theme": "soft-pink",
+      "accent": "theme default",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        }
+      ]
+    },
+    {
+      "theme": "soft-pink",
+      "accent": "theme default",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        }
+      ]
+    },
+    {
+      "theme": "soft-pink",
+      "accent": "0 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        }
+      ]
+    },
+    {
+      "theme": "soft-pink",
+      "accent": "0 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        }
+      ]
+    },
+    {
+      "theme": "soft-pink",
+      "accent": "60 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        }
+      ]
+    },
+    {
+      "theme": "soft-pink",
+      "accent": "60 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        }
+      ]
+    },
+    {
+      "theme": "soft-pink",
+      "accent": "120 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        }
+      ]
+    },
+    {
+      "theme": "soft-pink",
+      "accent": "120 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        }
+      ]
+    },
+    {
+      "theme": "soft-pink",
+      "accent": "240 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        }
+      ]
+    },
+    {
+      "theme": "soft-pink",
+      "accent": "240 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        }
+      ]
+    },
+    {
+      "theme": "soft-pink",
+      "accent": "0 0% 0%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        }
+      ]
+    },
+    {
+      "theme": "soft-pink",
+      "accent": "0 0% 0%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        }
+      ]
+    },
+    {
+      "theme": "soft-pink",
+      "accent": "0 0% 100%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        }
+      ]
+    },
+    {
+      "theme": "soft-pink",
+      "accent": "0 0% 100%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(70, 57, 62)",
+          "background": "rgb(244, 230, 232)",
+          "ratio": 9.048829814510283
+        }
+      ]
+    },
+    {
+      "theme": "ocean-blue",
+      "accent": "theme default",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        }
+      ]
+    },
+    {
+      "theme": "ocean-blue",
+      "accent": "theme default",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        }
+      ]
+    },
+    {
+      "theme": "ocean-blue",
+      "accent": "0 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        }
+      ]
+    },
+    {
+      "theme": "ocean-blue",
+      "accent": "0 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        }
+      ]
+    },
+    {
+      "theme": "ocean-blue",
+      "accent": "60 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        }
+      ]
+    },
+    {
+      "theme": "ocean-blue",
+      "accent": "60 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        }
+      ]
+    },
+    {
+      "theme": "ocean-blue",
+      "accent": "120 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        }
+      ]
+    },
+    {
+      "theme": "ocean-blue",
+      "accent": "120 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        }
+      ]
+    },
+    {
+      "theme": "ocean-blue",
+      "accent": "240 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        }
+      ]
+    },
+    {
+      "theme": "ocean-blue",
+      "accent": "240 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        }
+      ]
+    },
+    {
+      "theme": "ocean-blue",
+      "accent": "0 0% 0%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        }
+      ]
+    },
+    {
+      "theme": "ocean-blue",
+      "accent": "0 0% 0%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        }
+      ]
+    },
+    {
+      "theme": "ocean-blue",
+      "accent": "0 0% 100%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        }
+      ]
+    },
+    {
+      "theme": "ocean-blue",
+      "accent": "0 0% 100%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(43, 51, 59)",
+          "background": "rgb(232, 237, 243)",
+          "ratio": 10.881434995281026
+        }
+      ]
+    },
+    {
+      "theme": "luxury-green",
+      "accent": "theme default",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        }
+      ]
+    },
+    {
+      "theme": "luxury-green",
+      "accent": "theme default",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        }
+      ]
+    },
+    {
+      "theme": "luxury-green",
+      "accent": "0 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        }
+      ]
+    },
+    {
+      "theme": "luxury-green",
+      "accent": "0 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        }
+      ]
+    },
+    {
+      "theme": "luxury-green",
+      "accent": "60 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        }
+      ]
+    },
+    {
+      "theme": "luxury-green",
+      "accent": "60 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        }
+      ]
+    },
+    {
+      "theme": "luxury-green",
+      "accent": "120 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        }
+      ]
+    },
+    {
+      "theme": "luxury-green",
+      "accent": "120 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        }
+      ]
+    },
+    {
+      "theme": "luxury-green",
+      "accent": "240 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        }
+      ]
+    },
+    {
+      "theme": "luxury-green",
+      "accent": "240 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        }
+      ]
+    },
+    {
+      "theme": "luxury-green",
+      "accent": "0 0% 0%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        }
+      ]
+    },
+    {
+      "theme": "luxury-green",
+      "accent": "0 0% 0%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        }
+      ]
+    },
+    {
+      "theme": "luxury-green",
+      "accent": "0 0% 100%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        }
+      ]
+    },
+    {
+      "theme": "luxury-green",
+      "accent": "0 0% 100%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(39, 53, 46)",
+          "background": "rgb(231, 239, 235)",
+          "ratio": 10.975205700631944
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-latte",
+      "accent": "theme default",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-latte",
+      "accent": "theme default",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-latte",
+      "accent": "0 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-latte",
+      "accent": "0 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-latte",
+      "accent": "60 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-latte",
+      "accent": "60 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-latte",
+      "accent": "120 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-latte",
+      "accent": "120 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-latte",
+      "accent": "240 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-latte",
+      "accent": "240 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-latte",
+      "accent": "0 0% 0%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-latte",
+      "accent": "0 0% 0%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-latte",
+      "accent": "0 0% 100%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-latte",
+      "accent": "0 0% 100%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(75, 78, 104)",
+          "background": "rgb(230, 233, 239)",
+          "ratio": 6.669660070291341
+        }
+      ]
+    },
+    {
+      "theme": "atom-one-light",
+      "accent": "theme default",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        }
+      ]
+    },
+    {
+      "theme": "atom-one-light",
+      "accent": "theme default",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        }
+      ]
+    },
+    {
+      "theme": "atom-one-light",
+      "accent": "0 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        }
+      ]
+    },
+    {
+      "theme": "atom-one-light",
+      "accent": "0 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        }
+      ]
+    },
+    {
+      "theme": "atom-one-light",
+      "accent": "60 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        }
+      ]
+    },
+    {
+      "theme": "atom-one-light",
+      "accent": "60 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        }
+      ]
+    },
+    {
+      "theme": "atom-one-light",
+      "accent": "120 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        }
+      ]
+    },
+    {
+      "theme": "atom-one-light",
+      "accent": "120 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        }
+      ]
+    },
+    {
+      "theme": "atom-one-light",
+      "accent": "240 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        }
+      ]
+    },
+    {
+      "theme": "atom-one-light",
+      "accent": "240 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        }
+      ]
+    },
+    {
+      "theme": "atom-one-light",
+      "accent": "0 0% 0%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        }
+      ]
+    },
+    {
+      "theme": "atom-one-light",
+      "accent": "0 0% 0%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        }
+      ]
+    },
+    {
+      "theme": "atom-one-light",
+      "accent": "0 0% 100%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        }
+      ]
+    },
+    {
+      "theme": "atom-one-light",
+      "accent": "0 0% 100%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(56, 58, 66)",
+          "background": "rgb(239, 239, 241)",
+          "ratio": 9.873920121505344
+        }
+      ]
+    },
+    {
+      "theme": "nord-light",
+      "accent": "theme default",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        }
+      ]
+    },
+    {
+      "theme": "nord-light",
+      "accent": "theme default",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        }
+      ]
+    },
+    {
+      "theme": "nord-light",
+      "accent": "0 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        }
+      ]
+    },
+    {
+      "theme": "nord-light",
+      "accent": "0 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        }
+      ]
+    },
+    {
+      "theme": "nord-light",
+      "accent": "60 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        }
+      ]
+    },
+    {
+      "theme": "nord-light",
+      "accent": "60 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        }
+      ]
+    },
+    {
+      "theme": "nord-light",
+      "accent": "120 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        }
+      ]
+    },
+    {
+      "theme": "nord-light",
+      "accent": "120 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        }
+      ]
+    },
+    {
+      "theme": "nord-light",
+      "accent": "240 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        }
+      ]
+    },
+    {
+      "theme": "nord-light",
+      "accent": "240 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        }
+      ]
+    },
+    {
+      "theme": "nord-light",
+      "accent": "0 0% 0%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        }
+      ]
+    },
+    {
+      "theme": "nord-light",
+      "accent": "0 0% 0%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        }
+      ]
+    },
+    {
+      "theme": "nord-light",
+      "accent": "0 0% 100%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        }
+      ]
+    },
+    {
+      "theme": "nord-light",
+      "accent": "0 0% 100%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(77, 87, 106)",
+          "background": "rgb(223, 228, 236)",
+          "ratio": 5.6967214182080115
+        }
+      ]
+    },
+    {
+      "theme": "dark-grey",
+      "accent": "theme default",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        }
+      ]
+    },
+    {
+      "theme": "dark-grey",
+      "accent": "theme default",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        }
+      ]
+    },
+    {
+      "theme": "dark-grey",
+      "accent": "0 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        }
+      ]
+    },
+    {
+      "theme": "dark-grey",
+      "accent": "0 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        }
+      ]
+    },
+    {
+      "theme": "dark-grey",
+      "accent": "60 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        }
+      ]
+    },
+    {
+      "theme": "dark-grey",
+      "accent": "60 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        }
+      ]
+    },
+    {
+      "theme": "dark-grey",
+      "accent": "120 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        }
+      ]
+    },
+    {
+      "theme": "dark-grey",
+      "accent": "120 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        }
+      ]
+    },
+    {
+      "theme": "dark-grey",
+      "accent": "240 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        }
+      ]
+    },
+    {
+      "theme": "dark-grey",
+      "accent": "240 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        }
+      ]
+    },
+    {
+      "theme": "dark-grey",
+      "accent": "0 0% 0%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        }
+      ]
+    },
+    {
+      "theme": "dark-grey",
+      "accent": "0 0% 0%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        }
+      ]
+    },
+    {
+      "theme": "dark-grey",
+      "accent": "0 0% 100%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        }
+      ]
+    },
+    {
+      "theme": "dark-grey",
+      "accent": "0 0% 100%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(227, 229, 232)",
+          "background": "rgb(57, 62, 70)",
+          "ratio": 8.526507385258675
+        }
+      ]
+    },
+    {
+      "theme": "dark",
+      "accent": "theme default",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        }
+      ]
+    },
+    {
+      "theme": "dark",
+      "accent": "theme default",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        }
+      ]
+    },
+    {
+      "theme": "dark",
+      "accent": "0 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        }
+      ]
+    },
+    {
+      "theme": "dark",
+      "accent": "0 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        }
+      ]
+    },
+    {
+      "theme": "dark",
+      "accent": "60 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        }
+      ]
+    },
+    {
+      "theme": "dark",
+      "accent": "60 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        }
+      ]
+    },
+    {
+      "theme": "dark",
+      "accent": "120 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        }
+      ]
+    },
+    {
+      "theme": "dark",
+      "accent": "120 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        }
+      ]
+    },
+    {
+      "theme": "dark",
+      "accent": "240 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        }
+      ]
+    },
+    {
+      "theme": "dark",
+      "accent": "240 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        }
+      ]
+    },
+    {
+      "theme": "dark",
+      "accent": "0 0% 0%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        }
+      ]
+    },
+    {
+      "theme": "dark",
+      "accent": "0 0% 0%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        }
+      ]
+    },
+    {
+      "theme": "dark",
+      "accent": "0 0% 100%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        }
+      ]
+    },
+    {
+      "theme": "dark",
+      "accent": "0 0% 100%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 250, 250)",
+          "background": "rgb(39, 39, 42)",
+          "ratio": 14.270056301028625
+        }
+      ]
+    },
+    {
+      "theme": "dracula",
+      "accent": "theme default",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        }
+      ]
+    },
+    {
+      "theme": "dracula",
+      "accent": "theme default",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        }
+      ]
+    },
+    {
+      "theme": "dracula",
+      "accent": "0 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        }
+      ]
+    },
+    {
+      "theme": "dracula",
+      "accent": "0 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        }
+      ]
+    },
+    {
+      "theme": "dracula",
+      "accent": "60 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        }
+      ]
+    },
+    {
+      "theme": "dracula",
+      "accent": "60 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        }
+      ]
+    },
+    {
+      "theme": "dracula",
+      "accent": "120 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        }
+      ]
+    },
+    {
+      "theme": "dracula",
+      "accent": "120 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        }
+      ]
+    },
+    {
+      "theme": "dracula",
+      "accent": "240 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        }
+      ]
+    },
+    {
+      "theme": "dracula",
+      "accent": "240 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        }
+      ]
+    },
+    {
+      "theme": "dracula",
+      "accent": "0 0% 0%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        }
+      ]
+    },
+    {
+      "theme": "dracula",
+      "accent": "0 0% 0%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        }
+      ]
+    },
+    {
+      "theme": "dracula",
+      "accent": "0 0% 100%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        }
+      ]
+    },
+    {
+      "theme": "dracula",
+      "accent": "0 0% 100%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(248, 248, 242)",
+          "background": "rgb(57, 59, 76)",
+          "ratio": 10.347302319705568
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-mocha",
+      "accent": "theme default",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-mocha",
+      "accent": "theme default",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-mocha",
+      "accent": "0 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-mocha",
+      "accent": "0 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-mocha",
+      "accent": "60 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-mocha",
+      "accent": "60 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-mocha",
+      "accent": "120 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-mocha",
+      "accent": "120 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-mocha",
+      "accent": "240 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-mocha",
+      "accent": "240 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-mocha",
+      "accent": "0 0% 0%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-mocha",
+      "accent": "0 0% 0%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-mocha",
+      "accent": "0 0% 100%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        }
+      ]
+    },
+    {
+      "theme": "catppuccin-mocha",
+      "accent": "0 0% 100%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(205, 214, 244)",
+          "background": "rgb(49, 50, 68)",
+          "ratio": 8.69349059728767
+        }
+      ]
+    },
+    {
+      "theme": "nord",
+      "accent": "theme default",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        }
+      ]
+    },
+    {
+      "theme": "nord",
+      "accent": "theme default",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        }
+      ]
+    },
+    {
+      "theme": "nord",
+      "accent": "0 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        }
+      ]
+    },
+    {
+      "theme": "nord",
+      "accent": "0 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        }
+      ]
+    },
+    {
+      "theme": "nord",
+      "accent": "60 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        }
+      ]
+    },
+    {
+      "theme": "nord",
+      "accent": "60 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        }
+      ]
+    },
+    {
+      "theme": "nord",
+      "accent": "120 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        }
+      ]
+    },
+    {
+      "theme": "nord",
+      "accent": "120 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        }
+      ]
+    },
+    {
+      "theme": "nord",
+      "accent": "240 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        }
+      ]
+    },
+    {
+      "theme": "nord",
+      "accent": "240 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        }
+      ]
+    },
+    {
+      "theme": "nord",
+      "accent": "0 0% 0%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        }
+      ]
+    },
+    {
+      "theme": "nord",
+      "accent": "0 0% 0%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        }
+      ]
+    },
+    {
+      "theme": "nord",
+      "accent": "0 0% 100%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        }
+      ]
+    },
+    {
+      "theme": "nord",
+      "accent": "0 0% 100%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(216, 222, 233)",
+          "background": "rgb(59, 67, 84)",
+          "ratio": 7.343455637910568
+        }
+      ]
+    },
+    {
+      "theme": "gruvbox-dark",
+      "accent": "theme default",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        }
+      ]
+    },
+    {
+      "theme": "gruvbox-dark",
+      "accent": "theme default",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        }
+      ]
+    },
+    {
+      "theme": "gruvbox-dark",
+      "accent": "0 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        }
+      ]
+    },
+    {
+      "theme": "gruvbox-dark",
+      "accent": "0 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        }
+      ]
+    },
+    {
+      "theme": "gruvbox-dark",
+      "accent": "60 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        }
+      ]
+    },
+    {
+      "theme": "gruvbox-dark",
+      "accent": "60 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        }
+      ]
+    },
+    {
+      "theme": "gruvbox-dark",
+      "accent": "120 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        }
+      ]
+    },
+    {
+      "theme": "gruvbox-dark",
+      "accent": "120 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        }
+      ]
+    },
+    {
+      "theme": "gruvbox-dark",
+      "accent": "240 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        }
+      ]
+    },
+    {
+      "theme": "gruvbox-dark",
+      "accent": "240 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        }
+      ]
+    },
+    {
+      "theme": "gruvbox-dark",
+      "accent": "0 0% 0%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        }
+      ]
+    },
+    {
+      "theme": "gruvbox-dark",
+      "accent": "0 0% 0%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        }
+      ]
+    },
+    {
+      "theme": "gruvbox-dark",
+      "accent": "0 0% 100%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        }
+      ]
+    },
+    {
+      "theme": "gruvbox-dark",
+      "accent": "0 0% 100%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(250, 238, 188)",
+          "background": "rgb(61, 61, 61)",
+          "ratio": 9.32124601183368
+        }
+      ]
+    },
+    {
+      "theme": "monokai-pro",
+      "accent": "theme default",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        }
+      ]
+    },
+    {
+      "theme": "monokai-pro",
+      "accent": "theme default",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        }
+      ]
+    },
+    {
+      "theme": "monokai-pro",
+      "accent": "0 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        }
+      ]
+    },
+    {
+      "theme": "monokai-pro",
+      "accent": "0 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        }
+      ]
+    },
+    {
+      "theme": "monokai-pro",
+      "accent": "60 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        }
+      ]
+    },
+    {
+      "theme": "monokai-pro",
+      "accent": "60 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        }
+      ]
+    },
+    {
+      "theme": "monokai-pro",
+      "accent": "120 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        }
+      ]
+    },
+    {
+      "theme": "monokai-pro",
+      "accent": "120 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        }
+      ]
+    },
+    {
+      "theme": "monokai-pro",
+      "accent": "240 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        }
+      ]
+    },
+    {
+      "theme": "monokai-pro",
+      "accent": "240 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        }
+      ]
+    },
+    {
+      "theme": "monokai-pro",
+      "accent": "0 0% 0%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        }
+      ]
+    },
+    {
+      "theme": "monokai-pro",
+      "accent": "0 0% 0%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        }
+      ]
+    },
+    {
+      "theme": "monokai-pro",
+      "accent": "0 0% 100%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        }
+      ]
+    },
+    {
+      "theme": "monokai-pro",
+      "accent": "0 0% 100%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(212, 212, 206)",
+          "background": "rgb(66, 67, 61)",
+          "ratio": 6.7120573141413225
+        }
+      ]
+    },
+    {
+      "theme": "palenight",
+      "accent": "theme default",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        }
+      ]
+    },
+    {
+      "theme": "palenight",
+      "accent": "theme default",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        }
+      ]
+    },
+    {
+      "theme": "palenight",
+      "accent": "0 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        }
+      ]
+    },
+    {
+      "theme": "palenight",
+      "accent": "0 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        }
+      ]
+    },
+    {
+      "theme": "palenight",
+      "accent": "60 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        }
+      ]
+    },
+    {
+      "theme": "palenight",
+      "accent": "60 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        }
+      ]
+    },
+    {
+      "theme": "palenight",
+      "accent": "120 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        }
+      ]
+    },
+    {
+      "theme": "palenight",
+      "accent": "120 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        }
+      ]
+    },
+    {
+      "theme": "palenight",
+      "accent": "240 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        }
+      ]
+    },
+    {
+      "theme": "palenight",
+      "accent": "240 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        }
+      ]
+    },
+    {
+      "theme": "palenight",
+      "accent": "0 0% 0%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        }
+      ]
+    },
+    {
+      "theme": "palenight",
+      "accent": "0 0% 0%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        }
+      ]
+    },
+    {
+      "theme": "palenight",
+      "accent": "0 0% 100%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        }
+      ]
+    },
+    {
+      "theme": "palenight",
+      "accent": "0 0% 100%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(199, 201, 219)",
+          "background": "rgb(54, 60, 89)",
+          "ratio": 6.575761826555896
+        }
+      ]
+    },
+    {
+      "theme": "github-dark-hc",
+      "accent": "theme default",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        }
+      ]
+    },
+    {
+      "theme": "github-dark-hc",
+      "accent": "theme default",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        }
+      ]
+    },
+    {
+      "theme": "github-dark-hc",
+      "accent": "0 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        }
+      ]
+    },
+    {
+      "theme": "github-dark-hc",
+      "accent": "0 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        }
+      ]
+    },
+    {
+      "theme": "github-dark-hc",
+      "accent": "60 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        }
+      ]
+    },
+    {
+      "theme": "github-dark-hc",
+      "accent": "60 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        }
+      ]
+    },
+    {
+      "theme": "github-dark-hc",
+      "accent": "120 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        }
+      ]
+    },
+    {
+      "theme": "github-dark-hc",
+      "accent": "120 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        }
+      ]
+    },
+    {
+      "theme": "github-dark-hc",
+      "accent": "240 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        }
+      ]
+    },
+    {
+      "theme": "github-dark-hc",
+      "accent": "240 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        }
+      ]
+    },
+    {
+      "theme": "github-dark-hc",
+      "accent": "0 0% 0%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        }
+      ]
+    },
+    {
+      "theme": "github-dark-hc",
+      "accent": "0 0% 0%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        }
+      ]
+    },
+    {
+      "theme": "github-dark-hc",
+      "accent": "0 0% 100%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        }
+      ]
+    },
+    {
+      "theme": "github-dark-hc",
+      "accent": "0 0% 100%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(240, 242, 244)",
+          "background": "rgb(48, 55, 64)",
+          "ratio": 10.716072904535524
+        }
+      ]
+    },
+    {
+      "theme": "cobalt2",
+      "accent": "theme default",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        }
+      ]
+    },
+    {
+      "theme": "cobalt2",
+      "accent": "theme default",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        }
+      ]
+    },
+    {
+      "theme": "cobalt2",
+      "accent": "0 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        }
+      ]
+    },
+    {
+      "theme": "cobalt2",
+      "accent": "0 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        }
+      ]
+    },
+    {
+      "theme": "cobalt2",
+      "accent": "60 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        }
+      ]
+    },
+    {
+      "theme": "cobalt2",
+      "accent": "60 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        }
+      ]
+    },
+    {
+      "theme": "cobalt2",
+      "accent": "120 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        }
+      ]
+    },
+    {
+      "theme": "cobalt2",
+      "accent": "120 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        }
+      ]
+    },
+    {
+      "theme": "cobalt2",
+      "accent": "240 100% 50%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        }
+      ]
+    },
+    {
+      "theme": "cobalt2",
+      "accent": "240 100% 50%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        }
+      ]
+    },
+    {
+      "theme": "cobalt2",
+      "accent": "0 0% 0%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        }
+      ]
+    },
+    {
+      "theme": "cobalt2",
+      "accent": "0 0% 0%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        }
+      ]
+    },
+    {
+      "theme": "cobalt2",
+      "accent": "0 0% 100%",
+      "state": "selected",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        }
+      ]
+    },
+    {
+      "theme": "cobalt2",
+      "accent": "0 0% 100%",
+      "state": "hovered",
+      "result": [
+        {
+          "selector": ".result-title",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".result-sub",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        },
+        {
+          "selector": ".global-search-result-icon",
+          "color": "rgb(255, 255, 240)",
+          "background": "rgb(43, 60, 100)",
+          "ratio": 10.767394768473372
+        }
+      ]
+    }
+  ],
+  "failures": []
+}

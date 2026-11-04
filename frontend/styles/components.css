@@ -324,12 +324,11 @@ body.global-search-open {
   transition: background 0.12s ease;
 }
 
-.global-search-result-item:hover {
-  background: hsl(var(--accent));
+.global-search-result-item:is(:hover, .active) {
+  background: hsl(var(--secondary));
 }
 
 .global-search-result-item.active {
-  background: hsl(var(--accent));
   outline: 2px solid hsl(var(--ring));
   outline-offset: -2px;
 }
@@ -369,6 +368,10 @@ body.global-search-open {
 .global-search-result-text .result-sub {
   color: hsl(var(--text-secondary));
   font-size: 0.8rem;
+}
+
+.global-search-result-item:is(:hover, .active) :is(.global-search-result-icon, .result-title, .result-sub) {
+  color: hsl(var(--secondary-foreground));
 }
 
 .global-search-help {

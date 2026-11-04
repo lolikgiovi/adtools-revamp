@@ -13,6 +13,13 @@ to check alignment and capture `*-transition.png`, then verify rapid reversals
 and reduced-motion behavior. The checks also observe workspace resizing and
 verify alignment while reversing a transition before it finishes.
 
+Sidebar buttons use themed tooltips on mouse hover and keyboard focus. A small
+pointer connects each tooltip to its item; the project picker uses a downward
+placement to keep the toolbar clear. Tooltips remain open when hovered and
+dismiss on Escape, scrolling, navigation, or layout changes. `*-tooltip.png`
+captures the tool name, description, and pointer. Browser checks also confirm
+that native titles are removed and accessibility descriptions are connected.
+
 Start the installed Vite server:
 
 ```sh
