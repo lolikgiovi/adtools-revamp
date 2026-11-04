@@ -48,6 +48,12 @@ try {
       const icon = await trigger.boundingBox();
       const row = await header.boundingBox();
       assert.ok(icon.y >= row.y && icon.y + icon.height <= row.y + row.height);
+      assert.equal(await page.locator(".sidebar-project-icon").isVisible(), true);
+      await trigger.click();
+      await menu.waitFor({ state: "visible" });
+      await page.keyboard.press("Escape");
+      assert.equal(await trigger.evaluate(node => node === document.activeElement), true);
+      await page.screenshot({ path: resolve(output, `${width}-rail.png`), animations: "disabled" });
     }
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     checks.push({ width, hasTouch, headerHeight: hasTouch ? 57 : 39, dropdownHeight: hasTouch ? 40 : 28,

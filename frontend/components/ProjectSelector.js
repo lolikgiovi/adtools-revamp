@@ -84,7 +84,8 @@ export class ProjectSelector {
       `
       <svg class="sidebar-project-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+        <path d="m12 3 10 5-10 5L2 8Z" />
+        <path d="m2 12 10 5 10-5M2 16l10 5 10-5" />
       </svg>
     `,
     );
