@@ -1177,6 +1177,85 @@
   right: 12px;
 }
 
+.quick-query-tool-container .qq-dbeaver-dialog {
+  width: min(1100px, calc(100vw - 24px));
+  max-width: none;
+  max-height: calc(100dvh - 24px);
+  padding: 0;
+  margin: auto;
+  overflow: auto;
+  color: hsl(var(--foreground));
+  background: hsl(var(--background));
+}
+
+.qq-dbeaver-dialog::backdrop {
+  background: rgb(0 0 0 / 50%);
+}
+
+.qq-dbeaver-header,
+.qq-dbeaver-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+}
+
+.qq-dbeaver-header {
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.qq-dbeaver-header h2 {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+.qq-dbeaver-header .overlay-close-button {
+  position: static;
+}
+
+.qq-dbeaver-body {
+  min-width: 0;
+  padding: 16px;
+}
+
+.qq-dbeaver-body > p {
+  margin: 0 0 16px;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.qq-dbeaver-sheet {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+}
+
+.qq-dbeaver-body > .qq-dbeaver-error {
+  margin: 12px 0 0;
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
+
+.qq-dbeaver-footer {
+  flex-wrap: wrap;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.qq-dbeaver-footer p {
+  flex: 1 1 240px;
+  margin: 0;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.qq-dbeaver-footer > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+}
+
 /* Header actions aligned with title */
 .schema-modal-header-actions {
   display: flex;

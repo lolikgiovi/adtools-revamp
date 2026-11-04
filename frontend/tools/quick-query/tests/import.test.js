@@ -2,7 +2,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "fs";
 import path from "path";
-import { convertDbeaverSchemaRows, importSchemasPayload, parseDbeaverSchemaClipboard } from "../services/SchemaImportService.js";
+import {
+  convertDbeaverSchemaRows,
+  importSchemasPayload,
+  normalizeDbeaverSchemaRows,
+  parseDbeaverSchemaClipboard,
+} from "../services/SchemaImportService.js";
 import { IndexedDBStorageService } from "../services/IndexedDBStorageService.js";
 
 describe("SchemaImportService (KV nested tables payload)", () => {
@@ -88,6 +93,57 @@ describe("IndexedDBStorageService legacy migration", () => {
 });
 
 describe("SchemaImportService (DBeaver clipboard payload)", () => {
+  // Failure cases: displayed and advanced-copy layouts differ; pasted headers become fields;
+  // reordered columns shift nullability/defaults; false/blank checkboxes become NOT NULL;
+  // zero defaults disappear; partial/duplicate rows silently replace a valid schema.
+  it("converts the DBeaver Columns view without losing types, order or defaults", () => {
+    expect(
+      convertDbeaverSchemaRows([
+        ["Column Name", "#", "Type", "Type Mod", "Not Null", "Default", "Comment"],
+        ["EVENT_CODE", 1, "VARCHAR2(100)", "", "[v]", "", ""],
+        ["SPLUNK_TEMPLATE", 2, "CLOB", "", true, "", ""],
+        ["IS_DELETED", 3, "NUMBER(1,0)", "", true, 0, ""],
+        ["CREATED_BY", 5, "VARCHAR2(50)", "", false, "'SYSTEM'", ""],
+        ["UPDATED_BY", 7, "VARCHAR2(50)", "", "[ ]", "'SYSTEM'", ""],
+        [null, null, null, null, null, null, null],
+      ]),
+    ).toEqual([
+      ["EVENT_CODE", "VARCHAR2(100)", "No", "", "1", "No"],
+      ["SPLUNK_TEMPLATE", "CLOB", "No", "", "2", "No"],
+      ["IS_DELETED", "NUMBER(1,0)", "No", "0", "3", "No"],
+      ["CREATED_BY", "VARCHAR2(50)", "Yes", "'SYSTEM'", "5", "No"],
+      ["UPDATED_BY", "VARCHAR2(50)", "Yes", "'SYSTEM'", "7", "No"],
+    ]);
+  });
+
+  it("maps pasted headers rather than guessing positions", () => {
+    const rows = [
+      ["Not Null", "Default", "Type", "Column Name", "#"],
+      ["false", "0", "NUMBER(1,0)", "IS_DELETED", "3"],
+    ];
+    expect(normalizeDbeaverSchemaRows(rows)).toEqual([["IS_DELETED", "3", "NUMBER(1,0)", "", "false", "0", ""]]);
+    expect(convertDbeaverSchemaRows(rows)).toEqual([["IS_DELETED", "NUMBER(1,0)", "Yes", "0", "3", "No"]]);
+  });
+
+  it.each([
+    { row: ["FIELD", 1, "", "", true], message: /type/i },
+    { row: ["", 1, "NUMBER", "", true], message: /name/i },
+    { row: ["FIELD", 1, "NUMBER", "", "maybe"], message: /Not Null/i },
+  ])("rejects incomplete or ambiguous metadata: $row", ({ row, message }) => {
+    expect(() => convertDbeaverSchemaRows([["Column Name", "#", "Type", "Type Mod", "Not Null"], row])).toThrow(message);
+  });
+
+  it("rejects duplicate fields and missing Not Null headers", () => {
+    const headers = ["Column Name", "#", "Type", "Type Mod", "Not Null"];
+    expect(() => convertDbeaverSchemaRows([headers, ["ID", 1, "NUMBER", "", true], ["id", 2, "NUMBER", "", false]])).toThrow(/duplicate/i);
+    expect(() =>
+      convertDbeaverSchemaRows([
+        ["Column Name", "Type"],
+        ["ID", "NUMBER"],
+      ]),
+    ).toThrow(/Not Null/i);
+  });
+
   it("parses copied DBeaver columns into Quick Query schema rows", () => {
     const clipboard = [
       "Column Name\tColumn Type\tType Name\tColumn Size\tNot Null\tDefault Value\tComments",

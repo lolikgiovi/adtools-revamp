@@ -1,0 +1,8 @@
+{
+  "passed": true,
+  "checks": [
+    "1440px dark: no clipboard read; staged paste; cancel preserves schema and focus; headerless and legacy conversion; inline error; Escape; viewport bounds",
+    "390px light: no clipboard read; staged paste; cancel preserves schema and focus; headerless and legacy conversion; inline error; Escape; viewport bounds"
+  ],
+  "errors": []
+}

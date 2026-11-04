@@ -13,6 +13,7 @@ import { MAIN_TEMPLATE, FILE_BUTTON_TEMPLATE } from "./template.js";
 import { BaseTool } from "../../core/BaseTool.js";
 import { ensureMonacoWorkers, setupMonacoOracle, createOracleEditor, ORACLE_LANGUAGE_ID, ORACLE_THEME } from "../../core/MonacoOracle.js";
 import Handsontable from "handsontable";
+import { openDbeaverSchemaDialog } from "./DbeaverSchemaDialog.js";
 import "handsontable/styles/handsontable.css";
 import "handsontable/styles/ht-theme-main.css";
 import { getIconSvg } from "./icon.js";
@@ -25,7 +26,6 @@ import {
   alignDataToImportedSchema,
   convertDbeaverSchemaRows,
   importSchemasPayload,
-  parseDbeaverSchemaClipboard,
   prepareExcelDataForSchema,
   validateExcelHeaders,
 } from "./services/SchemaImportService.js";
@@ -1362,6 +1362,8 @@ export class QuickQueryUI {
   }
 
   pauseHiddenWork() {
+    this._dbeaverDialog?.close();
+    this._dbeaverDialog = null;
     if (this._cancelScheduledLayout) {
       this._cancelScheduledLayout();
       this._cancelScheduledLayout = null;
@@ -4356,46 +4358,27 @@ export class QuickQueryUI {
     }
   }
 
-  async readClipboardText() {
-    if (isTauri()) {
-      try {
-        const { readText } = await import("@tauri-apps/plugin-clipboard-manager");
-        return (await readText()) || "";
-      } catch (_) {
-        // Fall back to the browser clipboard API below.
-      }
-    }
-
-    if (typeof navigator === "undefined" || !navigator.clipboard?.readText) {
-      throw new Error("Clipboard read is not available in this environment.");
-    }
-
-    return navigator.clipboard.readText();
-  }
-
-  async handlePasteDbeaverSchema() {
-    try {
-      const text = await this.readClipboardText();
-      const schemaRows = parseDbeaverSchemaClipboard(text);
-      this.loadDbeaverSchemaRows(schemaRows);
-      this.showSuccess(`Pasted ${schemaRows.length} columns from DBeaver`);
-      this.trackQuickQueryEvent(
-        "schema_pasted_dbeaver",
-        this.getCurrentQuickQueryContext({
-          pasted_column_count: schemaRows.length,
-        }),
-        { flush: true },
-      );
-      setTimeout(() => this.clearError(), 3000);
-    } catch (error) {
-      this.showError(`Failed to paste from DBeaver: ${error.message}`);
-      const tableName = this.elements.tableNameInput.value.trim();
-      UsageTracker.trackEvent("quick-query", "ui_error", {
-        type: "dbeaver_paste_failed",
-        message: error.message,
-        table_name: tableName,
-      });
-    }
+  handlePasteDbeaverSchema() {
+    this._dbeaverDialog?.close();
+    this._dbeaverDialog = openDbeaverSchemaDialog({
+      root: this.container.querySelector(".quick-query-tool-container"),
+      onConvert: (schemaRows) => {
+        this.loadDbeaverSchemaRows(schemaRows);
+        this.showSuccess(`Converted ${schemaRows.length} columns from DBeaver`);
+        this.trackQuickQueryEvent(
+          "schema_pasted_dbeaver",
+          this.getCurrentQuickQueryContext({ pasted_column_count: schemaRows.length }),
+          { flush: true },
+        );
+      },
+      onFailure: () => {
+        UsageTracker.trackEvent("quick-query", "ui_error", {
+          type: "dbeaver_paste_failed",
+          reason: "invalid_schema",
+          table_name: this.elements.tableNameInput.value.trim(),
+        });
+      },
+    });
   }
 
   loadDbeaverSchemaRows(schemaRows) {

@@ -62,7 +62,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                         <span>Schemas</span>
                     </button>
                     <button id="pasteDbeaverSchema" class="btn btn-primary btn-sm"
-                        title="Copy columns from DBeaver, then paste them into the schema table">
+                        title="Paste and convert columns copied with DBeaver’s Copy Advanced Info">
                         <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <rect x="8" y="8" width="12" height="13" rx="2" />
