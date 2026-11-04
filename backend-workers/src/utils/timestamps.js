@@ -70,9 +70,10 @@ export function parseTsFlexible(x) {
  * Converts a timestamp to GMT+7 plain format. Legacy clients send Jakarta wall
  * time without an offset; explicit offsets and Z already identify an instant.
  * @param {string} s - ISO timestamp or legacy Jakarta wall time
+ * @param {{ milliseconds?: boolean }} [options] - keep milliseconds (usage_log identity needs them)
  * @returns {string|null} - Plain GMT+7 format or null if invalid
  */
-export function tsToGmt7Plain(s) {
+export function tsToGmt7Plain(s, { milliseconds = false } = {}) {
   try {
     const raw = String(s || "").trim();
     const jakartaWallTime = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(raw);
@@ -85,7 +86,8 @@ export function tsToGmt7Plain(s) {
     const hh = String(d.getUTCHours()).padStart(2, "0");
     const mi = String(d.getUTCMinutes()).padStart(2, "0");
     const ss = String(d.getUTCSeconds()).padStart(2, "0");
-    return `${y}-${m}-${day} ${hh}:${mi}:${ss}+07:00`;
+    const ms = milliseconds ? `.${String(d.getUTCMilliseconds()).padStart(3, "0")}` : "";
+    return `${y}-${m}-${day} ${hh}:${mi}:${ss}${ms}+07:00`;
   } catch (_) {
     return null;
   }

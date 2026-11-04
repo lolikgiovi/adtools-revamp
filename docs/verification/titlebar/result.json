@@ -5,5 +5,29 @@
     "Single-click retains native dragging; search and connection controls do not trigger window resize",
     "Preview remains usable in the sidebar footer, outside the desktop header"
   ],
-  "runtimePath": "/Users/lolik/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-2.9.5/src/window/scripts/drag.js"
+  "runtimePath": "/Users/ddl/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-2.9.5/src/window/scripts/drag.js",
+  "verified_on": "2026-11-04",
+  "native_acl_checks": [
+    {
+      "architecture": "aarch64",
+      "capability_path": "tauri/target/aarch64-apple-darwin/release/build/adtools-791c3f1bdc44e4ee/out/capabilities.json",
+      "window": "main",
+      "permission": "core:window:allow-start-dragging",
+      "allowed_command": "start_dragging",
+      "passed": true
+    },
+    {
+      "architecture": "x86_64",
+      "capability_path": "tauri/target/x86_64-apple-darwin/release/build/adtools-ed17ec287d2f7e68/out/capabilities.json",
+      "window": "main",
+      "permission": "core:window:allow-start-dragging",
+      "allowed_command": "start_dragging",
+      "passed": true
+    }
+  ],
+  "limitations": [
+    "Browser replay verifies native command dispatch, not physical macOS window movement.",
+    "Existing generated release build outputs were inspected; no desktop binary was rebuilt or deployed.",
+    "Older installed binaries require a desktop update and restart to receive native permissions."
+  ]
 }

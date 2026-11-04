@@ -41,3 +41,28 @@ No native AD Tools window was running in the available computer-use session.
 Changes to the native capability require rebuilding/restarting the desktop app.
 The broader responsive toolbar scenario remains in
 `frontend/core/tests/compact-header-browser.mjs`.
+
+
+## Verification on 4 November 2026
+
+Issue 4 from the D1 review is already corrected in source: commit `5a47321e`
+added `core:window:allow-start-dragging` to the main window capability. The
+reported dragging ACL failures were on app versions 1.3.11–1.3.13, with the
+last observed event on 3 November. Logged app versions alone do not identify
+the native binary installed on a device.
+
+Replayed the installed Tauri 2.9.5 macOS drag script against the current app:
+drag dispatch, double-click maximize/restore, and interactive control exclusions
+all passed. Refreshed `result.json` and `desktop.png` with this run.
+
+Also inspected the existing generated release build outputs for both
+`aarch64-apple-darwin` and `x86_64-apple-darwin`. Each generated
+`out/capabilities.json` enables the default capability for the local `main`
+window on macOS and includes `core:window:allow-start-dragging`. Its sibling
+`out/acl-manifests.json` maps that permission to `start_dragging`, without a
+deny command. Exact inspected paths are recorded in `result.json`.
+
+No additional permission or titlebar handler is needed in current source.
+These checks do not prove that an older installed application has received the
+native fix. No desktop binary was rebuilt or deployed during this verification,
+and physical OS window movement was not exercised.

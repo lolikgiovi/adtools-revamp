@@ -1030,9 +1030,11 @@ export class QuickQueryUI {
       item.textContent = `${cell}: ${issue.message}`;
       if (item.tagName === "BUTTON") {
         item.type = "button";
-        item.addEventListener("click", () => {
-          if (auditIssue) this.focusAuditUser();
-          else this.focusDataCell(issue.row, issue.col);
+        item.addEventListener("click", (event) => {
+          if (auditIssue) {
+            event.stopPropagation();
+            this.focusAuditUser();
+          } else this.focusDataCell(issue.row, issue.col);
         });
       }
       list.appendChild(item);

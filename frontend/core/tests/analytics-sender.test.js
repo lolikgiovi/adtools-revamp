@@ -28,7 +28,7 @@ describe("AnalyticsSender", () => {
 
     const ok = await AnalyticsSender.sendBatch({
       device_id: "device-1",
-      device_usage: [{ device_id: "device-1", tool_id: "json-tools", action: "open", count: 1 }],
+      tool_usage: [{ event_id: "use-1", tool_id: "json-tools", action: "prettify" }],
       events: [{ type: "json-tools", action: "tab_switch" }],
     });
 

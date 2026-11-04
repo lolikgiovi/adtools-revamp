@@ -270,7 +270,7 @@ describe("analytics overview count integrity", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
-      inserted: { events: 1, error_events: 1, usage_log: 1, device_usage: 1, tool_usage: 1 },
+      inserted: { events: 1, error_events: 1, usage_log: 1, tool_usage: 1 },
     });
 
     const data = await readOverview(env);

@@ -1,4 +1,5 @@
 const readyDatabases = new WeakSet();
+const eventsReadyDatabases = new WeakSet();
 const deviceVersionReadyDatabases = new WeakSet();
 const toolUsageReadyDatabases = new WeakSet();
 const lifetimeUsageBaselineReadyDatabases = new WeakSet();
@@ -22,7 +23,8 @@ const ERROR_EVENTS_SCHEMA_STATEMENTS = [
     colno INTEGER,
     user_agent TEXT,
     metadata TEXT,
-    created_time TEXT NOT NULL
+    created_time TEXT NOT NULL,
+    event_id TEXT
   )`,
   "CREATE INDEX IF NOT EXISTS idx_error_events_time ON error_events(created_time DESC)",
   "CREATE INDEX IF NOT EXISTS idx_error_events_email_time ON error_events(user_email, created_time DESC)",
@@ -38,8 +40,29 @@ export async function ensureErrorEventsSchema(env) {
   for (const statement of ERROR_EVENTS_SCHEMA_STATEMENTS) {
     await env.DB.prepare(statement).run();
   }
+  await ensureRowIdColumn(env, "error_events");
 
   readyDatabases.add(env.DB);
+}
+
+/** Retry-safe row ids on events (0032). Also covers a Worker deployed before that migration ran. */
+export async function ensureEventsSchema(env) {
+  if (!env?.DB || eventsReadyDatabases.has(env.DB)) return;
+  await ensureRowIdColumn(env, "events");
+  eventsReadyDatabases.add(env.DB);
+}
+
+async function ensureRowIdColumn(env, table) {
+  const result = await env.DB.prepare(`PRAGMA table_info(${table})`).all();
+  const columns = Array.isArray(result?.results) ? result.results : [];
+  if (!columns.some((column) => column?.name === "event_id")) {
+    try {
+      await env.DB.prepare(`ALTER TABLE ${table} ADD COLUMN event_id TEXT`).run();
+    } catch (err) {
+      if (!String(err).toLowerCase().includes("duplicate column")) throw err;
+    }
+  }
+  await env.DB.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_${table}_event_id ON ${table}(event_id) WHERE event_id IS NOT NULL`).run();
 }
 
 export async function ensureDeviceAppVersionSchema(env) {

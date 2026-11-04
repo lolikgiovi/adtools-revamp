@@ -274,7 +274,7 @@ class UsageTracker {
     if (!this._state) this._state = this._loadFromStorage();
     const now = new Date();
     if (!this._isValidTimestamp(now)) return null;
-    const eventId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${now.getTime()}-${Math.random()}`;
+    const eventId = this._newRowId(now);
     const timing = this._takeFirstUseTiming(toolId, now);
     const item = {
       event_id: eventId,
@@ -297,6 +297,16 @@ class UsageTracker {
       this._eventBus?.emit?.("usage:toolUse", item);
     } catch (_) {}
     return eventId;
+  }
+
+  /** Retry-safe identity for one queued row; the Worker ignores a second insert with the same id. */
+  static _newRowId(now = new Date()) {
+    return typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${now.getTime()}-${Math.random()}`;
+  }
+
+  /** Rows queued before ids existed get one on load, so their next send is retry-safe too. */
+  static _withRowId(row) {
+    return row && typeof row === "object" && !row.event_id ? { ...row, event_id: this._newRowId() } : row;
   }
 
   /** Remember which page opened last, so its first Tool Use can report how long it took to reach. */
@@ -348,6 +358,7 @@ class UsageTracker {
         if (!this._state) this._state = this._loadFromStorage();
         this._state.usageLogs = Array.isArray(this._state.usageLogs) ? this._state.usageLogs : [];
         this._state.usageLogs.push({
+          event_id: this._newRowId(now),
           user_email: userEmail,
           device_id: deviceId,
           tool_id: featureKey,
@@ -407,6 +418,7 @@ class UsageTracker {
     // Only trackFeature should increment usage counts
 
     const ev = {
+      event_id: this._newRowId(now),
       featureId: featureKey,
       action: actionKey,
       ts: now.toISOString(),
@@ -439,6 +451,7 @@ class UsageTracker {
       const createdTime = String(errorPayload.created_time || new Date().toISOString());
       const errorEvent = {
         ...errorPayload,
+        event_id: errorPayload.event_id || this._newRowId(),
         tool_id: toolId,
         created_time: createdTime,
       };
@@ -666,6 +679,9 @@ class UsageTracker {
           state.usageLogs = Array.isArray(state.usageLogs) ? state.usageLogs.filter((log) => this._validateUsageLog(log)) : [];
           state.errorEvents = Array.isArray(state.errorEvents) ? state.errorEvents.filter((err) => this._validateErrorEvent(err)) : [];
           state.toolUses = Array.isArray(state.toolUses) ? state.toolUses.filter((item) => this._validateToolUse(item)) : [];
+          state.events = state.events.map((row) => this._withRowId(row));
+          state.usageLogs = state.usageLogs.map((row) => this._withRowId(row));
+          state.errorEvents = state.errorEvents.map((row) => this._withRowId(row));
 
           // Time-based rotation: drop events older than 7 days
           const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
@@ -753,9 +769,6 @@ class UsageTracker {
     }
   }
 
-  static _nowGmt7Plain() {
-    return this._isoToGmt7Plain(new Date().toISOString());
-  }
 
   // Build batch payload with absolute counts from state.counts (idempotent)
   static _toBatchPayload(sourceState = this._state) {
@@ -770,6 +783,7 @@ class UsageTracker {
     } catch (_) {}
 
     const events = (Array.isArray(s.events) ? s.events : []).map((ev) => ({
+      event_id: ev.event_id,
       type: ev.featureId,
       action: ev.action,
       event_name: `${ev.featureId}.${ev.action}`,
@@ -781,6 +795,7 @@ class UsageTracker {
     }));
 
     const usage_log = (Array.isArray(s.usageLogs) ? s.usageLogs : []).map((log) => ({
+      event_id: log.event_id,
       user_email: log.user_email || userEmail,
       device_id: log.device_id || deviceId,
       tool_id: this.normalizeFeatureId(log.tool_id),
@@ -803,28 +818,6 @@ class UsageTracker {
       created_time: this._isoToGmt7Plain(item.ts || new Date().toISOString(), true),
     }));
 
-    // Build device_usage from absolute counts in state.counts
-    const device_usage = [];
-    const nowPlain = this._nowGmt7Plain();
-    const counts = s.counts || {};
-
-    for (const [tool_id, actions] of Object.entries(counts)) {
-      if (!actions || typeof actions !== "object") continue;
-      for (const [action, count] of Object.entries(actions)) {
-        const c = Number(count || 0);
-        if (c > 0) {
-          device_usage.push({
-            device_id: deviceId,
-            user_email: userEmail,
-            tool_id: this.normalizeFeatureId(tool_id),
-            action: String(action),
-            count: c,
-            updated_time: nowPlain,
-          });
-        }
-      }
-    }
-
     return {
       device_id: deviceId,
       user_email: userEmail,
@@ -834,7 +827,6 @@ class UsageTracker {
       usage_log,
       error_events,
       tool_usage,
-      device_usage,
     };
   }
 
@@ -853,7 +845,7 @@ class UsageTracker {
    * source detail rows acknowledged by that chunk for partial-flush cleanup.
    */
   static _partitionBatchPayload(payload, references = null) {
-    const arrayKeys = ["events", "usage_log", "error_events", "tool_usage", "device_usage"];
+    const arrayKeys = ["events", "usage_log", "error_events", "tool_usage"];
     const sourceArrays = Object.fromEntries(arrayKeys.map((key) => [key, Array.isArray(payload?.[key]) ? payload[key] : []]));
     const hasItems = arrayKeys.some((key) => sourceArrays[key].length > 0);
     const makeChunk = () => ({
@@ -862,9 +854,8 @@ class UsageTracker {
       usage_log: [],
       error_events: [],
       tool_usage: [],
-      device_usage: [],
     });
-    const makeReferences = () => (references ? { events: [], usage_log: [], error_events: [], tool_usage: [], device_usage: [] } : null);
+    const makeReferences = () => (references ? { events: [], usage_log: [], error_events: [], tool_usage: [] } : null);
 
     if (!hasItems) {
       return [{ payload: makeChunk(), references: makeReferences() }];
@@ -919,6 +910,18 @@ class UsageTracker {
     return this._partitionBatchPayload(payload).map(({ payload: chunk }) => chunk);
   }
 
+  /**
+   * Rows of one type that the Worker reported as stored. A Worker that predates per-row
+   * acknowledgements stored the whole chunk when it answered ok; tool uses were always acknowledged by id.
+   */
+  static _acceptedRows(result, references, key, { requireIds = false } = {}) {
+    const rows = references?.[key] || [];
+    const ids = typeof result === "object" ? result.acknowledged?.[key] : undefined;
+    if (!Array.isArray(ids)) return requireIds && typeof result === "object" ? [] : rows;
+    const accepted = new Set(ids);
+    return rows.filter((row) => accepted.has(row?.event_id));
+  }
+
   static _removeAcknowledgedRows(rows, acknowledgedRows) {
     const remaining = new Map();
     (acknowledgedRows || []).forEach((row) => remaining.set(row, (remaining.get(row) || 0) + 1));
@@ -948,15 +951,13 @@ class UsageTracker {
         (payload.events && payload.events.length) ||
         (payload.usage_log && payload.usage_log.length) ||
         (payload.error_events && payload.error_events.length) ||
-        (payload.tool_usage && payload.tool_usage.length) ||
-        (payload.device_usage && payload.device_usage.length)
+        (payload.tool_usage && payload.tool_usage.length)
       ) {
         const references = {
           events: snapshot.events,
           usage_log: snapshot.usageLogs,
           error_events: snapshot.errorEvents,
           tool_usage: snapshot.toolUses,
-          device_usage: [],
         };
         const chunks = this._partitionBatchPayload(payload, references);
         const acknowledged = {
@@ -975,16 +976,10 @@ class UsageTracker {
           }
           if (!result || (typeof result === "object" && result.ok === false)) break;
 
-          acknowledged.events.push(...(chunk.references?.events || []));
-          acknowledged.usageLogs.push(...(chunk.references?.usage_log || []));
-          acknowledged.errorEvents.push(...(chunk.references?.error_events || []));
-          const acceptedIds =
-            typeof result === "object"
-              ? new Set(Array.isArray(result.acknowledged?.tool_usage) ? result.acknowledged.tool_usage : [])
-              : null;
-          acknowledged.toolUses.push(
-            ...(chunk.references?.tool_usage || []).filter((item) => !acceptedIds || acceptedIds.has(item.event_id)),
-          );
+          acknowledged.events.push(...this._acceptedRows(result, chunk.references, "events"));
+          acknowledged.usageLogs.push(...this._acceptedRows(result, chunk.references, "usage_log"));
+          acknowledged.errorEvents.push(...this._acceptedRows(result, chunk.references, "error_events"));
+          acknowledged.toolUses.push(...this._acceptedRows(result, chunk.references, "tool_usage", { requireIds: true }));
         }
 
         if (
@@ -993,8 +988,7 @@ class UsageTracker {
           acknowledged.errorEvents.length ||
           acknowledged.toolUses.length
         ) {
-          // Counts/device_usage are absolute values and remain in state for the
-          // next sync. Only remove detail rows from the original snapshot.
+          // Only remove detail rows from the original snapshot; rows queued during the send stay.
           this._state.events = this._removeAcknowledgedRows(this._state.events, acknowledged.events);
           this._state.usageLogs = this._removeAcknowledgedRows(this._state.usageLogs, acknowledged.usageLogs);
           this._state.errorEvents = this._removeAcknowledgedRows(this._state.errorEvents, acknowledged.errorEvents);

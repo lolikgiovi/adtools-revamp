@@ -221,12 +221,11 @@ describe("UsageTracker analytics reliability", () => {
       events: Array.from({ length: 260 }, (_, index) => ({ id: `event-${index}` })),
       usage_log: Array.from({ length: 180 }, (_, index) => ({ id: `log-${index}` })),
       error_events: Array.from({ length: 70 }, (_, index) => ({ id: `error-${index}` })),
-      tool_usage: [],
-      device_usage: Array.from({ length: 40 }, (_, index) => ({ id: `usage-${index}` })),
+      tool_usage: Array.from({ length: 40 }, (_, index) => ({ id: `use-${index}` })),
     };
 
     const chunks = UsageTracker._chunkBatchPayload(payload);
-    const keys = ["events", "usage_log", "error_events", "tool_usage", "device_usage"];
+    const keys = ["events", "usage_log", "error_events", "tool_usage"];
 
     expect(chunks.length).toBeGreaterThan(1);
     chunks.forEach((chunk) => {

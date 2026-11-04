@@ -31,6 +31,7 @@ export default defineConfig({
       "backend-workers/tests/analytics-timestamp-regression-repair.test.js",
       "backend-workers/tests/capability-adoption.test.js",
       "backend-workers/tests/canonical-tool-usage-migration.test.js",
+      "backend-workers/tests/dashboard-load.test.js",
       "backend-workers/tests/dashboard-performance.test.js",
       "backend-workers/tests/dashboard-device-exclusions.test.js",
       "backend-workers/tests/dashboard-ordering.test.js",

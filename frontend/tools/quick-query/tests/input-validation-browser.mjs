@@ -272,7 +272,21 @@ try {
         fixture,
       );
       if (fixture.invalid) {
-        await panel.getByText("1 cell needs attention", { exact: true }).waitFor();
+        await panel
+          .getByText("1 cell needs attention", { exact: true })
+          .waitFor({ timeout: 5000 })
+          .catch(async (error) => {
+            console.log(
+              fixture.name,
+              await withUI(page, (ui) => ({
+                panel: ui.elements.inputValidation.textContent,
+                mode: ui.elements.auditUserMode.value,
+                data: ui.dataTable.getData(),
+                schema: ui.schemaTable.getData(),
+              })),
+            );
+            throw error;
+          });
         await page.locator("#generateQuery").click();
         await page.waitForFunction(() => {
           const ui = window.app.tools.get("quick-query").ui;

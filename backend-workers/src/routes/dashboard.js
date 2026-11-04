@@ -153,7 +153,7 @@ recent_usage AS (
         WHERE u2.user_email = u.user_email
           AND u2.device_id = u.device_id
           AND u2.tool_id = u.tool_id
-          AND DATE(datetime(u2.created_time)) = DATE(datetime(u.created_time))
+          AND SUBSTR(u2.created_time, 1, 10) = SUBSTR(u.created_time, 1, 10)
           AND u2.action != 'open'
       )
     )
@@ -195,13 +195,10 @@ LIMIT 200`,
   {
     id: "tools",
     name: "Tool Usage",
-    query: `WITH n AS (
-  SELECT
-    CASE WHEN tool_id IN ('jenkins-runner','run-query') THEN 'run-query' ELSE tool_id END AS tool_id,
-    action,
-    SUM(count) AS action_count
-  FROM device_usage
-  WHERE ${includedAnalyticsEmailSql("user_email")}
+    query: `WITH lifetime AS (${buildLifetimeUsageRollupQuery()}),
+n AS (
+  SELECT tool_id, action, SUM(count) AS action_count
+  FROM lifetime
   GROUP BY 1,2
 ),
 t AS (
@@ -1490,7 +1487,16 @@ function mergeStoredTabsWithDefaults(storedTabs) {
     const storedTab = storedById.get(defaultTab.id);
     if (!storedTab) return defaultTab;
     // Keep endpoint-owned built-in SQL current when stored copies outlive code changes.
-    return ["daily", "events", "qq-table-usage", "capability-adoption", "capability-people", "import-sources"].includes(defaultTab.id)
+    return [
+      "daily",
+      "events",
+      "qq-table-usage",
+      "capability-adoption",
+      "capability-people",
+      "import-sources",
+      "tools",
+      "active-users",
+    ].includes(defaultTab.id)
       ? { ...storedTab, query: defaultTab.query }
       : storedTab;
   });
@@ -2045,16 +2051,16 @@ async function executePersonQuery(env, person, rangeConfig) {
           .all()
       ).results || [];
     const [summary, tools, actions, days, recent] = await Promise.all([
-      rows(`SELECT ?1 AS user_email, COUNT(*) AS events, COUNT(DISTINCT DATE(datetime(created_time))) AS active_days,
+      rows(`SELECT ?1 AS user_email, COUNT(*) AS events, COUNT(DISTINCT SUBSTR(created_time, 1, 10)) AS active_days,
         COUNT(DISTINCT tool_id) AS tools_used, COUNT(DISTINCT device_id) AS devices_seen,
         MIN(created_time) AS first_activity, MAX(created_time) AS last_activity FROM person_activity`),
       rows(`SELECT tool_id, COUNT(*) AS events, MAX(created_time) AS last_activity FROM person_activity
         GROUP BY tool_id ORDER BY events DESC, tool_id`),
       rows(`SELECT tool_id, action, COUNT(*) AS events, MAX(created_time) AS last_activity FROM person_activity
         GROUP BY tool_id, action ORDER BY events DESC, tool_id, action`),
-      rows(`SELECT DATE(datetime(created_time)) AS day, COUNT(*) AS events FROM person_activity GROUP BY day ORDER BY day DESC`),
+      rows(`SELECT SUBSTR(created_time, 1, 10) AS day, COUNT(*) AS events FROM person_activity GROUP BY day ORDER BY day DESC`),
       rows(`SELECT user_email, tool_id, action, device_id, created_time FROM person_activity
-        ORDER BY datetime(created_time) DESC, tool_id, action, device_id LIMIT 100`),
+        ORDER BY created_time DESC, tool_id, action, device_id LIMIT 100`),
     ]);
     Object.assign(data, { summary: summary[0] || empty.summary, tools, actions, days, recent });
   }
@@ -2065,7 +2071,7 @@ async function executePersonQuery(env, person, rangeConfig) {
         CASE WHEN json_valid(properties) THEN properties ELSE '{}' END AS details
       FROM tool_usage
       WHERE LOWER(user_email) = ?1 AND ${includedAnalyticsEmailSql("user_email")} ${rangeConfig.where("created_time")}
-      ORDER BY datetime(created_time) DESC, id DESC LIMIT 100`,
+      ORDER BY created_time DESC, id DESC LIMIT 100`,
     )
       .bind(person)
       .all();
@@ -2090,7 +2096,7 @@ async function executePersonQuery(env, person, rangeConfig) {
     const [errors, count] = await Promise.all([
       env.DB.prepare(
         `SELECT tool_id, error_name, message, created_time FROM error_events ${where}
-        ORDER BY datetime(created_time) DESC, id DESC LIMIT 50`,
+        ORDER BY created_time DESC, id DESC LIMIT 50`,
       )
         .bind(person)
         .all(),
@@ -2753,25 +2759,25 @@ function getDashboardRangeConfig(range) {
       id: "today",
       label: "today",
       phrase: "today",
-      where: (column) => `AND datetime(${column}) >= datetime('now', '+7 hours', 'start of day')`,
+      where: (column) => `AND ${column} >= datetime('now', '+7 hours', 'start of day')`,
     },
     "7d": {
       id: "7d",
       label: "the last 7 days",
       phrase: "in the last 7 days",
-      where: (column) => `AND datetime(${column}) >= datetime('now', '+7 hours', '-7 days')`,
+      where: (column) => `AND ${column} >= datetime('now', '+7 hours', '-7 days')`,
     },
     "30d": {
       id: "30d",
       label: "the last 30 days",
       phrase: "in the last 30 days",
-      where: (column) => `AND datetime(${column}) >= datetime('now', '+7 hours', '-30 days')`,
+      where: (column) => `AND ${column} >= datetime('now', '+7 hours', '-30 days')`,
     },
     "90d": {
       id: "90d",
       label: "the last 90 days",
       phrase: "in the last 90 days",
-      where: (column) => `AND datetime(${column}) >= datetime('now', '+7 hours', '-90 days')`,
+      where: (column) => `AND ${column} >= datetime('now', '+7 hours', '-90 days')`,
     },
     all: {
       id: "all",

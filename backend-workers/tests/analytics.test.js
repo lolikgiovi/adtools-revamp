@@ -303,8 +303,8 @@ describe("Analytics endpoints", () => {
       env,
     );
     expect(response.status).toBe(200);
-    const insert = env.DB.executed.find((item) => item.sql.includes("INSERT INTO events"));
-    expect(JSON.parse(insert.args[3])).toMatchObject({ actor_email: "analytics-test@bankmandiri.co.id", file_name: "rates-202610.xlsx" });
+    const insert = env.DB.executed.find((item) => item.sql.includes("INTO events ("));
+    expect(JSON.parse(insert.args[4])).toMatchObject({ actor_email: "analytics-test@bankmandiri.co.id", file_name: "rates-202610.xlsx" });
   });
 
   it("accepts POST /analytics/batch", async () => {
@@ -371,7 +371,7 @@ describe("Analytics endpoints", () => {
     expect(data.inserted.usage_log).toBe(1);
     expect(data.inserted.tool_usage).toBe(1);
     expect(data.acknowledged.tool_usage).toEqual(["use-1"]);
-    expect(data.inserted.device_usage).toBe(1);
+    expect(data.inserted.device_usage).toBeUndefined();
     expect(env.DB.batch).toHaveBeenCalledTimes(1);
   });
 
@@ -494,12 +494,12 @@ describe("Analytics endpoints", () => {
     expect(data.ok).toBe(true);
     expect(data.inserted).toBe(1);
 
-    const insert = env.DB.executed.find((item) => item.sql.includes("INSERT INTO error_events"));
+    const insert = env.DB.executed.find((item) => item.sql.includes("INTO error_events ("));
     const createTable = env.DB.executed.find((item) => item.sql.includes("CREATE TABLE IF NOT EXISTS error_events"));
     expect(createTable).toBeTruthy();
     expect(insert.args).toContain("json-tools");
     expect(insert.args).toContain("Unexpected failure with code [redacted-code]");
-    const metadata = JSON.parse(insert.args[15]);
+    const metadata = JSON.parse(insert.args[16]);
     expect(metadata.context).toBe("render");
     expect(metadata.sql).toBeUndefined();
   });

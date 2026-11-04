@@ -5,7 +5,12 @@
 
 import { sendFeedbackEmail } from "../utils/feedbackEmail.js";
 import { corsHeaders } from "../utils/cors.js";
-import { ensureErrorEventsSchema, ensureLifetimeUsageBaselineSchema, ensureToolUsageSchema } from "../utils/analyticsSchema.js";
+import {
+  ensureErrorEventsSchema,
+  ensureEventsSchema,
+  ensureLifetimeUsageBaselineSchema,
+  ensureToolUsageSchema,
+} from "../utils/analyticsSchema.js";
 import { buildCanonicalToolUsageQuery, buildLifetimeUsageRollupQuery } from "../utils/analyticsUsageSql.js";
 import { consumeRateLimit } from "../utils/rateLimit.js";
 import { tsGmt7, tsGmt7Plain, tsToGmt7Plain } from "../utils/timestamps.js";
@@ -193,7 +198,7 @@ async function loadOverviewData(env, userEmail, source) {
       `WITH normalized_usage AS (${normalizedUsageSql})
          SELECT SUBSTR(created_time, 1, 10) AS day, COUNT(*) AS count
          FROM normalized_usage
-         WHERE created_time >= datetime('now', '+7 hours', '-6 days')
+         WHERE created_time >= date('now', '+7 hours', '-6 days')
            AND user_email = ?
          GROUP BY day
          ORDER BY day ASC`,
@@ -204,7 +209,7 @@ async function loadOverviewData(env, userEmail, source) {
       `WITH normalized_usage AS (${normalizedUsageSql})
          SELECT SUBSTR(created_time, 1, 10) AS day, COUNT(*) AS count
          FROM normalized_usage
-         WHERE created_time >= datetime('now', '+7 hours', '-6 days')
+         WHERE created_time >= date('now', '+7 hours', '-6 days')
          GROUP BY day
          ORDER BY day ASC`,
     ).all(),
@@ -276,10 +281,10 @@ function analyticsJson(payload, status = 200) {
 }
 
 /**
- * Handle POST /analytics/batch - batch insert events/usage logs and upsert device_usage
- * IMPROVEMENTS:
- * - Uses env.DB.batch() for single transaction (performance)
- * - Removed legacy daily_usage and user_usage writes
+ * Handle POST /analytics/batch - store queued events, error events, usage logs, and tool uses.
+ * Every insert is retry-safe (row id or identity index) and every stored row is acknowledged by id,
+ * so the client only drops rows the database actually holds. device_usage counters from older
+ * clients are accepted and ignored: lifetime totals come from the frozen baseline plus tool_usage.
  */
 export async function handleAnalyticsBatchPost(request, env, session) {
   try {
@@ -289,27 +294,23 @@ export async function handleAnalyticsBatchPost(request, env, session) {
     const events = Array.isArray(data.events) ? data.events : [];
     const usageLogs = Array.isArray(data.usage_log) ? data.usage_log : Array.isArray(data.usage_logs) ? data.usage_logs : [];
     const errorEvents = Array.isArray(data.error_events) ? data.error_events : [];
-    const deviceUsage = Array.isArray(data.device_usage) ? data.device_usage : [];
     const toolUsage = Array.isArray(data.tool_usage) ? data.tool_usage : Array.isArray(data.tool_uses) ? data.tool_uses : [];
-    if (events.length + usageLogs.length + errorEvents.length + deviceUsage.length + toolUsage.length > 500) {
+    if (events.length + usageLogs.length + errorEvents.length + toolUsage.length > 500) {
       return new Response(JSON.stringify({ ok: false, error: "Analytics batch exceeds 500 items" }), {
         status: 413,
         headers: { "Content-Type": "application/json", ...corsHeaders() },
       });
     }
 
-    let insertedEvents = 0;
-    let insertedUsageLogs = 0;
-    let insertedErrorEvents = 0;
-    let insertedToolUsage = 0;
-    let upsertsDevice = 0;
-    const acknowledgedToolUsageIds = [];
+    const inserted = { events: 0, error_events: 0, usage_log: 0, tool_usage: 0 };
+    const acknowledged = { events: [], error_events: [], usage_log: [], tool_usage: [] };
 
     if (env.DB) {
-      // Build batch statements for events
-      const eventStatements = [];
+      /** @type {{ key: keyof typeof inserted, id: string | null, statement: any }[]} */
+      const rows = [];
+      if (events.length > 0) await ensureEventsSchema(env);
       for (const ev of events) {
-        const createdTime = String(ev.created_time || tsGmt7Plain());
+        const createdTime = tsToGmt7Plain(ev.created_time) || tsGmt7Plain();
         const featureId = normalizeFeatureId(ev.feature_id || ev.type || "unknown");
         const action = String(ev.action || ev.event || "unknown");
         const properties =
@@ -341,88 +342,35 @@ export async function handleAnalyticsBatchPost(request, env, session) {
           }
           props = JSON.stringify({ ...sanitizeObject(details || {}, 4000), actor_email: userEmail });
         }
-        const dev = deviceId;
-
-        eventStatements.push(
-          env.DB.prepare("INSERT INTO events (device_id, feature_id, action, properties, created_time) VALUES (?, ?, ?, ?, ?)").bind(
-            dev,
-            featureId,
-            action,
-            props,
-            createdTime,
-          ),
-        );
+        const eventId = rowId(ev);
+        rows.push({
+          key: "events",
+          id: eventId,
+          statement: env.DB.prepare(
+            "INSERT OR IGNORE INTO events (event_id, device_id, feature_id, action, properties, created_time) VALUES (?, ?, ?, ?, ?, ?)",
+          ).bind(eventId, deviceId, featureId, action, props, createdTime),
+        });
       }
 
-      const errorStatements = [];
-      if (errorEvents.length > 0) {
-        await ensureErrorEventsSchema(env);
-      }
+      if (errorEvents.length > 0) await ensureErrorEventsSchema(env);
       for (const err of errorEvents) {
-        const userEmailForError = userEmail;
-        const deviceIdForError = deviceId;
-        const runtime = safeString(err.runtime || data.runtime || "unknown", 40);
-        const appVersion = safeString(err.app_version || data.app_version || "", 60) || null;
-        const route = safeString(err.route || "", 160) || null;
-        const toolId = normalizeFeatureId(err.tool_id || "");
-        const processArea = safeString(err.process_area || "shell", 80);
-        const errorKind = safeString(err.error_kind || "uncaught_error", 80);
-        const errorName = safeString(err.error_name || "Error", 120);
-        const message = safeString(err.message || "Unknown error", 300);
-        const stack = safeString(err.stack || "", 1500) || null;
-        const source = safeString(err.source || "", 500) || null;
-        const lineno = Number.isFinite(Number(err.lineno)) ? Number(err.lineno) : null;
-        const colno = Number.isFinite(Number(err.colno)) ? Number(err.colno) : null;
-        const userAgent = safeString(err.user_agent || "", 300) || null;
-        const metadata = JSON.stringify(sanitizeObject(err.metadata || {}, 300));
-        const createdTime = tsToGmt7Plain(err.created_time) || tsGmt7Plain();
-
-        errorStatements.push(
-          env.DB.prepare(
-            `INSERT INTO error_events (
-              user_email, device_id, runtime, app_version, route, tool_id, process_area,
-              error_kind, error_name, message, stack, source, lineno, colno, user_agent,
-              metadata, created_time
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          ).bind(
-            userEmailForError,
-            deviceIdForError,
-            runtime,
-            appVersion,
-            route,
-            toolId || null,
-            processArea,
-            errorKind,
-            errorName,
-            message,
-            stack,
-            source,
-            lineno,
-            colno,
-            userAgent,
-            metadata,
-            createdTime,
-          ),
-        );
+        const eventId = rowId(err);
+        rows.push({ key: "error_events", id: eventId, statement: errorEventStatement(env, err, data, userEmail, deviceId, eventId) });
       }
 
-      const usageLogStatements = [];
       for (const log of usageLogs) {
-        const email = userEmail;
-        const dev = deviceId;
         const toolId = normalizeFeatureId(log.tool_id || "unknown");
         const action = String(log.action || "unknown");
-        const createdTime = String(log.created_time || tsGmt7Plain());
-
-        usageLogStatements.push(
-          env.DB.prepare(
+        const createdTime = tsToGmt7Plain(log.created_time, { milliseconds: true }) || tsGmt7Plain();
+        rows.push({
+          key: "usage_log",
+          id: rowId(log),
+          statement: env.DB.prepare(
             "INSERT OR IGNORE INTO usage_log (user_email, device_id, tool_id, action, created_time) VALUES (?, ?, ?, ?, ?)",
-          ).bind(email, dev, toolId, action, createdTime),
-        );
+          ).bind(userEmail, deviceId, toolId, action, createdTime),
+        });
       }
 
-      const toolUsageStatements = [];
-      const toolUsageStatementIds = [];
       if (toolUsage.length > 0) await ensureToolUsageSchema(env);
       for (const item of toolUsage) {
         const eventId = safeString(item.event_id || item.eventId || "", 160).trim();
@@ -431,109 +379,82 @@ export async function handleAnalyticsBatchPost(request, env, session) {
         if (!eventId || !toolId || toolId === "unknown" || !action) continue;
         const properties = JSON.stringify(sanitizeObject(item.properties || item.meta || {}, 4000));
         const createdTime = tsToGmt7Plain(item.created_time || item.ts) || tsGmt7Plain();
-        toolUsageStatements.push(
-          env.DB.prepare(
+        rows.push({
+          key: "tool_usage",
+          id: eventId,
+          statement: env.DB.prepare(
             `INSERT OR IGNORE INTO tool_usage
              (event_id, user_email, device_id, tool_id, action, properties, source, created_time)
              VALUES (?, ?, ?, ?, ?, ?, 'client', ?)`,
           ).bind(eventId, userEmail, deviceId, toolId, action, properties, createdTime),
-        );
-        toolUsageStatementIds.push(eventId);
+        });
       }
 
-      // Build batch statements for device_usage (idempotent - replaces counts)
-      const usageStatements = [];
-      for (const du of deviceUsage) {
-        const devId = deviceId;
-        const email = userEmail;
-        const toolId = normalizeFeatureId(du.tool_id || "unknown");
-        const action = String(du.action || "unknown");
-        const count = Number(du.count || 0) || 0;
-        const updatedTime = String(du.updated_time || tsGmt7Plain());
-
-        usageStatements.push(
-          env.DB.prepare(
-            `INSERT INTO device_usage (device_id, user_email, tool_id, action, count, updated_time)
-             VALUES (?, ?, ?, ?, ?, ?)
-             ON CONFLICT(device_id, tool_id, action) DO UPDATE SET
-               user_email = excluded.user_email,
-               count = excluded.count,
-               updated_time = excluded.updated_time`,
-          ).bind(devId, email, toolId, action, count, updatedTime),
-        );
-      }
-
-      // Execute all statements in a single batch transaction
-      const allStatements = [...eventStatements, ...errorStatements, ...usageLogStatements, ...toolUsageStatements, ...usageStatements];
-      if (allStatements.length > 0) {
+      const stored = (row) => {
+        inserted[row.key]++;
+        if (row.id) acknowledged[row.key].push(row.id);
+      };
+      if (rows.length > 0) {
         try {
-          await env.DB.batch(allStatements);
-          // Count successful inserts
-          insertedEvents = eventStatements.length;
-          insertedErrorEvents = errorStatements.length;
-          insertedUsageLogs = usageLogStatements.length;
-          insertedToolUsage = toolUsageStatements.length;
-          acknowledgedToolUsageIds.push(...toolUsageStatementIds);
-          upsertsDevice = usageStatements.length;
+          await env.DB.batch(rows.map((row) => row.statement));
+          rows.forEach(stored);
         } catch (batchErr) {
-          // Fallback to individual inserts if batch fails
-          for (const stmt of eventStatements) {
+          // The transaction rolled back; store what can be stored and acknowledge only those rows.
+          console.error(JSON.stringify({ message: "analytics batch fell back to single inserts", error: String(batchErr) }));
+          for (const row of rows) {
             try {
-              await stmt.run();
-              insertedEvents++;
-            } catch (_) {}
-          }
-          for (const stmt of errorStatements) {
-            try {
-              await stmt.run();
-              insertedErrorEvents++;
-            } catch (_) {}
-          }
-          for (const stmt of usageLogStatements) {
-            try {
-              await stmt.run();
-              insertedUsageLogs++;
-            } catch (_) {}
-          }
-          for (const stmt of usageStatements) {
-            try {
-              await stmt.run();
-              upsertsDevice++;
-            } catch (_) {}
-          }
-          for (const [index, stmt] of toolUsageStatements.entries()) {
-            try {
-              await stmt.run();
-              insertedToolUsage++;
-              acknowledgedToolUsageIds.push(toolUsageStatementIds[index]);
+              await row.statement.run();
+              stored(row);
             } catch (_) {}
           }
         }
       }
     }
 
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        inserted: {
-          events: insertedEvents,
-          error_events: insertedErrorEvents,
-          usage_log: insertedUsageLogs,
-          tool_usage: insertedToolUsage,
-          device_usage: upsertsDevice,
-        },
-        acknowledged: { tool_usage: acknowledgedToolUsageIds },
-      }),
-      {
-        headers: { "Content-Type": "application/json", ...corsHeaders() },
-      },
-    );
+    return new Response(JSON.stringify({ ok: true, inserted, acknowledged }), {
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
   } catch (err) {
     return new Response(JSON.stringify({ ok: false, error: String(err) }), {
       status: 400,
       headers: { "Content-Type": "application/json", ...corsHeaders() },
     });
   }
+}
+
+function rowId(row) {
+  return safeString(row?.event_id || "", 160).trim() || null;
+}
+
+function errorEventStatement(env, err, defaults, userEmail, deviceId, eventId) {
+  const lineno = Number.isFinite(Number(err.lineno)) ? Number(err.lineno) : null;
+  const colno = Number.isFinite(Number(err.colno)) ? Number(err.colno) : null;
+  return env.DB.prepare(
+    `INSERT OR IGNORE INTO error_events (
+      event_id, user_email, device_id, runtime, app_version, route, tool_id, process_area,
+      error_kind, error_name, message, stack, source, lineno, colno, user_agent,
+      metadata, created_time
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(
+    eventId,
+    userEmail,
+    deviceId,
+    safeString(err.runtime || defaults?.runtime || "unknown", 40),
+    safeString(err.app_version || defaults?.app_version || "", 60) || null,
+    safeString(err.route || "", 160) || null,
+    normalizeFeatureId(err.tool_id || "") || null,
+    safeString(err.process_area || "shell", 80),
+    safeString(err.error_kind || "uncaught_error", 80),
+    safeString(err.error_name || "Error", 120),
+    safeString(err.message || "Unknown error", 300),
+    safeString(err.stack || "", 1500) || null,
+    safeString(err.source || "", 500) || null,
+    lineno,
+    colno,
+    safeString(err.user_agent || "", 300) || null,
+    JSON.stringify(sanitizeObject(err.metadata || {}, 300)),
+    tsToGmt7Plain(err.created_time) || tsGmt7Plain(),
+  );
 }
 
 /**
@@ -555,7 +476,7 @@ export async function handleAnalyticsLogPost(request, env, session) {
     const deviceId = String(session.deviceId);
     const toolId = normalizeFeatureId(data.tool_id || "unknown");
     const action = String(data.action || "unknown");
-    const createdTime = String(data.created_time || tsGmt7Plain());
+    const createdTime = tsToGmt7Plain(data.created_time, { milliseconds: true }) || tsGmt7Plain();
 
     let inserted = 0;
     let dbError = null;
@@ -599,24 +520,6 @@ export async function handleAnalyticsLogPost(request, env, session) {
 export async function handleAnalyticsErrorPost(request, env, session) {
   try {
     const data = await request.json();
-    const userEmail = String(session.email).trim().toLowerCase();
-    const deviceId = String(session.deviceId);
-    const runtime = safeString(data.runtime || "unknown", 40);
-    const appVersion = safeString(data.app_version || "", 60) || null;
-    const route = safeString(data.route || "", 160) || null;
-    const toolId = normalizeFeatureId(data.tool_id || "");
-    const processArea = safeString(data.process_area || "shell", 80);
-    const errorKind = safeString(data.error_kind || "uncaught_error", 80);
-    const errorName = safeString(data.error_name || "Error", 120);
-    const message = safeString(data.message || "Unknown error", 300);
-    const stack = safeString(data.stack || "", 1500) || null;
-    const source = safeString(data.source || "", 500) || null;
-    const lineno = Number.isFinite(Number(data.lineno)) ? Number(data.lineno) : null;
-    const colno = Number.isFinite(Number(data.colno)) ? Number(data.colno) : null;
-    const userAgent = safeString(data.user_agent || "", 300) || null;
-    const metadata = JSON.stringify(sanitizeObject(data.metadata || {}, 300));
-    const createdTime = tsToGmt7Plain(data.created_time) || tsGmt7Plain();
-
     if (!env.DB) {
       return new Response(JSON.stringify({ ok: false, error: "Database unavailable" }), {
         status: 500,
@@ -625,34 +528,8 @@ export async function handleAnalyticsErrorPost(request, env, session) {
     }
 
     await ensureErrorEventsSchema(env);
-
-    await env.DB.prepare(
-      `INSERT INTO error_events (
-        user_email, device_id, runtime, app_version, route, tool_id, process_area,
-        error_kind, error_name, message, stack, source, lineno, colno, user_agent,
-        metadata, created_time
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-      .bind(
-        userEmail,
-        deviceId,
-        runtime,
-        appVersion,
-        route,
-        toolId || null,
-        processArea,
-        errorKind,
-        errorName,
-        message,
-        stack,
-        source,
-        lineno,
-        colno,
-        userAgent,
-        metadata,
-        createdTime,
-      )
-      .run();
+    const userEmail = String(session.email).trim().toLowerCase();
+    await errorEventStatement(env, data, data, userEmail, String(session.deviceId), rowId(data)).run();
 
     return new Response(JSON.stringify({ ok: true, inserted: 1 }), {
       headers: { "Content-Type": "application/json", ...corsHeaders() },

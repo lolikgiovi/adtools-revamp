@@ -30,6 +30,14 @@ function applyMigrations(sqlite, predicate) {
   for (const name of MIGRATION_NAMES.filter(predicate)) sqlite.exec(readFileSync(new URL(name, MIGRATIONS), "utf8"));
 }
 
+/** events reference a registered device, as every production row does. */
+function registerDevice(sqlite, deviceId, email = SESSION.email) {
+  sqlite.exec(`INSERT OR IGNORE INTO users (id, email, created_time, last_seen)
+    VALUES ('user-${deviceId}', '${email}', '2026-01-01 00:00:00', '2026-01-01 00:00:00');
+    INSERT OR IGNORE INTO device (device_id, user_id, created_time, last_seen)
+    VALUES ('${deviceId}', 'user-${deviceId}', '2026-01-01 00:00:00', '2026-01-01 00:00:00');`);
+}
+
 /** D1-shaped wrapper. `faults.batch` makes the transaction fail; `faults.run(sql, args)` fails single statements. */
 function d1(sqlite, faults = {}) {
   return {
@@ -121,6 +129,7 @@ describe("analytics ingestion integrity", () => {
   beforeEach(() => {
     sqlite = new DatabaseSync(":memory:");
     applyMigrations(sqlite, () => true);
+    registerDevice(sqlite, SESSION.deviceId);
     env = createEnv(sqlite);
     localStorage.clear();
     localStorage.setItem("user.email", SESSION.email);
@@ -140,7 +149,12 @@ describe("analytics ingestion integrity", () => {
   function queueOneOfEach() {
     UsageTracker._trackEventImmediate("json-tools", "page_view", { source: "sidebar" });
     UsageTracker._queueUsageLog("json-tools", "open");
-    UsageTracker.queueErrorEvent({ error_kind: "captured_error", error_name: "Error", message: "boom", created_time: new Date().toISOString() });
+    UsageTracker.queueErrorEvent({
+      error_kind: "captured_error",
+      error_name: "Error",
+      message: "boom",
+      created_time: new Date().toISOString(),
+    });
     UsageTracker.trackToolUse("json-tools", "prettify");
   }
 
@@ -234,12 +248,22 @@ describe("analytics ingestion integrity", () => {
     );
     expect(live.status).toBe(200);
 
-    expect(sqlite.prepare("SELECT action, created_time FROM events ORDER BY action").all().map((row) => ({ ...row }))).toEqual([
+    expect(
+      sqlite
+        .prepare("SELECT action, created_time FROM events ORDER BY action")
+        .all()
+        .map((row) => ({ ...row })),
+    ).toEqual([
       { action: "naive", created_time: "2026-10-29 10:00:00+07:00" },
       { action: "offset", created_time: "2026-10-29 10:00:00+07:00" },
       { action: "utc", created_time: "2026-10-29 10:00:00+07:00" },
     ]);
-    expect(sqlite.prepare("SELECT action, created_time FROM usage_log ORDER BY action").all().map((row) => ({ ...row }))).toEqual([
+    expect(
+      sqlite
+        .prepare("SELECT action, created_time FROM usage_log ORDER BY action")
+        .all()
+        .map((row) => ({ ...row })),
+    ).toEqual([
       { action: "mount", created_time: "2026-10-29 10:00:00.456+07:00" },
       { action: "open", created_time: "2026-10-29 10:00:00.123+07:00" },
     ]);
@@ -251,6 +275,7 @@ describe("analytics ingestion integrity", () => {
       const backfill = MIGRATION_NAMES.find((name) => name.startsWith("0032_"));
       expect(backfill, "0032 migration").toBeTruthy();
       applyMigrations(legacy, (name) => name < backfill);
+      registerDevice(legacy, "d", "a@x.test");
       legacy.exec(`
         INSERT INTO events (device_id, feature_id, action, properties, created_time) VALUES
           ('d', 'json-tools', 'naive', '{}', '2026-10-29 10:00:00'),
@@ -267,7 +292,11 @@ describe("analytics ingestion integrity", () => {
 
       applyMigrations(legacy, (name) => name >= backfill);
 
-      const times = (table) => legacy.prepare(`SELECT created_time FROM ${table} ORDER BY created_time`).all().map((row) => row.created_time);
+      const times = (table) =>
+        legacy
+          .prepare(`SELECT created_time FROM ${table} ORDER BY created_time`)
+          .all()
+          .map((row) => row.created_time);
       expect(times("events")).toEqual(["2026-10-29 10:00:00+07:00", "2026-10-29 10:00:00+07:00"]);
       expect(times("usage_log")).toEqual(["2026-10-29 10:00:00.100+07:00", "2026-10-29 10:00:00.200+07:00"]);
       expect(times("tool_usage")).toEqual(["2026-10-29 10:00:00+07:00", "2026-10-29 10:00:00+07:00"]);
@@ -277,7 +306,11 @@ describe("analytics ingestion integrity", () => {
         .map((row) => row.name);
       expect(tables).not.toContain("daily_usage");
       expect(tables).not.toContain("user_usage");
-      const columns = (table) => legacy.prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name);
+      const columns = (table) =>
+        legacy
+          .prepare(`PRAGMA table_info(${table})`)
+          .all()
+          .map((column) => column.name);
       expect(columns("events")).toContain("event_id");
       expect(columns("error_events")).toContain("event_id");
     } finally {
@@ -330,7 +363,7 @@ describe("analytics ingestion integrity", () => {
     expect(tools).toContainEqual(expect.objectContaining({ tool_id: "json-tools", action: "TOTAL", total_count: 1 }));
     const adoption = await dashboard(env, { tabId: "tool-adoption", range: "all" });
     expect(adoption).toContainEqual(
-      expect.objectContaining({ tool_id: "json-tools", total_actions: 1, opens: 1, users: 1, devices: 1, top_action: "prettify" }),
+      expect.objectContaining({ tool_id: "json-tools", successful_uses: 1, opens: 1, users: 1, devices: 1, top_action: "prettify" }),
     );
     expect(count(sqlite, "device_usage")).toBe(0);
   });

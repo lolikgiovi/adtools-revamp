@@ -110,7 +110,7 @@ class AnalyticsSender {
   // Preferred batch sender for periodic and success-triggered flushes. POST only.
   static async sendBatch(batch = {}) {
     const deviceId = String(batch.device_id || batch.deviceId || "");
-    this._log("sendBatch called, usage entries:", batch.device_usage?.length || 0, "events:", batch.events?.length || 0);
+    this._log("sendBatch called, tool uses:", batch.tool_usage?.length || 0, "events:", batch.events?.length || 0);
     return this._postJsonResult("/analytics/batch", batch, deviceId ? { "X-Device-Id": deviceId } : {});
   }
 

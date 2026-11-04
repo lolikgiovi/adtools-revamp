@@ -20,7 +20,10 @@
     "1440: Unicode CHAR length accepted and generates SQL",
     "1440: real worker duplicate warning links C1 and C72 to displayed rows, preserving the blank row",
     "1440: legacy generation error uses data row 1 and links to B1",
-    "1440: new tab clears validation from prior data",
+    "1440: 72-row custom audit error groups into two control issues, focuses the custom editor and clears on correction without changing cells",
+    "1440: Off mode validates and links the real audit cell",
+    "1440: invalid SYSTEM override highlights and focuses its control",
+    "1440: new tab clears validation from prior data and audit controls",
     "390: live required/BYTE/CHAR issues, exact coordinates, navigation, generation blocked, input preserved",
     "390: corrections clear markers and successful SQL is produced",
     "390: blank UPDATE preserves existing value; explicit NULL remains blocked",
@@ -40,7 +43,10 @@
     "390: Unicode CHAR length accepted and generates SQL",
     "390: real worker duplicate warning links C1 and C72 to displayed rows, preserving the blank row",
     "390: legacy generation error uses data row 1 and links to B1",
-    "390: new tab clears validation from prior data"
+    "390: 72-row custom audit error groups into two control issues, focuses the custom editor and clears on correction without changing cells",
+    "390: Off mode validates and links the real audit cell",
+    "390: invalid SYSTEM override highlights and focuses its control",
+    "390: new tab clears validation from prior data and audit controls"
   ],
   "errors": [],
   "base": "http://127.0.0.1:1249",

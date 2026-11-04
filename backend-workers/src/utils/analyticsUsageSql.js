@@ -35,7 +35,7 @@ SELECT u.user_email,
         WHERE u2.user_email = u.user_email
           AND u2.device_id = u.device_id
           AND u2.tool_id = u.tool_id
-          AND DATE(datetime(u2.created_time)) = DATE(datetime(u.created_time))
+          AND SUBSTR(u2.created_time, 1, 10) = SUBSTR(u.created_time, 1, 10)
           AND u2.action != 'open'
       )
     )`;

@@ -14,8 +14,8 @@ blank PARAMETER_KEY is highlighted at C1, generation is blocked before the CONFI
 confirmation, correcting the key removes the issue, and UPDATE SQL then generates.
 See `1440-dark-required-key.png` and `390-light-required-key.png`.
 
-The browser run records 40 checks in `result.json`, with zero uncaught page errors.
-The Quick Query suite passed 420 tests; the regression suite includes all nine reported false-positive/negative cases,
+The browser run records 46 checks in `result.json`, with zero uncaught page errors.
+The Quick Query suite passed 426 tests; the regression suite includes all nine reported false-positive/negative cases,
 exact decimal precision and audit-user literal handling. Production Vite compilation and ESLint were also run.
 Existing lint warnings and dependency source-map/build warnings remain.
 
@@ -56,3 +56,17 @@ the imported rows are separate from the editable manual grid.
 - `1440-dark-duplicate-warning.png` / `390-light-duplicate-warning.png`: warning links.
 - `1440-dark-duplicate-links.png` / `390-light-duplicate-links.png`: selected row 72.
 - `1440-dark-legacy-cell-link.png` / `390-light-legacy-cell-link.png`: legacy error links.
+
+## Audit-user validation targets
+
+When Custom or SYSTEM overrides CREATED_BY/UPDATED_BY, validation reports each
+invalid field once at the audit-user control, rather than repeating it on every row.
+The selected source control receives the invalid outline; underlying grid cells keep
+their original values and have no misleading error markers. Clicking a custom-user
+issue opens and focuses the editor. Saving a valid value clears the control errors.
+Off mode continues to highlight and navigate to actual invalid sheet cells. Partial
+UPDATEs also validate an implicit UPDATED_BY supplied by the override.
+
+The 46 browser checks include a 72-row custom override, correction without changing
+source data, Off mode, SYSTEM mode, and clearing control state on a new tab. See
+`1440-dark-audit-control.png` and `390-light-audit-control.png`.
