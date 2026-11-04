@@ -269,7 +269,7 @@ class Sidebar {
     const styles = getComputedStyle(document.documentElement);
     const edgeMotion = document
       .querySelector(".sidebar")
-      .getAnimations()
+      .getAnimations({ subtree: true })
       .find((animation) => animation.transitionProperty === "transform");
     const duration =
       edgeMotion?.effect.getComputedTiming().duration || parseFloat(styles.getPropertyValue("--sidebar-motion-duration")) || 280;
@@ -284,6 +284,10 @@ class Sidebar {
       .map(({ element, x, y }) =>
         element.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: "translate(0px, 0px)" }], { duration, easing }),
       );
+    const startTime = edgeMotion?.startTime ?? document.timeline.currentTime;
+    this.sidebarAnimations.forEach((animation) => {
+      animation.startTime = startTime;
+    });
   }
 
   /**
@@ -507,7 +511,8 @@ class Sidebar {
           const toolId = button.closest("[data-tool]").dataset.tool;
           this.togglePin(toolId, "button");
           await this._pinRenderPromise;
-          const item = Array.from(sidebarContent.querySelectorAll("[data-tool]")).find((node) => node.dataset.tool === toolId);
+          const item = Array.from(sidebarContent.querySelectorAll("[data-tool]"))
+            .find((node) => node.dataset.tool === toolId);
           item?.querySelector(".sidebar-pin-action")?.focus({ preventScroll: true });
         });
       });

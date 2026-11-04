@@ -159,8 +159,8 @@ try {
         window.app.sidebar.expand();
         await new Promise((resolve) => setTimeout(resolve, 60));
         const edge = getComputedStyle(document.querySelector(".sidebar"), "::after");
-        const difference = document.querySelector(".main").getBoundingClientRect().left -
-          (parseFloat(edge.left) + new DOMMatrix(edge.transform).m41 + 1);
+        const difference =
+          document.querySelector(".main").getBoundingClientRect().left - (parseFloat(edge.left) + new DOMMatrix(edge.transform).m41 + 1);
         window.app.sidebar.collapse();
         await new Promise((resolve) => setTimeout(resolve, 350));
         return Math.abs(difference);

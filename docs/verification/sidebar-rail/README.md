@@ -4,11 +4,14 @@ Desktop collapse keeps a 52px navigation rail. Project selection, navigation,
 active states, footer actions, and keyboard pinning remain available. Mobile
 continues to use an overlay drawer.
 
-Expand/collapse uses a synchronized 200ms ease-out transition for the sidebar
-and workspace, with a short label fade on expansion. Reduced-motion mode changes
-the desktop layout instantly. The browser scenarios pause the transition halfway
+Expand/collapse uses synchronized 280ms transform animations for the workspace
+and icon rows, with a clipped background reveal and a short label fade. The
+workspace adopts its final width once rather than resizing editors every frame.
+Reduced-motion mode changes
+the desktop layout instantly. The browser scenarios pause the transition mid-motion
 to check alignment and capture `*-transition.png`, then verify rapid reversals
-and reduced-motion behavior.
+and reduced-motion behavior. The checks also observe workspace resizing and
+verify alignment while reversing a transition before it finishes.
 
 Start the installed Vite server:
 
