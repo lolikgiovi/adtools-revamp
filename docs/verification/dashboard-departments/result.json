@@ -1,0 +1,11 @@
+{
+  "passed": true,
+  "checks": [
+    "API: token required; registered-but-idle and Unknown departments kept; exclusions, reconstructed rows, and device double counting rejected; range applied",
+    "1440: Analytics Departments tab ranks departments, people/actions matrix toggle, range change refetches, no page overflow",
+    "390: Analytics Departments tab ranks departments, people/actions matrix toggle, range change refetches, no page overflow"
+  ],
+  "errors": [],
+  "data": "Synthetic SQLite fixtures; actual authenticated Worker handlers",
+  "command": "DASHBOARD_TEST_URL=http://127.0.0.1:1246 PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs node frontend/pages/analytics-dashboard/tests/departments-browser.mjs"
+}

@@ -1,5 +1,6 @@
 import { buildDailyTrendsQuery, buildDeviceHealthQuery, deviceVersionStatus } from "../utils/dashboardAnalysis.js";
 import { readUsagePatterns } from "../utils/usagePatterns.js";
+import { readDepartmentUsage } from "../utils/departmentUsage.js";
 import { scopeDashboardDevices } from "../utils/dashboardDevices.js";
 import { buildCapabilityAdoptionQuery, buildImportSourcesQuery } from "../utils/capabilityAdoption.js";
 /**
@@ -52,6 +53,12 @@ const DEFAULT_TABS = [
   { id: "capability-adoption", name: "Capability Adoption", query: buildCapabilityAdoptionQuery() },
   { id: "capability-people", name: "Capability by User", query: buildCapabilityAdoptionQuery(null, true) },
   { id: "import-sources", name: "Query Import Sources", query: buildImportSourcesQuery() },
+  {
+    id: "departments",
+    name: "Departments",
+    query:
+      "SELECT 'Departments are computed by the dashboard API' AS department, '-' AS tool_id, 'Use the dashboard API time range filter' AS details",
+  },
   {
     id: "who",
     name: "Who",
@@ -1572,6 +1579,16 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
           readUsagePatterns(env, normalized),
         ]);
         return JSON.stringify({ ok: true, data: daily.results || [], analysis });
+      });
+      return new Response(result, { headers: { "Content-Type": "application/json", ...corsHeaders() } });
+    }
+
+    if (tab.id === "departments") {
+      await ensureToolUsageSchema(env);
+      const normalized = getDashboardRangeConfig(range).id;
+      const result = await coalesceDashboardQuery(env, `tab:departments:${normalized}:v1`, async () => {
+        const analysis = await readDepartmentUsage(env, normalized);
+        return JSON.stringify({ ok: true, data: analysis.departments, analysis });
       });
       return new Response(result, { headers: { "Content-Type": "application/json", ...corsHeaders() } });
     }

@@ -5,8 +5,10 @@
  */
 import { renderTrends, renderDeviceHealth } from "./analysis.js";
 import { renderUsagePatterns } from "./patterns.js";
+import { renderDepartmentUsage } from "./departments.js";
 import { AnalyticsDashboardTemplate } from "./template.js";
 import "./styles.css";
+import "./departments.css";
 
 const API_BASE = String(import.meta.env.VITE_WORKER_BASE || (import.meta.env.DEV ? "http://localhost:8787" : "")).replace(/\/$/, "");
 const TOKEN_KEY = "analytics.dashboard.token";
@@ -14,12 +16,14 @@ const PRIMARY_VIEWS = [
   { id: "overview", label: "Summary" },
   { id: "opportunities", label: "Tools" },
   { id: "who", label: "People" },
+  { id: "departments", label: "Departments" },
   { id: "trends", label: "Trends" },
   { id: "device-health", label: "Devices" },
   { id: "daily", label: "Activity" },
 ];
 const RANGED_REPORTS = new Set([
   "trends",
+  "departments",
   "overview",
   "opportunities",
   "who",
@@ -36,6 +40,7 @@ const REPORT_GROUPS = [
       "trends",
       "opportunities",
       "who",
+      "departments",
       "capability-adoption",
       "capability-people",
       "active-users",
@@ -360,7 +365,7 @@ class AnalyticsDashboardPage {
     const actions = this.container.querySelector(".dashboard-actions");
     if (actions) actions.hidden = library;
     const search = this.container.querySelector(".dashboard-search");
-    if (search) search.hidden = ["overview", "trends"].includes(this.currentTab) || Boolean(this.selectedPerson);
+    if (search) search.hidden = ["overview", "trends", "departments"].includes(this.currentTab) || Boolean(this.selectedPerson);
     const input = this.container.querySelector("#dashboard-search");
     const label =
       this.currentTab === "who"
@@ -576,7 +581,8 @@ class AnalyticsDashboardPage {
           this.cache[cacheKey] = pageResult;
           this.applyPaginatedPage(content, pageResult.data, pageResult.pagination, append, paginationState);
         } else {
-          const report = tabId === "trends" && data.analysis ? { data: data.data, analysis: data.analysis } : data.data;
+          const report =
+            ["trends", "departments"].includes(tabId) && data.analysis ? { data: data.data, analysis: data.analysis } : data.data;
           this.cache[cacheKey] = report;
           this.renderTable(content, report);
         }
@@ -629,6 +635,10 @@ class AnalyticsDashboardPage {
 
   renderTable(container, data, { skipFilter = false } = {}) {
     if (!container) return;
+    if (this.currentTab === "departments" && data?.analysis) {
+      this.lastRenderedData = data.data;
+      return renderDepartmentUsage(this, container, data.analysis);
+    }
     if (this.currentTab === "trends" && data?.analysis) {
       this.lastRenderedData = data.data;
       return renderUsagePatterns(this, container, data.analysis);
