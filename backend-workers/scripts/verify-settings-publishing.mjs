@@ -286,7 +286,7 @@ try {
       };
       return { legacyId: getLegacyProjectId(), duplicateId: duplicate.id };
     });
-    await one.getByRole("button", { name: "Clear selection" }).click();
+    await one.getByRole("button", { name: "Clear", exact: true }).click();
     await one.locator("#publish-title").fill("Livin replace");
     await one.locator("#publish-project").fill("Livin");
     await one.locator("#publish-replace").check();

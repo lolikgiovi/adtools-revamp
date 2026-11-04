@@ -76,7 +76,7 @@ function displayValue(value, item) {
   if (item.options) return item.options.find((option) => option.value === value)?.label || value;
   return value === "" ? "Empty" : String(value);
 }
-function renderValue(value, item, settings = {}) {
+function renderValue(value, item, settings = {}, { logins = false } = {}) {
   if (!Array.isArray(value)) return `<span>${escape(displayValue(value, item))}</span>`;
   if (!value.length) return '<span class="publish-note">Empty list — clears the recipient’s list</span>';
   if (item.type === "string-list") return `<ul>${value.map((entry) => `<li>${escape(entry)}</li>`).join("")}</ul>`;
@@ -84,9 +84,9 @@ function renderValue(value, item, settings = {}) {
   const connections = settings["config.oracle.environment.catalog"] || [];
   return value
     .map(
-      (row) =>
+      (row, index) =>
         `<div class="publish-record"><strong>${escape(row.name)}</strong><dl>${Object.entries(row)
-          .filter(([key, val]) => fieldLabels[key] && key !== "name" && val)
+          .filter(([key, val]) => fieldLabels[key] && key !== "name" && val && !(logins && ["username", "password"].includes(key)))
           .map(([key, val]) => {
             const resolved =
               key === "environmentId"
@@ -97,9 +97,17 @@ function renderValue(value, item, settings = {}) {
             const shown = key === "password" ? "••••••••" : resolved || val;
             return `<dt>${escape(fieldLabels[key])}</dt><dd>${escape(shown)}</dd>`;
           })
-          .join("")}</dl></div>`,
+          .join("")}</dl>${logins ? loginFields(row, index) : ""}</div>`,
     )
     .join("");
+}
+/** Shared Oracle logins are typed per connection; they are written into the publication JSON. */
+function loginFields(row, index) {
+  const field = (key, label, type) =>
+    `<label class="publish-login-field"><span>${label}</span><input type="${type}" data-login="${key}" data-row="${index}"
+      value="${escape(row[key] || "")}" autocomplete="${type === "password" ? "new-password" : "off"}" spellcheck="false"
+      aria-label="${escape(`${row.name} ${label.toLowerCase()}`)}"></label>`;
+  return `<div class="publish-login">${field("username", "Username", "text")}${field("password", "Password", "password")}</div>`;
 }
 
 export class SettingsPublisher {
@@ -116,53 +124,60 @@ export class SettingsPublisher {
           <button type="submit" class="btn btn-primary">Unlock publishing</button></div>
       </form>
       <div class="publish-workspace" hidden>
-        <form class="publish-form">
-          <fieldset class="publish-project-fields"><legend>Project defaults</legend>
-            <div><label for="publish-source">Copy settings from</label>
-              <select id="publish-source">${listProjects()
-                .map(
-                  (project) => `<option value="${escape(project.id)}"
-                ${project.id === this.sourceProject.id ? "selected" : ""}>${escape(project.name)}</option>`,
-                )
-                .join("")}</select></div>
-            <div><label for="publish-project">Project name on other devices</label>
-              <input id="publish-project" maxlength="80" value="${escape(this.sourceProject.name)}" required autocomplete="off"></div>
-            <div><label for="publish-title">Publication name</label>
-              <input id="publish-title" maxlength="120" value="${escape(this.sourceProject.name)} defaults" required autocomplete="off"></div>
+        <form class="publish-form" id="publish-form">
+          <section class="publish-section" aria-labelledby="publish-project-heading">
+            <h3 id="publish-project-heading">Project</h3>
+            <div class="publish-project-fields">
+              <div><label for="publish-source">Copy settings from</label>
+                <select id="publish-source">${listProjects()
+                  .map(
+                    (project) => `<option value="${escape(project.id)}"
+                  ${project.id === this.sourceProject.id ? "selected" : ""}>${escape(project.name)}</option>`,
+                  )
+                  .join("")}</select></div>
+              <div><label for="publish-project">Project name on other devices</label>
+                <input id="publish-project" maxlength="80" value="${escape(this.sourceProject.name)}" required autocomplete="off"></div>
+              <div><label for="publish-title">Publication name</label>
+                <input id="publish-title" maxlength="120" value="${escape(this.sourceProject.name)} defaults" required autocomplete="off"></div>
+            </div>
             <label class="publish-choice"><input id="publish-replace" type="checkbox">Replace Default project</label>
-          </fieldset>
-          <fieldset><legend>Share with</legend>
-            <label for="publish-audience">Recipients</label>
-            <select id="publish-audience"><option value="departments">Departments</option><option value="emails">Specific people</option></select>
+          </section>
+          <section class="publish-section" aria-labelledby="publish-audience-heading">
+            <div class="publish-section-head"><h3 id="publish-audience-heading">Recipients</h3>
+              <select id="publish-audience" aria-label="Recipients"><option value="departments">Departments</option><option value="emails">Specific people</option></select></div>
             <div class="publish-emails" hidden><label for="publish-emails">User emails</label>
               <textarea id="publish-emails" rows="3" placeholder="One email per line" spellcheck="false"></textarea></div>
-            <div class="publish-departments">${DEPARTMENTS.map(
+            <div class="publish-departments" role="group" aria-label="Departments">${DEPARTMENTS.map(
               (department) => `<label class="publish-choice">
               <input type="checkbox" value="${department}" ${department === this.sourceProject.department ? "checked" : ""}>${department}</label>`,
             ).join("")}</div>
             <p class="publish-note">Only registered users in the selected audience receive these settings. New members need a new publication.</p>
-          </fieldset>
-          <fieldset><legend>Include settings</legend>
-            <div class="publish-heading"><span class="publish-selection-count" role="status"></span><div class="publish-actions">
-              <button type="button" class="btn btn-secondary btn-sm" data-action="use-project">Use project settings</button>
-              <button type="button" class="btn btn-secondary btn-sm" data-action="clear">Clear selection</button></div></div>
-            <div class="publish-setting-list">${groups
-              .map(
-                (group) => `<section class="publish-group"><h3>${escape(group.label)}</h3>
-              ${group.items.map((item) => this.settingRow(item)).join("")}</section>`,
-              )
-              .join("")}
-              <section class="publish-group publish-legacy" hidden><h3>Legacy settings</h3>${PUBLISHABLE_SETTINGS.filter((item) =>
-                legacyKeys.has(item.storageKey),
-              )
-                .map((item) => this.settingRow(item))
-                .join("")}</section></div>
-          </fieldset>
-          <button type="submit" class="btn btn-secondary">Preview publication</button>
+          </section>
+          <section class="publish-section" aria-labelledby="publish-settings-heading">
+            <div class="publish-section-head"><h3 id="publish-settings-heading">Settings</h3>
+              <div class="publish-actions">
+                <button type="button" class="btn btn-secondary btn-sm" data-action="use-project">Use project settings</button>
+                <button type="button" class="btn btn-ghost btn-sm" data-action="clear">Clear</button></div></div>
+            <div class="publish-setting-list">${groups.map((group) => this.groupRow(group.label, group.items)).join("")}
+              ${this.groupRow(
+                "Legacy settings",
+                PUBLISHABLE_SETTINGS.filter((item) => legacyKeys.has(item.storageKey)),
+                "publish-legacy",
+              )}</div>
+          </section>
         </form>
         <aside class="publish-rail">
+          <section class="publish-summary" aria-labelledby="publish-summary-title">
+            <h3 id="publish-summary-title"></h3>
+            <dl>
+              <dt>Project</dt><dd data-summary="project"></dd>
+              <dt>Recipients</dt><dd data-summary="recipients"></dd>
+              <dt>Settings</dt><dd data-summary="settings" class="publish-selection-count" role="status"></dd>
+            </dl>
+            <button type="submit" form="publish-form" class="btn btn-primary">Preview publication</button>
+          </section>
           <section class="publish-preview" hidden aria-label="Publication preview"></section>
-          <section class="publish-history"><div class="publish-heading"><h3>Publication history</h3></div>
+          <section class="publish-history"><h3>Publication history</h3>
             <div class="publish-history-list"></div></section>
         </aside>
       </div>
@@ -177,7 +192,10 @@ export class SettingsPublisher {
       event.preventDefault();
       void this.preview();
     });
-    this.root.addEventListener("input", () => this.invalidate());
+    this.root.addEventListener("input", () => {
+      this.invalidate();
+      this.updateSummary();
+    });
     this.root.addEventListener("change", (event) => {
       this.invalidate();
       if (event.target.id === "publish-source") this.changeSource(event.target.value);
@@ -186,6 +204,7 @@ export class SettingsPublisher {
         this.root.querySelector(".publish-departments").hidden = event.target.value !== "departments";
       }
       if (event.target.matches("[data-setting]")) this.editSetting(event.target);
+      this.updateSummary();
     });
     this.root.addEventListener("click", (event) => {
       const action = event.target.closest("[data-action]");
@@ -204,6 +223,11 @@ export class SettingsPublisher {
     }
   }
 
+  groupRow(label, items, className = "") {
+    return `<section class="publish-group ${className}"${className ? " hidden" : ""}>
+      <h4>${escape(label)}</h4><div class="publish-group-items">${items.map((item) => this.settingRow(item)).join("")}</div></section>`;
+  }
+
   settingRow(item) {
     const index = PUBLISHABLE_SETTINGS.findIndex((entry) => entry.storageKey === item.storageKey);
     return `<div class="publish-setting"><label class="publish-choice">
@@ -213,7 +237,24 @@ export class SettingsPublisher {
 
   updateSelection() {
     const count = this.root.querySelectorAll("[data-setting]:checked").length;
-    this.root.querySelector(".publish-selection-count").textContent = `${count} setting${count === 1 ? "" : "s"} selected`;
+    this.root.querySelector(".publish-selection-count").textContent = count ? `${count} selected` : "None selected";
+    this.updateSummary();
+  }
+
+  updateSummary() {
+    const value = (selector) => this.root.querySelector(selector).value.trim();
+    const replace = this.root.querySelector("#publish-replace").checked;
+    const emails = value("#publish-emails")
+      .split(/[\s,;]+/)
+      .filter(Boolean).length;
+    const departments = [...this.root.querySelectorAll(".publish-departments input:checked")].map((input) => input.value);
+    this.root.querySelector("#publish-summary-title").textContent = value("#publish-title") || "Untitled publication";
+    this.root.querySelector('[data-summary="project"]').textContent =
+      `${value("#publish-project") || "—"}${replace ? " · replaces Default project" : ""}`;
+    this.root.querySelector('[data-summary="recipients"]').textContent =
+      value("#publish-audience") === "emails"
+        ? `${emails || "No"} ${emails === 1 ? "person" : "people"}`
+        : departments.join(", ") || "No departments";
   }
 
   clearSelection() {
@@ -231,6 +272,7 @@ export class SettingsPublisher {
     this.clearSelection();
     this.root.querySelector("#publish-project").value = this.sourceProject.name;
     this.root.querySelector("#publish-title").value = `${this.sourceProject.name} defaults`;
+    this.updateSummary();
     this.message("");
   }
 
@@ -338,25 +380,62 @@ export class SettingsPublisher {
       html =
         item.type === "string-list"
           ? `<textarea id="${id}" rows="4" spellcheck="false" placeholder="One value per line" aria-label="${escape(item.label)}"></textarea>`
-          : `<div class="publish-saved-values">${renderValue(value, item, this.sourceValues())}</div>
-          <details class="publish-json"><summary>Edit values as JSON</summary>
-            <textarea id="${id}" rows="5" spellcheck="false"></textarea></details>`;
+          : `<div class="publish-saved-values">${renderValue(value, item, this.sourceValues(), { logins: this.hasLogins(item) })}</div>
+          <details class="publish-json"><summary><span class="publish-json-closed">Edit values as JSON</span>
+            <span class="publish-json-open">Done editing JSON</span></summary>
+            <textarea id="${id}" spellcheck="false" wrap="off"></textarea>
+            <p class="publish-json-error" role="alert" hidden></p></details>`;
     } else html = `<input id="${id}" type="${item.type === "number" ? "number" : "text"}" autocomplete="off">`;
     editor.innerHTML = html;
-    const input = editor.querySelector("input, textarea, select");
+    const input = editor.querySelector(".publish-json textarea") || editor.querySelector("input, textarea, select");
     input.setAttribute("aria-label", item.label);
     input.dataset.valueKey = item.storageKey;
-    if (editor.querySelector(".publish-saved-values"))
-      input.addEventListener("input", () => {
-        const summary = editor.querySelector(".publish-saved-values");
-        try {
-          summary.innerHTML = renderValue(JSON.parse(input.value), item, this.sourceValues());
-        } catch {
-          summary.textContent = "Invalid JSON. Fix the values before previewing.";
-        }
-      });
     input.value =
       item.type === "string-list" ? value.join("\n") : typeof value === "object" ? JSON.stringify(value, null, 2) : String(value);
+    if (editor.querySelector(".publish-saved-values")) this.bindStructuredEditor(editor, input, item);
+  }
+
+  hasLogins(item) {
+    return item.storageKey === "config.oracle.environment.catalog";
+  }
+
+  bindStructuredEditor(editor, input, item) {
+    const summary = editor.querySelector(".publish-saved-values");
+    const error = editor.querySelector(".publish-json-error");
+    // Fit the editor to its content so a whole list can be read and edited without scrolling a five-line box.
+    const fit = () => {
+      input.rows = Math.min(Math.max(input.value.split("\n").length + 1, 8), 40);
+    };
+    const parse = () => {
+      try {
+        const parsed = JSON.parse(input.value);
+        error.hidden = true;
+        return parsed;
+      } catch (failure) {
+        error.textContent = `Invalid JSON: ${failure.message}`;
+        error.hidden = false;
+        return undefined;
+      }
+    };
+    fit();
+    input.addEventListener("input", () => {
+      fit();
+      const parsed = parse();
+      if (parsed !== undefined) {
+        summary.innerHTML = renderValue(parsed, item, this.sourceValues(), { logins: this.hasLogins(item) });
+      }
+    });
+    summary.addEventListener("input", (event) => {
+      const field = event.target.closest("[data-login]");
+      if (!field) return;
+      const rows = parse();
+      const row = Array.isArray(rows) ? rows[Number(field.dataset.row)] : null;
+      if (!row) return;
+      if (field.value) row[field.dataset.login] = field.value;
+      else delete row[field.dataset.login];
+      input.value = JSON.stringify(rows, null, 2);
+      fit();
+    });
   }
 
   sourceValues() {
@@ -418,7 +497,7 @@ export class SettingsPublisher {
   async preview() {
     if (this.busy) return;
     this.busy = true;
-    const button = this.root.querySelector('.publish-form button[type="submit"]');
+    const button = this.root.querySelector('.publish-summary button[type="submit"]');
     button.disabled = true;
     const revision = this.revision;
     this.message("Preparing preview…");
@@ -464,7 +543,9 @@ export class SettingsPublisher {
     button.disabled = true;
     // Freeze the draft while the publication is in flight.
     const controls = [
-      ...this.root.querySelectorAll(".publish-form input, .publish-form textarea, .publish-form select, .publish-form button"),
+      ...this.root.querySelectorAll(
+        ".publish-form input, .publish-form textarea, .publish-form select, .publish-form button, .publish-summary button",
+      ),
     ];
     controls.forEach((control) => {
       control.disabled = true;
@@ -540,6 +621,7 @@ export class SettingsPublisher {
       input.checked = Object.hasOwn(publication.settings, input.dataset.setting);
       this.editSetting(input, publication.settings[input.dataset.setting]);
     }
+    this.updateSummary();
     this.root.querySelector("#publish-title").focus();
     this.message("Draft loaded. Review recipients and preview before publishing.");
   }
