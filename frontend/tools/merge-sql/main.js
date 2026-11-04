@@ -99,6 +99,10 @@ export class MergeSqlTool extends BaseTool {
   }
 
   onUnmount() {
+    if (this._mergeShortcutHandler) {
+      document.removeEventListener("keydown", this._mergeShortcutHandler);
+      this._mergeShortcutHandler = null;
+    }
     this.reportImageActionPromises?.clear();
     if (this.saveDebounceTimer) {
       clearTimeout(this.saveDebounceTimer);
@@ -327,6 +331,10 @@ export class MergeSqlTool extends BaseTool {
     const downloadReportImageBtn = document.getElementById("merge-sql-download-report-image-btn");
 
     if (addFilesBtn) addFilesBtn.addEventListener("click", () => fileInput?.click());
+    document.getElementById("merge-sql-empty-state")?.addEventListener("click", () => fileInput?.click());
+    this.bindFileDropZone();
+    this.bindMergeShortcut();
+    this.bindCardDragContainerEvents();
     if (addFolderBtn) addFolderBtn.addEventListener("click", () => folderInput?.click());
     if (fileInput) fileInput.addEventListener("change", (e) => this.handleFileSelect(e));
     if (folderInput) folderInput.addEventListener("change", (e) => this.handleFolderSelect(e));
@@ -401,6 +409,87 @@ export class MergeSqlTool extends BaseTool {
         if (tab) this.setActiveEditorFile(tab.dataset.id);
       });
     }
+  }
+
+  bindFileDropZone() {
+    const zone = document.getElementById("merge-sql-file-list");
+    if (!zone) return;
+    let depth = 0;
+    const hasFiles = (e) => Array.from(e.dataTransfer?.types || []).includes("Files");
+    zone.addEventListener("dragenter", (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      depth++;
+      zone.classList.add("is-drop-target");
+    });
+    zone.addEventListener("dragover", (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    });
+    zone.addEventListener("dragleave", (e) => {
+      if (!hasFiles(e)) return;
+      depth = Math.max(0, depth - 1);
+      if (depth === 0) zone.classList.remove("is-drop-target");
+    });
+    zone.addEventListener("drop", async (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      depth = 0;
+      zone.classList.remove("is-drop-target");
+      const files = await MergeSqlTool.collectDroppedFiles(e.dataTransfer);
+      const sqlFiles = files.filter((f) => f.name.toLowerCase().endsWith(".sql"));
+      if (sqlFiles.length === 0) {
+        this.showError("No .sql files found");
+        return;
+      }
+      this.addFiles(sqlFiles);
+    });
+  }
+
+  /** Flattens dropped files and folders (via webkitGetAsEntry) into a File list. */
+  static async collectDroppedFiles(dataTransfer) {
+    const entries = Array.from(dataTransfer?.items || [])
+      .map((item) => (item.kind === "file" && item.webkitGetAsEntry ? item.webkitGetAsEntry() : null))
+      .filter(Boolean);
+    if (entries.length === 0) return Array.from(dataTransfer?.files || []);
+
+    const files = [];
+    const readEntries = (reader) => new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+    const walk = async (entry) => {
+      if (entry.isFile) {
+        files.push(await new Promise((resolve, reject) => entry.file(resolve, reject)));
+        return;
+      }
+      if (!entry.isDirectory) return;
+      const reader = entry.createReader();
+      let batch;
+      do {
+        batch = await readEntries(reader);
+        for (const child of batch) await walk(child);
+      } while (batch.length > 0);
+    };
+    for (const entry of entries) await walk(entry);
+    return files;
+  }
+
+  bindMergeShortcut() {
+    const isMac = /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || "");
+    const kbd = document.querySelector("#merge-sql-btn .merge-shortcut");
+    if (kbd) kbd.textContent = isMac ? "⌘↵" : "Ctrl ↵";
+    this._mergeShortcutHandler = (e) => {
+      if (e.key !== "Enter" || !(e.metaKey || e.ctrlKey) || e.defaultPrevented) return;
+      const container = document.querySelector(".merge-sql-container");
+      if (!container || !container.isConnected || container.offsetParent === null) return;
+      e.preventDefault();
+      if (this.inputMode === "sql") {
+        this.handleSqlModeRefresh();
+        return;
+      }
+      const mergeBtn = document.getElementById("merge-sql-btn");
+      if (mergeBtn && !mergeBtn.disabled) this.handleMerge();
+    };
+    document.addEventListener("keydown", this._mergeShortcutHandler);
   }
 
   handleFileSelect(e) {
@@ -966,6 +1055,7 @@ export class MergeSqlTool extends BaseTool {
     const startTime = Date.now();
 
     const mergeBtn = document.getElementById("merge-sql-btn");
+    const idleMergeLabel = mergeBtn?.innerHTML;
     if (mergeBtn) {
       mergeBtn.disabled = true;
       mergeBtn.innerHTML = `
@@ -973,7 +1063,7 @@ export class MergeSqlTool extends BaseTool {
           <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
           <path d="M12 2a10 10 0 0 1 10 10" stroke-opacity="1"></path>
         </svg>
-        Processing...
+        Merging…
       `;
     }
 
@@ -1025,15 +1115,8 @@ export class MergeSqlTool extends BaseTool {
       );
     } finally {
       if (mergeBtn) {
-        mergeBtn.disabled = false;
-        mergeBtn.innerHTML = `
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M8 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4"></path>
-            <path d="M16 4h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"></path>
-            <path d="M12 2v20"></path>
-          </svg>
-          MERGE SQLs
-        `;
+        mergeBtn.innerHTML = idleMergeLabel;
+        this.updateMergeButton();
       }
     }
   }
@@ -1321,9 +1404,9 @@ export class MergeSqlTool extends BaseTool {
       insights.classList.add("insights-warning");
     }
 
-    if (insightTitle) insightTitle.textContent = "Duplicate Queries Detected";
-    if (duplicatesText)
-      duplicatesText.textContent = `${this.result.duplicates.length} duplicate${this.result.duplicates.length === 1 ? "" : "s"} detected`;
+    const duplicateCount = this.result.duplicates.length;
+    if (insightTitle) insightTitle.textContent = `${duplicateCount} duplicate ${duplicateCount === 1 ? "query" : "queries"}`;
+    if (duplicatesText) duplicatesText.textContent = "";
     if (viewDuplicatesBtn) viewDuplicatesBtn.style.display = "";
     if (viewReportBtn) viewReportBtn.style.display = "none";
   }
@@ -1691,6 +1774,8 @@ export class MergeSqlTool extends BaseTool {
   }
 
   updateUI() {
+    const sortControls = document.getElementById("merge-sql-sort-controls");
+    if (sortControls) sortControls.hidden = this.files.length === 0;
     this.renderFileList();
     this.updateMergeButton();
     this.updateSortButtons();
@@ -1702,7 +1787,7 @@ export class MergeSqlTool extends BaseTool {
     const clearFilesBtn = document.getElementById("merge-sql-clear-files-btn");
     if (!clearFilesBtn) return;
 
-    clearFilesBtn.style.display = this.files.length > 0 ? "block" : "none";
+    clearFilesBtn.style.display = this.files.length > 0 ? "" : "none";
   }
 
   updateFileCount() {
@@ -1837,6 +1922,7 @@ export class MergeSqlTool extends BaseTool {
     if (!fileItems) return;
 
     fileItems.forEach((item) => {
+      item.addEventListener("click", () => this.openFileInEditor(item.dataset.id));
       const editBtn = item.querySelector(".btn-edit-file");
       if (editBtn) {
         editBtn.addEventListener("click", (e) => {
@@ -1858,11 +1944,13 @@ export class MergeSqlTool extends BaseTool {
   }
 
   bindCardEvents() {
-    const toggles = document.querySelectorAll("#merge-sql-file-items .table-card-toggle");
-    toggles.forEach((toggle) => {
-      toggle.addEventListener("click", (e) => {
+    const headers = document.querySelectorAll("#merge-sql-file-items .table-card-header");
+    headers.forEach((header) => {
+      header.addEventListener("click", (e) => {
+        if (e.target.closest(".table-card-drag-handle")) return;
         e.stopPropagation();
-        const tableName = toggle.dataset.tableName;
+        const tableName = header.closest(".table-card")?.dataset.tableName;
+        if (!tableName) return;
         if (this.expandedTables.has(tableName)) {
           this.expandedTables.delete(tableName);
         } else {
@@ -1882,7 +1970,12 @@ export class MergeSqlTool extends BaseTool {
     dragHandles.forEach((handle) => {
       handle.addEventListener("mousedown", (e) => this.handleCardDragStart(e));
     });
+  }
 
+  /** The items container outlives each render, so its move/end listeners are bound once. */
+  bindCardDragContainerEvents() {
+    const container = document.getElementById("merge-sql-file-items");
+    if (!container) return;
     container.addEventListener("mousemove", (e) => this.handleCardDragMove(e));
     container.addEventListener("mouseup", (e) => this.handleCardDragEnd(e));
     container.addEventListener("mouseleave", (e) => this.handleCardDragEnd(e));

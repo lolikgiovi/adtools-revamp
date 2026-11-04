@@ -17,7 +17,7 @@
 const COLUMN_LAYOUT = {
   index: 50,
   source: 150,
-  status: 130,
+  status: 168,
   minValue: 200,
   maxValue: 720,
   minKey: 160,
@@ -147,7 +147,7 @@ export class GridView {
     // When env names are identical (e.g., same filename in Excel compare), use Reference/Comparator labels
     let displayEnv1Name = this.formatEnvName(env1Name);
     let displayEnv2Name = this.formatEnvName(env2Name);
-    if (env1Name === env2Name) {
+    if (env1Name === env2Name || displayEnv1Name === displayEnv2Name) {
       displayEnv1Name = "Reference";
       displayEnv2Name = "Comparator";
     }
@@ -757,7 +757,7 @@ export class GridView {
           showStatus
             ? `
           <td class="sticky-col status-cell" style="${this.getStickyOffsets(pkFields.length, hasSourceFile)}">
-            <span class="status-badge status-${statusClass}">${this.escapeHtml(statusLabel)}</span>
+            <span class="status-badge status-${statusClass}" title="${this.escapeHtml(statusLabel)}">${this.escapeHtml(statusLabel)}</span>
           </td>
         `
             : ""
@@ -969,6 +969,10 @@ export class GridView {
    */
   formatEnvName(envName) {
     if (!envName || typeof envName !== "string") return envName;
+
+    // Spreadsheet file names ("config_prod.csv") read as TABLE.FIELD below, so name them first.
+    const spreadsheetMatch = envName.match(/^(.+)\.(csv|xlsx|xls)$/i);
+    if (spreadsheetMatch) return spreadsheetMatch[1];
 
     const sqlQueryMatch = envName.match(/^\(([^)]+)\)\s+SQL Query$/i);
     if (sqlQueryMatch) return sqlQueryMatch[1];

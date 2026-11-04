@@ -86,7 +86,7 @@ export const CompareConfigTemplate = /* html */ `
                             </label>
                         </div>
                         <span class="source-status" id="source-a-status" role="status"
-                              aria-live="polite" aria-atomic="true">Not loaded</span>
+                              aria-live="polite" aria-atomic="true" hidden></span>
                     </div>
 
                     <!-- Oracle Config (shown when Oracle selected) -->
@@ -169,7 +169,7 @@ export const CompareConfigTemplate = /* html */ `
                     <div class="excel-config" id="source-a-excel-config" style="display: none;">
                         <div class="file-upload-zone compact" id="source-a-upload-zone">
                             <div class="upload-zone-header">
-                                <span class="zone-label">Excel or CSV files</span>
+                                <span class="zone-label">Files</span>
                                 <div class="upload-zone-actions">
                                     <button class="btn btn-ghost btn-xs btn-browse" id="source-a-browse-files">
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -197,6 +197,15 @@ export const CompareConfigTemplate = /* html */ `
                                     </button>
                                 </div>
                             </div>
+                            <button type="button" class="excel-dropzone" id="source-a-dropzone">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                    <line x1="12" y1="18" x2="12" y2="12"></line>
+                                    <line x1="9" y1="15" x2="15" y2="15"></line>
+                                </svg>
+                                <span>Drop .xlsx, .xls or .csv</span>
+                            </button>
                             <input type="file" id="source-a-file-input" multiple accept=".xlsx,.xls,.csv" style="display: none;">
                             <input type="file" id="source-a-folder-input" webkitdirectory style="display: none;">
                             <div class="file-list" id="source-a-file-list"></div>
@@ -255,7 +264,7 @@ export const CompareConfigTemplate = /* html */ `
                             </label>
                         </div>
                         <span class="source-status" id="source-b-status" role="status"
-                              aria-live="polite" aria-atomic="true">Not loaded</span>
+                              aria-live="polite" aria-atomic="true" hidden></span>
                     </div>
 
                     <!-- Oracle Config -->
@@ -352,7 +361,7 @@ export const CompareConfigTemplate = /* html */ `
                     <div class="excel-config" id="source-b-excel-config" style="display: none;">
                         <div class="file-upload-zone compact" id="source-b-upload-zone">
                             <div class="upload-zone-header">
-                                <span class="zone-label">Excel or CSV files</span>
+                                <span class="zone-label">Files</span>
                                 <div class="upload-zone-actions">
                                     <button class="btn btn-ghost btn-xs btn-browse" id="source-b-browse-files">
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -380,6 +389,15 @@ export const CompareConfigTemplate = /* html */ `
                                     </button>
                                 </div>
                             </div>
+                            <button type="button" class="excel-dropzone" id="source-b-dropzone">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                    <line x1="12" y1="18" x2="12" y2="12"></line>
+                                    <line x1="9" y1="15" x2="15" y2="15"></line>
+                                </svg>
+                                <span>Drop .xlsx, .xls or .csv</span>
+                            </button>
                             <input type="file" id="source-b-file-input" multiple accept=".xlsx,.xls,.csv" style="display: none;">
                             <input type="file" id="source-b-folder-input" webkitdirectory style="display: none;">
                             <div class="file-list" id="source-b-file-list"></div>
@@ -499,9 +517,8 @@ export const CompareConfigTemplate = /* html */ `
                 <!-- Primary Key Selection -->
                 <div class="field-selection-section">
                     <div class="field-header">
-                        <h4 class="field-title">Primary Key Selection</h4>
+                        <h4 class="field-title">Primary Key</h4>
                     </div>
-                    <p class="field-help">Select field(s) to use as primary key for matching rows</p>
                     <div class="searchable-select pk-select" id="unified-pk-select">
                         <div class="pk-input-shell">
                             <div class="pk-input-flow">
@@ -523,7 +540,6 @@ export const CompareConfigTemplate = /* html */ `
                     <div class="field-header">
                         <h4 class="field-title">Fields to Compare</h4>
                     </div>
-                    <p class="field-help">Select fields to include in comparison</p>
                     <div class="searchable-select pk-select" id="unified-compare-select">
                         <div class="pk-input-shell">
                             <div class="pk-input-flow">

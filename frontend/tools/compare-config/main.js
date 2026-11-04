@@ -38,6 +38,41 @@ import {
   validateSourceConfig,
 } from "./lib/unified-compare-utils.js";
 
+/** Above this many files per source, the searchable file picker is shown next to the list. */
+const UNIFIED_FILE_SEARCH_THRESHOLD = 6;
+const LIKELY_KEY_FIELD = /^(id|key|code|.+_(id|key|code))$/i;
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(
+    /[&<>"']/g,
+    (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char],
+  );
+}
+
+/**
+ * Picks one common field that looks like a row identifier and is unique and non-empty on both sides,
+ * so a fresh comparison can run without a manual primary-key pick. Returns null when nothing qualifies.
+ */
+export function suggestPrimaryKeyField(commonMapped, rowsA = [], rowsB = []) {
+  const isUniqueKey = (rows, field) => {
+    const seen = new Set();
+    for (const row of rows) {
+      const value = row?.[field];
+      if (value === null || value === undefined || String(value).trim() === "") return false;
+      const normalized = String(value).trim();
+      if (seen.has(normalized)) return false;
+      seen.add(normalized);
+    }
+    return true;
+  };
+  const candidates = commonMapped.filter(({ sourceA }) => LIKELY_KEY_FIELD.test(sourceA));
+  candidates.sort((a, b) => Number(/^id$/i.test(b.sourceA)) - Number(/^id$/i.test(a.sourceA)));
+  const match = candidates.find(
+    ({ sourceA, sourceB }) => rowsA.length > 0 && rowsB.length > 0 && isUniqueKey(rowsA, sourceA) && isUniqueKey(rowsB, sourceB),
+  );
+  return match?.sourceA || null;
+}
+
 class CompareConfigTool extends BaseTool {
   constructor(eventBus) {
     super({ id: "compare-config", eventBus, isHeavyTool: true });
@@ -1058,7 +1093,8 @@ class CompareConfigTool extends BaseTool {
     if (!resultsSection) return;
     const editButton = document.getElementById("btn-edit-comparison");
     if (editButton) {
-      editButton.style.display = this.unified.sourceA.dataLoaded && this.unified.sourceB.dataLoaded ? "" : "none";
+      // Restored sessions keep their files, so the setup is always worth returning to.
+      editButton.style.display = "";
     }
 
     // Update title with comparison info (without "Comparison Results:" prefix)
@@ -2090,20 +2126,30 @@ class CompareConfigTool extends BaseTool {
       });
     }
 
+    document.getElementById(`${prefix}-dropzone`)?.addEventListener("click", () => browseFilesLink?.click());
+
     // Upload zone drag & drop
     const uploadZone = document.getElementById(`${prefix}-upload-zone`);
     if (uploadZone) {
-      uploadZone.addEventListener("dragover", (e) => {
+      let dragDepth = 0;
+      uploadZone.addEventListener("dragenter", (e) => {
         e.preventDefault();
+        dragDepth++;
         uploadZone.classList.add("drag-over");
       });
 
+      uploadZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+      });
+
       uploadZone.addEventListener("dragleave", () => {
-        uploadZone.classList.remove("drag-over");
+        dragDepth = Math.max(0, dragDepth - 1);
+        if (dragDepth === 0) uploadZone.classList.remove("drag-over");
       });
 
       uploadZone.addEventListener("drop", (e) => {
         e.preventDefault();
+        dragDepth = 0;
         uploadZone.classList.remove("drag-over");
         const files = e.dataTransfer.files;
         if (files.length > 0) {
@@ -2327,6 +2373,8 @@ class CompareConfigTool extends BaseTool {
     if (!tauri) {
       const oracleOptions = document.querySelectorAll('.source-type-btn:has(input[value="oracle"])');
       oracleOptions.forEach((opt) => (opt.style.display = "none"));
+      // A selector with a single choice is noise; the panel content already says "files".
+      document.querySelectorAll(".source-type-selector-inline").forEach((el) => (el.hidden = true));
 
       // Pre-select Excel for both sources
       const excelARadio = document.getElementById("source-a-type-excel");
@@ -2769,26 +2817,8 @@ class CompareConfigTool extends BaseTool {
         }
       }
     }
-    const isLoaded = this.unified[sourceKey].dataLoaded || this.unified[sourceKey].schemaLoaded;
-    if (preview) preview.style.display = isLoaded ? "block" : "none";
-
-    // Manage status visibility and text
-    const status = document.getElementById(`${prefix}-status`);
-    if (status) {
-      if (type) {
-        status.style.display = "inline-flex";
-        if (!isLoaded) {
-          status.textContent = "Not loaded";
-          status.className = "source-status";
-        } else {
-          status.textContent = "Ready";
-          status.className = "source-status ready";
-        }
-      } else {
-        status.style.display = "none";
-        status.textContent = "Not loaded"; // Reset text but keep hidden
-      }
-    }
+    if (preview) preview.style.display = "none";
+    this.renderUnifiedSourceStatus(source);
 
     this.updateUnifiedMaxRowsVisibility();
   }
@@ -3282,7 +3312,9 @@ class CompareConfigTool extends BaseTool {
    */
   async handleUnifiedExcelFileSelection(sourceKey, files) {
     const fileArray = Array.from(files);
-    const supportedFiles = FileParser.filterSupportedFiles(fileArray);
+    const existing = new Set(this.unified[sourceKey].excelFiles.map(({ file }) => `${file.name}:${file.size}`));
+    const supportedFiles = FileParser.filterSupportedFiles(fileArray).filter((file) => !existing.has(`${file.name}:${file.size}`));
+    if (supportedFiles.length === 0 && FileParser.filterSupportedFiles(fileArray).length > 0) return;
 
     if (supportedFiles.length === 0) {
       this.eventBus.emit("notification:show", {
@@ -3477,6 +3509,9 @@ class CompareConfigTool extends BaseTool {
 
     // Update file list
     const fileListEl = document.getElementById(`${prefix}-file-list`);
+    const dropzone = document.getElementById(`${prefix}-dropzone`);
+    if (dropzone) dropzone.hidden = files.length > 0;
+    const selectedId = this.unified[sourceKey].selectedExcelFile?.id;
     if (fileListEl) {
       if (files.length === 0) {
         fileListEl.innerHTML = "";
@@ -3485,8 +3520,9 @@ class CompareConfigTool extends BaseTool {
           .sort((a, b) => a.file.name.localeCompare(b.file.name))
           .map(
             (f) => `
-          <div class="excel-file-item" data-file-id="${f.id}">
-            <span class="file-name">${f.file.name}</span>
+          <div class="excel-file-item${f.id === selectedId ? " selected" : ""}" data-file-id="${escapeHtml(f.id)}"
+               role="option" aria-selected="${f.id === selectedId}" tabindex="0">
+            <span class="file-name" title="${escapeHtml(f.file.name)}">${escapeHtml(f.file.name)}</span>
             <button class="btn btn-ghost btn-xs btn-remove-file" title="Remove">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -3498,9 +3534,22 @@ class CompareConfigTool extends BaseTool {
           )
           .join("");
 
+        fileListEl.querySelectorAll(".excel-file-item").forEach((item) => {
+          const select = () => this.selectUnifiedExcelFile(sourceKey, item.dataset.fileId);
+          item.addEventListener("click", (e) => {
+            if (!e.target.closest(".btn-remove-file")) select();
+          });
+          item.addEventListener("keydown", (e) => {
+            if (e.target !== item || (e.key !== "Enter" && e.key !== " ")) return;
+            e.preventDefault();
+            select();
+          });
+        });
+
         // Bind remove buttons
         fileListEl.querySelectorAll(".btn-remove-file").forEach((btn) => {
           btn.addEventListener("click", (e) => {
+            e.stopPropagation();
             const fileItem = e.target.closest(".excel-file-item");
             const fileId = fileItem?.dataset.fileId;
             if (fileId) {
@@ -3520,7 +3569,8 @@ class CompareConfigTool extends BaseTool {
     // Show/hide file selection dropdown
     const fileSelectionDiv = document.getElementById(`${prefix}-file-selection`);
     if (fileSelectionDiv) {
-      fileSelectionDiv.style.display = files.length > 0 ? "block" : "none";
+      // The list itself is the picker; the search box only earns its place on long lists.
+      fileSelectionDiv.style.display = files.length > UNIFIED_FILE_SEARCH_THRESHOLD ? "block" : "none";
 
       if (files.length > 0) {
         // Setup searchable dropdown
@@ -3707,6 +3757,12 @@ class CompareConfigTool extends BaseTool {
     if (input) {
       input.value = file.file.name;
     }
+    document.querySelectorAll(`#source-${source}-file-list .excel-file-item`).forEach((item) => {
+      const isSelected = item.dataset.fileId === fileId;
+      item.classList.toggle("selected", isSelected);
+      item.setAttribute("aria-selected", String(isSelected));
+    });
+    this.renderUnifiedSourceStatus(source.toUpperCase());
 
     this.updateUnifiedLoadButtonState();
     this.updateUnifiedLoadDataButtonVisibility();
@@ -4184,28 +4240,34 @@ class CompareConfigTool extends BaseTool {
    * Update the source preview after data is loaded
    */
   updateUnifiedSourcePreview(source) {
-    const sourceKey = source === "A" ? "sourceA" : "sourceB";
     const prefix = `source-${source.toLowerCase()}`;
-    const data = this.unified[sourceKey].data;
-
     const preview = document.getElementById(`${prefix}-preview`);
-    const stats = document.getElementById(`${prefix}-stats`);
-    const status = document.getElementById(`${prefix}-status`);
+    if (preview) preview.style.display = "none";
+    this.renderUnifiedSourceStatus(source);
+  }
 
-    if (preview && data) {
-      preview.style.display = "block";
-      if (stats) {
-        stats.textContent =
-          data.metadata.rowCount != null
-            ? `${data.metadata.rowCount} rows, ${data.metadata.columnCount} columns`
-            : `${data.metadata.columnCount} columns (schema only)`;
-      }
+  /**
+   * The header pill is the single place a source reports what it loaded.
+   * Hidden until data arrives, then shows the row and column counts.
+   * @param {'A'|'B'} source
+   */
+  renderUnifiedSourceStatus(source) {
+    const sourceKey = source === "A" ? "sourceA" : "sourceB";
+    const status = document.getElementById(`source-${source.toLowerCase()}-status`);
+    if (!status) return;
+    const config = this.unified[sourceKey];
+    const data = config.data;
+    const isLoaded = Boolean(data && (config.dataLoaded || config.schemaLoaded));
+    status.style.display = "";
+    status.hidden = !isLoaded;
+    status.className = isLoaded ? "source-status ready" : "source-status";
+    if (!isLoaded) {
+      status.textContent = "";
+      return;
     }
-
-    if (status) {
-      status.textContent = "Ready";
-      status.className = "source-status ready";
-    }
+    const count = (n, unit) => `${Number(n).toLocaleString()} ${unit}${Number(n) === 1 ? "" : "s"}`;
+    const { rowCount, columnCount } = data.metadata || {};
+    status.textContent = rowCount != null ? `${count(rowCount, "row")} · ${count(columnCount, "col")}` : count(columnCount, "col");
   }
 
   /**
@@ -4231,6 +4293,10 @@ class CompareConfigTool extends BaseTool {
     this.unified.selectedPkFields = suggested
       .map((name) => reconciled.common.find((field) => field.toUpperCase() === name))
       .filter(Boolean);
+    if (this.unified.selectedPkFields.length === 0) {
+      const guessed = suggestPrimaryKeyField(reconciled.commonMapped || [], dataA.rows || [], dataB.rows || []);
+      if (guessed) this.unified.selectedPkFields = [guessed];
+    }
     this.unified.selectedCompareFields = reconciled.common.filter(
       (field) =>
         field.toUpperCase() !== "PARAMETER_KEY" && !this.unified.selectedPkFields.includes(field) && !/^(created_|updated_)/i.test(field),

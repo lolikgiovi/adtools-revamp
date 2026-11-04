@@ -765,7 +765,8 @@
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 0.5rem;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 /* One control height across the results card: the header buttons, the view tab list, the
@@ -2235,9 +2236,9 @@ input.results-search-input {
 .excel-table .status-header,
 .excel-table .status-cell {
   left: var(--sticky-left);
-  width: 130px;
-  min-width: 130px;
-  max-width: 130px;
+  width: 168px;
+  min-width: 168px;
+  max-width: 168px;
   text-align: center;
 }
 
@@ -2330,14 +2331,16 @@ input.results-search-input {
 /* Status Labels (inside table) */
 .excel-table .status-badge {
   display: inline-block;
-  max-width: 112px;
+  max-width: 152px;
   padding: 2px 5px;
   border-radius: 6px;
   font-size: 0.62rem;
   font-weight: 700;
   text-transform: uppercase;
-  white-space: normal;
-  overflow-wrap: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
   line-height: 1.2;
 }
 
@@ -4776,4 +4779,73 @@ label.compare-toggle input:checked ~ .compare-toggle-track .compare-toggle-thumb
   color: hsl(var(--muted-foreground));
   margin: 0;
   font-style: italic;
+}
+
+/* ============================================
+   Source panel: drop target, selectable file list, status pill
+   ============================================ */
+
+.source-type-selector-inline[hidden],
+.source-status[hidden],
+.excel-dropzone[hidden] {
+  display: none;
+}
+
+.source-panel-header:has(.source-type-selector-inline[hidden]) {
+  min-height: 2.25rem;
+}
+
+.excel-dropzone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 6rem;
+  padding: 1rem;
+  font: inherit;
+  font-size: 0.8125rem;
+  color: hsl(var(--muted-foreground));
+  background: transparent;
+  border: 1.5px dashed hsl(var(--border));
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.excel-dropzone:hover,
+.excel-dropzone:focus-visible {
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--muted-foreground) / 0.6);
+  background: hsl(var(--muted) / 0.2);
+  outline: none;
+}
+
+.file-upload-zone.drag-over .excel-dropzone,
+.file-upload-zone.drag-over .file-list {
+  border-color: hsl(var(--primary));
+  border-style: dashed;
+  background: hsl(var(--primary) / 0.06);
+}
+
+.excel-file-item {
+  cursor: pointer;
+}
+
+.excel-file-item:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 1px;
+}
+
+.excel-file-item.selected {
+  border-color: hsl(var(--primary) / 0.7);
+  background: hsl(var(--primary) / 0.08);
+  box-shadow: inset 3px 0 0 hsl(var(--primary));
+}
+
+.source-status.ready {
+  font-variant-numeric: tabular-nums;
 }

@@ -12,7 +12,7 @@ export const MergeSqlTemplate = /* html */ `
       <div class="tabs-container mode-toggle-bar" id="merge-sql-mode-toggle">
         <div class="tabs-left">
           <button class="tab-button mode-toggle-btn active" data-mode="files">Files</button>
-          <button class="tab-button mode-toggle-btn" data-mode="sql">Modified Merged SQL</button>
+          <button class="tab-button mode-toggle-btn" data-mode="sql" title="Edit merged SQL and regenerate validation">Merged SQL</button>
         </div>
       </div>
 
@@ -55,8 +55,7 @@ export const MergeSqlTemplate = /* html */ `
           <input type="text" id="merge-sql-folder-name" class="form-input" placeholder="Enter output file name prefix..." value="MERGED">
         </div>
 
-        <div class="sort-controls">
-          <span class="sort-label">Sort:</span>
+        <div class="sort-controls" id="merge-sql-sort-controls" hidden>
           <button class="btn btn-ghost btn-xs sort-btn active" id="merge-sql-sort-asc" title="Sort by table name A-Z">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 5v14M5 12l7-7 7 7"/>
@@ -81,14 +80,16 @@ export const MergeSqlTemplate = /* html */ `
         </div>
 
         <div class="file-list-container" id="merge-sql-file-list">
-          <div class="file-list-empty" id="merge-sql-empty-state">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <button type="button" class="file-list-empty" id="merge-sql-empty-state">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
               <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="12" y1="18" x2="12" y2="12"></line>
+              <line x1="9" y1="15" x2="15" y2="15"></line>
             </svg>
-            <p>No SQL files added</p>
-            <span class="hint">Use the buttons above to add .sql files</span>
-          </div>
+            <p>Drop .sql files or folders</p>
+          </button>
+          <div class="file-list-drop-overlay" aria-hidden="true">Drop to add</div>
           <div class="file-list-items" id="merge-sql-file-items"></div>
         </div>
 
@@ -102,7 +103,8 @@ export const MergeSqlTemplate = /* html */ `
               <path d="M16 4h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"></path>
               <path d="M12 2v20"></path>
             </svg>
-            MERGE SQLs
+            Merge
+            <kbd class="merge-shortcut" aria-hidden="true">⌘↵</kbd>
           </button>
           <button class="btn btn-ghost" id="merge-sql-clear-btn" style="display: none;">
             Clear All
@@ -214,7 +216,7 @@ export const MergeSqlTemplate = /* html */ `
           </svg>
         </div>
         <div class="insight-content">
-          <span class="insight-title" id="merge-sql-insight-title">Duplicate Queries Detected</span>
+          <span class="insight-title" id="merge-sql-insight-title"></span>
           <span class="insight-text" id="merge-sql-duplicates-text"></span>
         </div>
         <button class="btn btn-ghost btn-xs" id="merge-sql-view-duplicates" style="display: none;">View Duplicates</button>
@@ -231,7 +233,6 @@ export const MergeSqlTemplate = /* html */ `
             <line x1="16" y1="17" x2="8" y2="17"></line>
           </svg>
           <p>Merged SQL will appear here</p>
-          <span>Add files and click "MERGE SQLs" to start</span>
         </div>
 
         <!-- Report Tab Content -->
@@ -295,8 +296,7 @@ export const MergeSqlTemplate = /* html */ `
               <line x1="16" y1="13" x2="8" y2="13"></line>
               <line x1="16" y1="17" x2="8" y2="17"></line>
             </svg>
-            <p>No file open</p>
-            <span>Click the pencil icon on any file in the Files panel to open it here</span>
+            <p>Select a file to edit</p>
           </div>
         </div>
       </div>
