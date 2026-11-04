@@ -343,6 +343,7 @@ export class QuerifyTool extends BaseTool {
     this.updateControls();
     this.setMessage("Generating...");
     const queryType = this.elements.queryType?.value || "merge";
+    let lastError = null;
 
     try {
       const schemaLookup = await this.service.buildSchemaLookup();
@@ -378,6 +379,7 @@ export class QuerifyTool extends BaseTool {
             { refreshEditor: false },
           );
         } catch (error) {
+          lastError = error;
           this.updateFile(
             item.id,
             {
@@ -401,7 +403,10 @@ export class QuerifyTool extends BaseTool {
         failed_count: failedCount,
         query_type: queryType,
       });
+      // Partial success is still a use; the click failed only when no file generated.
+      if (!successCount && lastError) UsageTracker.trackFailure("querify", "generate", lastError, { file_count: this.files.length });
     } catch (error) {
+      UsageTracker.trackFailure("querify", "generate", error);
       this.setMessage(error.message || String(error), "error");
     } finally {
       this.isGenerating = false;

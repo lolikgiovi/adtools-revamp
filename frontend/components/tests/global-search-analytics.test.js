@@ -26,7 +26,7 @@ describe("command search behavior", () => {
     expect(spy.mock.calls[1][2]).toMatchObject({ target: "settings", result_type: "setting", input_method: "keyboard", query_length: 6 });
     expect(JSON.stringify(spy.mock.calls)).not.toContain("SECRET");
     expect(JSON.stringify(spy.mock.calls)).not.toContain("private-setting");
-    expect(router.navigate).toHaveBeenCalledWith("settings", { value: "SECRET" });
+    expect(router.navigate).toHaveBeenCalledWith("settings", { value: "SECRET" }, { source: "search" });
   });
 
   it("records an abandoned zero-result search", () => {
@@ -37,5 +37,45 @@ describe("command search behavior", () => {
     search.inputEl.dispatchEvent(new Event("input"));
     search.modalEl.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(spy.mock.calls.at(-1)[2]).toMatchObject({ reason: "escape", query_length: 7, result_count: 0 });
+  });
+
+  // Searches that find nothing show what people look for. Ways it could go wrong: it reports per keystroke,
+  // on a search that found something, or leaks free text that is not a plain tool or table name.
+  it("reports a search abandoned with no results once, with its length but never its text", () => {
+    const spy = vi.spyOn(UsageTracker, "trackEvent").mockImplementation(() => {});
+    const search = new GlobalSearch();
+    search.open("header");
+    for (const term of ["CUST", "CUST_ACCT", "CUST_ACCT_X"]) {
+      search.inputEl.value = term;
+      search.inputEl.dispatchEvent(new Event("input"));
+    }
+    search.close("escape");
+    const empty = spy.mock.calls.filter((call) => call[1] === "no_results");
+    expect(empty).toEqual([["global-search", "no_results", expect.objectContaining({ term_length: 11 })]]);
+    // Table and setting names typed here are search text too, and search text never leaves the app.
+    expect(JSON.stringify(spy.mock.calls)).not.toContain("CUST");
+  });
+
+  it("keeps free text out of the no-result report", () => {
+    const spy = vi.spyOn(UsageTracker, "trackEvent").mockImplementation(() => {});
+    const search = new GlobalSearch();
+    search.open("header");
+    search.inputEl.value = "budi@bank.co.id";
+    search.inputEl.dispatchEvent(new Event("input"));
+    search.close("escape");
+    const [[, , meta]] = spy.mock.calls.filter((call) => call[1] === "no_results");
+    expect(meta.term_length).toBe(15);
+    expect(JSON.stringify(spy.mock.calls)).not.toContain("budi");
+  });
+
+  it("does not report a search that found something", () => {
+    const spy = vi.spyOn(UsageTracker, "trackEvent").mockImplementation(() => {});
+    const search = new GlobalSearch();
+    search.setIndex([{ id: "json-tools", name: "JSON Tools", route: "json-tools", type: "tool" }]);
+    search.open("header");
+    search.inputEl.value = "JSON";
+    search.inputEl.dispatchEvent(new Event("input"));
+    search.close("escape");
+    expect(spy.mock.calls.filter((call) => call[1] === "no_results")).toEqual([]);
   });
 });

@@ -43,6 +43,14 @@ _Avoid_: Click, attempt, mount, open
 An interaction or diagnostic observation that explains behavior but does not independently represent delivered value, such as a tab change, validation error, or retry.
 _Avoid_: Tool use, impact
 
+**Failure**:
+A user-started operation that ends without usable output, recorded with `UsageTracker.trackFailure` as a `failed` Supporting Event carrying the action and a bounded category (`invalid_input`, `network`, `timeout`, `auth`, `not_found`, `rejected`, `server`, `cancelled`, `internal`). Never a message or content, and never a Tool Use.
+_Avoid_: Error event, exception
+
+**Entry Source**:
+How a page was opened (`sidebar`, `search`, `home`, `handoff`, `release_tour`, `resume`, `launch`, `history`), passed as `router.navigate(path, data, { source })` and reported on the `page_view` Supporting Event.
+_Avoid_: Referrer
+
 **Impact**:
 The combination of verified Tool Uses and the distinct real users who received that value. Tool Opens and Supporting Events are reported separately.
 _Avoid_: Raw activity, total events

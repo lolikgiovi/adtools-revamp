@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { UsageTracker } from "../../../core/UsageTracker.js";
 import { KafkaService, KAFKA_BROKERS_KEY } from "../service.js";
 
-vi.mock("../../../core/UsageTracker.js", () => ({ UsageTracker: { trackEvent: vi.fn() } }));
+vi.mock("../../../core/UsageTracker.js", () => ({ UsageTracker: { trackEvent: vi.fn(), trackToolUse: vi.fn(), trackFailure: vi.fn() } }));
 
 // Failure modes: partial delivery treated as success, rejected calls omitted, sensitive
 // inputs leaked, telemetry breaking operations, and asynchronous listener errors omitted.

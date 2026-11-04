@@ -29,3 +29,22 @@ describe("JSON Tools usage counting", () => {
     expect(events.filter((event) => event === "json-tools:output_used")).toHaveLength(2);
   });
 });
+
+// Failures: a process the user starts that produces nothing is recorded with a bounded category.
+// Ways it could go wrong: invalid JSON is not recorded; the editor text leaks into the failure; it counts as a use.
+describe("JSON Tools failures", () => {
+  it("records invalid JSON as an invalid_input failure without content", () => {
+    const failures = [];
+    vi.spyOn(UsageTracker, "trackToolUse").mockImplementation(() => {});
+    vi.spyOn(UsageTracker, "trackEvent").mockImplementation(() => {});
+    vi.spyOn(UsageTracker, "trackFailure").mockImplementation((id, action, error) => failures.push([id, action, error]));
+    const tool = Object.assign(Object.create(JSONTools.prototype), {
+      inputSource: "typed",
+      currentTab: "extract-keys",
+      editor: { getValue: () => '{"secret": ' },
+      showError: vi.fn(),
+    });
+    tool.prettifyJSON();
+    expect(failures).toEqual([["json-tools", "prettify", "invalid_input"]]);
+  });
+});

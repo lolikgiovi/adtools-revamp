@@ -496,6 +496,7 @@ export class RunBatch extends BaseTool {
       } catch (err) {
         statusEl.textContent = "Error: " + errorMapping(err);
         this.showError(errorMapping(err));
+        UsageTracker.trackFailure("run-batch", "run", err, { env });
         this.trackAnalytics(
           "run_error",
           UsageTracker.enrichErrorMeta(err, {

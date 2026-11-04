@@ -1106,7 +1106,7 @@ class Sidebar {
     this.updateActiveItem(toolId);
 
     if (this.router) {
-      this.router.navigate(toolId);
+      this.router.navigate(toolId, {}, { source: "sidebar" });
     }
 
     // Close sidebar on mobile after selection
@@ -1240,7 +1240,7 @@ class Sidebar {
    */
   navigateToPage(pageId) {
     if (this.router) {
-      this.router.navigate(pageId);
+      this.router.navigate(pageId, {}, { source: "sidebar" });
     }
 
     if (this.eventBus) {

@@ -101,6 +101,9 @@ class JSONTools extends BaseTool {
   }
 
   trackProcessError(action, input, errorType = "invalid_input", meta = {}) {
+    // Empty or unparseable input is the user's to fix; anything else is the tool failing.
+    const inputProblem = ["invalid_input", "invalid_json", "empty_input", "SyntaxError"].includes(errorType);
+    UsageTracker.trackFailure("json-tools", String(action).replaceAll("-", "_"), inputProblem ? "invalid_input" : { name: errorType });
     this.trackAnalytics("process_error", {
       action,
       error_type: String(errorType || "invalid_input").slice(0, 80),

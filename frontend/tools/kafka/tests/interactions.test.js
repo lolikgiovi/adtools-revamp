@@ -7,7 +7,7 @@ import {
   saveKafkaBrokerProfiles,
 } from "../service.js";
 
-vi.mock("../../../core/UsageTracker.js", () => ({ UsageTracker: { trackToolUse: vi.fn() } }));
+vi.mock("../../../core/UsageTracker.js", () => ({ UsageTracker: { trackToolUse: vi.fn(), trackEvent: vi.fn(), trackFailure: vi.fn() } }));
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 

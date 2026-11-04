@@ -203,6 +203,7 @@ class QRGenerator extends BaseTool {
       }
     } catch (e) {
       this.showError("Failed to download PNG");
+      UsageTracker.trackFailure("qr-tools", "download_png", e);
       console.error(e);
     }
   }
@@ -226,6 +227,7 @@ class QRGenerator extends BaseTool {
       UsageTracker.trackToolUse("qr-tools", "download_svg", { size: this.state.size, mode: this.state.mode });
     } catch (e) {
       this.showError("Failed to download SVG");
+      UsageTracker.trackFailure("qr-tools", "download_svg", e);
       console.error(e);
     }
   }

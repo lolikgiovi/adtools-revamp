@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RedisCacheTool } from "../main.js";
 
 vi.mock("../../../core/UsageTracker.js", () => ({
-  UsageTracker: { trackToolUse: vi.fn() },
+  UsageTracker: { trackToolUse: vi.fn(), trackEvent: vi.fn(), trackFailure: vi.fn() },
 }));
 
 vi.mock("../../../core/AnalyticsMeta.js", () => ({

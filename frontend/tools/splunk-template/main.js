@@ -992,6 +992,7 @@ class SplunkVTLEditor extends BaseTool {
 
     btnCopy?.addEventListener("click", async () => {
       const copied = await this.copyToClipboard(this.editor.getValue(), btnCopy);
+      if (!copied) UsageTracker.trackFailure("splunk-template", "copy", "internal");
       if (copied) {
         this.trackAnalytics("copy_success", {
           field_count: extractFieldsFromTemplate(this.editor.getValue()).length,

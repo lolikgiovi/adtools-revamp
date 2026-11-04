@@ -5,6 +5,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import toolsConfig from "../../config/tools.json";
 import definitions from "../../config/tool-usage-definitions.json";
+import { capabilities } from "../../config/capabilities.js";
 
 const sourceFolders = {
   "html-template": "html-editor",
@@ -39,5 +40,19 @@ describe("canonical tool-use coverage", () => {
         .join("\n");
       expect(source, `${id} must call trackToolUse at its success boundary`).toContain(`trackToolUse("${id}"`);
     }
+  });
+
+  // A capability succeeds when its tool records one of these actions; a renamed action silently zeroes it.
+  // Tools without a definition (not yet registered) are covered once they are registered above.
+  it("maps every capability success to an action its tool records", () => {
+    const matches = (pattern, action) => pattern === action || (pattern.endsWith("*") && action.startsWith(pattern.slice(0, -1)));
+    const stale = capabilities.flatMap((item) => {
+      const tool = item.useTool || item.tool;
+      if (!definitions[tool]) return [];
+      return (item.uses || [])
+        .filter((action) => !definitions[tool].actions.some((pattern) => matches(pattern, action)))
+        .map((action) => `${item.tool}.${item.id}:${action}`);
+    });
+    expect(stale).toEqual([]);
   });
 });

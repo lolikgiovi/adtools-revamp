@@ -961,6 +961,19 @@ export class KafkaTool extends BaseTool {
     this.stopListening();
   }
   field(id) { return this.container?.querySelector(`#${id}`); }
+
+  // A broker profile name like "SIT" labels the environment; a name that looks like a host or address stays local.
+  brokerMeta() {
+    const profile = this.brokerProfiles.find((item) => item.id === this.field("kafkaBrokerSelect")?.value);
+    const name = String(profile?.name || "").trim();
+    return /^[A-Za-z0-9 _-]{1,40}$/.test(name) ? { broker_profile: name } : {};
+  }
+
+  // The desktop bridge rejects with strings; wrap them so failures are categorized, never sent as text.
+  trackFailure(action, error, meta = {}) {
+    const reason = error instanceof Error ? error : new Error(String(error));
+    UsageTracker.trackFailure("kafka", action, reason, { ...this.brokerMeta(), ...meta });
+  }
   config() {
     const profile = this.brokerProfiles.find((item) => item.id === this.field("kafkaBrokerSelect")?.value);
     return { brokers: profile?.brokers || "", securityProtocol: "PLAINTEXT" };
@@ -1790,6 +1803,7 @@ export class KafkaTool extends BaseTool {
       this.topicsLoaded = true;
     } catch (error) {
       if (requestId !== this.topicRequestId || !this.container) return;
+      this.trackFailure("browse_topics", error);
       this.topicError = `Could not browse topics: ${String(error)}`;
     } finally {
       if (requestId === this.topicRequestId && this.container) {
@@ -1918,6 +1932,7 @@ export class KafkaTool extends BaseTool {
       this.setConnectionState("connected");
       this.field("kafkaConnectionStatus").title = String(result || "Connected to Kafka");
     } catch (error) {
+      this.trackFailure("test_connection", error);
       this.setConnectionState("error", String(error));
     } finally {
       this.testingConnection = false;
@@ -1958,7 +1973,11 @@ export class KafkaTool extends BaseTool {
     try {
       records = this.records();
       if (!this.config().brokers || !this.field("kafkaTopic").value.trim()) throw new Error("Enter bootstrap servers and a topic.");
-    } catch (error) { this.message("kafkaPublishStatus", error.message, true); return; }
+    } catch (error) {
+      UsageTracker.trackFailure("kafka", "publish", "invalid_input", this.brokerMeta());
+      this.message("kafkaPublishStatus", error.message, true);
+      return;
+    }
     this.saveConnection();
     this.publishing = true;
     this.field("kafkaPublish").disabled = true;
@@ -1969,6 +1988,9 @@ export class KafkaTool extends BaseTool {
       const result = await this.service.publish(this.config(), this.field("kafkaTopic").value.trim(), records);
       const count = result.delivered.length;
       if (count) UsageTracker.trackToolUse("kafka", "publish", { message_count: count });
+      if (result.failedAt != null) {
+        this.trackFailure("publish", result.error || "delivery failed", { message_count: records.length, delivered_count: count });
+      }
       if (!this.container) return;
       const status = result.failedAt == null ? `${count} ${count === 1 ? "message" : "messages"} delivered.` :
         `${count} delivered; stopped at message ${result.failedAt + 1}: ${result.error || "delivery failed"}`;
@@ -1978,8 +2000,10 @@ export class KafkaTool extends BaseTool {
         row.textContent = `#${delivery.index + 1} · partition ${delivery.partition} · offset ${delivery.offset}`;
         this.field("kafkaDeliveries").append(row);
       }
-    } catch (error) { this.message("kafkaPublishStatus", String(error), true); }
-    finally {
+    } catch (error) {
+      this.trackFailure("publish", error, { message_count: records.length });
+      this.message("kafkaPublishStatus", String(error), true);
+    } finally {
       this.publishing = false;
       if (this.container) { this.field("kafkaSave").disabled = false; this.updateCount(); }
     }
@@ -2178,6 +2202,7 @@ export class KafkaTool extends BaseTool {
       this.setListeningButton("Stop listening", false, true);
       this.message("kafkaListenStatus", "");
     } catch (error) {
+      this.trackFailure("listen", error);
       this.unlisten.forEach((unlisten) => unlisten()); this.unlisten = [];
       this.setListeningButton();
       if (this.container) this.updateActionAvailability();
@@ -2207,9 +2232,20 @@ export class KafkaTool extends BaseTool {
       if (requestId !== this.historyRequestId || !this.container) return;
       for (const match of result.matches) this.showMessage(match, true);
       const count = result.matches.length;
+      // Only the search's shape: the text may be an account or customer identifier.
+      if (!count) {
+        UsageTracker.trackEvent("kafka", "history_empty", {
+          ...this.brokerMeta(),
+          range_hours: rangeHours,
+          term_length: query.length,
+          scanned_count: Number(result.scanned) || 0,
+          limited: Boolean(result.limited),
+        });
+      }
       this.message("kafkaHistoryStatus", `${count} ${count === 1 ? "match" : "matches"} in ${result.scanned.toLocaleString()} records.${result.limited ? " Search limit reached; narrow the start time to look further." : ""}`,
       );
     } catch (error) {
+      if (requestId === this.historyRequestId) this.trackFailure("history_search", error);
       if (requestId === this.historyRequestId && this.container) this.message("kafkaHistoryStatus", String(error), true);
     } finally {
       this.searchingHistory = false;

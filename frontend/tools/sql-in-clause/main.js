@@ -125,6 +125,7 @@ class SQLInClauseTool extends BaseTool {
         const text = out?.value || "";
         if (text) {
           if (await this.copyToClipboard(text, copyBtn)) this.trackAnalytics("copy_output", this.buildAnalyticsMeta());
+          else UsageTracker.trackFailure("sql-in-clause", "copy", "internal");
         }
       });
     }

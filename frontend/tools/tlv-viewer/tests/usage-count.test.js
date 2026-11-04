@@ -59,3 +59,17 @@ describe("TLV Viewer sample data", () => {
     expect(uses).toEqual([]);
   });
 });
+
+// Failures: a parse the user asks for that cannot read the input is recorded; restored input that fails is not.
+describe("TLV Viewer failures", () => {
+  it("records a failed explicit parse, not a failed restore", () => {
+    const failures = [];
+    vi.spyOn(UsageTracker, "trackFailure").mockImplementation((id, action, error) => failures.push([id, action, error]));
+    localStorage.setItem("tool:tlv-viewer:input", "ZZ-not-tlv");
+    localStorage.setItem("tool:tlv-viewer:format", "ber-hex");
+    const { container } = mount();
+    expect(failures).toEqual([]);
+    container.querySelector("#tlv-parse-btn").click();
+    expect(failures).toEqual([["tlv-viewer", "parse", "invalid_input"]]);
+  });
+});

@@ -50,6 +50,62 @@ const DEFAULT_TABS = [
     query:
       "SELECT 'Opportunities are computed by the dashboard API' AS signal, '-' AS tool_id, 'Use the dashboard API time range filter' AS next_step",
   },
+  {
+    id: "entry-points",
+    name: "Entry Points",
+    query: `SELECT e.feature_id AS page,
+    json_extract(CASE WHEN json_valid(e.properties) THEN e.properties ELSE '{}' END, '$.source') AS source,
+    COUNT(*) AS opens,
+    COUNT(DISTINCT LOWER(u.email)) AS users,
+    MAX(e.created_time) AS last_seen
+  FROM events e
+  JOIN device d ON d.device_id = e.device_id
+  JOIN users u ON u.id = d.user_id
+  WHERE e.action = 'page_view'
+    AND json_extract(CASE WHEN json_valid(e.properties) THEN e.properties ELSE '{}' END, '$.source') IS NOT NULL
+    AND e.created_time >= datetime('now', '+7 hours', '-30 days')
+    AND ${includedAnalyticsEmailSql("u.email")}
+  GROUP BY page, source
+  ORDER BY page, opens DESC`,
+  },
+  {
+    id: "empty-searches",
+    name: "Empty Searches",
+    query: `SELECT e.feature_id AS area,
+    json_extract(CASE WHEN json_valid(e.properties) THEN e.properties ELSE '{}' END, '$.mode') AS mode,
+    COALESCE(json_extract(CASE WHEN json_valid(e.properties) THEN e.properties ELSE '{}' END, '$.term'), '(' || json_extract(CASE WHEN json_valid(e.properties) THEN e.properties ELSE '{}' END, '$.term_length') || ' characters)') AS term,
+    COUNT(*) AS searches,
+    COUNT(DISTINCT LOWER(u.email)) AS users,
+    MAX(e.created_time) AS last_seen
+  FROM events e
+  JOIN device d ON d.device_id = e.device_id
+  JOIN users u ON u.id = d.user_id
+  WHERE e.action IN ('search_empty', 'no_results')
+    AND e.created_time >= datetime('now', '+7 hours', '-30 days')
+    AND ${includedAnalyticsEmailSql("u.email")}
+  GROUP BY area, mode, term
+  ORDER BY searches DESC, users DESC
+  LIMIT 100`,
+  },
+  {
+    id: "tool-failures",
+    name: "Tool Failures",
+    query: `SELECT e.feature_id AS tool_id,
+    json_extract(CASE WHEN json_valid(e.properties) THEN e.properties ELSE '{}' END, '$.action') AS action,
+    json_extract(CASE WHEN json_valid(e.properties) THEN e.properties ELSE '{}' END, '$.category') AS category,
+    COUNT(*) AS failures,
+    COUNT(DISTINCT LOWER(u.email)) AS users,
+    MAX(e.created_time) AS last_seen
+  FROM events e
+  JOIN device d ON d.device_id = e.device_id
+  JOIN users u ON u.id = d.user_id
+  WHERE e.action = 'failed'
+    AND e.created_time >= datetime('now', '+7 hours', '-30 days')
+    AND ${includedAnalyticsEmailSql("u.email")}
+  GROUP BY tool_id, action, category
+  ORDER BY failures DESC, users DESC
+  LIMIT 100`,
+  },
   { id: "capability-adoption", name: "Capability Adoption", query: buildCapabilityAdoptionQuery() },
   { id: "capability-people", name: "Capability by User", query: buildCapabilityAdoptionQuery(null, true) },
   { id: "import-sources", name: "Query Import Sources", query: buildImportSourcesQuery() },
@@ -1658,7 +1714,7 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
     }
 
     if (tab.id === "tool-adoption") {
-      return executeToolAdoptionQuery(env, "tab:tool-adoption:v4", tab.query);
+      return executeToolAdoptionQuery(env, "tab:tool-adoption:v5", tab.query);
     }
 
     return executeQuery(env, `tab:${tab.id}:${tab.query}`, tab.query);
@@ -2274,12 +2330,22 @@ async function executeToolAdoptionQuery(env, cacheKey, fallbackQuery) {
     }
 
     // Uses come from the Tool Use ledger; usage_log only holds opens and mount pings, so it reports opens alone.
+    const jakartaDay = (column) => `DATE(datetime(${dashboardTimestamp(column)}, '+7 hours'))`;
     const opensSql = tables.has("usage_log")
-      ? `SELECT tool_id, COUNT(*) AS opens
+      ? `SELECT tool_id, user_email, ${jakartaDay("created_time")} AS day
   FROM (${buildDeduplicatedUsageLogQuery()})
-  WHERE action = 'open'
-  GROUP BY tool_id`
-      : "SELECT NULL AS tool_id, 0 AS opens WHERE 0";
+  WHERE action = 'open'`
+      : "SELECT NULL AS tool_id, NULL AS user_email, NULL AS day WHERE 0";
+    // A failure is reported by the tool itself (UsageTracker.trackFailure), never inferred from exceptions.
+    const failuresSql =
+      tables.has("events") && tables.has("device") && tables.has("users")
+        ? `SELECT e.feature_id AS tool_id, COUNT(*) AS failures
+  FROM events e
+  JOIN device d ON d.device_id = e.device_id
+  JOIN users u ON u.id = d.user_id
+  WHERE e.action = 'failed' AND ${includedAnalyticsEmailSql("u.email")}
+  GROUP BY e.feature_id`
+        : "SELECT NULL AS tool_id, 0 AS failures WHERE 0";
     const query = `WITH successful_use AS (
   ${buildCanonicalToolUsageQuery()}
 ),
@@ -2292,8 +2358,44 @@ totals AS (
   FROM successful_use
   GROUP BY tool_id
 ),
-opens AS (
+open_rows AS (
   ${opensSql}
+),
+opens AS (
+  SELECT tool_id, COUNT(*) AS opens FROM open_rows GROUP BY tool_id
+),
+-- A person-day that opened a tool converts when the same person used it that day.
+conversion AS (
+  SELECT o.tool_id,
+    COUNT(*) AS open_days,
+    SUM(CASE WHEN EXISTS (
+      SELECT 1 FROM successful_use s
+      WHERE s.tool_id = o.tool_id AND s.user_email = o.user_email AND ${jakartaDay("s.created_time")} = o.day
+    ) THEN 1 ELSE 0 END) AS open_days_with_use
+  FROM (SELECT DISTINCT tool_id, user_email, day FROM open_rows) o
+  GROUP BY o.tool_id
+),
+first_use AS (
+  SELECT tool_id,
+    CAST(json_extract(CASE WHEN json_valid(properties) THEN properties ELSE '{}' END, '$.ms_to_first_use') AS REAL) AS ms
+  FROM tool_usage u
+  WHERE u.source = 'client' AND ${includedAnalyticsEmailSql("u.user_email")}
+),
+first_use_ranked AS (
+  SELECT tool_id, ms,
+    ROW_NUMBER() OVER (PARTITION BY tool_id ORDER BY ms) AS position,
+    COUNT(*) OVER (PARTITION BY tool_id) AS samples
+  FROM first_use
+  WHERE ms IS NOT NULL
+),
+first_use_median AS (
+  SELECT tool_id, ROUND(AVG(ms) / 1000.0, 1) AS median_first_use_s
+  FROM first_use_ranked
+  WHERE position IN ((samples + 1) / 2, (samples + 2) / 2)
+  GROUP BY tool_id
+),
+failures AS (
+  ${failuresSql}
 ),
 ranked_actions AS (
   SELECT tool_id,
@@ -2320,6 +2422,10 @@ errors AS (
 SELECT totals.tool_id,
   totals.successful_uses,
   COALESCE(opens.opens, 0) AS opens,
+  ROUND(100.0 * conversion.open_days_with_use / NULLIF(conversion.open_days, 0), 1) AS open_to_use_pct,
+  first_use_median.median_first_use_s,
+  COALESCE(failures.failures, 0) AS failures,
+  ROUND(100.0 * COALESCE(failures.failures, 0) / NULLIF(COALESCE(failures.failures, 0) + totals.successful_uses, 0), 1) AS failure_rate_pct,
   totals.users,
   totals.devices,
   ranked_actions.action AS top_action,
@@ -2329,6 +2435,9 @@ SELECT totals.tool_id,
   errors.last_error
 FROM totals
 LEFT JOIN opens ON opens.tool_id = totals.tool_id
+LEFT JOIN conversion ON conversion.tool_id = totals.tool_id
+LEFT JOIN first_use_median ON first_use_median.tool_id = totals.tool_id
+LEFT JOIN failures ON failures.tool_id = totals.tool_id
 LEFT JOIN ranked_actions ON ranked_actions.tool_id = totals.tool_id AND ranked_actions.rank = 1
 LEFT JOIN errors ON errors.tool_id = totals.tool_id
 ORDER BY totals.successful_uses DESC, totals.users DESC

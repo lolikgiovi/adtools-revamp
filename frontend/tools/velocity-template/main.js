@@ -664,6 +664,10 @@ class VelocityTemplateTool extends withTemplateSqlImport(BaseTool) {
       },
       this._renderState === "valid",
     );
+    // An explicit render that does not produce valid output is a failed attempt; the template is the user's to fix.
+    if (this._renderState !== "valid") {
+      UsageTracker.trackFailure("velocity-template", "render", "invalid_input", { outcome: this._renderState });
+    }
   }
 
   validationSnapshot() {
@@ -711,6 +715,7 @@ class VelocityTemplateTool extends withTemplateSqlImport(BaseTool) {
       }
     } catch (error) {
       this.track("validate", snapshot.template || "", "", { outcome: "invalid_input" }, false);
+      UsageTracker.trackFailure("velocity-template", "validate", "invalid_input");
       this.setValidationStatus(error.message);
       return;
     }
@@ -750,6 +755,9 @@ class VelocityTemplateTool extends withTemplateSqlImport(BaseTool) {
         },
         response.status >= 200 && response.status < 300,
       );
+      if (response.status < 200 || response.status >= 300) {
+        UsageTracker.trackFailure("velocity-template", "validate", { status: response.status }, { status_code: response.status });
+      }
     } catch (error) {
       if (this._validationRequest === request && request.sequence === this._mountSequence) {
         this.track(
@@ -762,6 +770,7 @@ class VelocityTemplateTool extends withTemplateSqlImport(BaseTool) {
           },
           false,
         );
+        UsageTracker.trackFailure("velocity-template", "validate", error);
         this.setValidationStatus(error?.message || "Velocity API validator unavailable.");
       }
     } finally {

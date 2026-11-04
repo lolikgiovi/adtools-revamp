@@ -33,6 +33,9 @@ const title = (table, row) =>
   row?.MENU_LABEL || row?.GROUP_TITLE || row?.TABLE_TITLE || row?.FIELD_TITLE || row?.COLUMN_TITLE || row?.[KEYS[table]] || LABELS[table];
 const frozenStates = new Set(["Checking Latest", "Updating", "Outcome Unknown"]);
 
+// Operations whose failure means the user did not get what they asked for; UI actions like select are excluded.
+const TRACKED_FAILURES = new Set(["load", "generate", "download", "verify", "history", "history-more", "history-diff"]);
+
 export class MonitoringQuery extends BaseTool {
   constructor(eventBus) {
     super({ id: "monitoring-query", eventBus, isHeavyTool: true });
@@ -68,7 +71,9 @@ export class MonitoringQuery extends BaseTool {
       "click",
       (event) => {
         const target = event.target.closest("[data-action]");
-        if (target && !target.disabled) this.action(target.dataset.action, target).catch((error) => this.fail(error));
+        if (target && !target.disabled) {
+          this.action(target.dataset.action, target).catch((error) => this.fail(error, target.dataset.action));
+        }
       },
       options,
     );
@@ -104,9 +109,17 @@ export class MonitoringQuery extends BaseTool {
       element.dataset.error = String(error);
     }
   }
-  fail(error) {
+  fail(error, action) {
+    if (TRACKED_FAILURES.has(action)) UsageTracker.trackFailure("monitoring-query", action, error, this.connectionMeta());
     this.status(error.message || String(error), true);
     this.showError(error.message || "Monitoring operation failed");
+  }
+  // A connection name like "SIT_MONITORING" labels the environment; one that looks like a host or address stays local.
+  connectionMeta() {
+    const selected = this.container?.querySelector("#mq-connection")?.value;
+    const connection = this.connection || this.connections?.[Number(selected)];
+    const name = String(connection?.name || "").trim();
+    return /^[A-Za-z0-9 _-]{1,40}$/.test(name) ? { connection_label: name } : {};
   }
   async onChange(event) {
     if (event.target.id === "mq-connection") {
@@ -811,9 +824,11 @@ export class MonitoringQuery extends BaseTool {
         this.status(`Committed · Change ${request.changeId}. Open History or Verify Database for readback.`);
       } else if (result.state === "Outcome Unknown") {
         this.state = "Outcome Unknown";
+        this.trackApplyFailure("network", "Outcome Unknown", operations.length);
         this.status("Outcome Unknown. Verify Database and history before another write.", true);
       } else {
         this.state = result.state === "Conflict" ? "Conflict" : "Failed";
+        this.trackApplyFailure(this.state === "Conflict" ? "rejected" : "server", this.state, operations.length);
         this.conflicts = result.conflicts || [];
         this.submission = null;
         this.status(
@@ -822,6 +837,7 @@ export class MonitoringQuery extends BaseTool {
         );
       }
     } catch (error) {
+      this.trackApplyFailure(error, dispatched ? "Outcome Unknown" : "Failed", operations.length);
       this.state = dispatched ? "Outcome Unknown" : "Failed";
       if (!dispatched) this.submission = null;
       this.status(dispatched ? "Outcome Unknown. The commit response was lost. Verify Database before resuming." : error.message, true);
@@ -829,6 +845,9 @@ export class MonitoringQuery extends BaseTool {
       await this.persist();
       this.renderAll();
     }
+  }
+  trackApplyFailure(error, state, operationCount) {
+    UsageTracker.trackFailure("monitoring-query", "apply", error, { ...this.connectionMeta(), state, operation_count: operationCount });
   }
   async acceptCommitted(_result) {
     this.commitRefreshPending = true;
@@ -891,7 +910,7 @@ export class MonitoringQuery extends BaseTool {
       this.status("Standalone guarded SQL generated. Copy/download includes embedded values; it has not executed.");
     } catch (error) {
       this.state = "Draft";
-      this.fail(error);
+      this.fail(error, "generate");
     } finally {
       if (this.state === "Checking Latest") this.state = "Draft";
       await this.persist();
@@ -964,6 +983,7 @@ export class MonitoringQuery extends BaseTool {
       this.historyComplete = result.complete;
       this.historyMessage = result.message;
     } catch (error) {
+      if (historySequence === this.historySequence) UsageTracker.trackFailure("monitoring-query", "history", error, this.connectionMeta());
       if (historySequence === this.historySequence) this.historyError = error.message;
     } finally {
       this.historyLoading = false;

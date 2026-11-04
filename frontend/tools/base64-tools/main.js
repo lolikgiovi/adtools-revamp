@@ -717,6 +717,7 @@ class Base64Tools extends BaseTool {
         });
       } catch (error) {
         UsageTracker.trackEvent("base64-tools", "encode_error", UsageTracker.enrichErrorMeta(error, { type: "file" }));
+        UsageTracker.trackFailure("base64-tools", "encode", error, { input_mode: "file" });
         this.showError("Failed to encode file to Base64");
         outputArea.value = "";
       }
@@ -749,6 +750,7 @@ class Base64Tools extends BaseTool {
           ...summarizeText(text, "input"),
         });
       } catch (error) {
+        UsageTracker.trackFailure("base64-tools", "encode", error, { input_mode: "text" });
         this.showError("Failed to encode text to Base64");
         outputArea.value = "";
       }
@@ -869,6 +871,8 @@ class Base64Tools extends BaseTool {
       } catch (error) {
         console.error("❌ [DEBUG] Error decoding Base64:", error);
         UsageTracker.trackEvent("base64-tools", "decode_error", UsageTracker.enrichErrorMeta(error, { type: "text" }));
+        // atob rejects malformed text; the user sees "Invalid Base64 input".
+        UsageTracker.trackFailure("base64-tools", "decode", "invalid_input", { input_mode: "text" });
         this.showError("Invalid Base64 input");
         outputArea.value = "";
       }
@@ -886,6 +890,7 @@ class Base64Tools extends BaseTool {
 
     // Process each file
     const processedFiles = [];
+    let lastError = null;
 
     for (const [fileId, { file }] of selectedFilesForMode) {
       try {
@@ -970,6 +975,7 @@ class Base64Tools extends BaseTool {
         }
       } catch (error) {
         console.error("❌ [DEBUG] Failed to process file:", file.name, error);
+        lastError = error;
         UsageTracker.trackEvent(
           "base64-tools",
           mode === "encode" ? "encode_error" : "decode_error",
@@ -977,6 +983,11 @@ class Base64Tools extends BaseTool {
         );
         this.showError(`Failed to process ${file.name}: ${error.message}`);
       }
+    }
+
+    // One click is one attempt: it failed only when no file produced output.
+    if (!processedFiles.length && lastError) {
+      UsageTracker.trackFailure("base64-tools", mode, lastError, { input_mode: "multi_file", file_count: selectedFilesForMode.length });
     }
 
     const singleDecodedText =

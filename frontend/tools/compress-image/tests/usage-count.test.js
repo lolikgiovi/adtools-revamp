@@ -36,7 +36,8 @@ describe("Compress Image usage counting", () => {
   it("counts a batch of several images once, with the number readied", async () => {
     const { tool, uses } = batch([true, true, false, true]);
     await tool.processQueue();
-    expect(uses).toEqual([{ use: "compress-image:compress", image_count: 3 }]);
+    expect(uses).toHaveLength(1);
+    expect(uses[0]).toMatchObject({ use: "compress-image:compress", image_count: 3 });
   });
 
   it("does not count a batch where every image fails", async () => {

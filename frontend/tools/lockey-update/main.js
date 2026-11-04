@@ -1111,7 +1111,10 @@ export class LockeyUpdate extends BaseTool {
   async copySql() {
     if (!this.lastSql || !this.lastResult?.ok) return;
     const copied = await this.copyToClipboard(this.lastSql, null, "INSERT SQL copied to clipboard");
-    if (!copied) return;
+    if (!copied) {
+      UsageTracker.trackFailure("lockey-update", "copy", "internal");
+      return;
+    }
     try {
       UsageTracker.trackToolUse("lockey-update", "copy", {
         rows: this.lastResult.rows.length,
@@ -1147,6 +1150,7 @@ export class LockeyUpdate extends BaseTool {
       }
     } catch (error) {
       this.showError(`Failed to download SQL: ${this.errorMessage(error)}`);
+      UsageTracker.trackFailure("lockey-update", "download", error);
     }
   }
 

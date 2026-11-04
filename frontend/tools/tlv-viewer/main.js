@@ -166,6 +166,7 @@ class TLVViewer extends BaseTool {
       this.showError(error?.message || "Failed to parse TLV payload.");
       this.updateCopyButton();
       UsageTracker.trackEvent("tlv-viewer", "parse_error", UsageTracker.enrichErrorMeta(error, { format }));
+      if (countUse) UsageTracker.trackFailure("tlv-viewer", "parse", "invalid_input", { format });
     }
   }
 

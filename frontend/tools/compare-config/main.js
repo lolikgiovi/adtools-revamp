@@ -23,6 +23,7 @@ import { buildDiffPredicate } from "./lib/row-query-builder.js";
 import { OracleConnectionService, SidecarStatus } from "../../core/OracleConnectionService.js";
 import {
   buildCompareConfigSuccessMeta,
+  buildCompareConfigUseMeta,
   buildUnifiedSourceAnalytics,
   cleanCompareConfigAnalyticsMeta,
 } from "./lib/compare-config-analytics.js";
@@ -1198,7 +1199,7 @@ class CompareConfigTool extends BaseTool {
     copyButton.className = "btn btn-secondary btn-sm";
     copyButton.dataset.rowQueryText = queryResult.predicate;
     copyButton.textContent = "Copy diff predicate";
-    copyButton.addEventListener("click", () => this.copyToClipboard(queryResult.predicate, copyButton));
+    copyButton.addEventListener("click", () => this.copyDiffPredicate(queryResult.predicate, copyButton, differingRows.length));
     actions.append(copyButton);
 
     section.append(code, actions);
@@ -1481,6 +1482,19 @@ class CompareConfigTool extends BaseTool {
   /**
    * Exports comparison results
    */
+  // What people do with a comparison after it renders; file names and predicates stay local.
+  trackDiffUse(event, format, rowCount = this.results[this.queryMode]?.rows?.length || 0) {
+    UsageTracker.trackEvent("compare-config", event, { format, row_count: rowCount });
+  }
+
+  async copyDiffPredicate(predicate, button, rowCount) {
+    if (await this.copyToClipboard(predicate, button)) this.trackDiffUse("diff_copied", "predicate", rowCount);
+  }
+
+  reportComparisonFailure(error, mode) {
+    UsageTracker.trackFailure("compare-config", "compare", error, { mode });
+  }
+
   async exportResults(format) {
     if (!this.results[this.queryMode]) {
       this.showError("No comparison results to export");
@@ -1517,8 +1531,10 @@ class CompareConfigTool extends BaseTool {
       this.showSuccess(`Results exported as ${exportData.filename}`);
 
       this.eventBus.emit("comparison:exported", { filename: exportData.filename, format });
+      this.trackDiffUse("diff_exported", format);
     } catch (error) {
       console.error("Export failed:", error);
+      UsageTracker.trackFailure("compare-config", "export", error, { format });
 
       this.showError(`Export failed: ${error.message || error}`);
     }
@@ -1577,8 +1593,10 @@ class CompareConfigTool extends BaseTool {
       this.showSuccess(`Results exported as ${filename}`);
 
       this.eventBus.emit("comparison:exported", { filename, format: "excel" });
+      this.trackDiffUse("diff_exported", "excel");
     } catch (error) {
       console.error("Excel export failed:", error);
+      UsageTracker.trackFailure("compare-config", "export", error, { format: "excel" });
       this.showError(`Excel export failed: ${error.message || error}`);
     }
   }
@@ -4735,11 +4753,8 @@ class CompareConfigTool extends BaseTool {
 
       // Track feature usage: one comparison = one usage
       const comparisonMode = `unified_${sourceA.type}_${sourceB.type}`;
-      UsageTracker.trackToolUse("compare-config", comparisonMode, {
-        rows_compared: viewResult.rows?.length || 0,
-        pk_fields: selectedPkFields.length,
-        compare_fields: selectedCompareFields.length,
-      });
+      const useMeta = buildCompareConfigUseMeta(viewResult, selectedPkFields, selectedCompareFields);
+      UsageTracker.trackToolUse("compare-config", comparisonMode, useMeta);
 
       // Track rich success event for behavioral insights
       this.trackCompareConfigEvent(
@@ -4771,6 +4786,7 @@ class CompareConfigTool extends BaseTool {
       // Track error for debugging insights (rich error with code, stack)
       const comparisonMode = `unified_${sourceA.type}_${sourceB.type}`;
       UsageTracker.trackEvent("compare-config", "comparison_error", UsageTracker.enrichErrorMeta(error, { mode: comparisonMode }));
+      this.reportComparisonFailure(error, comparisonMode);
     }
   }
 }

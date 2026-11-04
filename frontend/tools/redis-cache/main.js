@@ -79,6 +79,16 @@ function formatRedisTtl(value) {
   return `${Math.floor(ttl / 86400)}d TTL`;
 }
 
+// The desktop diagnoses connection failures by stage; analytics keeps only the matching category.
+const REDIS_STAGE_CATEGORIES = {
+  network: "network",
+  tls: "network",
+  auth: "auth",
+  authentication: "auth",
+  timeout: "timeout",
+  configuration: "invalid_input",
+};
+
 export class RedisCacheTool extends BaseTool {
   constructor(eventBus, service = new RedisCacheService()) {
     super({ id: "redis-cache", eventBus });
@@ -219,6 +229,11 @@ export class RedisCacheTool extends BaseTool {
     this.updateActionState();
   }
 
+  // Non-identifying connection facts for analytics; the host and user stay local.
+  connectionMeta() {
+    return { database: Number(this.config?.database) || 0, tls: Boolean(this.config?.tls) };
+  }
+
   async testConnection() {
     if (this.busy || !this.requireConfiguration()) return;
     const button = this.container.querySelector("#redisTestConnection");
@@ -233,8 +248,14 @@ export class RedisCacheTool extends BaseTool {
       const result = await this.service.testConnection(this.config);
       if (dot) dot.dataset.state = result?.ok ? "ready" : "error";
       this.renderConnectionDiagnostics(result);
+      if (!result?.ok) {
+        const stage = String(result?.stage || "unknown").slice(0, 40);
+        const category = REDIS_STAGE_CATEGORIES[stage] || "server";
+        UsageTracker.trackFailure("redis-cache", "test_connection", category, { ...this.connectionMeta(), stage });
+      }
       this.setMessage(result?.ok ? "" : result?.message || "Connection test failed", result?.ok ? "neutral" : "error");
     } catch (error) {
+      UsageTracker.trackFailure("redis-cache", "test_connection", error, this.connectionMeta());
       if (dot) dot.dataset.state = "error";
       const detail = this.errorMessage(error);
       this.renderConnectionDiagnostics({
@@ -380,8 +401,17 @@ export class RedisCacheTool extends BaseTool {
             scan_complete: this.scanComplete,
           }),
         );
+        // Only the pattern's shape: patterns often hold customer or account identifiers.
+        if (!this.keys.length) {
+          UsageTracker.trackEvent("redis-cache", "search_empty", {
+            has_wildcard: /[*?[]/.test(pattern),
+            pattern_length: pattern.length,
+            ...this.connectionMeta(),
+          });
+        }
       }
     } catch (error) {
+      UsageTracker.trackFailure("redis-cache", reset ? "search" : "page", error, this.connectionMeta());
       this.setMessage(this.errorMessage(error), "error");
       this.renderResults();
     } finally {
@@ -549,6 +579,7 @@ export class RedisCacheTool extends BaseTool {
       this.renderValueInspector(result);
       UsageTracker.trackToolUse("redis-cache", "view", cleanAnalyticsMeta({ type: result?.kind || "unknown" }));
     } catch (error) {
+      UsageTracker.trackFailure("redis-cache", "view", error, this.connectionMeta());
       if (this.valueInspectorKey === key) this.renderValueInspector({ key, error: this.errorMessage(error) });
     } finally {
       this.setBusy(false);
@@ -881,6 +912,7 @@ export class RedisCacheTool extends BaseTool {
         UsageTracker.trackToolUse("redis-cache", "clear", cleanAnalyticsMeta({ requested_count: keys.length, deleted_count: deleted }));
       }
     } catch (error) {
+      UsageTracker.trackFailure("redis-cache", "clear", error, { ...this.connectionMeta(), requested_count: keys.length });
       this.removeClearedResults(clearedKeys);
       this.closeDeleteConfirmation({ restoreFocus: false });
       this.renderResults();

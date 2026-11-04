@@ -80,6 +80,17 @@ export function summarizeCompareConfigResult(result = {}) {
   };
 }
 
+// The comparison Tool Use: what was found, so impact reports show differences, not just rows read.
+export function buildCompareConfigUseMeta(result, pkFields = [], compareFields = []) {
+  const summary = summarizeCompareConfigResult(result);
+  return {
+    ...summary,
+    diff_count: summary.rows_differ + summary.rows_only_a + summary.rows_only_b,
+    pk_fields: countItems(pkFields),
+    compare_fields: countItems(compareFields),
+  };
+}
+
 export function buildCompareConfigSuccessMeta({
   mode,
   sourceA,

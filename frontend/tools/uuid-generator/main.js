@@ -119,6 +119,7 @@ class UUIDGenerator extends BaseTool {
     if (resultInput && resultInput.value) {
       this.trackAnalytics("copy_action", { type: "single", count: 1 });
       if (await this.copyToClipboard(resultInput.value)) UsageTracker.trackToolUse("uuid-generator", "single");
+      else UsageTracker.trackFailure("uuid-generator", "single", "internal");
     }
   }
 
@@ -130,6 +131,7 @@ class UUIDGenerator extends BaseTool {
         count: resultTextarea.value.split("\n").length,
       });
       if (await this.copyToClipboard(resultTextarea.value)) UsageTracker.trackToolUse("uuid-generator", "multiple");
+      else UsageTracker.trackFailure("uuid-generator", "multiple", "internal");
     }
   }
 

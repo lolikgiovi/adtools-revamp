@@ -9,6 +9,9 @@ class Router {
     this.currentRoute = null;
     this.navigationId = 0;
     this.defaultRoute = "home";
+    // Where the current route was opened from; reported with the page view, never passed to the route.
+    this.currentSource = null;
+    this.pendingSource = null;
 
     this.init();
   }
@@ -38,8 +41,11 @@ class Router {
    * Navigate to a route
    * @param {string} path - Route path
    * @param {Object} data - Optional data to pass
+   * @param {Object} options
+   * @param {string} options.source - Where the user opened it: sidebar, search, home, release_tour, resume. Data without a source is a hand-off.
    */
-  navigate(path, data = {}) {
+  navigate(path, data = {}, { source } = {}) {
+    this.pendingSource = source || (data && Object.keys(data).length ? "handoff" : "app");
     const isCurrentRoute = window.location.hash === `#${path}`;
     window.location.hash = path;
     this.eventBus.emit("route:change", { path, data });
@@ -51,6 +57,9 @@ class Router {
    */
   handleRouteChange() {
     const navigationId = ++this.navigationId;
+    // A hash change no navigate() call announced is back/forward or a typed link.
+    this.currentSource = this.pendingSource || "history";
+    this.pendingSource = null;
     const hash = window.location.hash.slice(1) || this.defaultRoute;
     const hashParts = hash.split("/");
     const path = hashParts[0];

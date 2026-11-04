@@ -727,10 +727,17 @@ class MasterLockey extends BaseTool {
       this.countedSearch = null;
       return;
     }
-    const key = `${this.els.searchMode.value}:${query}`;
-    if (!this.filteredRows?.length || this.countedSearch === key) return;
+    const mode = this.els.searchMode.value;
+    const key = `${mode}:${query}`;
+    if (this.countedSearch === key) return;
     this.countedSearch = key;
-    UsageTracker.trackToolUse("master-lockey", "search", { mode: this.els.searchMode.value, result_count: this.filteredRows.length });
+    if (this.filteredRows?.length) {
+      UsageTracker.trackToolUse("master-lockey", "search", { mode, result_count: this.filteredRows.length });
+      return;
+    }
+    // What people look for and don't find. Keys are product identifiers; content searches could be anything, so only their length.
+    const detail = mode === "key" ? { term: query.slice(0, 120) } : { term_length: query.length };
+    UsageTracker.trackEvent("master-lockey", "search_empty", { mode, ...detail });
   }
 
   applyFilterDebounced() {
@@ -1318,6 +1325,7 @@ class MasterLockey extends BaseTool {
       const lockeys = this.service.parseConfluenceTableForLockeys(pageData.html);
 
       if (lockeys.length === 0) {
+        UsageTracker.trackFailure("master-lockey", "confluence_search", "not_found");
         this.showConfluenceError(
           "No lockey table found on this page. Make sure the table has a column named 'Localization Key', 'Lockey', or 'Loc Key'.",
         );
@@ -1356,6 +1364,7 @@ class MasterLockey extends BaseTool {
       console.error("Confluence fetch error:", error);
       this.showConfluenceError(error.message);
 
+      UsageTracker.trackFailure("master-lockey", "confluence_search", error);
       UsageTracker.trackEvent("master-lockey", "confluence_fetch_error", {
         error: error.message,
       });
@@ -1739,6 +1748,7 @@ class MasterLockey extends BaseTool {
       .filter((line) => line.length > 0);
 
     if (pageInputs.length === 0) return;
+    let lastError = null;
 
     // Show loading
     this.els.btnBulkConfluenceSearch.classList.add("loading");
@@ -1772,6 +1782,7 @@ class MasterLockey extends BaseTool {
           error: null,
         });
       } catch (error) {
+        lastError = error;
         // Store error for this page
         results.push({
           screenName: pageInput.substring(0, 50) + (pageInput.length > 50 ? "..." : ""),
@@ -1792,6 +1803,9 @@ class MasterLockey extends BaseTool {
     this.bulkConfluenceResults = results;
 
     const successfulPages = results.filter((result) => !result.error).length;
+    if (successfulPages === 0 && lastError) {
+      UsageTracker.trackFailure("master-lockey", "bulk_confluence_search", lastError, { page_count: pageInputs.length });
+    }
     if (successfulPages > 0) {
       UsageTracker.trackEvent("master-lockey", "bulk_confluence_search", { pageCount: pageInputs.length, successfulPages });
       UsageTracker.trackToolUse("master-lockey", "bulk_confluence_search", {

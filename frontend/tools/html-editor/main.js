@@ -224,6 +224,9 @@ class HTMLTemplateTool extends withTemplateSqlImport(BaseTool) {
   }
 
   trackHtmlProcessError(operation, input, startedAt, attemptId, errorType) {
+    try {
+      UsageTracker.trackFailure("html-template", operation, { name: errorType });
+    } catch (_) {}
     this.trackAnalytics("process_error", {
       operation,
       error_type: String(errorType || "operation_error").slice(0, 80),
@@ -1335,6 +1338,7 @@ class HTMLTemplateTool extends withTemplateSqlImport(BaseTool) {
           this.trackAnalytics("output_used", meta);
         } catch (e) {
           this.trackAnalytics("output_error", { operation: "copy", error_type: e?.name || "clipboard_error" });
+          UsageTracker.trackFailure("html-template", "copy", e);
           this.showError("Copy failed");
         }
       });

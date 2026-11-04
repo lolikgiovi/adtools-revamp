@@ -546,6 +546,7 @@ class CheckImageTool extends BaseTool {
   async checkBatchImages() {
     const { imagePaths, duplicateCount } = this.getInputEntries();
     if (imagePaths.length === 0) {
+      UsageTracker.trackFailure("check-image", "check", "invalid_input", { reason: "no_images" });
       this.showInputValidation("Add at least one image ID or content path to start a check.");
       this.elements.batchImagePathsInput?.focus();
       return;
@@ -554,6 +555,8 @@ class CheckImageTool extends BaseTool {
     const baseUrls = this.getSelectedEnvironments();
     if (baseUrls.length === 0) {
       const configuredEnvironments = this.imageCheckerService.baseUrlService.getAllUrls();
+      const reason = configuredEnvironments.length ? "no_environment" : "unconfigured";
+      UsageTracker.trackFailure("check-image", "check", "invalid_input", { reason });
       this.showInputValidation(
         configuredEnvironments.length === 0
           ? "No environments are configured. Add one in Settings, then try again."
@@ -974,6 +977,7 @@ class CheckImageTool extends BaseTool {
       });
     } catch (error) {
       console.error("Error during progressive fetch:", error);
+      UsageTracker.trackFailure("check-image", "check", error);
     }
   }
 

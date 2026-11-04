@@ -168,9 +168,9 @@ class App {
     const initialRoute = window.location.hash.slice(1).split("/")[0];
     const projectResumeRoute = sessionStorage.getItem("project.resume-route");
     sessionStorage.removeItem("project.resume-route");
-    if (projectResumeRoute && this.router.routes.has(projectResumeRoute)) this.router.navigate(projectResumeRoute);
+    if (projectResumeRoute && this.router.routes.has(projectResumeRoute)) this.router.navigate(projectResumeRoute, {}, { source: "resume" });
     else if (["dashboard", "analytics-dashboard", "approval"].includes(initialRoute)) this.router.handleRouteChange();
-    else this.router.navigate("home");
+    else this.router.navigate("home", {}, { source: "launch" });
 
     this.bindGlobalEvents();
     void this.setupDesktopTabShortcuts();
@@ -479,7 +479,7 @@ class App {
     }
 
     if (this.isNavigationCurrent(navigationId, "home")) {
-      this.eventBus.emit("page:changed", { page: "home" });
+      this.eventBus.emit("page:changed", { page: "home", source: this.router.currentSource });
       this.showPendingWelcome();
     }
   }
@@ -566,7 +566,7 @@ class App {
 
     if (this.isNavigationCurrent(navigationId, toolId)) {
       this.globalSearch?.recentInteractionStore?.touchItem({ type: "tool", route: toolId });
-      this.eventBus.emit("page:changed", { page: "tool", toolId, title: definition.name });
+      this.eventBus.emit("page:changed", { page: "tool", toolId, title: definition.name, source: this.router.currentSource });
       UsageTracker.trackFeature(toolId, "open", { route: `#${toolId}` }, 2000);
     }
   }
@@ -652,7 +652,7 @@ class App {
     }
 
     if (this.isNavigationCurrent(navigationId, pageId)) {
-      this.eventBus.emit("page:changed", { page: eventName, title });
+      this.eventBus.emit("page:changed", { page: eventName, title, source: this.router.currentSource });
     }
   }
 
@@ -1023,7 +1023,7 @@ class App {
       if (action.focus) localStorage.setItem("settings.focus", action.focus);
     } catch (_) {}
     try {
-      this.router.navigate(action.route);
+      this.router.navigate(action.route, {}, { source: "release_tour" });
     } catch (_) {}
   }
 
@@ -1947,7 +1947,7 @@ class App {
       pinnedIds: this.sidebar?.getPinnedToolIds() || new Set(),
       recentStore: this.globalSearch?.recentInteractionStore,
       getIcon: this.getToolIcon.bind(this),
-      onOpen: (id) => this.router.navigate(id),
+      onOpen: (id) => this.router.navigate(id, {}, { source: "home" }),
       onSearch: () => this.globalSearch?.open("home"),
     });
   }

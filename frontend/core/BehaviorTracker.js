@@ -19,14 +19,14 @@ export class BehaviorTracker {
         /* Best effort. */
       }
     };
-    this.unsubscribe = eventBus.on("page:changed", ({ page, toolId }) => {
+    this.unsubscribe = eventBus.on("page:changed", ({ page, toolId, source }) => {
       const feature = toolId || page;
       if (!feature || feature === this.feature) return;
       const previous = this.feature;
       this.leave("navigation");
       this.feature = feature;
       this.startedAt = document.hidden ? null : Date.now();
-      this.track(feature, "page_view", { previous: previous || "none" });
+      this.track(feature, "page_view", { previous: previous || "none", ...(source ? { source } : {}) });
     });
     document.addEventListener("click", this.onClick, true);
     document.addEventListener("change", this.onChange, true);

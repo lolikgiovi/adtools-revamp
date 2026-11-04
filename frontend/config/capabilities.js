@@ -3,7 +3,7 @@ const define = (tool, id, name, options = {}) => ({ tool, id, name, ...options }
 export const capabilities = [
   define("plantuml", "local_render", "Render diagrams locally", {
     expose: "#puml-editor",
-    uses: ["render"],
+    uses: ["view", "edit"],
     events: { render_result: "outcome" },
   }),
   define("plantuml", "export", "Export diagrams and workspaces", {
@@ -275,12 +275,12 @@ export const capabilities = [
   define("master-lockey", "search_keys", "Search localization keys", {
     change: "#search-input",
     desktop: true,
-    uses: ["search_copy_lockey", "search_copy_results"],
+    uses: ["search"],
   }),
   define("master-lockey", "confluence", "Find localization keys in Confluence", {
     start: "#btn-fetch-confluence",
     desktop: true,
-    uses: ["confluence_copy_lockey", "confluence_copy_table"],
+    uses: ["confluence_search"],
   }),
   define("master-lockey", "bulk_confluence", "Search multiple Confluence pages", {
     start: "#btn-bulk-confluence-search",

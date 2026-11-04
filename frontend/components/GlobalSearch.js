@@ -195,6 +195,11 @@ class GlobalSearch {
   /** Close the overlay */
   close(reason = "dismiss") {
     if (!this.isOpen) return;
+    // Reported once per search, when it is abandoned, so typing never floods it. Search text never leaves the app.
+    const term = this.inputEl.value.trim();
+    if (term && !this.filtered.length && reason !== "selected") {
+      this._trackSearch("no_results", { term_length: term.length, source: this._searchSource });
+    }
     this._trackSearch("search_close", {
       ...this._searchMeta(),
       reason,
@@ -578,7 +583,7 @@ class GlobalSearch {
     // Close first to avoid flicker
     this.close("selected");
 
-    this.router.navigate(item.route, item.data);
+    this.router.navigate(item.route, item.data, { source: "search" });
   }
 
   _searchMeta() {

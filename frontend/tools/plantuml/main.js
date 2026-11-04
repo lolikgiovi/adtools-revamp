@@ -13,9 +13,12 @@ import { colorNames, colorRows, confluencePalette, starterSequence } from "./pla
 import { getIconSvg, workbenchIcon } from "./icon.js";
 import { editorThemeOptions } from "./themes.js";
 import { template } from "./template.js";
+import { diagramType } from "./diagram-type.js";
 import "./styles.css";
 
 const USAGE_COUNTED_KEY = "plantuml.usage.counted";
+// Actions whose failure means the user did not get their file; navigation and layout actions are excluded.
+const FAILURE_ACTIONS = { svg: "export_svg", png: "export_png", backup: "export_workspace", format: "format" };
 
 // Composition: a quiet file rail, persistent source tabs, and a dominant diagram canvas.
 // Content: file management in the explorer, source controls in the editor, and diagram controls in the preview.
@@ -155,7 +158,10 @@ export class PlantUmlTool extends BaseTool {
         }
         const button = event.target.closest("[data-action]");
         if (!button || button.disabled) return;
-        void this.action(button.dataset.action, button).catch((error) => this.showError(error.message));
+        void this.action(button.dataset.action, button).catch((error) => {
+          this.reportActionFailure(button.dataset.action, error);
+          this.showError(error.message);
+        });
       },
       { signal },
     );
@@ -166,6 +172,7 @@ export class PlantUmlTool extends BaseTool {
         event.target.value = "";
         void this.importFiles(files).catch((error) => {
           trackWorkflowEvent("plantuml", "import_result", { outcome: "failure", file_count: files.length });
+          this.reportImportFailure(error, files.length);
           this.showError(error.message);
         });
       },
@@ -592,12 +599,34 @@ export class PlantUmlTool extends BaseTool {
     UsageTracker.trackToolUse("plantuml", action, meta);
   }
 
+  reportActionFailure(action, error) {
+    if (FAILURE_ACTIONS[action]) UsageTracker.trackFailure("plantuml", FAILURE_ACTIONS[action], error);
+  }
+
+  reportImportFailure(error, fileCount) {
+    UsageTracker.trackFailure("plantuml", "import", error, { file_count: fileCount });
+  }
+
+  renderUseMeta(result) {
+    return { input_size: result.source.length, duration_ms: result.milliseconds, diagram_type: diagramType(result.source) };
+  }
+
+  // Renders repeat on every typing pause, so a broken diagram is one failure until that file renders again.
+  trackRenderOutcome(result) {
+    this.brokenRenders ||= new Set();
+    if (result.state === "ready") this.brokenRenders.delete(result.fileId);
+    if (result.state !== "error") return;
+    trackWorkflowEvent("plantuml", "render_result", { outcome: "failure", reason: "render_error" });
+    if (this.brokenRenders.has(result.fileId)) return;
+    this.brokenRenders.add(result.fileId);
+    const category = result.line > 0 ? "invalid_input" : "internal";
+    UsageTracker.trackFailure("plantuml", "render", category, { diagram_type: diagramType(result.source) });
+  }
+
   renderChanged(result) {
     if (!this.container) return;
     this.renderState = result.state;
-    if (result.state === "error") {
-      trackWorkflowEvent("plantuml", "render_result", { outcome: "failure", reason: "render_error" });
-    }
+    this.trackRenderOutcome(result);
     const status = this.$("#puml-status");
     status.dataset.state = result.state;
     status.textContent = {
@@ -635,7 +664,7 @@ export class PlantUmlTool extends BaseTool {
     if (result.state === "ready") {
       this.diagram = result;
       this.preview?.show(result.svg, this.activeFile?.name || "diagram");
-      const meta = { input_size: result.source.length, duration_ms: result.milliseconds };
+      const meta = this.renderUseMeta(result);
       this.trackDailyUse("view", result.fileId, meta);
       if (this.editedFiles.has(result.fileId)) this.trackDailyUse("edit", result.fileId, meta);
     }

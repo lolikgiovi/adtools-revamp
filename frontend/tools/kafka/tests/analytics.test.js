@@ -3,7 +3,7 @@ import { UsageTracker } from "../../../core/UsageTracker.js";
 import { KafkaTool } from "../main.js";
 import { KAFKA_ACTIVE_BROKER_KEY, KAFKA_BROKERS_KEY, KAFKA_TOPIC_FAVORITES_KEY } from "../service.js";
 
-vi.mock("../../../core/UsageTracker.js", () => ({ UsageTracker: { trackToolUse: vi.fn(), trackEvent: vi.fn() } }));
+vi.mock("../../../core/UsageTracker.js", () => ({ UsageTracker: { trackToolUse: vi.fn(), trackEvent: vi.fn(), trackFailure: vi.fn() } }));
 
 function mountWithBroker(tool) {
   const profile = { id: "test-broker", name: "broker:9092", brokers: "broker:9092" };

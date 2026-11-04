@@ -538,6 +538,10 @@ export class JenkinsRunner extends BaseTool {
           try {
             const s = String(chunk || "").toLowerCase();
             if (s.includes("argument list too long")) {
+              // Jenkins rejected the query; log chunks can repeat the line, so record it once per run.
+              if (!this.state.lastRunArgListTooLong) {
+                UsageTracker.trackFailure("run-query", "run", "rejected", { reason: "arg_list_too_long" });
+              }
               this.state.lastRunArgListTooLong = true;
               statusEl.textContent = "Query too long. Detected 'Argument list too long'.";
             }
@@ -2433,6 +2437,7 @@ export class JenkinsRunner extends BaseTool {
       if (!safety.ok) {
         statusEl.textContent = safety.message;
         this.showError("Unsafe SQL");
+        UsageTracker.trackFailure("run-query", "run", "invalid_input", { reason: "unsafe_sql" });
         this.trackAnalytics("validation_error", {
           type: "unsafe_sql",
           env,
@@ -2742,6 +2747,7 @@ export class JenkinsRunner extends BaseTool {
               if (attempts > 30) {
                 statusEl.textContent = "Polling timeout";
                 this.trackAnalytics("run_timeout", this.getActiveRunAnalytics({ context: "polling" }));
+                UsageTracker.trackFailure("run-query", "run", "timeout", { context: "polling" });
                 runBtn.disabled = false;
                 return;
               }
@@ -2753,6 +2759,7 @@ export class JenkinsRunner extends BaseTool {
                   "run_error",
                   UsageTracker.enrichErrorMeta(err, this.getActiveRunAnalytics({ context: "polling" })),
                 );
+                UsageTracker.trackFailure("run-query", "run", err, { context: "polling" });
               } catch (_) {}
               this.showError(String(err));
               runBtn.disabled = false;
@@ -2944,6 +2951,7 @@ export class JenkinsRunner extends BaseTool {
             "run_error",
             UsageTracker.enrichErrorMeta(err, this.getActiveRunAnalytics({ job, env, context: "trigger" })),
           );
+          UsageTracker.trackFailure("run-query", "run", err, { context: "trigger", env });
         } catch (_) {}
         this.showError(errorMapping(err));
         runBtn.disabled = false;

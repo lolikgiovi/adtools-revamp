@@ -2639,6 +2639,8 @@ export class QuickQueryUI {
 
       await this._generateQuery(tableName, queryType, schemaData, inputData, dataSource, options);
     } catch (error) {
+      // Only pre-generation checks throw here (missing table, schema or SYSTEM value); _generateQuery handles its own.
+      UsageTracker.trackFailure("quick-query", this.getQueryTypeValue(), "invalid_input");
       this.showError(error.message);
       this.editor.setValue("");
     } finally {
@@ -2789,6 +2791,7 @@ export class QuickQueryUI {
         return;
       }
 
+      UsageTracker.trackFailure("quick-query", queryType, error);
       this.showError(error.message);
       this.editor.setValue("");
       this.scheduleActiveTabDraftSave();

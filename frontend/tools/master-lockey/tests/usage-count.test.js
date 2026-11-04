@@ -86,3 +86,61 @@ describe("Master Lockey usage counting", () => {
     expect(uses).toEqual([]);
   });
 });
+
+// Empty searches and failures: what people look for and don't find, and which lookups break.
+// Ways it could go wrong: every typing pause of an empty query reports (overcount); content searches leak the
+// typed text; restored filters report; a failed Confluence page or an all-failed bulk search records nothing.
+describe("Master Lockey empty searches and failures", () => {
+  let events;
+  let failures;
+
+  beforeEach(() => {
+    events = [];
+    failures = [];
+    UsageTracker.trackEvent.mockImplementation((id, event, meta) => events.push({ event, ...meta }));
+    vi.spyOn(UsageTracker, "trackFailure").mockImplementation((id, action, error) => failures.push(`${id}:${action}`));
+  });
+
+  it("reports a settled key search with no results once, with the key", () => {
+    for (const query of ["home.tit", "home.titel"]) {
+      search(query, 0);
+      vi.advanceTimersByTime(800);
+    }
+    vi.advanceTimersByTime(1500);
+    search("home.titel", 0);
+    vi.advanceTimersByTime(1500);
+    expect(events.filter((item) => item.event === "search_empty")).toEqual([{ event: "search_empty", mode: "key", term: "home.titel" }]);
+    expect(uses).toEqual([]);
+  });
+
+  it("reports only the length of an empty content search", () => {
+    tool.els.searchMode.value = "content";
+    search("Nomor rekening 1234", 0);
+    vi.advanceTimersByTime(1500);
+    expect(events.filter((item) => item.event === "search_empty")).toEqual([{ event: "search_empty", mode: "content", term_length: 19 }]);
+    expect(JSON.stringify(events)).not.toContain("rekening");
+  });
+
+  it("does not report a restored filter with no results", () => {
+    tool.els.searchInput.value = "restored";
+    tool.filteredRows = [];
+    vi.advanceTimersByTime(5000);
+    expect(events.filter((item) => item.event === "search_empty")).toEqual([]);
+  });
+
+  it("records a failed Confluence page fetch", async () => {
+    Object.assign(tool, {
+      els: {
+        ...tool.els,
+        confluencePageInput: { value: "12345" },
+        btnFetchConfluence: { classList: { add() {}, remove() {} }, querySelector: () => ({ style: {} }), disabled: false },
+        confluenceResults: { style: {} },
+      },
+      service: { fetchConfluencePage: vi.fn().mockRejectedValue(Object.assign(new Error("x"), { status: 401 })) },
+      hideConfluenceError: vi.fn(),
+      showConfluenceError: vi.fn(),
+    });
+    await tool.fetchFromConfluence();
+    expect(failures).toEqual(["master-lockey:confluence_search"]);
+  });
+});

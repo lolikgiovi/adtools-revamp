@@ -1,5 +1,27 @@
 import { getRuntime } from "./Runtime.js";
 import { AnalyticsSender } from "./AnalyticsSender.js";
+import usageDefinitions from "../config/tool-usage-definitions.json";
+
+const FAILURE_CATEGORIES = new Set(["invalid_input", "network", "timeout", "auth", "not_found", "rejected", "server", "cancelled", "internal"]);
+
+/** A bounded reason for a failure. Messages, paths and payloads never leave this function. */
+export function failureCategory(error) {
+  if (typeof error === "string") return FAILURE_CATEGORIES.has(error) ? error : "internal";
+  if (!error) return "internal";
+  const status = Number(error.status ?? error.statusCode);
+  const name = String(error.name || "");
+  const message = String(error.message || "");
+  if (name === "AbortError") return "cancelled";
+  if (name === "TimeoutError" || status === 408 || status === 504 || /timed? ?out|timeout/i.test(message)) return "timeout";
+  if (status === 401 || status === 403) return "auth";
+  if (status === 404) return "not_found";
+  if (status >= 500) return "server";
+  if (status >= 400) return "rejected";
+  if (/ORA-01017|ORA-28000|unauthori[sz]ed|forbidden|permission denied|logon denied|invalid credentials|authentication/i.test(message)) return "auth";
+  if (/failed to fetch|load failed|network|ECONN|ENOTFOUND|EHOSTUNREACH|connection (refused|reset|closed)|unreachable|ORA-12541|ORA-12170/i.test(message)) return "network";
+  if (name === "SyntaxError" || /invalid|malformed|unexpected token|parse error|cannot parse/i.test(message)) return "invalid_input";
+  return "internal";
+}
 /**
  * UsageTracker - Centralized usage analytics with localStorage persistence
  * - Records feature/action events with timestamps
@@ -37,6 +59,9 @@ class UsageTracker {
   /** Initialize tracker (optional), sets event bus and attaches lifecycle hooks */
   static init(eventBus = null) {
     this._eventBus = eventBus || null;
+    try {
+      eventBus?.on?.("page:changed", ({ toolId, page }) => this.noteToolOpen(toolId || page));
+    } catch (_) {}
     // Set sane defaults before reading storage (prevents backup fallback in dev)
     const isDev = !!(import.meta && import.meta.env && import.meta.env.DEV);
     this._backupEnabled = isDev ? false : true;
@@ -250,7 +275,14 @@ class UsageTracker {
     const now = new Date();
     if (!this._isValidTimestamp(now)) return null;
     const eventId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${now.getTime()}-${Math.random()}`;
-    const item = { event_id: eventId, tool_id: toolId, action: String(action), ts: now.toISOString(), meta: this._sanitizeMeta(meta) };
+    const timing = this._takeFirstUseTiming(toolId, now);
+    const item = {
+      event_id: eventId,
+      tool_id: toolId,
+      action: String(action),
+      ts: now.toISOString(),
+      meta: this._sanitizeMeta(timing === null ? meta : { ...meta, ms_to_first_use: timing }),
+    };
     this._state.toolUses = Array.isArray(this._state.toolUses) ? this._state.toolUses : [];
     this._state.toolUses.push(item);
     if (this._state.toolUses.length > this.MAX_TOOL_USES) {
@@ -265,6 +297,28 @@ class UsageTracker {
       this._eventBus?.emit?.("usage:toolUse", item);
     } catch (_) {}
     return eventId;
+  }
+
+  /** Remember which page opened last, so its first Tool Use can report how long it took to reach. */
+  static noteToolOpen(featureId) {
+    this._openedTool = featureId ? { id: this.normalizeFeatureId(featureId), at: Date.now(), used: false } : null;
+  }
+
+  static _takeFirstUseTiming(toolId, now) {
+    const opened = this._openedTool;
+    if (!opened || opened.used) return null;
+    if (opened.id !== toolId && usageDefinitions[toolId]?.embedded_in !== opened.id) return null;
+    opened.used = true;
+    return Math.max(0, now.getTime() - opened.at);
+  }
+
+  /** Record that a user-started operation failed. Never a Tool Use; carries a bounded category, not the error. */
+  static trackFailure(featureId, action, error, meta = {}) {
+    try {
+      return this.trackEvent(featureId, "failed", { ...meta, action: String(action || "unknown"), category: failureCategory(error) });
+    } catch (_) {
+      return undefined;
+    }
   }
 
   static _scheduleRemoteFlush() {

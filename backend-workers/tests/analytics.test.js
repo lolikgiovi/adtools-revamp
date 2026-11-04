@@ -642,7 +642,7 @@ describe("Analytics endpoints", () => {
   });
 
   it("uses lifetime usage for cumulative tools and the tool use ledger for adoption", async () => {
-    mockDashboardTables(env, ["tool_usage", "lifetime_usage_baseline", "usage_log", "device_usage", "error_events"]);
+    mockDashboardTables(env, ["tool_usage", "lifetime_usage_baseline", "usage_log", "device_usage", "error_events", "events", "device", "users"]);
 
     const login = await worker.fetch(
       new Request("http://localhost/dashboard/verify", {
@@ -697,6 +697,12 @@ describe("Analytics endpoints", () => {
     expect(toolAdoptionQuery.sql).toContain("successful_uses");
     expect(toolAdoptionQuery.sql).toMatch(/FROM usage_log[\s\S]*action = 'open'/);
     expect(toolAdoptionQuery.sql).not.toContain("NOT EXISTS");
+    // Opens that end in a use, the typical time to reach the first use, and how often work fails.
+    expect(toolAdoptionQuery.sql).toContain("open_to_use_pct");
+    expect(toolAdoptionQuery.sql).toContain("$.ms_to_first_use");
+    expect(toolAdoptionQuery.sql).toContain("median_first_use_s");
+    expect(toolAdoptionQuery.sql).toContain("e.action = 'failed'");
+    expect(toolAdoptionQuery.sql).toContain("failure_rate_pct");
     expect(toolsQuery.sql).not.toContain("FROM device_usage");
   });
 
@@ -903,5 +909,36 @@ describe("Analytics endpoints", () => {
     expect(data.source).toBe("kv+defaults");
     expect(ids[0]).toBe("overview");
     expect(ids).toContain("custom-tab");
+    expect(ids).toEqual(expect.arrayContaining(["entry-points", "empty-searches", "tool-failures"]));
+  });
+
+  // Insight reports: where opens come from, what people search for and don't find, and why work fails.
+  it.each([
+    ["entry-points", ["'page_view'", "$.source"]],
+    ["empty-searches", ["'search_empty'", "'no_results'", "$.term"]],
+    ["tool-failures", ["e.action = 'failed'", "$.category"]],
+  ])("queries the %s report from content-free events", async (tabId, fragments) => {
+    mockDashboardTables(env, ["events", "device", "users"]);
+    const login = await worker.fetch(
+      new Request("http://localhost/dashboard/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: "testpassword123" }),
+      }),
+      env,
+    );
+    const { token } = await login.json();
+    const response = await worker.fetch(
+      new Request("http://localhost/dashboard/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ tabId }),
+      }),
+      env,
+    );
+    expect(response.status).toBe(200);
+    const query = env.DB.executed.find((item) => fragments.every((fragment) => item.sql.includes(fragment)));
+    expect(query).toBeTruthy();
+    expect(query.sql).not.toContain("fashalli.bilhaq@bankmandiri.co.id");
   });
 });

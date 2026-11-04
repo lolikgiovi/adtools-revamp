@@ -1018,6 +1018,7 @@ export class MergeSqlTool extends BaseTool {
     } catch (error) {
       console.error("Merge failed:", error);
       this.showError(`Failed to merge files: ${error.message}`);
+      UsageTracker.trackFailure("merge-sql", "merge", error, { file_count: this.files.length });
       this.trackAnalytics(
         "merge_error",
         UsageTracker.enrichErrorMeta(error, { input_mode: this.inputMode, file_count: this.files.length }),
@@ -1145,6 +1146,7 @@ export class MergeSqlTool extends BaseTool {
     } catch (error) {
       console.error("SQL mode refresh failed:", error);
       this.showError(`Failed to process merged SQL: ${error.message}`);
+      UsageTracker.trackFailure("merge-sql", "report_from_sql", error);
       this.trackAnalytics("sql_mode_refresh_error", UsageTracker.enrichErrorMeta(error, { ...summarizeText(mergedSql, "input") }));
     } finally {
       if (sqlRefreshBtn) {

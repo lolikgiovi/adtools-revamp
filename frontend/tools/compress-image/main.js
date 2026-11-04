@@ -554,6 +554,9 @@ export class CompressImage extends BaseTool {
     const batch = (this.batch = new AbortController());
     const pending = [...this.items];
     let readied = 0;
+    // Click totals for the one Tool Use, and the first failure as the click's failure reason.
+    const totals = { bytes_before: 0, bytes_after: 0, formats: new Set(), lossy_count: 0, lossless_count: 0, resized: false };
+    const failed = [];
     pending.forEach((item) => {
       item.status = "Queued";
       item.primaryPending = (item.type || item.file.type) === "image/jpeg" ? "lossy" : settings.lossyPng ? "lossy" : "lossless";
@@ -570,9 +573,16 @@ export class CompressImage extends BaseTool {
         this.log(item, "Completed", { outcome: item.result.outcome });
         item.error = null;
         readied++;
+        totals.bytes_before += Number(item.file.size) || 0;
+        totals.bytes_after += Number(item.blob?.size) || 0;
+        if (item.blob?.type) totals.formats.add(item.blob.type.replace("image/", ""));
+        if (item.result?.lossy) totals.lossy_count++;
+        else totals.lossless_count++;
+        totals.resized ||= Boolean(item.result?.resized);
       } catch (error) {
         if (generation !== this.generation) return;
         item.status = "Error";
+        failed.push(error);
         item.error = `${error.message}${item.result ? " Previous result kept." : ""}`;
         this.log(item, "processing.failed", { message: error.message });
       }
@@ -585,12 +595,24 @@ export class CompressImage extends BaseTool {
     try {
       await Promise.allSettled(pending.map(process));
       // One Compress click is one Tool Use, however many images it readies.
-      if (readied) {
-        try {
-          UsageTracker.trackToolUse("compress-image", "compress", { image_count: readied });
-        } catch (_) {
-          /* Analytics cannot interrupt local processing. */
+      try {
+        if (readied) {
+          UsageTracker.trackToolUse("compress-image", "compress", {
+            image_count: readied,
+            bytes_before: totals.bytes_before,
+            bytes_after: totals.bytes_after,
+            bytes_saved: Math.max(0, totals.bytes_before - totals.bytes_after),
+            formats: [...totals.formats].sort().join(","),
+            lossy_count: totals.lossy_count,
+            lossless_count: totals.lossless_count,
+            resized: totals.resized,
+          });
         }
+        if (failed.length) {
+          UsageTracker.trackFailure("compress-image", "compress", failed[0], { failed_count: failed.length, image_count: pending.length });
+        }
+      } catch (_) {
+        /* Analytics cannot interrupt local processing. */
       }
     } finally {
       if (generation === this.generation) {
