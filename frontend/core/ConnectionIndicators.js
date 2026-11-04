@@ -335,7 +335,6 @@ export class ConnectionIndicators {
       const trigger = this.container.querySelector(`[data-connection="${item.service}"]`);
       if (!trigger) continue;
       trigger.dataset.state = item.state;
-      trigger.querySelector(".connection-detail").textContent = item.detail;
       trigger.title = `${item.name}: ${item.detail}`;
       trigger.setAttribute("aria-label", `Manage ${item.name} connections. ${item.detail}`);
     }

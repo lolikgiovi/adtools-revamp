@@ -22,7 +22,7 @@ import { KAFKA_ACTIVE_BROKER_KEY, KAFKA_BROKERS_KEY } from "../../tools/kafka/se
 describe("connection indicators", () => {
   let indicators;
   let native;
-  const detail = (service) => document.querySelector(`[data-connection="${service}"] .connection-detail`).textContent;
+  const detail = (service) => document.querySelector(`[data-connection="${service}"]`).title.split(": ").slice(1).join(": ");
 
   beforeEach(() => {
     native = vi.spyOn(ConnectionIndicators.prototype, "native").mockImplementation(async (command) => {
@@ -39,7 +39,7 @@ describe("connection indicators", () => {
     oracle.ready = false;
     oracle.pools = [];
     document.body.innerHTML = `<div class="connection-indicators">${["oracle", "kafka", "redis"].map((service) =>
-      `<button data-connection="${service}" class="connection-indicator"><span class="connection-detail"></span></button>
+      `<button data-connection="${service}" class="connection-indicator"></button>
       <div id="${service}-connection-menu" hidden></div>`,
       ).join("")}</div>`;
     indicators = new ConnectionIndicators(document.querySelector(".connection-indicators"));

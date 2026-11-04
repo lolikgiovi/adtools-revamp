@@ -188,9 +188,14 @@ try {
       });
       assert.match(await oracle.getAttribute("aria-label"), /UAT/);
       assert.equal(await oracle.getAttribute("data-state"), "active");
-      if (width > 900) {
-        assert.equal(await oracle.locator(".connection-detail").evaluate((node) => node.scrollWidth > node.clientWidth), false);
-      }
+      assert.equal(await oracle.locator(".connection-detail").count(), 0);
+      await oracle.click();
+      assert.equal(await oracle.getAttribute("aria-expanded"), "true");
+      await page.waitForFunction(() =>
+        getComputedStyle(document.querySelector('[data-connection="oracle"] .connection-chevron')).transform === "matrix(-1, 0, 0, -1, 0, 0)",
+      );
+      await page.keyboard.press("Escape");
+      assert.equal(await oracle.getAttribute("aria-expanded"), "false");
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
       await page.screenshot({ path: resolve(output, `${width}-desktop.png`), fullPage: true, animations: "disabled" });
       checks.push(
