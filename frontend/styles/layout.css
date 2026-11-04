@@ -1,7 +1,7 @@
 :root {
   --app-header-height: 57px;
   --tool-tab-height: 39px;
-  --sidebar-header-height: 57px;
+  --sidebar-header-height: var(--tool-tab-height);
   --app-workspace-inset: calc(var(--app-header-height) + 2rem);
 }
 

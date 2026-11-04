@@ -1,0 +1,29 @@
+{
+  "passed": true,
+  "checks": [
+    {
+      "width": 1440,
+      "hasTouch": false,
+      "headerHeight": 39,
+      "dropdownHeight": 28,
+      "menu": "opens within viewport; Escape restores focus",
+      "collapsed": "project icon fits"
+    },
+    {
+      "width": 900,
+      "hasTouch": false,
+      "headerHeight": 39,
+      "dropdownHeight": 28,
+      "menu": "opens within viewport; Escape restores focus",
+      "collapsed": "project icon fits"
+    },
+    {
+      "width": 390,
+      "hasTouch": true,
+      "headerHeight": 57,
+      "dropdownHeight": 40,
+      "menu": "opens within viewport; Escape restores focus",
+      "collapsed": "mobile drawer"
+    }
+  ]
+}
