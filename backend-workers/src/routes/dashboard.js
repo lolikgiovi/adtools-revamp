@@ -1400,6 +1400,60 @@ GROUP BY domain, mode
 ORDER BY events DESC, last_seen DESC
 LIMIT 150`,
   },
+  {
+    id: "plantuml",
+    name: "PlantUML",
+    query: `SELECT STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("t.created_time")}, '+7 hours') AS time,
+      SUBSTR(t.user_email, 1, INSTR(t.user_email, '@') - 1) AS user,
+      t.action,
+      COALESCE(json_extract(t.properties, '$.diagram_type'), '-') AS diagram_type,
+      COALESCE(json_extract(t.properties, '$.line_count'), '-') AS lines,
+      COALESCE(json_extract(t.properties, '$.file_count'), '-') AS files,
+      COALESCE(json_extract(t.properties, '$.duration_ms'), '-') AS render_ms
+      FROM tool_usage t
+      WHERE t.tool_id = 'plantuml' AND t.source = 'client'
+      ORDER BY julianday(${dashboardTimestamp("t.created_time")}) DESC, t.id DESC
+      LIMIT 100`,
+  },
+  {
+    id: "plantuml-summary",
+    name: "PlantUML Summary",
+    query: `WITH uses AS (
+  SELECT COALESCE(json_extract(properties, '$.diagram_type'), '-') AS diagram_type,
+    LOWER(user_email) AS email,
+    action,
+    created_time
+  FROM tool_usage
+  WHERE tool_id = 'plantuml' AND source = 'client'
+),
+failures AS (
+  SELECT COALESCE(json_extract(properties, '$.diagram_type'), '-') AS diagram_type,
+    COUNT(*) AS render_failures
+  FROM events
+  WHERE feature_id = 'plantuml' AND action = 'failed' AND json_extract(properties, '$.action') = 'render'
+  GROUP BY 1
+),
+types AS (
+  SELECT diagram_type FROM uses
+  UNION
+  SELECT diagram_type FROM failures
+)
+SELECT types.diagram_type,
+  COUNT(uses.action) AS uses,
+  COUNT(DISTINCT uses.email) AS people,
+  COALESCE(SUM(uses.action = 'view'), 0) AS views,
+  COALESCE(SUM(uses.action = 'edit'), 0) AS edits,
+  COALESCE(SUM(uses.action LIKE 'export%'), 0) AS exports,
+  COALESCE(SUM(uses.action = 'import'), 0) AS imports,
+  COALESCE(MAX(failures.render_failures), 0) AS render_failures,
+  MAX(uses.created_time) AS last_seen
+FROM types
+LEFT JOIN uses ON uses.diagram_type = types.diagram_type
+LEFT JOIN failures ON failures.diagram_type = types.diagram_type
+GROUP BY types.diagram_type
+ORDER BY uses DESC, render_failures DESC, last_seen DESC
+LIMIT 100`,
+  },
 ];
 
 const KV_KEY = "analytics-dashboard-config";

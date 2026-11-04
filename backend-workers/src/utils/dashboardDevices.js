@@ -47,8 +47,10 @@ export async function scopeDashboardDevices(env) {
           const tables = DEVICE_TABLES.filter((table) => new RegExp(`\\b(?:FROM|JOIN)\\s+${table}\\b`, "i").test(sql));
           if (!tables.length) return target.prepare(sql);
           const sources = tables.map(
-            (table) => `${table} AS (SELECT * FROM main.${table} WHERE device_id IS NULL OR device_id NOT IN (${excluded}))`,
+            (table) =>
+              `${table} AS NOT MATERIALIZED (SELECT * FROM main.${table} WHERE device_id IS NULL OR device_id NOT IN (${excluded}))`,
           );
+          // NOT MATERIALIZED keeps each reference an indexed read instead of a full temporary copy of the table.
           // Outer CTEs scope both ordinary reports and reports that already have their own WITH clause.
           return target.prepare(`WITH ${sources.join(", ")} SELECT * FROM (${sql.trim().replace(/;\s*$/, "")}) AS dashboard_rows`);
         };

@@ -71,6 +71,7 @@ const REPORT_GROUPS = [
   ["UUID & SQL IN", ["uuid-sql", "uuid-sql-summary"]],
   ["Merge SQL", ["merge-sql", "merge-sql-summary"]],
   ["Master Lockey", ["master-lockey", "master-lockey-summary"]],
+  ["PlantUML", ["plantuml", "plantuml-summary"]],
 ];
 
 class AnalyticsDashboardPage {

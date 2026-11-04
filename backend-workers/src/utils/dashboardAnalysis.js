@@ -13,8 +13,10 @@ export function buildDailyTrendsQuery(range) {
     range === "all"
       ? null
       : {
+          // The date-prefix bound keeps the read on the created_time index; one spare day covers UTC instants.
           where: (column) =>
-            `AND julianday(${instant(column)}) >= julianday('now', '+7 hours', 'start of day', '-${days} days', '-7 hours')`,
+            `AND ${column} >= date('now', '+7 hours', '-${days + 1} days')
+    AND julianday(${instant(column)}) >= julianday('now', '+7 hours', 'start of day', '-${days} days', '-7 hours')`,
         };
   return `WITH RECURSIVE usage AS (${buildCanonicalToolUsageQuery(usageRange)}),
     daily AS (
@@ -35,30 +37,34 @@ export function buildDailyTrendsQuery(range) {
       WHERE day >= (SELECT start_day FROM bounds) ORDER BY day`;
 }
 
+// Each usage table is read once from a (device_id, ..., created_time) index, never row by row.
 export function buildDeviceHealthQuery() {
-  return `WITH activity AS (
-    SELECT device_id, MAX(julianday(${instant("created_time")})) AS seen FROM tool_usage GROUP BY device_id
-    UNION ALL SELECT device_id, MAX(julianday(${instant("created_time")})) AS seen FROM usage_log GROUP BY device_id
-  ), latest AS (SELECT device_id, MAX(seen) AS seen FROM activity GROUP BY device_id),
-  last_action AS (
-    SELECT device_id, MAX(julianday(${instant("created_time")})) AS last_action
-    FROM tool_usage WHERE source='client' AND julianday(${instant("created_time")})<=julianday('now') GROUP BY device_id
+  const at = (column) => `julianday(${instant(column)})`;
+  return `WITH tool_seen AS (
+    SELECT device_id, MAX(${at("created_time")}) AS seen,
+      MAX(CASE WHEN source='client' AND ${at("created_time")}<=julianday('now') THEN ${at("created_time")} END) AS last_action
+    FROM tool_usage GROUP BY device_id
+  ), log_seen AS (
+    SELECT device_id, MAX(${at("created_time")}) AS seen FROM usage_log GROUP BY device_id
   ), devices AS (
     SELECT d.device_id, LOWER(u.email) AS user_email, COALESCE(d.platform, 'Unknown') AS platform,
       COALESCE(NULLIF(TRIM(u.department),''),'Unknown') AS department,
       strftime('%Y-%m-%dT%H:%M:%SZ',${instant("d.last_seen")}) AS last_checkin,
-      strftime('%Y-%m-%dT%H:%M:%SZ',a.last_action) AS last_tool_action,
+      strftime('%Y-%m-%dT%H:%M:%SZ',t.last_action) AS last_tool_action,
       NULLIF(TRIM(d.app_version), '') AS app_version,
-      MAX(COALESCE(julianday(${instant("d.last_seen")}), l.seen),
-        COALESCE(l.seen, julianday(${instant("d.last_seen")}))) AS seen
-    FROM device d JOIN users u ON u.id = d.user_id LEFT JOIN latest l ON l.device_id = d.device_id
-      LEFT JOIN last_action a ON a.device_id=d.device_id
+      COALESCE(MAX(t.seen, l.seen), t.seen, l.seen) AS latest,
+      ${at("d.last_seen")} AS checkin_seen
+    FROM device d JOIN users u ON u.id = d.user_id
+      LEFT JOIN tool_seen t ON t.device_id = d.device_id
+      LEFT JOIN log_seen l ON l.device_id = d.device_id
     WHERE ${includedAnalyticsEmailSql("u.email")}
+  ), scored AS (
+    SELECT *, MAX(COALESCE(checkin_seen, latest), COALESCE(latest, checkin_seen)) AS seen FROM devices
   ) SELECT device_id, user_email, department, platform, app_version, last_checkin, last_tool_action,
     strftime('%Y-%m-%dT%H:%M:%SZ', seen) AS last_seen,
     CASE WHEN seen IS NULL OR seen > julianday('now') THEN NULL
       ELSE CAST(julianday('now') - seen AS INTEGER) END AS days_since_seen
-    FROM devices ORDER BY seen DESC, user_email, device_id`;
+    FROM scored ORDER BY seen DESC, user_email, device_id`;
 }
 
 export function deviceVersionStatus(version, stable) {
