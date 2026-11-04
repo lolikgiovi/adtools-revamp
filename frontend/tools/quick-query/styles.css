@@ -2936,3 +2936,48 @@
   box-shadow: inset 0 -2px var(--color-danger, #dc2626);
   background-image: linear-gradient(#dc262619, #dc262619);
 }
+
+.qq-cell-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.qq-cell-link:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.quick-query-tool-container #errorMessages {
+  white-space: pre-line;
+}
+
+.qq-duplicate-warning {
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.qq-duplicate-warning summary {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.qq-duplicate-warning-content {
+  max-height: 180px;
+  overflow: auto;
+  padding: 0 12px;
+  overflow-wrap: anywhere;
+}
+
+.system-mode-choice.qq-audit-invalid,
+#customAuditUser[aria-invalid="true"] {
+  outline: 2px solid var(--color-danger, #dc2626);
+  outline-offset: -2px;
+}

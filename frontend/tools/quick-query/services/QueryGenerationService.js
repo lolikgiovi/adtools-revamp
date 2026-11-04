@@ -1,13 +1,19 @@
 import { ValueProcessorService } from "./ValueProcessorService.js";
 import { oracleReservedWords } from "../constants.js";
-import { AttachmentValidationService } from "./AttachmentValidationService.js";
+import { resolveAttachmentValue } from "./AttachmentValidationService.js";
+
+const populatedDataRows = (inputData) =>
+  inputData
+    .slice(1)
+    .map((values, index) => ({ values, rowNumber: index + 1 }))
+    .filter(({ values }) => values.some((cell) => cell != null && cell !== ""));
 
 const isImportedBlobValue = (value) => typeof value === "string" && /^data:application\/octet-stream;base64,/i.test(value);
 
 function getBlobColumns(schemaData, inputData) {
   const blobFields = new Set(schemaData.filter((row) => String(row[1]).trim().toUpperCase() === "BLOB").map((row) => row[0]));
   return (inputData?.[0] || [])
-    .map((name, index) => blobFields.has(String(name || "").trim()) ? index : -1)
+    .map((name, index) => (blobFields.has(String(name || "").trim()) ? index : -1))
     .filter((index) => index >= 0);
 }
 
@@ -52,7 +58,6 @@ export function columnIndexToLetter(index) {
 export class QueryGenerationService {
   constructor() {
     this.ValueProcessorService = new ValueProcessorService();
-    this.attachmentValidationService = new AttachmentValidationService();
   }
 
   /**
@@ -149,7 +154,7 @@ export class QueryGenerationService {
     const fieldNames = inputData[0].map((name) => name);
 
     // 3. Get data rows (excluding header row)
-    const dataRows = inputData.slice(1).filter((row) => row.some((cell) => cell !== null && cell !== ""));
+    const dataRows = populatedDataRows(inputData);
 
     // 4. Find indices of primary key columns
     const pkIndices = primaryKeys.map((pk) => {
@@ -165,7 +170,7 @@ export class QueryGenerationService {
     const pkCombinations = new Map();
     const duplicates = [];
 
-    dataRows.forEach((row, rowIndex) => {
+    dataRows.forEach(({ values: row, rowNumber: actualRowNumber }) => {
       // Extract primary key values for this row
       const pkValues = pkIndices.map(({ field, index }) => {
         const value = row[index];
@@ -189,8 +194,7 @@ export class QueryGenerationService {
       }
 
       // Create a unique key from primary key combination
-      const pkKey = pkValues.join("|");
-      const actualRowNumber = rowIndex + 2; // +2 because we skip header row and use 1-based indexing
+      const pkKey = JSON.stringify(pkValues);
 
       if (pkCombinations.has(pkKey)) {
         // Found duplicate - add to existing entry
@@ -202,6 +206,7 @@ export class QueryGenerationService {
           duplicates.push({
             pkValues,
             pkFields: primaryKeys,
+            columns: pkIndices.map(({ index }) => index),
             rows: existing.rows,
           });
         }
@@ -246,6 +251,7 @@ export class QueryGenerationService {
         summary: `Warning: Duplicate primary keys detected (${totalAffectedRows} rows affected)`,
         details: warningMessages,
         note: "This may cause unexpected behavior.",
+        duplicates,
       };
     }
 
@@ -276,7 +282,7 @@ export class QueryGenerationService {
     });
 
     // 2. Get data rows (excluding header row)
-    const dataRows = inputData.slice(1).filter((row) => row.some((cell) => cell !== null && cell !== ""));
+    const dataRows = populatedDataRows(inputData);
 
     // 3. Map schema with field name as key
     const schemaMap = new Map(schemaData.map((row) => [row[0], row]));
@@ -291,15 +297,13 @@ export class QueryGenerationService {
         .map((row) => row[0])
         .filter(
           (field) =>
-            ["updated_time", "updated_by"].includes(field.toLowerCase()) &&
-            !fieldNames.includes(field) &&
-            !primaryKeys.includes(field),
+            ["updated_time", "updated_by"].includes(field.toLowerCase()) && !fieldNames.includes(field) && !primaryKeys.includes(field),
         );
       fieldNames.push(...missingAuditFields);
     }
 
     // 4. Process each row of data
-    const processedRows = dataRows.map((rowData, rowIndex) => {
+    const processedRows = dataRows.map(({ values: rowData, rowNumber }) => {
       try {
         // For each field in the row
         return fieldNames.map((fieldName, colIndex) => {
@@ -322,9 +326,10 @@ export class QueryGenerationService {
             let value = colIndex < inputData[0].length ? rowData[colIndex] : null;
 
             // BLOB attachments are reconstructed as PL/SQL variables before the DML runs.
-            const matchingBlob = options.blobAttachmentMode !== "filename" && dataType.trim().toUpperCase() === "BLOB" && attachments?.find(
-              (file) => file.name.toLowerCase() === String(value).toLowerCase(),
-            );
+            const matchingBlob =
+              options.blobAttachmentMode !== "filename" &&
+              dataType.trim().toUpperCase() === "BLOB" &&
+              attachments?.find((file) => file.name.toLowerCase() === String(value).toLowerCase());
             if (matchingBlob) {
               if (!matchingBlob.processedFormats?.base64) {
                 throw new Error(`Attachment "${matchingBlob.name}" has no binary content`);
@@ -356,17 +361,7 @@ export class QueryGenerationService {
               return { fieldName, formattedValue: blobAttachments.get(blob) };
             }
 
-            // Check if value matches any attachment
-            const attachmentValue = this.attachmentValidationService.validateAttachment(
-              value,
-              dataType.replace(/\([^)]*\)/g, ""), // Remove any length specifiers (e.g., VARCHAR(100) -> VARCHAR)
-              this.getMaxLength(dataType),
-              attachments,
-              tableName,
-            );
-
-            // Use attachment value if found, otherwise use original value
-            value = attachmentValue != null ? attachmentValue : value;
+            value = resolveAttachmentValue(value, dataType, attachments);
 
             // Return formatted object
             return {
@@ -376,7 +371,7 @@ export class QueryGenerationService {
           } catch (fieldError) {
             // Convert column index to Excel-style letter (A, B, ..., Z, AA, AB, ...)
             const columnLetter = this.columnIndexToLetter(colIndex);
-            throw new Error(`Error in Cell ${columnLetter}${rowIndex + 2}, Field "${fieldName}":<br>${fieldError.message}`);
+            throw new Error(`Error in Cell ${columnLetter}${rowNumber}, Field "${fieldName}":<br>${fieldError.message}`);
           }
         });
       } catch (error) {
@@ -397,7 +392,15 @@ export class QueryGenerationService {
         queryParts.push(this.generateInsertStatement(tableName, processedFields));
       }
     } else if (queryType === "update") {
-      queryParts.push(this.generateUpdateStatement(tableName, updateRows, primaryKeys, fieldNames));
+      queryParts.push(
+        this.generateUpdateStatement(
+          tableName,
+          updateRows,
+          primaryKeys,
+          fieldNames,
+          dataRows.map(({ rowNumber }) => rowNumber),
+        ),
+      );
     } else {
       for (const processedFields of processedRows) {
         queryParts.push(this.generateMergeStatement(tableName, processedFields, primaryKeys, options));
@@ -444,8 +447,8 @@ export class QueryGenerationService {
     }
 
     const cleanup = [...blobAttachments.values()].map((variable) => `  DBMS_LOB.FREETEMPORARY(${variable});`);
-    const errorCleanup = [...blobAttachments.values()].map((variable) =>
-      `    IF DBMS_LOB.ISTEMPORARY(${variable}) = 1 THEN DBMS_LOB.FREETEMPORARY(${variable}); END IF;`,
+    const errorCleanup = [...blobAttachments.values()].map(
+      (variable) => `    IF DBMS_LOB.ISTEMPORARY(${variable}) = 1 THEN DBMS_LOB.FREETEMPORARY(${variable}); END IF;`,
     );
     return `DECLARE\n${declarations.join("\n")}\nBEGIN\n${initialization.join("\n")}\n${statements.join("\n\n")}\n${cleanup.join("\n")}\nEXCEPTION\n  WHEN OTHERS THEN\n${errorCleanup.join("\n")}\n    RAISE;\nEND;\n/`;
   }
@@ -501,7 +504,7 @@ export class QueryGenerationService {
     return mergeStatement;
   }
 
-  generateUpdateStatement(tableName, processedRows, primaryKeys, fieldNames = []) {
+  generateUpdateStatement(tableName, processedRows, primaryKeys, fieldNames = [], sourceRows = []) {
     // Collect all unique fields being updated across all rows (table scope)
     const allUpdatedFields = new Set();
     // Collect PK tuples for composite key WHERE clause (instead of separate IN clauses)
@@ -568,12 +571,12 @@ export class QueryGenerationService {
 
               UsageTracker.trackEvent("quick-query", "generation_error", {
                 type: "pk_missing_in_row",
-                row: rowIndex + 2,
+                row: sourceRows[rowIndex] ?? rowIndex + 1,
                 column: columnLetter,
                 table_name: tableName,
               });
               throw new Error(
-                `Error in Cell ${columnLetter}${rowIndex + 2}, Field "${pk}": Primary key must have a value for UPDATE operation.`,
+                `Error in Cell ${columnLetter}${sourceRows[rowIndex] ?? rowIndex + 1}, Field "${pk}": Primary key must have a value for UPDATE operation.`,
               );
             }
             return `${this.formatFieldName(pk)} = ${pkField.formattedValue}`;
@@ -714,10 +717,5 @@ export class QueryGenerationService {
       return oracleReservedWords.has(fieldName.toLowerCase()) ? `"${fieldName.toLowerCase()}"` : fieldName;
     }
     return fieldName.toLowerCase();
-  }
-
-  getMaxLength(dataType) {
-    const match = dataType.match(/\((\d+)(?:\s*\w+)?\)/);
-    return match ? parseInt(match[1]) : null;
   }
 }

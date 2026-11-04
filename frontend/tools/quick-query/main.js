@@ -1001,31 +1001,38 @@ export class QuickQueryUI {
           },
           attachments: this.processedFiles || [],
         });
+    const auditIssues = result.issues.filter((issue) => issue.target === "audit_user");
+    this.markAuditUserIssues(auditIssues);
     this._inputIssueCells = new Map(
       result.issues.filter((issue) => !excel && issue.col !== null).map((issue) => [`${issue.row}:${issue.col}`, issue]),
     );
     panel.hidden = result.issues.length === 0;
     if (reveal) panel.open = true;
     const summary = panel.querySelector("summary");
+    const unit = auditIssues.length ? "issue" : "cell";
     summary.textContent =
       `${result.issues.length}${result.truncated ? "+" : ""} ` +
-      `${result.issues.length === 1 ? "cell needs" : "cells need"} attention${excel ? " in Excel" : ""}`;
+      `${unit}${result.issues.length === 1 ? " needs" : "s need"} attention${excel ? " in Excel" : ""}`;
     const list = panel.querySelector(".qq-input-issues");
     list.replaceChildren();
     for (const issue of result.issues) {
-      const item = document.createElement(excel || issue.col === null ? "p" : "button");
-      const cell = excel
-        ? `${issue.row ? `Excel row ${issue.row + 1}` : "Excel header"}, ${inputData[0][issue.col] || "field"}`
-        : issue.col === null
-          ? "Header"
-          : `${columnIndexToLetter(issue.col)}${issue.row || " (field)"}`;
+      const auditIssue = issue.target === "audit_user";
+      const item = document.createElement(!auditIssue && (excel || issue.col === null) ? "p" : "button");
+      const cell = auditIssue
+        ? this.elements.auditUserMode?.value === "system"
+          ? "SYSTEM audit user"
+          : "Custom audit user"
+        : excel
+          ? `${issue.row ? `Excel row ${issue.row + 1}` : "Excel header"}, ${inputData[0][issue.col] || "field"}`
+          : issue.col === null
+            ? "Header"
+            : `${columnIndexToLetter(issue.col)}${issue.row || " (field)"}`;
       item.textContent = `${cell}: ${issue.message}`;
       if (item.tagName === "BUTTON") {
         item.type = "button";
         item.addEventListener("click", () => {
-          this.dataTable.selectCell(issue.row, issue.col);
-          this.dataTable.scrollViewportTo({ row: issue.row, col: issue.col });
-          this.dataTable.listen();
+          if (auditIssue) this.focusAuditUser();
+          else this.focusDataCell(issue.row, issue.col);
         });
       }
       list.appendChild(item);
@@ -1033,6 +1040,34 @@ export class QuickQueryUI {
     this.dataTable?.render?.();
     this.scheduleDataTableLayoutRefresh();
     return result;
+  }
+
+  markAuditUserIssues(issues) {
+    const mode = this.elements.auditUserMode?.value || "off";
+    this.elements.systemModeControl?.querySelectorAll(".system-mode-choice").forEach((button) => {
+      const invalid = issues.length > 0 && button.dataset.auditMode === mode;
+      button.classList.toggle("qq-audit-invalid", invalid);
+      if (invalid) {
+        button.setAttribute("aria-invalid", "true");
+        button.setAttribute("aria-describedby", "quickQueryInputValidation");
+      } else {
+        button.removeAttribute("aria-invalid");
+        button.removeAttribute("aria-describedby");
+      }
+    });
+    if (issues.length && mode === "custom") this.elements.customAuditUser?.setAttribute("aria-invalid", "true");
+    else this.elements.customAuditUser?.removeAttribute("aria-invalid");
+  }
+
+  focusAuditUser() {
+    const mode = this.elements.auditUserMode?.value || "off";
+    this.elements.systemModeControl?.scrollIntoView?.({ block: "nearest" });
+    if (mode === "custom") {
+      this.openSystemCustomPopover();
+      this.elements.customAuditUser?.select();
+    } else {
+      this.elements.systemModeControl?.querySelector(`[data-audit-mode="${mode}"]`)?.focus();
+    }
   }
 
   captureDataTablePaste(event) {
@@ -2358,10 +2393,73 @@ export class QuickQueryUI {
     return persist;
   }
 
+  focusDataCell(row, col) {
+    if (!this.dataTable || this.excelImportService?.hasData()) return;
+    if (row < 0 || col < 0 || row >= this.dataTable.countRows() || col >= this.dataTable.countCols()) return;
+    this.elements.dataContainer?.scrollIntoView?.({ block: "nearest" });
+    this.dataTable.selectCell(row, col);
+    this.dataTable.scrollViewportTo({ row, col });
+    this.dataTable.listen();
+  }
+
+  createCellLink(row, col, label) {
+    const link = document.createElement(this.excelImportService?.hasData() ? "span" : "button");
+    link.textContent = label;
+    if (link.tagName === "BUTTON") {
+      link.type = "button";
+      link.className = "qq-cell-link";
+      link.addEventListener("click", () => this.focusDataCell(row, col));
+    }
+    return link;
+  }
+
+  appendErrorCellLinks(container, message) {
+    const text = String(message).replace(/<br\s*\/?>/gi, "\n");
+    const references = /\bCell ([A-Z]+)([1-9]\d*)\b/g;
+    let end = 0;
+    for (const match of text.matchAll(references)) {
+      container.appendChild(document.createTextNode(text.slice(end, match.index)));
+      const col = [...match[1]].reduce((value, letter) => value * 26 + letter.charCodeAt(0) - 64, 0) - 1;
+      container.appendChild(this.createCellLink(Number(match[2]), col, match[0]));
+      end = match.index + match[0].length;
+    }
+    container.appendChild(document.createTextNode(text.slice(end)));
+  }
+
+  showDuplicateWarning(message) {
+    const warning = document.createElement("details");
+    warning.className = "qq-duplicate-warning";
+    const summary = document.createElement("summary");
+    summary.textContent = message.summary;
+    warning.appendChild(summary);
+    const content = document.createElement("div");
+    content.className = "qq-duplicate-warning-content";
+    for (const duplicate of message.duplicates) {
+      const line = document.createElement("p");
+      line.appendChild(
+        document.createTextNode(
+          `Primary key ${duplicate.pkFields.join(", ")} with value ${duplicate.pkValues.join(", ")} appears in cells: `,
+        ),
+      );
+      for (const [index, row] of duplicate.rows.slice(0, 5).entries()) {
+        if (index) line.appendChild(document.createTextNode(", "));
+        for (const [keyIndex, col] of duplicate.columns.entries()) {
+          if (keyIndex) line.appendChild(document.createTextNode(" / "));
+          line.appendChild(this.createCellLink(row, col, `${columnIndexToLetter(col)}${row}`));
+        }
+      }
+      if (duplicate.rows.length > 5) line.appendChild(document.createTextNode(` and ${duplicate.rows.length - 5} more rows`));
+      content.appendChild(line);
+    }
+    warning.appendChild(content);
+    this.elements.warningMessages.replaceChildren(warning);
+  }
+
   // Error handling methods
   showError(message) {
     if (this.elements.errorMessages) {
-      this.elements.errorMessages.innerHTML = message;
+      this.elements.errorMessages.replaceChildren();
+      this.appendErrorCellLinks(this.elements.errorMessages, message);
       this.elements.errorMessages.style.display = "block";
       this.elements.errorMessages.style.color = "red";
     }
@@ -2378,7 +2476,9 @@ export class QuickQueryUI {
   showWarning(message) {
     if (this.elements.warningMessages) {
       // Support both string messages (legacy) and structured warning objects
-      if (typeof message === "object" && message.summary) {
+      if (typeof message === "object" && message.duplicates) {
+        this.showDuplicateWarning(message);
+      } else if (typeof message === "object" && message.summary) {
         const warningId = `warning-${Date.now()}`;
         this.elements.warningMessages.innerHTML = `
           <div class="qq-warning-collapsible">
@@ -5900,6 +6000,7 @@ export class QuickQueryUI {
   }
 
   updateAttachmentControlsState() {
+    this.scheduleInputValidation();
     const hasFiles = this.processedFiles.length > 0;
     if (this.elements.compressImagesButton) {
       this.elements.compressImagesButton.hidden = !this.processedFiles.some(imageAttachmentType);

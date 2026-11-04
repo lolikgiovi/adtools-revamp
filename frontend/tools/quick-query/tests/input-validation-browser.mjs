@@ -233,11 +233,172 @@ try {
       `${width}: screenshot's empty PARAMETER_KEY is highlighted for UPDATE; corrected key generates while blank non-key cells remain allowed`,
     );
 
+    const parityCases = [
+      { name: "UUID expansion", type: "VARCHAR2(3)", value: "uuid", invalid: true },
+      { name: "audit user expansion", type: "VARCHAR2(3)", field: "CREATED_BY", value: "ABCDEFG", invalid: true },
+      { name: "numeric exponent", type: "NUMBER(5)", value: "1e21", invalid: true },
+      { name: "spaced type declaration", type: "VARCHAR2 (3 BYTE)", value: "abcdef", invalid: true },
+      {
+        name: "filename in NUMBER",
+        type: "NUMBER",
+        value: "bad.txt",
+        invalid: true,
+        attachments: [{ name: "bad.txt", type: "text/plain", processedFormats: { original: "hello" } }],
+      },
+      { name: "fractional precision", type: "NUMBER(2,2)", value: "0.12" },
+      { name: "large exact integer", type: "NUMBER(20)", value: "99999999999999999999" },
+      { name: "nullable Y", type: "VARCHAR2(3)", nullable: "Y", value: "" },
+      { name: "Unicode CHAR length", type: "VARCHAR2(1 CHAR)", value: "😀" },
+    ];
+    for (const fixture of parityCases) {
+      await withUI(
+        page,
+        (ui, fixture) => {
+          ui.elements.tableNameInput.value = "APP.TEST";
+          ui.setQueryTypeValue("insert");
+          ui.elements.auditUserMode.value = "off";
+          ui.processedFiles = fixture.attachments || [];
+          const field = fixture.field || "VALUE";
+          ui.schemaTable.loadData([
+            ["ID", "NUMBER", "No", "", "1", "Yes"],
+            [field, fixture.type, fixture.nullable || "No", "", "2", "No"],
+          ]);
+          ui.updateDataSpreadsheet();
+          ui.dataTable.loadData([
+            ["ID", field],
+            ["1", fixture.value],
+          ]);
+        },
+        fixture,
+      );
+      if (fixture.invalid) {
+        await panel.getByText("1 cell needs attention", { exact: true }).waitFor();
+        await page.locator("#generateQuery").click();
+        await page.waitForFunction(() => {
+          const ui = window.app.tools.get("quick-query").ui;
+          return !ui._queryPreparationPending && ui.editor.getValue() === "";
+        });
+      } else {
+        await page.waitForFunction(() => document.querySelector("#quickQueryInputValidation").hidden);
+        await page.locator("#generateQuery").click();
+        await page.waitForFunction(() => {
+          const ui = window.app.tools.get("quick-query").ui;
+          return !ui._queryPreparationPending && ui.editor.getValue().includes("INSERT INTO");
+        });
+        if (fixture.name === "large exact integer") assert.ok((await withUI(page, (ui) => ui.editor.getValue())).includes(fixture.value));
+      }
+      checks.push(`${width}: ${fixture.name} ${fixture.invalid ? "highlighted and blocked" : "accepted and generates SQL"}`);
+    }
+
+    await withUI(page, (ui) => {
+      ui.processedFiles = [];
+      ui.elements.tableNameInput.value = "APP.ITEMS";
+      ui.setQueryTypeValue("insert");
+      ui.schemaTable.loadData([
+        ["CONFIG_ID", "VARCHAR2(36)", "Yes", "", "1", "No"],
+        ["DESCRIPTION", "VARCHAR2(200)", "Yes", "", "2", "No"],
+        ["PARAMETER_KEY", "VARCHAR2(100)", "No", "", "3", "Yes"],
+      ]);
+      ui.updateDataSpreadsheet();
+      const values = Array.from({ length: 1000 }, (_, index) => [String(index), "ok", `key-${index}`]);
+      values[0][2] = "123";
+      values[1] = [null, null, null];
+      values[71][2] = "123";
+      ui.dataTable.loadData([["CONFIG_ID", "DESCRIPTION", "PARAMETER_KEY"], ...values]);
+    });
+    await page.locator("#generateQuery").click();
+    const duplicateWarning = page.locator(".qq-duplicate-warning");
+    await duplicateWarning.locator("summary").waitFor();
+    assert.equal(await withUI(page, (ui) => Boolean(ui.queryExecutionService.worker)), true);
+    await duplicateWarning.locator("summary").click();
+    assert.equal(await duplicateWarning.getByRole("button").count(), 2);
+    await page.screenshot({ path: resolve(output, `${width}-${theme}-duplicate-warning.png`), animations: "disabled" });
+    await duplicateWarning.getByRole("button", { name: "C1", exact: true }).click();
+    assert.deepEqual(await withUI(page, (ui) => ui.dataTable.getSelectedLast().slice(0, 2)), [1, 2]);
+    await duplicateWarning.getByRole("button", { name: "C72", exact: true }).click();
+    assert.deepEqual(await withUI(page, (ui) => ui.dataTable.getSelectedLast().slice(0, 2)), [72, 2]);
+    await page.screenshot({ path: resolve(output, `${width}-${theme}-duplicate-links.png`), animations: "disabled" });
+    checks.push(`${width}: real worker duplicate warning links C1 and C72 to displayed rows, preserving the blank row`);
+
+    await withUI(page, async (ui) => {
+      const schema = [
+        ["ID", "NUMBER", "No", "", "1", "Yes"],
+        ["VALUE", "VARCHAR2(3)", "No", "", "2", "No"],
+      ];
+      const data = [
+        ["ID", "VALUE"],
+        ["1", "long"],
+      ];
+      ui.schemaTable.loadData(schema);
+      ui.updateDataSpreadsheet();
+      ui.dataTable.loadData(data);
+      await ui._generateQuery("APP.TEST", "insert", schema, data);
+    });
+    const errorLink = page.locator("#errorMessages").getByRole("button", { name: "Cell B1", exact: true });
+    await errorLink.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: resolve(output, `${width}-${theme}-legacy-cell-link.png`), animations: "disabled" });
+    await errorLink.click();
+    assert.deepEqual(await withUI(page, (ui) => ui.dataTable.getSelectedLast().slice(0, 2)), [1, 1]);
+    checks.push(`${width}: legacy generation error uses data row 1 and links to B1`);
+
+    await withUI(page, (ui) => {
+      ui.elements.tableNameInput.value = "APP.TEST";
+      ui.setQueryTypeValue("insert");
+      ui.customAuditUserValue = "R27_ANTARES_" + "X".repeat(36);
+      ui.elements.systemCustomLabel.textContent = ui.customAuditUserValue;
+      ui.elements.auditUserMode.value = "custom";
+      ui.syncAuditUserMode();
+      ui.schemaTable.loadData([
+        ["ID", "NUMBER", "No", "", "1", "Yes"],
+        ["CREATED_BY", "VARCHAR2(36)", "No", "", "2", "No"],
+        ["UPDATED_BY", "VARCHAR2(36)", "Yes", "", "3", "No"],
+      ]);
+      ui.updateDataSpreadsheet();
+      ui.dataTable.loadData([
+        ["ID", "CREATED_BY", "UPDATED_BY"],
+        ...Array.from({ length: 72 }, (_, index) => [String(index), "SYSTEM", "SYSTEM"]),
+      ]);
+      window.auditSourceData = JSON.stringify(ui.dataTable.getData());
+    });
+    await panel.getByText("2 issues need attention", { exact: true }).waitFor();
+    assert.equal(await panel.getByRole("button").count(), 2);
+    assert.equal(await page.locator('#spreadsheet-data .ht_master td[aria-invalid="true"]').count(), 0);
+    await page.locator('.system-mode-custom-button[aria-invalid="true"]').waitFor();
+    await page.screenshot({ path: resolve(output, `${width}-${theme}-audit-control.png`), animations: "disabled" });
+    await panel.getByRole("button", { name: /Custom audit user:.*CREATED_BY/ }).click();
+    assert.equal(await page.locator("#customAuditUser").evaluate((el) => el === document.activeElement), true);
+    assert.equal(await page.locator("#customAuditUser").getAttribute("aria-invalid"), "true");
+    await page.locator("#customAuditUser").fill("R27_ANTARES");
+    await page.locator("#systemCustomDone").click();
+    await page.waitForFunction(() => document.querySelector("#quickQueryInputValidation").hidden);
+    assert.equal(await page.locator('.system-mode-choice[aria-invalid="true"]').count(), 0);
+    assert.equal(await withUI(page, (ui) => JSON.stringify(ui.dataTable.getData()) === window.auditSourceData), true);
+    checks.push(
+      `${width}: 72-row custom audit error groups into two control issues, focuses the custom editor and clears on correction without changing cells`,
+    );
+
+    await withUI(page, (ui) => ui.dataTable.setDataAtCell(1, 1, "R27_ANTARES_" + "X".repeat(36)));
+    await page.locator('[data-audit-mode="off"]').click();
+    await panel.getByText("1 cell needs attention", { exact: true }).waitFor();
+    await panel.getByRole("button", { name: /B1:.*CREATED_BY/ }).click();
+    assert.deepEqual(await withUI(page, (ui) => ui.dataTable.getSelectedLast().slice(0, 2)), [1, 1]);
+    assert.equal(await page.locator('.system-mode-choice[aria-invalid="true"]').count(), 0);
+    checks.push(`${width}: Off mode validates and links the real audit cell`);
+
+    await withUI(page, (ui) => ui.schemaTable.setDataAtCell(1, 1, "VARCHAR2(3)"));
+    await page.locator('[data-audit-mode="system"]').click();
+    await panel.getByText("1 issue needs attention", { exact: true }).waitFor();
+    await panel.getByRole("button", { name: /SYSTEM audit user:.*CREATED_BY/ }).click();
+    assert.equal(await page.locator('[data-audit-mode="system"]').evaluate((el) => el === document.activeElement), true);
+    assert.equal(await page.locator('#spreadsheet-data .ht_master td[aria-invalid="true"]').count(), 0);
+    checks.push(`${width}: invalid SYSTEM override highlights and focuses its control`);
+
     await withUI(page, async (ui) => {
       await ui.createNewTab();
     });
     await page.waitForFunction(() => document.querySelector("#quickQueryInputValidation").hidden);
-    checks.push(`${width}: new tab clears validation from prior data`);
+    assert.equal(await page.locator('.system-mode-choice[aria-invalid="true"]').count(), 0);
+    checks.push(`${width}: new tab clears validation from prior data and audit controls`);
     await context.close();
   }
   assert.deepEqual(errors, []);

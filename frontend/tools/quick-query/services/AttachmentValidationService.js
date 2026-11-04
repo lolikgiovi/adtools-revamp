@@ -1,69 +1,16 @@
-import { UsageTracker } from "../../../core/UsageTracker.js";
-
-export class AttachmentValidationService {
-  validateAttachment(value, dataType, maxLength, attachments, tableName) {
-    // Only text cells can reference a filename; preserve typed spreadsheet values.
-    if (typeof value !== "string" || !value || !attachments?.length) return null;
-
-    // Find matching file (case-insensitive)
-    const matchingFile = attachments.find((file) => file.name.toLowerCase() === value.toLowerCase());
-    if (!matchingFile) {
-      return null;
-    }
-
-    const fieldDataType = dataType.toUpperCase();
-
-    if (!["BLOB", "CLOB", "VARCHAR", "VARCHAR2", "CHAR"].includes(fieldDataType)) {
-      UsageTracker.trackEvent("quick-query", "attachment_error", {
-        type: "unsupported_type",
-        dataType: fieldDataType,
-        table_name: tableName,
-      });
-      return null;
-    } else if (["VARCHAR", "VARCHAR2", "CHAR"].includes(fieldDataType)) {
-      return this.handleVarcharType(matchingFile, maxLength, tableName);
-    } else if (["CLOB"].includes(fieldDataType)) {
-      return this.handleClobType(matchingFile);
-    }
-  }
-
-  handleVarcharType(file, maxLength, tableName) {
-    if (file.type.includes("text") || file.type.includes("json")) {
-      // For text files, use original content
-      const content = file.processedFormats.original;
-      if (content.length <= maxLength) {
-        return content;
-      } else {
-        UsageTracker.trackEvent("quick-query", "attachment_error", {
-          type: "exceeds_max_length",
-          fileType: file.type,
-          length: content.length,
-          maxLength,
-          table_name: tableName,
-        });
-      }
-    } else {
-      // For base64/image/pdf, use base64 content
-      const content = file.processedFormats.base64;
-      if (content.length <= maxLength) {
-        return content;
-      } else {
-        UsageTracker.trackEvent("quick-query", "attachment_error", {
-          type: "exceeds_max_length",
-          fileType: file.type,
-          length: content.length,
-          maxLength,
-          table_name: tableName,
-        });
-      }
-    }
-    return null;
-  }
-
-  handleClobType(file) {
-    if (file.type.includes("text")) {
-      return file.processedFormats.original;
-    }
-    return file.processedFormats.base64;
-  }
+// Resolve only types that support file-content substitution. Constraint checks run
+// on the returned content, using the same BYTE/CHAR rules as ordinary cells.
+export function resolveAttachmentValue(value, dataType, attachments = []) {
+  if (typeof value !== "string" || !value) return value;
+  const type = dataType
+    .trim()
+    .toUpperCase()
+    .replace(/\s*\(.*\)$/, "");
+  if (!["CLOB", "VARCHAR", "VARCHAR2", "CHAR"].includes(type)) return value;
+  const file = attachments.find((entry) => entry.name.toLowerCase() === value.toLowerCase());
+  if (!file) return value;
+  const useOriginal = file.type?.includes("text") || (type !== "CLOB" && file.type?.includes("json"));
+  const content = file.processedFormats?.[useOriginal ? "original" : "base64"];
+  if (typeof content !== "string") throw new Error(`Attachment "${file.name}" has no processed content`);
+  return content;
 }

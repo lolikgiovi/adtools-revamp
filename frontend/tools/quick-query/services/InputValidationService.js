@@ -1,3 +1,4 @@
+import { resolveAttachmentValue } from "./AttachmentValidationService.js";
 import { ValueProcessorService } from "./ValueProcessorService.js";
 
 const processor = new ValueProcessorService();
@@ -38,7 +39,21 @@ export function collectInputIssues({ schemaData, inputData, queryType, tableName
     const [, dataType, nullable] = schema.get(field);
     return { field, dataType, nullable, parsed: processor.parseDataType(String(dataType || "")) };
   });
-  const filenames = new Set(attachments.map((file) => file.name.toLowerCase()));
+  const auditOverride = ["custom", "system"].includes(options.auditUserMode);
+  const auditFields = new Set();
+  if (auditOverride) {
+    for (const [field, dataType, nullable] of schemaData) {
+      const lower = field.toLowerCase();
+      if (!["created_by", "updated_by"].includes(lower)) continue;
+      const appendedToUpdate = queryType === "update" && lower === "updated_by" && !matchKeys.has(field);
+      if (!headers.includes(field) && !appendedToUpdate) continue;
+      auditFields.add(field);
+      if (!dataType) continue;
+      const issue = processor.getConstraintIssue(null, dataType, nullable, field, queryType, options);
+      if (issue) issues.push({ row: null, col: null, target: "audit_user", field, ...issue });
+      if (issues.length >= limit) return result();
+    }
+  }
   for (let row = 1; row < inputData.length; row++) {
     const values = inputData[row];
     if (!values.some((value) => value != null && value !== "")) continue;
@@ -49,9 +64,14 @@ export function collectInputIssues({ schemaData, inputData, queryType, tableName
         if (issues.length >= limit) return result();
         continue;
       }
-      if (!dataType || (typeof value === "string" && filenames.has(value.toLowerCase()))) continue;
-      const issue = processor.getConstraintIssue(value, dataType, nullable, field, queryType, options, parsed);
-      if (issue) issues.push({ row, col, ...issue });
+      if (!dataType || auditFields.has(field)) continue;
+      try {
+        const effectiveValue = resolveAttachmentValue(value, dataType, attachments);
+        const issue = processor.getConstraintIssue(effectiveValue, dataType, nullable, field, queryType, options, parsed);
+        if (issue) issues.push({ row, col, ...issue });
+      } catch (error) {
+        issues.push({ row, col, type: "attachment", message: error.message });
+      }
       if (issues.length >= limit) return result();
     }
   }

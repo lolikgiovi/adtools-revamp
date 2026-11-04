@@ -25,6 +25,7 @@ export default defineConfig({
     exclude: [
       "backend-workers/tests/settings-publishing.test.js",
       "backend-workers/tests/analytics-count-integrity.test.js",
+      "backend-workers/tests/analytics-ingestion-integrity.test.js",
       "backend-workers/tests/analytics-timestamps.test.js",
       "backend-workers/tests/analytics-timestamp-repair.test.js",
       "backend-workers/tests/analytics-timestamp-regression-repair.test.js",

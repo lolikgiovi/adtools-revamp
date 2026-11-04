@@ -52,13 +52,22 @@ export class ValueProcessorService {
   getConstraintIssue(value, dataType, nullable, fieldName, queryType = null, options = {}, parsedType = null) {
     const field = fieldName.toLowerCase();
     if (["created_time", "updated_time"].includes(field) && options.defaultSysdate !== false) return null;
-    if (["created_by", "updated_by"].includes(field)) return null;
+    const auditUserField = ["created_by", "updated_by"].includes(field);
+    if (auditUserField) {
+      const mode = options.auditUserMode || "off";
+      value = mode === "custom" ? options.customAuditUser : mode === "system" ? "SYSTEM" : value;
+      value = this._toString(value).trim().toUpperCase() || (mode === "custom" ? "" : "SYSTEM");
+    }
 
     const text = this._toString(value);
     const empty = value === null || value === undefined || value === "";
     if (empty && queryType === "update") return null;
-    if (empty || text.toLowerCase() === "null") {
-      return nullable?.toLowerCase() === "yes"
+    if (empty || (!auditUserField && text.toLowerCase() === "null")) {
+      return ["yes", "y"].includes(
+        String(nullable ?? "")
+          .trim()
+          .toLowerCase(),
+      )
         ? null
         : {
             type: "null_not_allowed",
@@ -75,7 +84,7 @@ export class ValueProcessorService {
       if (!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(normalized) || !Number.isFinite(num)) {
         return { type: "invalid_number", data_type: type.type, message: `Invalid numeric value for field "${fieldName}"` };
       }
-      return type.precision ? this.getNumberPrecisionIssue(num, type.precision, type.scale, fieldName) : null;
+      return type.precision ? this.getNumberPrecisionIssue(normalized, type.precision, type.scale, fieldName) : null;
     }
     if (["DATE", "TIMESTAMP"].includes(type.type)) {
       try {
@@ -86,10 +95,17 @@ export class ValueProcessorService {
       }
     }
     // These tokens are expanded by the generator rather than stored literally.
-    if (dataType.toUpperCase().startsWith("VARCHAR") && text.toLowerCase() === "uuid") return null;
+    if (!auditUserField && ["VARCHAR", "VARCHAR2", "CHAR"].includes(type.type) && text.toLowerCase() === "uuid") {
+      if (!type.maxLength || type.maxLength >= 36) return null;
+      return {
+        type: "uuid_length_too_small",
+        maxLength: type.maxLength,
+        message: `Field "${fieldName}" needs at least 36 ${type.unit} to store a UUID`,
+      };
+    }
     if (field === "system_config_id" && text.toLowerCase() === "max") return null;
     if (!["VARCHAR", "VARCHAR2", "CHAR"].includes(type.type) || !type.maxLength) return null;
-    const length = type.unit === "BYTE" ? new TextEncoder().encode(text).length : text.length;
+    const length = type.unit === "BYTE" ? new TextEncoder().encode(text).length : Array.from(text).length;
     if (length <= type.maxLength) return null;
     return {
       type: "max_length_exceeded",
@@ -107,6 +123,13 @@ export class ValueProcessorService {
       by: ["created_by", "updated_by"],
     };
 
+    const constraintIssue = this.getConstraintIssue(value, dataType, nullable, fieldName, queryType, options);
+    if (constraintIssue) {
+      const { message, ...meta } = constraintIssue;
+      UsageTracker.trackEvent("quick-query", "value_error", { ...meta, queryType, table_name: tableName });
+      throw new Error(message);
+    }
+
     // Handle audit fields
     if (AUDIT_FIELDS.time.includes(fieldName.toLowerCase())) {
       if (options.defaultSysdate !== false) {
@@ -123,13 +146,6 @@ export class ValueProcessorService {
       const strValue = this._toString(auditUserValue).trim();
       if (mode === "custom" && !strValue) throw new Error("Enter a custom SYSTEM value before generating the query.");
       return strValue ? `'${strValue.replace(/'/g, "''").toUpperCase()}'` : "'SYSTEM'";
-    }
-
-    const constraintIssue = this.getConstraintIssue(value, dataType, nullable, fieldName, queryType, options);
-    if (constraintIssue) {
-      const { message, ...meta } = constraintIssue;
-      UsageTracker.trackEvent("quick-query", "value_error", { ...meta, queryType, table_name: tableName });
-      throw new Error(message);
     }
 
     // Handle NULL values
@@ -162,14 +178,6 @@ export class ValueProcessorService {
       return `(SELECT NVL(MAX(${fieldName})+1, 1) FROM ${tableName})`;
     }
 
-    // Varchar containing UUID
-    if (upperDataType.startsWith("VARCHAR") && lowerStrValue === "uuid") {
-      if (!this.isValidUUID(strValue)) {
-        return `'${crypto.randomUUID()}'`;
-      }
-      return `'${strValue}'`;
-    }
-
     // System config ID
     if (fieldName.toLowerCase() === "system_config_id" && lowerStrValue === "max") {
       return `(SELECT MAX(CAST(${fieldName} AS INT))+1 FROM ${tableName})`;
@@ -185,23 +193,7 @@ export class ValueProcessorService {
       case "VARCHAR":
       case "VARCHAR2":
       case "CHAR":
-        const UUID_V4_MAXLENGTH = 36;
-
-        if (lowerStrValue === "uuid") {
-          if (fieldDataType.maxLength && fieldDataType.maxLength < UUID_V4_MAXLENGTH) {
-            UsageTracker.trackEvent("quick-query", "value_error", {
-              type: "uuid_length_too_small",
-              maxLength: fieldDataType.maxLength,
-              table_name: tableName,
-            });
-            throw new Error(
-              `Field "${fieldName}" length (${fieldDataType.maxLength}) is too small to store UUID. ` +
-                `Minimum required length is ${UUID_V4_MAXLENGTH}.`,
-            );
-          }
-          return `'${crypto.randomUUID()}'`;
-        }
-
+        if (lowerStrValue === "uuid") return `'${crypto.randomUUID()}'`;
         return `'${strValue.replace(/'/g, "''")}'`;
 
       case "DATE":
@@ -220,10 +212,10 @@ export class ValueProcessorService {
   }
 
   parseDataType(dataType) {
-    const upperType = dataType.toUpperCase();
+    const upperType = dataType.trim().toUpperCase();
 
     // Parse NUMBER type
-    const numberMatch = upperType.match(/NUMBER\((\d+)(?:,\s*(\d+))?\)/);
+    const numberMatch = upperType.match(/^NUMBER\s*\(\s*(\d+)\s*(?:,\s*(-?\d+)\s*)?\)$/);
     if (numberMatch) {
       return {
         type: "NUMBER",
@@ -233,7 +225,7 @@ export class ValueProcessorService {
     }
 
     // Parse VARCHAR/CHAR type
-    const stringMatch = upperType.match(/(VARCHAR2?|CHAR)\((\d+)(?:\s+(BYTE|CHAR))?\)/);
+    const stringMatch = upperType.match(/^(VARCHAR2?|CHAR)\s*\(\s*(\d+)(?:\s+(BYTE|CHAR))?\s*\)$/);
     if (stringMatch) {
       return {
         type: stringMatch[1],
@@ -253,10 +245,18 @@ export class ValueProcessorService {
   }
 
   getNumberPrecisionIssue(num, precision, scale, fieldName) {
-    const parts = Math.abs(num).toString().split(".");
-    const integerDigits = parts[0].length;
-    const decimalDigits = parts[1]?.length || 0;
-    if (integerDigits + decimalDigits > precision) {
+    // Work on the decimal text: Number() loses large integer digits and toString() uses exponents.
+    const match = String(num).match(/^[+-]?(\d*)(?:\.(\d*))?(?:e([+-]?\d+))?$/i);
+    if (!match) return { type: "invalid_number", message: `Invalid numeric value for field "${fieldName}"` };
+    const digits = match[1] + (match[2] || "");
+    const first = digits.search(/[1-9]/);
+    if (first < 0) return null;
+    const end = digits.replace(/0+$/, "").length;
+    const decimalPosition = match[1].length + Number(match[3] || 0);
+    const integerDigits = decimalPosition - first;
+    const decimalDigits = end - decimalPosition;
+    const storedDigits = end - first + Math.max(0, decimalPosition + Math.min(scale ?? 0, 0) - end);
+    if (storedDigits > precision) {
       return {
         type: "precision_exceeded",
         precision,

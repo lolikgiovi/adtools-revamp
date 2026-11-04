@@ -147,7 +147,7 @@ describe("input validation", () => {
     const schemaData = [
       ["ID", "NUMBER", "No"],
       ["UPDATED_TIME", "DATE", "No"],
-      ["UPDATED_BY", "VARCHAR2(3)", "No"],
+      ["UPDATED_BY", "VARCHAR2(36)", "No"],
     ];
     const inputData = [
       ["ID", "UPDATED_TIME", "UPDATED_BY"],
@@ -196,14 +196,14 @@ describe("input validation", () => {
     expect(check([[], []], { schemaData: [] }).issues).toEqual([]);
   });
 
-  it("defers attachment content validation to the generator", () => {
+  it("validates attachment content instead of the filename", () => {
     expect(
       check(
         [
           ["ID", "NAME"],
           ["1", "file.txt"],
         ],
-        { attachments: [{ name: "file.txt" }] },
+        { attachments: [{ name: "file.txt", type: "text/plain", processedFormats: { original: "ok" } }] },
       ).issues,
     ).toEqual([]);
   });
