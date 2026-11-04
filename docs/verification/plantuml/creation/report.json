@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "checks": [
+    "root button removed; inline folder creation; selected folder expands; new file opens in editor",
+    "duplicate and invalid names stay editable; correction succeeds; selected file creates sibling",
+    "Escape, empty Enter, and click away cancel without creating items",
+    "empty space selects root; creation clears filtering and remains visible",
+    "inline creation fits desktop and mobile",
+    "created files and folders persist after reload"
+  ],
+  "errors": [],
+  "reproduce": "Start npm run dev, then PLAYWRIGHT_MODULE=/Users/ddl/node_modules/playwright/index.mjs node frontend/tools/plantuml/tests/creation-browser.mjs"
+}

@@ -36,7 +36,7 @@ try {
     assert.equal(await page.locator(".puml-activity").count(), 0);
     assert.equal(await page.locator('.puml-editor-toolbar [data-action="explorer"]').count(), 1);
     assert.equal(await page.locator('.puml-explorer-header [data-action="search-files"]').count(), 1);
-    assert.equal(await page.locator('.puml-explorer-header [data-action="root"]').getAttribute("aria-label"), "Select workspace root");
+    assert.equal(await page.locator('[data-action="root"]').count(), 0);
     const toggle = page.locator('[data-action="explorer"]');
     const openIcon = await toggle.innerHTML();
     await toggle.click();

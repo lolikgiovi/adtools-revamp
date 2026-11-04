@@ -54,11 +54,19 @@ try {
     if (await page.locator("#puml-explorer").isHidden()) await page.locator('[data-action="explorer"]').click();
     for (const action of ["new-file", "new-folder", "palette"]) {
       if (width <= 760 && action === "palette") await page.locator('[data-action="explorer"]').click();
-      await check(`${action} dialog is centered at ${width}px`, async () => {
+      await check(`${action} input or dialog fits at ${width}px`, async () => {
         await page.locator(`[data-action="${action}"]`).click();
-        const box = await page.locator(".puml-dialog").boundingBox();
-        assert.ok(Math.abs(box.x + box.width / 2 - width / 2) < 2);
-        assert.ok(Math.abs(box.y + box.height / 2 - 450) < 2);
+        if (action === "palette") {
+          const box = await page.locator(".puml-dialog").boundingBox();
+          assert.ok(Math.abs(box.x + box.width / 2 - width / 2) < 2);
+          assert.ok(Math.abs(box.y + box.height / 2 - 450) < 2);
+        } else {
+          const input = page.locator("#puml-new-name");
+          const box = await input.boundingBox();
+          assert.ok(box.x >= 0 && box.x + box.width <= width);
+          assert.equal(await input.evaluate((el) => el === document.activeElement), true);
+          assert.equal(await page.locator(".puml-dialog").count(), 0);
+        }
       });
       await page.keyboard.press("Escape");
     }

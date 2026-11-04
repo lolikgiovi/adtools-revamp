@@ -13,7 +13,6 @@ export const template = `
       <aside id="puml-explorer" aria-label="Workspace files">
         <header class="puml-explorer-header">
           <div class="puml-actions">
-            ${iconButton("root", "Select workspace root", "folder")}
             ${iconButton("search-files", "Search files", "search", 'aria-expanded="false" aria-controls="puml-file-search"')}
             ${iconButton("new-file", "New file (Alt+N)", "filePlus")}
             ${iconButton("new-folder", "New folder", "folderPlus")}

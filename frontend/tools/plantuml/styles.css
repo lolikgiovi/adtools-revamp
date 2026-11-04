@@ -541,6 +541,10 @@ body:has(.main-content .plantuml-tool) .workbench-hover {
   height: 15px;
   flex-shrink: 0;
 }
+.puml-node > button[aria-expanded] > span:first-child > svg:first-child,
+.puml-creation-icon > svg:first-child:not(:last-child) {
+  transform: translateX(-4px);
+}
 .puml-workspace.preview-maximized {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
@@ -595,4 +599,46 @@ body:has(.main-content .plantuml-tool) .workbench-hover {
 
 #puml-error {
   white-space: normal;
+}
+
+.puml-creation {
+  align-items: flex-start;
+  gap: 6px;
+  padding-block: 2px;
+}
+.puml-creation-icon {
+  display: flex;
+  flex-shrink: 0;
+  padding-top: 5px;
+  color: hsl(var(--foreground));
+}
+.puml-creation-field {
+  flex: 1;
+  min-width: 0;
+}
+#puml-new-name {
+  width: 100%;
+  min-width: 0;
+  height: 26px;
+  padding: 2px 4px;
+  border: 1px solid hsl(var(--foreground) / 0.5);
+  border-radius: 0;
+  outline: none;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font: inherit;
+  font-size: 12px;
+}
+#puml-new-name:focus-visible {
+  outline: 1px solid hsl(var(--foreground) / 0.5);
+  outline-offset: -1px;
+}
+#puml-new-name[aria-invalid="true"] {
+  border-color: hsl(var(--destructive));
+}
+.puml-creation-error {
+  padding: 4px;
+  color: hsl(var(--destructive));
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }

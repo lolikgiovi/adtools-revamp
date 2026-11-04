@@ -81,14 +81,14 @@ try {
   checks.push("edits survive reload");
   // CRUD, safe names, folder moves, tab switching, and formatting through the real UI.
   await page.locator('[data-action="new-folder"]').click();
-  await page.getByRole("textbox", { name: "Name", exact: true }).fill("../unsafe");
-  await page.getByRole("button", { name: "Save", exact: true }).click();
-  assert.match(await page.locator(".puml-dialog-error").textContent(), /without slashes/);
-  await page.getByRole("textbox", { name: "Name", exact: true }).fill("test-folder");
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("textbox", { name: "New folder name", exact: true }).fill("../unsafe");
+  await page.keyboard.press("Enter");
+  assert.match(await page.locator(".puml-creation-error").textContent(), /without slashes/);
+  await page.getByRole("textbox", { name: "New folder name", exact: true }).fill("test-folder");
+  await page.keyboard.press("Enter");
   await page.locator('[data-action="new-file"]').click();
-  await page.getByRole("textbox", { name: "Name", exact: true }).fill("test.puml");
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("textbox", { name: "New file name", exact: true }).fill("test.puml");
+  await page.keyboard.press("Enter");
   await source("@startuml\nalt condition\nAlice -> Bob: newest\nend\n@enduml");
   await page.locator('[data-action="format"]').click();
   await page.waitForFunction(() => window.app.currentTool.editor.getValue().includes("\n  Alice -> Bob"));
@@ -98,7 +98,7 @@ try {
   await page.getByRole("textbox", { name: "Name", exact: true }).fill("renamed.puml");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   const moved = page.locator(".puml-node").filter({ has: page.getByRole("button", { name: "renamed.puml", exact: true }) });
-  await moved.dragTo(page.locator('[data-action="root"]'));
+  await moved.dragTo(page.locator("#puml-explorer"), { targetPosition: { x: 20, y: 600 } });
   await page.waitForFunction(() => document.querySelector("#puml-path").textContent === "renamed.puml");
   await page.getByRole("button", { name: "Delete test-folder", exact: true }).click();
   await page.getByRole("button", { name: "Delete", exact: true }).click();

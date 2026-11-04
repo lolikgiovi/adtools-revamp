@@ -8,7 +8,7 @@ import { PlantUmlStore } from "./service.js";
 import { PlantUmlRenderer } from "./renderer.js";
 import { DiagramPreview } from "./preview.js";
 import { downloadBlob, exportPng, exportWorkspace, readWorkspaceZip } from "./files.js";
-import { addNode, deleteNode, initialWorkspace, moveNode, nodePath, renameNode, validateWorkspace } from "./workspace.js";
+import { addNode, deleteNode, initialWorkspace, moveNode, nodePath, renameNode, validateName, validateWorkspace } from "./workspace.js";
 import { colorNames, colorRows, confluencePalette, starterSequence } from "./plantuml.js";
 import { getIconSvg, workbenchIcon } from "./icon.js";
 import { editorThemeOptions } from "./themes.js";
@@ -51,6 +51,7 @@ export class PlantUmlTool extends BaseTool {
     this.dirty = false;
     this.saveFailed = false;
     this.selectedId = null;
+    this.pendingCreation = null;
     this.store = new PlantUmlStore();
     const store = this.store;
     let workspace;
@@ -148,6 +149,10 @@ export class PlantUmlTool extends BaseTool {
     this.$(".plantuml-tool").addEventListener(
       "click",
       (event) => {
+        if (event.target.closest("#puml-explorer") && !event.target.closest(".puml-explorer-header, #puml-file-search, .puml-node")) {
+          this.selectedId = null;
+          this.renderTree();
+        }
         const button = event.target.closest("[data-action]");
         if (!button || button.disabled) return;
         void this.action(button.dataset.action, button).catch((error) => this.showError(error.message));
@@ -251,9 +256,12 @@ export class PlantUmlTool extends BaseTool {
 
   renderTree() {
     const tree = this.$("#puml-tree");
+    const draft = this.$("#puml-new-name");
+    if (draft && this.pendingCreation) this.pendingCreation.name = draft.value;
     tree.replaceChildren();
     const query = this.$("#puml-search").value.trim().toLowerCase();
     const append = (parentId, depth) => {
+      if (!query && this.pendingCreation?.parentId === parentId) tree.append(this.creationRow(depth));
       const children = this.workspace.nodes
         .filter((node) =>
           query
@@ -264,7 +272,7 @@ export class PlantUmlTool extends BaseTool {
       for (const node of children) {
         const row = document.createElement("div");
         row.className = "puml-node";
-        row.classList.toggle("selected", (this.selectedId || this.workspace.activeId) === node.id);
+        row.classList.toggle("selected", this.selectedId === node.id);
         row.style.paddingLeft = `${10 + depth * 12}px`;
         row.dataset.node = node.id;
         row.draggable = true;
@@ -310,6 +318,102 @@ export class PlantUmlTool extends BaseTool {
       empty.textContent = "No files found";
       tree.append(empty);
     }
+  }
+
+  startCreation(kind) {
+    const selected = this.workspace.nodes.find((node) => node.id === this.selectedId);
+    const parentId = selected?.kind === "folder" ? selected.id : selected?.parentId || null;
+    this.pendingCreation = { kind, parentId, name: "" };
+    this.toggleExplorer(true);
+    this.closeFileSearch();
+    if (parentId && !this.workspace.expanded.includes(parentId)) {
+      this.workspace = { ...this.workspace, expanded: [...this.workspace.expanded, parentId] };
+    }
+    this.renderTree();
+    const input = this.$("#puml-new-name");
+    input.scrollIntoView({ block: "nearest" });
+    input.focus();
+  }
+
+  creationRow(depth) {
+    const creation = this.pendingCreation;
+    const row = document.createElement("div");
+    row.className = "puml-node puml-creation";
+    row.style.paddingLeft = `${12 + depth * 12}px`;
+    const icon = document.createElement("span");
+    icon.className = "puml-creation-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.innerHTML = creation.kind === "folder" ? workbenchIcon("chevronRight") + workbenchIcon("folder") : workbenchIcon("file");
+    const field = document.createElement("div");
+    field.className = "puml-creation-field";
+    const input = document.createElement("input");
+    input.id = "puml-new-name";
+    input.setAttribute("aria-label", creation.kind === "file" ? "New file name" : "New folder name");
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.value = creation.name;
+    const error = document.createElement("div");
+    error.id = "puml-new-name-error";
+    error.className = "puml-creation-error";
+    error.setAttribute("role", "alert");
+    error.hidden = true;
+    input.setAttribute("aria-describedby", error.id);
+    const validate = () => {
+      try {
+        validateName(input.value);
+        if (
+          this.workspace.nodes.some((node) => node.parentId === creation.parentId && node.name.toLowerCase() === input.value.toLowerCase())
+        )
+          throw new Error("That name already exists in this folder.");
+        input.removeAttribute("aria-invalid");
+        error.hidden = true;
+        return true;
+      } catch (failure) {
+        input.setAttribute("aria-invalid", "true");
+        error.textContent = failure.message;
+        error.hidden = false;
+        return false;
+      }
+    };
+    const cancel = (restoreFocus) => {
+      if (this.pendingCreation !== creation) return;
+      this.pendingCreation = null;
+      row.remove();
+      if (restoreFocus) this.$(`[data-action="new-${creation.kind}"]`).focus();
+    };
+    input.addEventListener("input", () => {
+      creation.name = input.value;
+      validate();
+    });
+    input.addEventListener("keydown", (event) => {
+      event.stopPropagation();
+      if (event.isComposing) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        cancel(true);
+      } else if (event.key === "Enter") {
+        event.preventDefault();
+        if (!input.value) return cancel(true);
+        if (!validate()) return;
+        const next = addNode(
+          this.workspace,
+          input.value,
+          creation.parentId,
+          creation.kind,
+          creation.kind === "file" ? starterSequence : "",
+        );
+        this.pendingCreation = null;
+        this.selectedId = next.nodes.at(-1).id;
+        this.update(next);
+        if (creation.kind === "file") this.editor.focus();
+        else this.$(`[data-action="open"][data-id="${this.selectedId}"]`).focus();
+        trackWorkflowEvent("plantuml", "workspace_create_result", { outcome: "success", kind: creation.kind });
+      }
+    });
+    input.addEventListener("blur", () => cancel(false));
+    field.append(input, error);
+    row.append(icon, field);
+    return row;
   }
 
   renderTabs() {
@@ -397,15 +501,7 @@ export class PlantUmlTool extends BaseTool {
     } else if (action === "tab") this.openFile(id);
     else if (action === "close-tab") this.closeActiveTab(id);
     else if (action === "new-file" || action === "new-folder") {
-      const kind = action === "new-file" ? "file" : "folder";
-      const selected = this.workspace.nodes.find((node) => node.id === this.selectedId);
-      const parentId = selected?.kind === "folder" ? selected.id : selected?.parentId || null;
-      this.nameDialog(`New ${kind}`, kind === "file" ? "diagram.puml" : "folder", (name) => {
-        const next = addNode(this.workspace, name, parentId, kind, kind === "file" ? starterSequence : "");
-        this.selectedId = next.nodes.at(-1).id;
-        this.update(next);
-        trackWorkflowEvent("plantuml", "workspace_create_result", { outcome: "success", kind });
-      });
+      this.startCreation(action === "new-file" ? "file" : "folder");
     } else if (action === "rename") {
       const node = this.workspace.nodes.find((node) => node.id === id);
       this.nameDialog("Rename", node.name, (name) => this.update(renameNode(this.workspace, id, name)));
