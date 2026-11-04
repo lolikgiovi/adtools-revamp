@@ -1,6 +1,14 @@
 import { UsageTracker } from "./UsageTracker.js";
 import { getRuntime } from "./Runtime.js";
 
+// Known non-bugs: Monaco cancels superseded async work with a "Canceled" error, browsers report ResizeObserver
+// back-pressure as an error, and Monaco's hidden-area view model races itself after edits.
+const BENIGN_ERRORS = [
+  ({ error_name, message }) => error_name === "Canceled" && message === "Canceled",
+  ({ message }) => /^ResizeObserver loop (completed with undelivered notifications|limit exceeded)/.test(message || ""),
+  ({ message }) => /modelLineProjections/.test(message || "") && /isVisible/.test(message || ""),
+];
+
 class ErrorMonitor {
   static _initialized = false;
   static _options = {};
@@ -123,7 +131,7 @@ class ErrorMonitor {
   }
 
   static _send(payload) {
-    if (!payload || this._isDuplicate(payload)) return;
+    if (!payload || BENIGN_ERRORS.some((isBenign) => isBenign(payload)) || this._isDuplicate(payload)) return;
     UsageTracker.queueErrorEvent(this._sanitizePayload(payload));
   }
 

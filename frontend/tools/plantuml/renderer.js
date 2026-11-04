@@ -22,8 +22,16 @@ export class PlantUmlRenderer {
           this.onChange({ state: "ready", ...request, svg: data.svg, milliseconds: Math.round(performance.now() - request.start) });
         } else if (data.kind === "error" && typeof data.error === "string") {
           clearTimeout(this.renderTimeout);
+          const { fileId, source } = this.request || {};
           this.request = null;
-          this.onChange({ state: "error", error: data.error, line: Number.isInteger(data.line) ? data.line : null });
+          this.onChange({
+            state: "error",
+            cause: "diagram",
+            fileId,
+            source,
+            error: data.error,
+            line: Number.isInteger(data.line) ? data.line : null,
+          });
         }
       }
     };
@@ -44,7 +52,7 @@ export class PlantUmlRenderer {
     this.host.append(this.frame);
     this.onChange({ state: "loading" });
     this.loadTimeout = setTimeout(
-      () => this.onChange({ state: "error", error: "Renderer did not load. Restart the renderer to retry." }),
+      () => this.onChange({ state: "error", cause: "engine_unavailable", error: "Renderer did not load. Restart the renderer to retry." }),
       30000,
     );
   }
@@ -71,8 +79,15 @@ export class PlantUmlRenderer {
         location.origin === "null" ? "*" : location.origin,
       );
       this.renderTimeout = setTimeout(() => {
+        const { fileId, source } = this.request || {};
         this.cancel();
-        this.onChange({ state: "error", error: "Rendering timed out. Simplify the diagram or restart the renderer." });
+        this.onChange({
+          state: "error",
+          cause: "timeout",
+          fileId,
+          source,
+          error: "Rendering timed out. Simplify the diagram or restart the renderer.",
+        });
       }, 30000);
     }, delay);
   }

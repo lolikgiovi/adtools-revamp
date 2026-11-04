@@ -120,7 +120,7 @@ pub async fn fetch_page_content(
             if e.is_timeout() {
                 "Request timed out after 30 seconds".to_string()
             } else if e.is_connect() {
-                format!("Connection error: Unable to connect to Confluence. Check the URL and network.")
+                "Can't reach Confluence. Connect to the office VPN, then try again.".to_string()
             } else {
                 format!("Network error: {}", e)
             }

@@ -782,7 +782,7 @@ async fn fetch_lockey_json(url: String) -> Result<String, String> {
       if e.is_timeout() {
         format!("Request timed out after 30 seconds")
       } else if e.is_connect() {
-        format!("Connection error: Unable to connect to server. Check the URL and network connection.")
+        "Can't reach the Lockey server. Connect to the office VPN, then try again.".to_string()
       } else if e.is_request() {
         format!("Request error: {}", e)
       } else {

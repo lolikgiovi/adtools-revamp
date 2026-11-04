@@ -54,11 +54,19 @@ describe("shared behavior tracking", () => {
     vi.advanceTimersByTime(1500);
     eventBus.emit("page:changed", { page: "settings" });
     expect(spy).toHaveBeenCalledWith("velocity-template", "page_leave", { duration_ms: 1500, reason: "navigation" });
+    // Hiding the window pauses the visit; it is not a leave, so visit counts stay one per page_view.
+    vi.advanceTimersByTime(2000);
     vi.spyOn(document, "hidden", "get").mockReturnValue(true);
     document.dispatchEvent(new Event("visibilitychange"));
+    expect(spy).toHaveBeenCalledWith("settings", "page_hidden", { duration_ms: 2000 });
     vi.advanceTimersByTime(60000);
+    vi.spyOn(document, "hidden", "get").mockReturnValue(false);
+    document.dispatchEvent(new Event("visibilitychange"));
+    vi.advanceTimersByTime(3000);
     window.dispatchEvent(new Event("pagehide"));
+    expect(spy).toHaveBeenCalledWith("settings", "page_leave", { duration_ms: 3000, reason: "pagehide" });
     expect(spy.mock.calls.filter((call) => call[1] === "page_leave")).toHaveLength(2);
+    expect(spy.mock.calls.filter((call) => call[1] === "page_hidden")).toHaveLength(1);
     tracker.destroy();
   });
 

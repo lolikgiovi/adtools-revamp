@@ -1,6 +1,7 @@
 import { trackWorkflowEvent } from "../../core/WorkflowAnalytics.js";
 import { BaseTool } from "../../core/BaseTool.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import { claimDailyUse } from "../../core/dailyUse.js";
 import { ThemeManager } from "../../core/ThemeManager.js";
 import { confirmAction } from "../../components/ConfirmationDialog.js";
 import { monaco, setCompletionWorkspace } from "./editor.js";
@@ -23,6 +24,12 @@ const FAILURE_ACTIONS = { svg: "export_svg", png: "export_png", backup: "export_
 // Composition: a quiet file rail, persistent source tabs, and a dominant diagram canvas.
 // Content: file management in the explorer, source controls in the editor, and diagram controls in the preview.
 // Interaction: direct tab/file manipulation, immediate stale feedback, and pan/zoom without animation.
+// A located diagram error is the user's syntax; the rest separate unlocated diagram errors from engine failures.
+function renderFailureReason({ cause, line }) {
+  if (cause === "diagram") return line > 0 ? "syntax_error" : "diagram_error";
+  return ["timeout", "engine_unavailable"].includes(cause) ? cause : "engine_error";
+}
+
 export class PlantUmlTool extends BaseTool {
   constructor(eventBus) {
     super({ id: "plantuml", eventBus, isHeavyTool: true });
@@ -586,19 +593,7 @@ export class PlantUmlTool extends BaseTool {
 
   // Renders follow typing pauses, file switches and resumes, so a diagram counts once per day as viewed and once as edited.
   trackDailyUse(action, fileId, meta) {
-    const day = new Date().toLocaleDateString("en-CA");
-    let counted = this.usageCounted;
-    try {
-      counted = JSON.parse(localStorage.getItem(USAGE_COUNTED_KEY)) || counted;
-    } catch (_) {}
-    if (counted?.day !== day || !Array.isArray(counted.keys)) counted = { day, keys: [] };
-    const key = `${action}:${fileId}`;
-    if (counted.keys.includes(key)) return;
-    this.usageCounted = { day, keys: [...counted.keys, key] };
-    try {
-      localStorage.setItem(USAGE_COUNTED_KEY, JSON.stringify(this.usageCounted));
-    } catch (_) {}
-    UsageTracker.trackToolUse("plantuml", action, meta);
+    if (claimDailyUse(USAGE_COUNTED_KEY, `${action}:${fileId}`)) UsageTracker.trackToolUse("plantuml", action, meta);
   }
 
   reportActionFailure(action, error) {
@@ -634,7 +629,7 @@ export class PlantUmlTool extends BaseTool {
     this.brokenRenders ||= new Set();
     if (result.state === "ready") this.brokenRenders.delete(result.fileId);
     if (result.state !== "error") return;
-    trackWorkflowEvent("plantuml", "render_result", { outcome: "failure", reason: "render_error" });
+    trackWorkflowEvent("plantuml", "render_result", { outcome: "failure", reason: renderFailureReason(result) });
     if (this.brokenRenders.has(result.fileId)) return;
     this.brokenRenders.add(result.fileId);
     const category = result.line > 0 ? "invalid_input" : "internal";

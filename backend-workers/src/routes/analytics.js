@@ -13,6 +13,7 @@ import {
 } from "../utils/analyticsSchema.js";
 import { buildCanonicalToolUsageQuery, buildLifetimeUsageRollupQuery } from "../utils/analyticsUsageSql.js";
 import { consumeRateLimit } from "../utils/rateLimit.js";
+import { isBenignError } from "../utils/benignErrors.js";
 import { tsGmt7, tsGmt7Plain, tsToGmt7Plain } from "../utils/timestamps.js";
 
 /**
@@ -312,11 +313,14 @@ export async function handleAnalyticsBatchPost(request, env, session) {
       for (const ev of events) {
         const createdTime = tsToGmt7Plain(ev.created_time) || tsGmt7Plain();
         const featureId = normalizeFeatureId(ev.feature_id || ev.type || "unknown");
-        const action = String(ev.action || ev.event || "unknown");
+        // Clients before page_hidden sent a hidden-window pause as page_leave {reason: "hidden"}.
+        const pausedVisit = ev.action === "page_leave" && ev.properties?.reason === "hidden";
+        const action = pausedVisit ? "page_hidden" : String(ev.action || ev.event || "unknown");
+        const { reason: _pauseReason, ...pauseProperties } = pausedVisit ? ev.properties : {};
         const properties =
           ev.properties && typeof ev.properties === "object"
             ? {
-                ...ev.properties,
+                ...(pausedVisit ? pauseProperties : ev.properties),
                 runtime: safeString(ev.runtime || data.runtime, 40),
                 app_version: safeString(ev.app_version || data.app_version, 60),
               }
@@ -355,6 +359,10 @@ export async function handleAnalyticsBatchPost(request, env, session) {
       if (errorEvents.length > 0) await ensureErrorEventsSchema(env);
       for (const err of errorEvents) {
         const eventId = rowId(err);
+        if (isBenignError(err)) {
+          if (eventId) acknowledged.error_events.push(eventId);
+          continue;
+        }
         rows.push({ key: "error_events", id: eventId, statement: errorEventStatement(env, err, data, userEmail, deviceId, eventId) });
       }
 
@@ -409,6 +417,7 @@ export async function handleAnalyticsBatchPost(request, env, session) {
           }
         }
       }
+      if (rows.length > 0) await touchUserLastSeen(env, userEmail);
     }
 
     return new Response(JSON.stringify({ ok: true, inserted, acknowledged }), {
@@ -420,6 +429,16 @@ export async function handleAnalyticsBatchPost(request, env, session) {
       headers: { "Content-Type": "application/json", ...corsHeaders() },
     });
   }
+}
+
+// last_seen is the latest time the Worker received activity from the user; compare wall time so legacy offset-free values still order.
+async function touchUserLastSeen(env, email) {
+  const now = tsGmt7Plain();
+  try {
+    await env.DB.prepare("UPDATE users SET last_seen = ? WHERE email = ? AND substr(last_seen, 1, 19) < substr(?, 1, 19)")
+      .bind(now, email, now)
+      .run();
+  } catch (_) {}
 }
 
 function rowId(row) {

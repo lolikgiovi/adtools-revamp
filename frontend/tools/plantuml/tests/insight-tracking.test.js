@@ -54,6 +54,21 @@ describe("PlantUML insight", () => {
     expect(JSON.stringify(failures)).not.toContain("secret");
   });
 
+  // A half-typed diagram and a broken engine both used to report "render_error", so the two could not be told apart.
+  it.each([
+    [{ state: "error", fileId: "a", line: 2, cause: "diagram" }, "syntax_error"],
+    [{ state: "error", fileId: "a", line: null, cause: "diagram" }, "diagram_error"],
+    [{ state: "error", fileId: "a", cause: "timeout" }, "timeout"],
+    [{ state: "error", fileId: "a", cause: "engine_unavailable" }, "engine_unavailable"],
+    [{ state: "error", fileId: "a" }, "engine_error"],
+  ])("labels the render failure %j as %s", (result, reason) => {
+    const events = vi.spyOn(UsageTracker, "trackEvent").mockImplementation(() => {});
+    vi.spyOn(UsageTracker, "trackFailure").mockImplementation(() => {});
+    Object.create(PlantUmlTool.prototype).trackRenderOutcome(result);
+    const failed = events.mock.calls.find((call) => call[1] === "capability_failed" || call[1] === "render_result");
+    expect(failed?.[2]?.reason ?? JSON.stringify(events.mock.calls)).toBe(reason);
+  });
+
   it("adds the diagram type to view and edit uses", () => {
     const { instance } = tool();
     expect(instance.renderUseMeta({ source: "@startmindmap\n* a\n@endmindmap", milliseconds: 40 })).toEqual({

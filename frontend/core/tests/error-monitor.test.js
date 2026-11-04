@@ -63,6 +63,27 @@ describe("ErrorMonitor", () => {
     expect(payload.metadata.reason_type).toBe("string");
   });
 
+  // Failure modes: Monaco's cancelled async work, browser ResizeObserver notices, and Monaco's internal
+  // view-model race reach the error log as if they were app bugs, while look-alike real errors get swallowed.
+  it("drops known benign editor and browser noise", () => {
+    const canceled = new Error("Canceled");
+    canceled.name = "Canceled";
+    ErrorMonitor.captureUnhandledRejection({ reason: canceled });
+    ErrorMonitor.captureWindowError({ target: window, message: "ResizeObserver loop completed with undelivered notifications." });
+    ErrorMonitor.captureWindowError({ target: window, message: "ResizeObserver loop limit exceeded" });
+    ErrorMonitor.captureUnhandledRejection({
+      reason: new TypeError("undefined is not an object (evaluating 'this.modelLineProjections[e-1].isVisible')"),
+    });
+    ErrorMonitor.captureUnhandledRejection({
+      reason: new TypeError("Cannot read properties of undefined (reading 'isVisible') at modelLineProjections"),
+    });
+    expect(UsageTracker.queueErrorEvent).not.toHaveBeenCalled();
+
+    ErrorMonitor.captureUnhandledRejection({ reason: new Error("Request canceled by server") });
+    ErrorMonitor.captureUnhandledRejection({ reason: new TypeError("Cannot read properties of undefined (reading 'isVisible')") });
+    expect(UsageTracker.queueErrorEvent).toHaveBeenCalledTimes(2);
+  });
+
   it("serializes resource load failures without query strings", () => {
     const script = document.createElement("script");
     script.src = "https://cdn.example/app.js?token=secret";

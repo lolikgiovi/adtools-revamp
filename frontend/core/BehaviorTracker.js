@@ -7,9 +7,10 @@ export class BehaviorTracker {
     this.startedAt = null;
     this.onClick = (event) => this.recordControl(event, "click");
     this.onChange = (event) => this.recordControl(event, "change");
+    this.visitOpen = false;
     this.onVisibility = () => {
-      if (document.hidden) this.leave("hidden");
-      else if (this.feature && this.startedAt === null) this.startedAt = Date.now();
+      if (document.hidden) this.pause();
+      else if (this.visitOpen && this.startedAt === null) this.startedAt = Date.now();
     };
     this.onPageHide = () => {
       this.leave("pagehide");
@@ -25,6 +26,7 @@ export class BehaviorTracker {
       const previous = this.feature;
       this.leave("navigation");
       this.feature = feature;
+      this.visitOpen = true;
       this.startedAt = document.hidden ? null : Date.now();
       this.track(feature, "page_view", { previous: previous || "none", ...(source ? { source } : {}) });
     });
@@ -60,10 +62,23 @@ export class BehaviorTracker {
     });
   }
 
-  leave(reason) {
-    if (!this.feature || this.startedAt === null) return;
-    this.track(this.feature, "page_leave", { duration_ms: Math.max(0, Date.now() - this.startedAt), reason });
+  visibleMs() {
+    return this.startedAt === null ? 0 : Math.max(0, Date.now() - this.startedAt);
+  }
+
+  // A hidden window pauses the visit: page_hidden carries the visible time so far, and the visit resumes on return.
+  pause() {
+    if (!this.visitOpen || this.startedAt === null) return;
+    this.track(this.feature, "page_hidden", { duration_ms: this.visibleMs() });
     this.startedAt = null;
+  }
+
+  // Each page_view closes with exactly one page_leave; its duration is the visible time since the last pause.
+  leave(reason) {
+    if (!this.feature || !this.visitOpen) return;
+    this.track(this.feature, "page_leave", { duration_ms: this.visibleMs(), reason });
+    this.startedAt = null;
+    this.visitOpen = false;
   }
 
   destroy() {

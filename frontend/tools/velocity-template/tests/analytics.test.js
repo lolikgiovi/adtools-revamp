@@ -25,6 +25,43 @@ describe("Velocity success boundaries", () => {
     expect(events).toHaveBeenCalledWith("velocity-template", "render_result", expect.objectContaining({ outcome: state }));
     expect(JSON.stringify(events.mock.calls)).not.toContain("SECRET");
   });
+  // Failure modes: unedited starter previews count as use, every debounce counts, a new day never counts,
+  // other documents share one claim, invalid output counts, and storage failures throw.
+  it("counts an edited document's automatic preview once per document per day", () => {
+    localStorage.clear();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-05T10:00:00"));
+    const uses = vi.spyOn(UsageTracker, "trackToolUse").mockImplementation(() => {});
+    vi.spyOn(UsageTracker, "trackEvent").mockImplementation(() => {});
+    const tool = Object.assign(Object.create(VelocityTemplateTool.prototype), {
+      activeDocumentId: "a",
+      _editedDocuments: new Set(),
+      editor: { getValue: () => "Hello $name" },
+      previewEditor: { getValue: () => "Hello" },
+    });
+    tool.recordAutomaticPreview("valid");
+    expect(uses).not.toHaveBeenCalled();
+    tool._editedDocuments.add("a");
+    tool.recordAutomaticPreview("error");
+    expect(uses).not.toHaveBeenCalled();
+    tool.recordAutomaticPreview("valid");
+    tool.recordAutomaticPreview("valid");
+    expect(uses).toHaveBeenCalledTimes(1);
+    expect(uses).toHaveBeenCalledWith("velocity-template", "preview", expect.any(Object));
+    tool.activeDocumentId = "b";
+    tool._editedDocuments.add("b");
+    tool.recordAutomaticPreview("valid");
+    expect(uses).toHaveBeenCalledTimes(2);
+    vi.setSystemTime(new Date("2026-11-06T10:00:00"));
+    tool.activeDocumentId = "a";
+    tool.recordAutomaticPreview("valid");
+    expect(uses).toHaveBeenCalledTimes(3);
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    expect(() => tool.recordAutomaticPreview("valid")).not.toThrow();
+    vi.useRealTimers();
+  });
   it("includes the imported table without SQL predicates or row identifiers", () => {
     const events = vi.spyOn(UsageTracker, "trackEvent").mockImplementation(() => {});
     vi.spyOn(UsageTracker, "trackToolUse").mockImplementation(() => {});

@@ -3,6 +3,7 @@ import { BaseTool } from "../../core/BaseTool.js";
 import { cleanAnalyticsMeta, summarizeText } from "../../core/AnalyticsMeta.js";
 import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import { claimDailyUse } from "../../core/dailyUse.js";
 import { isTauri } from "../../core/Runtime.js";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.main.js";
 import "monaco-editor/esm/vs/language/json/monaco.contribution.js";
@@ -90,6 +91,7 @@ class VelocityTemplateTool extends withTemplateSqlImport(BaseTool) {
     this._mountSequence = 0;
     this._lastRender = null;
     this._renderState = "idle";
+    this._editedDocuments = new Set();
     this._hadRenderError = false;
     this._undoAction = null;
     this._undoTimer = null;
@@ -670,6 +672,17 @@ class VelocityTemplateTool extends withTemplateSqlImport(BaseTool) {
     }
   }
 
+  // The preview renders as the user types, so an edited document's valid preview is a use, counted once per day.
+  recordAutomaticPreview(state) {
+    if (state !== "valid" || !this._editedDocuments?.has(this.activeDocumentId)) return;
+    try {
+      if (!claimDailyUse("velocity-template.usage.counted", `preview:${this.activeDocumentId}`)) return;
+    } catch (_) {
+      return;
+    }
+    this.track("preview", this.editor?.getValue() || "", this.previewEditor?.getValue() || "", { outcome: state });
+  }
+
   validationSnapshot() {
     return {
       documentId: this.activeDocumentId,
@@ -874,6 +887,7 @@ class VelocityTemplateTool extends withTemplateSqlImport(BaseTool) {
       contextError.textContent = "";
       this._lastRender = { at: Date.now(), bytes: byteLength(displayValue) };
       this.setRenderMeta("valid");
+      this.recordAutomaticPreview("valid");
       if (this._hadRenderError) {
         const announcement = document.getElementById("velocityRenderAnnouncement");
         if (announcement) announcement.textContent = `Result updated at ${this.formatRenderTime(this._lastRender.at)}.`;
@@ -1247,7 +1261,7 @@ class VelocityTemplateTool extends withTemplateSqlImport(BaseTool) {
         ...details,
       });
       UsageTracker.trackEvent("velocity-template", `${action}_result`, meta);
-      if (successfulUse && ["copy", "copy_output", "render", "validate", "import_sql", "sync_context"].includes(action)) {
+      if (successfulUse && ["copy", "copy_output", "render", "preview", "validate", "import_sql", "sync_context"].includes(action)) {
         UsageTracker.trackToolUse("velocity-template", action, meta);
       }
     } catch (_) {
@@ -1262,11 +1276,13 @@ class VelocityTemplateTool extends withTemplateSqlImport(BaseTool) {
       window.app?.router?.navigate("settings");
     });
     this.editor?.onDidChangeModelContent(() => {
+      this._editedDocuments.add(this.activeDocumentId);
       this.scheduleDocumentSave();
       this.markResultStale();
       this.schedulePreview();
     });
     this.contextEditor?.onDidChangeModelContent(() => {
+      this._editedDocuments.add(this.activeDocumentId);
       this.scheduleDocumentSave();
       this.markResultStale();
       this.schedulePreview();
