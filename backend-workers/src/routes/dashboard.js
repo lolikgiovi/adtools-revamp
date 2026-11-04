@@ -1406,6 +1406,7 @@ LIMIT 150`,
     query: `SELECT STRFTIME('%Y-%m-%d / %H:%M:%S', ${dashboardTimestamp("t.created_time")}, '+7 hours') AS time,
       SUBSTR(t.user_email, 1, INSTR(t.user_email, '@') - 1) AS user,
       t.action,
+      COALESCE(json_extract(t.properties, '$.file_name'), '-') AS file_name,
       COALESCE(json_extract(t.properties, '$.diagram_type'), '-') AS diagram_type,
       COALESCE(json_extract(t.properties, '$.line_count'), '-') AS lines,
       COALESCE(json_extract(t.properties, '$.file_count'), '-') AS files,
@@ -1422,6 +1423,8 @@ LIMIT 150`,
   SELECT COALESCE(json_extract(properties, '$.diagram_type'), '-') AS diagram_type,
     LOWER(user_email) AS email,
     action,
+    CASE WHEN json_type(properties, '$.line_count') = 'integer' AND json_extract(properties, '$.line_count') >= 0
+      THEN json_extract(properties, '$.line_count') END AS line_count,
     created_time
   FROM tool_usage
   WHERE tool_id = 'plantuml' AND source = 'client'
@@ -1445,6 +1448,9 @@ SELECT types.diagram_type,
   COALESCE(SUM(uses.action = 'edit'), 0) AS edits,
   COALESCE(SUM(uses.action LIKE 'export%'), 0) AS exports,
   COALESCE(SUM(uses.action = 'import'), 0) AS imports,
+  ROUND(AVG(uses.line_count), 1) AS avg_lines_per_use,
+  COUNT(uses.line_count) AS measured_uses,
+  MAX(uses.line_count) AS max_lines,
   COALESCE(MAX(failures.render_failures), 0) AS render_failures,
   MAX(uses.created_time) AS last_seen
 FROM types

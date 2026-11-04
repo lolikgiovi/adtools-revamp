@@ -111,9 +111,9 @@ function seed(db) {
     ('b1','b','Windows','2026-01-01',datetime('now','+7 hours','-40 days'),'1.3.9'),
     ('excluded','c','macOS','2026-01-01',datetime('now','+7 hours'),'1.3.12');
     INSERT INTO tool_usage (event_id,user_email,device_id,tool_id,action,properties,source,created_time) VALUES ${rows.join(",")},
-    ('puml-view','a@example.test','a1','plantuml','view','{"diagram_type":"sequence","input_size":420,"duration_ms":80}','client',
+    ('puml-view','a@example.test','a1','plantuml','view','{"diagram_type":"sequence","file_name":"payment.puml","line_count":10,"input_size":420,"duration_ms":80}','client',
       datetime('now','+7 hours','start of day','-1 day','+10 hours')),
-    ('puml-edit','a@example.test','a1','plantuml','edit','{"diagram_type":"sequence","input_size":440,"duration_ms":90}','client',
+    ('puml-edit','a@example.test','a1','plantuml','edit','{"diagram_type":"sequence","file_name":"payment.puml","line_count":21,"input_size":440,"duration_ms":90}','client',
       datetime('now','+7 hours','start of day','-1 day','+11 hours')),
     ('puml-svg','b@example.test','b1','plantuml','export_svg','{"diagram_type":"class","line_count":12}','client',
       datetime('now','+7 hours','start of day','-2 days','+10 hours')),
@@ -174,10 +174,28 @@ it("offers PlantUML detailed reports built from recorded diagram uses", async ()
     const recent = (await queryTab(env, token, "plantuml")).data;
     expect(recent.map((row) => row.action).sort()).toEqual(["edit", "export_svg", "import", "view"]);
     expect(recent.find((row) => row.action === "import")).toMatchObject({ files: 3 });
+    expect(recent.find((row) => row.action === "edit")).toMatchObject({ file_name: "payment.puml", lines: 21 });
 
     const summary = (await queryTab(env, token, "plantuml-summary")).data;
-    expect(summary.find((row) => row.diagram_type === "sequence")).toMatchObject({ uses: 2, people: 1, views: 1, edits: 1 });
-    expect(summary.find((row) => row.diagram_type === "class")).toMatchObject({ uses: 1, people: 1, exports: 1, render_failures: 1 });
+    expect(summary.find((row) => row.diagram_type === "sequence")).toMatchObject({
+      uses: 2,
+      people: 1,
+      views: 1,
+      edits: 1,
+      avg_lines_per_use: 15.5,
+      measured_uses: 2,
+      max_lines: 21,
+    });
+    expect(summary.find((row) => row.diagram_type === "class")).toMatchObject({
+      uses: 1,
+      people: 1,
+      exports: 1,
+      render_failures: 1,
+      avg_lines_per_use: 12,
+      measured_uses: 1,
+      max_lines: 12,
+    });
+    expect(summary.find((row) => row.diagram_type === "-")).toMatchObject({ avg_lines_per_use: null, measured_uses: 0, max_lines: null });
   } finally {
     db.close();
   }
