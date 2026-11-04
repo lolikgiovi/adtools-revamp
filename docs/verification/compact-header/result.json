@@ -1,16 +1,16 @@
 {
   "passed": true,
   "checks": [
-    "1440px web: restored 57px header, centered working search, sidebar project selector, no overflow",
+    "1440px web: compact 39px header, centered working search, sidebar project selector, no overflow",
     "1440px desktop simulation: one native toolbar, centered search, sidebar project/menu, native actions and connections, keyboard focus, runtime restoration",
     "1440px sidebar management opens Settings with readable web breadcrumbs",
-    "900px web: restored 57px header, centered working search, sidebar project selector, no overflow",
+    "900px web: compact 39px header, centered working search, sidebar project selector, no overflow",
     "900px desktop simulation: one native toolbar, centered search, sidebar project/menu, native actions and connections, keyboard focus, runtime restoration",
     "900px sidebar management opens Settings with readable web breadcrumbs",
-    "620px web: restored 57px header, centered working search, sidebar project selector, no overflow",
+    "620px web: compact 39px header, centered working search, sidebar project selector, no overflow",
     "620px desktop simulation: one native toolbar, centered search, sidebar project/menu, native actions and connections, keyboard focus, runtime restoration",
     "620px sidebar management opens Settings with readable web breadcrumbs",
-    "390px web: restored 57px header, centered working search, sidebar project selector, no overflow",
+    "390px web: compact 39px header, centered working search, sidebar project selector, no overflow",
     "390px sidebar management opens Settings with readable web breadcrumbs"
   ],
   "errors": []

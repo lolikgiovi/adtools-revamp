@@ -47,6 +47,8 @@ try {
     assert.equal(await page.locator(".sidebar-header .header-search").count(), 0);
     const webSearch = await page.locator(".header-center .header-search").boundingBox();
     assert.equal(webSearch.height, width <= 600 ? 32 : 28);
+    assert.ok(Math.abs(webSearch.y + webSearch.height / 2 - webHeader.y - (webHeader.height - 1) / 2) < 1);
+    assert.equal((await page.locator(".sidebar-header").boundingBox()).height, 39);
     assert.ok(Math.abs(webSearch.x + webSearch.width / 2 - webHeader.x - webHeader.width / 2) < 1);
     await page.locator(".header-search").click();
     await page.locator(".global-search-overlay[aria-hidden='false']").waitFor();
@@ -188,7 +190,7 @@ try {
     }
     await page.locator(".sidebar-project .ad-searchable-dropdown-trigger").click();
     await page.getByRole("option", { name: "Create or manage projects…", exact: true }).click();
-    await page.locator(".project-name-save").waitFor();
+    await page.locator("button.project-settings-select").waitFor();
     if (width <= 768) assert.equal(await page.locator(".sidebar").getAttribute("data-state"), "closed");
     const currentCrumb = await page.locator(".header-context .breadcrumb").boundingBox();
     const currentSearch = await page.locator(".header-search").boundingBox();

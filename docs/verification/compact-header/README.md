@@ -1,7 +1,7 @@
 # Sidebar and platform header verification
 
 Project selection lives at the top of the sidebar on both web and desktop.
-The web header is restored to its previous 57px height, with navigation on the
+The web header shares the 39px height of the sidebar header and tool tabs, with navigation on the
 left, global search centered in the workspace header, and actions on the right.
 On narrow web layouts, centered search becomes an icon and the sidebar opens
 below the header so the project picker remains usable.
@@ -23,7 +23,7 @@ In another terminal:
 
 ```sh
 HEADER_TEST_URL=http://127.0.0.1:1247 \
-PLAYWRIGHT_MODULE=/Users/lolik/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs \
+PLAYWRIGHT_MODULE=/Users/ddl/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs \
 node frontend/core/tests/compact-header-browser.mjs
 ```
 
