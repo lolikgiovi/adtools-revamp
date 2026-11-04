@@ -77,8 +77,8 @@ describe("SearchableDropdown", () => {
 
     const left = Number.parseFloat(dropdown.menu.style.getPropertyValue("--ad-searchable-dropdown-menu-left"));
     const width = Number.parseFloat(dropdown.menu.style.getPropertyValue("--ad-searchable-dropdown-menu-width"));
-    expect(left).toBeGreaterThanOrEqual(12);
-    expect(left + width).toBeLessThanOrEqual(348);
+    expect(left).toBeGreaterThanOrEqual(8);
+    expect(left + width).toBeLessThanOrEqual(352);
 
     Object.defineProperty(window, "innerWidth", { configurable: true, value: originalWidth });
   });

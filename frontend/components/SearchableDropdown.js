@@ -394,7 +394,7 @@ export class SearchableDropdown {
     if (!this.isOpen || !this.trigger || !this.menu) return;
 
     const triggerRect = this.trigger.getBoundingClientRect();
-    const viewportPadding = 12;
+    const viewportPadding = 8;
     const menuGap = 6;
     const viewportWidth = Math.max(window.innerWidth || document.documentElement.clientWidth || 0, viewportPadding * 2);
     const viewportHeight = Math.max(window.innerHeight || document.documentElement.clientHeight || 0, viewportPadding * 2);

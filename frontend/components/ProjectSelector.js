@@ -54,7 +54,7 @@ export class ProjectSelector {
       }
     }
     if (shared.children.length) select.append(shared);
-    select.append(new Option("Create or manage projects…", "__manage__"));
+    select.append(new Option("Create/Manage Project", "__manage__"));
     select.addEventListener("change", async () => {
       if (select.value === "__manage__") {
         select.value = active.id;

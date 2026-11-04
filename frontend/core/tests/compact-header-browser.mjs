@@ -31,6 +31,21 @@ try {
     await page.waitForFunction(() => Boolean(window.app?.connectionIndicators));
     await page.waitForTimeout(300);
     await page.evaluate(() => document.fonts.ready);
+    if (width >= 900) {
+      const trigger = page.locator(".sidebar-project .ad-searchable-dropdown-trigger");
+      await trigger.click();
+      const menu = page.locator(".ad-searchable-dropdown-menu[aria-hidden='false']");
+      await menu.waitFor({ state: "visible" });
+      await page.waitForTimeout(180);
+      assert.equal(await menu.getByRole("option", { name: "Create/Manage Project", exact: true }).count(), 1);
+      assert.ok((await menu.boundingBox()).width < 210, "Short project names keep the menu compact");
+      assert.equal(
+        await menu.getByRole("option", { name: "Create/Manage Project", exact: true }).locator(".ad-searchable-dropdown-option-label")
+          .evaluate((label) => label.scrollWidth <= label.clientWidth),
+        true,
+      );
+      await page.keyboard.press("Escape");
+    }
     await page.evaluate(async () => {
       const { getActiveProject, renameProject, createProject } = await import("/core/Projects.js");
       renameProject(getActiveProject().id, "Livin");
@@ -100,6 +115,8 @@ try {
       await projectMenu.waitFor({ state: "visible" });
       await page.waitForTimeout(180);
       const menuBounds = await projectMenu.boundingBox();
+      const triggerBounds = await page.locator(".sidebar-project .ad-searchable-dropdown-trigger").boundingBox();
+      assert.ok(Math.abs(menuBounds.x - triggerBounds.x) < 1, "Project menu aligns with its trigger");
       assert.ok(menuBounds.x >= 0 && menuBounds.x + menuBounds.width <= width);
       assert.equal(
         await projectMenu.evaluate((node) => {
@@ -189,7 +206,7 @@ try {
       await page.locator(".sidebar-trigger").click();
     }
     await page.locator(".sidebar-project .ad-searchable-dropdown-trigger").click();
-    await page.getByRole("option", { name: "Create or manage projects…", exact: true }).click();
+    await page.getByRole("option", { name: "Create/Manage Project", exact: true }).click();
     await page.locator("button.project-settings-select").waitFor();
     if (width <= 768) assert.equal(await page.locator(".sidebar").getAttribute("data-state"), "closed");
     const currentCrumb = await page.locator(".header-context .breadcrumb").boundingBox();
