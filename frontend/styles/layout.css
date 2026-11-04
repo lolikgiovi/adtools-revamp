@@ -721,3 +721,56 @@ html[data-tauri="true"][data-fullscreen="true"] .window-titlebar-leading {
     display: none;
   }
 }
+
+button.feedback-trigger {
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--ring) / 0.5);
+  background: hsl(var(--muted));
+  font-weight: 600;
+}
+
+button.feedback-trigger:hover {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+.main-header .feedback-trigger {
+  height: 28px;
+  font-size: 0.6875rem;
+}
+
+.feedback-dialog {
+  margin: auto;
+  width: min(30rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  padding: 1.5rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+}
+
+.feedback-dialog::backdrop { background: rgb(0 0 0 / 0.45); }
+.feedback-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; }
+.feedback-dialog h2 { margin: 0; font-size: 1.25rem; }
+.feedback-dialog form { display: grid; gap: 1rem; }
+.feedback-dialog .usage-form-field { display: grid; gap: 0.5rem; }
+.feedback-dialog :is(select, textarea) {
+  width: 100%;
+  min-width: 0;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font: inherit;
+}
+.feedback-dialog textarea { min-height: 9rem; resize: vertical; }
+.feedback-dialog textarea::placeholder { color: hsl(var(--muted-foreground)); }
+.feedback-dialog :is(button, select, textarea):focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+.feedback-dialog-actions { display: flex; justify-content: flex-end; }
+.feedback-dialog [data-feedback-status] { font-size: 0.875rem; }
+.feedback-dialog [data-feedback-status]:empty { display: none; }
+.feedback-dialog [data-state="error"] { color: hsl(var(--destructive)); }
+.feedback-dialog button:disabled { opacity: 0.6; cursor: wait; }

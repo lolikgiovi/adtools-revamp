@@ -3,6 +3,7 @@
  * Handles authenticated ingestion plus deliberately limited public overview/feedback endpoints.
  */
 
+import { sendFeedbackEmail } from "../utils/feedbackEmail.js";
 import { corsHeaders } from "../utils/cors.js";
 import { ensureErrorEventsSchema, ensureLifetimeUsageBaselineSchema, ensureToolUsageSchema } from "../utils/analyticsSchema.js";
 import { buildCanonicalToolUsageQuery, buildLifetimeUsageRollupQuery } from "../utils/analyticsUsageSql.js";
@@ -77,7 +78,10 @@ export async function handleImprovementFeedbackPost(request, env, session) {
       .bind(String(session.email).trim().toLowerCase(), String(session.deviceId), toolId, message, tsGmt7Plain())
       .run();
 
-    return analyticsJson({ ok: true, message: "Improvement note received" }, 201);
+    const notificationSent = await sendFeedbackEmail(env, {
+      email: String(session.email).trim().toLowerCase(), deviceId: String(session.deviceId), toolId, message,
+    });
+    return analyticsJson({ ok: true, message: "Improvement note received", notification_sent: notificationSent }, 201);
   } catch (err) {
     console.error(JSON.stringify({ message: "improvement feedback failed", error: String(err) }));
     return analyticsJson({ ok: false, error: "Could not save the improvement note" }, 500);
@@ -122,7 +126,8 @@ export async function handlePublicImprovementFeedbackPost(request, env) {
       .bind(userEmail, deviceId, toolId, message, tsGmt7Plain())
       .run();
 
-    return analyticsJson({ ok: true, message: "Improvement note received" }, 201);
+    const notificationSent = await sendFeedbackEmail(env, { email: userEmail, deviceId, toolId, message });
+    return analyticsJson({ ok: true, message: "Improvement note received", notification_sent: notificationSent }, 201);
   } catch (err) {
     console.error(JSON.stringify({ message: "public improvement feedback failed", error: String(err) }));
     return analyticsJson({ ok: false, error: "Could not save the improvement note" }, 500);

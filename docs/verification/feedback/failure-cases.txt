@@ -1,0 +1,7 @@
+Feedback failure cases to verify before implementation:
+- Header action hidden in web or moved out of desktop chrome; mismatched button height; narrow viewport overflow.
+- Wrong active tool, unavailable tool options, general feedback outside a tool.
+- Empty/whitespace/overlong notes; double submit; loss of draft after errors or dismissal.
+- Keyboard escape, focus trapping/restoration, inaccessible fields or status.
+- Stored feedback lost when email fails; false claim of notification success; forged notification recipient.
+- Invalid payload or rate limit sends an email; message/tool/identity not reflected safely in email.

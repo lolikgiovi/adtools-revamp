@@ -160,85 +160,6 @@
   outline-offset: 2px;
 }
 
-.home-feedback {
-  margin: 1.75rem 0;
-}
-
-.home-feedback .usage-feedback-section {
-  display: block;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
-
-.home-feedback .usage-feedback-copy {
-  margin: 0 0 0.875rem;
-}
-
-.home-feedback .usage-feedback-copy h2 {
-  margin: 0;
-  font-size: 0.9375rem;
-  font-weight: 600;
-}
-
-.home-feedback .usage-feedback-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.5rem;
-  max-width: none;
-  margin: 0;
-}
-
-.home-feedback .usage-feedback-fields {
-  display: grid;
-  grid-template-columns: minmax(9rem, 12rem) minmax(0, 1fr);
-  align-items: start;
-  gap: 0.5rem;
-}
-
-.home-feedback .usage-form-field {
-  display: block;
-  width: 100%;
-  min-width: 0;
-  margin: 0;
-}
-
-.home-feedback .usage-form-field :is(select, textarea) {
-  display: block;
-  width: 100%;
-  min-height: 2.375rem;
-  height: 2.375rem;
-  margin: 0;
-  padding: 0.5rem 0.625rem;
-  font: inherit;
-  font-size: 0.8125rem;
-  line-height: 1.25rem;
-  box-sizing: border-box;
-}
-
-.home-feedback textarea {
-  resize: vertical;
-}
-
-.home-feedback .usage-feedback-actions {
-  margin: 0;
-  align-items: start;
-}
-
-.home-feedback .usage-primary-button {
-  min-height: 2.375rem;
-}
-
-.home-feedback .usage-feedback-status {
-  grid-column: 1 / -1;
-  min-height: 0;
-}
-
-.home-feedback .usage-feedback-status:empty {
-  display: none;
-}
-
 .home-container .home-usage-details {
   padding-top: 1.5rem;
   border-top: 1px solid hsl(var(--border));
@@ -317,11 +238,6 @@
 
   .home-tip-list,
   .home-usage-details .usage-overview-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .home-feedback .usage-feedback-form,
-  .home-feedback .usage-feedback-fields {
     grid-template-columns: minmax(0, 1fr);
   }
 

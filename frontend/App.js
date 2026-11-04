@@ -158,6 +158,7 @@ class App {
     this.connectionIndicators = new ConnectionIndicators(document.querySelector(".connection-indicators"), {
       onOpenSettings: () => this.router.navigate("settings"),
     });
+    document.querySelector(".feedback-trigger")?.addEventListener("click", () => this.openFeedback());
     this.syncDeviceVersion();
     this.setupRoutes();
 
@@ -454,17 +455,10 @@ class App {
         <div class="home-container">
           <h1 class="home-greeting">${this.#escapeHtml(this.getHomeGreeting())}</h1>
           <div id="home-workspace"></div>
-          <div class="home-feedback">
-            ${this.#renderFeedbackSection({ canSubmit: Boolean(this.#getUsageIdentity()) })}
-          </div>
           <div id="usage-details"></div>
         </div>
       `;
       this.renderHomeWorkspace();
-      this.mainContent.querySelector("[data-usage-feedback-form]")?.addEventListener("submit", (event) => {
-        event.preventDefault();
-        void this.submitUsageFeedback(event.currentTarget);
-      });
       const requestId = ++this.usageOverviewRequestId;
       const usageIdentity = this.#getUsageIdentity();
       this.usageOverviewState = {
@@ -1786,13 +1780,63 @@ class App {
     }
   }
 
+  openFeedback() {
+    let dialog = document.querySelector(".feedback-dialog");
+    if (!dialog) {
+      dialog = document.createElement("dialog");
+      dialog.id = "feedback-dialog";
+      dialog.className = "feedback-dialog";
+      dialog.setAttribute("aria-labelledby", "feedback-title");
+      dialog.innerHTML = `
+        <div class="feedback-dialog-heading">
+          <h2 id="feedback-title">Send feedback</h2>
+          <button class="btn btn-ghost btn-icon-only" type="button" data-feedback-close aria-label="Close feedback">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="m6 6 12 12M18 6 6 18" />
+            </svg>
+          </button>
+        </div>
+        <form>
+          <label class="usage-form-field"><span>Tool</span>
+            <select name="tool_id"><option value="">General feedback</option>${this.#renderFeedbackOptions()}</select>
+          </label>
+          <label class="usage-form-field"><span>Feedback</span>
+            <textarea name="message" rows="6" maxlength="4000" required placeholder="What should be better?"></textarea>
+          </label>
+          <div data-feedback-status role="status" aria-live="polite"></div>
+          <div class="feedback-dialog-actions"><button class="btn btn-primary" type="submit">Send feedback</button></div>
+        </form>`;
+      document.body.append(dialog);
+      dialog.querySelector("[data-feedback-close]").addEventListener("click", () => dialog.close());
+      dialog.addEventListener("close", () => document.querySelector(".feedback-trigger")?.focus());
+      dialog.querySelector("form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        void this.submitUsageFeedback(event.currentTarget);
+      });
+    }
+    if (dialog.open) return;
+    if (!dialog.querySelector("textarea").value) {
+      const select = dialog.querySelector("select");
+      const activeId = this.currentTool?.id || "";
+      select.value = [...select.options].some((option) => option.value === activeId) ? activeId : "";
+      dialog.querySelector("[data-feedback-status]").textContent = "";
+    }
+    dialog.showModal();
+    dialog.querySelector("textarea").focus();
+  }
+
   async submitUsageFeedback(form) {
     const status = form?.querySelector("[data-feedback-status]");
     const submitButton = form?.querySelector("button[type='submit']");
-    if (!form || !status || !submitButton) return;
+    if (!form || !status || !submitButton || submitButton.disabled) return;
 
     const toolId = form.querySelector("[name='tool_id']")?.value || "";
-    const message = form.querySelector("[name='message']")?.value || "";
+    const message = (form.querySelector("[name='message']")?.value || "").trim();
+    if (!message) {
+      status.textContent = "Enter your feedback before sending.";
+      status.dataset.state = "error";
+      return;
+    }
     const usageIdentity = this.#getUsageIdentity();
     if (!usageIdentity) {
       status.textContent = "Register an email before sending feedback.";
@@ -1804,9 +1848,11 @@ class App {
     status.dataset.state = "pending";
 
     try {
-      await UsageOverviewService.submitPublicImprovement({ ...usageIdentity, toolId, message });
+      const result = await UsageOverviewService.submitPublicImprovement({ ...usageIdentity, toolId, message });
       form.reset();
-      status.textContent = "Feedback sent.";
+      status.textContent = result.notification_sent === false
+        ? "Feedback saved. The email notification could not be sent."
+        : "Feedback sent.";
       status.dataset.state = "success";
     } catch (error) {
       status.textContent = String(error?.message || "Could not send feedback. Try again.");
@@ -1890,47 +1936,6 @@ class App {
     return UsageOverviewService.getRegisteredIdentity({ deviceId: UsageTracker.getDeviceId() });
   }
 
-  #renderFeedbackSection({ canSubmit = false } = {}) {
-    if (!canSubmit) {
-      return `
-        <section class="usage-feedback-section usage-feedback-section-locked" aria-labelledby="usage-feedback-title">
-          <div class="usage-feedback-copy">
-            <h2 id="usage-feedback-title">Have feedback?</h2>
-            <p>Register your email to send a note about a tool that needs attention.</p>
-          </div>
-          <div class="usage-feedback-locked-action"><span class="usage-feedback-locked-note">Available after account registration.</span></div>
-        </section>
-      `;
-    }
-
-    return `
-      <section class="usage-feedback-section" aria-labelledby="usage-feedback-title">
-        <div class="usage-feedback-copy">
-          <h2 id="usage-feedback-title">Send feedback</h2>
-        </div>
-        <form class="usage-feedback-form" data-usage-feedback-form>
-          <div class="usage-feedback-fields">
-            <label class="usage-form-field usage-form-tool-field">
-              <span class="sr-only">Tool (optional)</span>
-              <select name="tool_id">
-                <option value="">Tool (optional)</option>
-                ${this.#renderFeedbackOptions()}
-              </select>
-            </label>
-            <label class="usage-form-field">
-              <span class="sr-only">What should be better?</span>
-              <textarea name="message" rows="1" maxlength="4000" required placeholder="What should be better?"></textarea>
-            </label>
-          </div>
-          <div class="usage-feedback-actions">
-            <button class="usage-primary-button" type="submit">Send feedback</button>
-          </div>
-          <div class="usage-feedback-status" data-feedback-status role="status" aria-live="polite"></div>
-        </form>
-      </section>
-    `;
-  }
-
   renderHomeWorkspace() {
     const container = document.getElementById("home-workspace");
     if (!container) return;
@@ -1995,11 +2000,13 @@ class App {
     this._headerBreadcrumb ||= document.querySelector(".breadcrumb");
     this._headerSearch ||= document.querySelector(".header-search");
     this._headerActions ||= document.querySelector(".header-actions");
+    this._headerFeedback ||= document.querySelector(".feedback-trigger");
     for (const [control, desktopHost, webHost] of [
       [this._headerSidebarToggle, ".window-titlebar-leading", ".header-context"],
       [this._headerBreadcrumb, ".window-titlebar-leading", ".header-context"],
       [this._headerSearch, ".window-titlebar-center", ".header-center"],
       [this._headerActions, ".window-titlebar-actions", ".main-header"],
+      [this._headerFeedback, ".connection-indicators", ".header-actions"],
     ]) {
       const host = document.querySelector(desktop ? desktopHost : webHost);
       if (control && host && control.parentElement !== host) host.append(control);

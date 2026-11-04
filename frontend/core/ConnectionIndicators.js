@@ -68,7 +68,7 @@ export class ConnectionIndicators {
         void this.runAction(action.dataset.connectionAction, action.dataset.connectionName);
         return;
       }
-      const trigger = event.target.closest("button.connection-indicator");
+      const trigger = event.target.closest("button[data-connection]");
       if (trigger) this.toggleMenu(trigger.dataset.connection);
     };
     container?.addEventListener("click", this.onContainerClick);

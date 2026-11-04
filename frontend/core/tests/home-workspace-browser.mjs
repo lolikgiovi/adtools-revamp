@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || "playwright");
 const base = process.env.HOME_TEST_URL || "http://127.0.0.1:1247";
-const output = resolve("docs/verification/home-workspace");
+const output = resolve(process.env.HOME_TEST_OUTPUT || "docs/verification/home-workspace");
 const release = JSON.parse(await readFile("frontend/config/release-content.json", "utf8"));
 const overview = {
   ok: true,
@@ -68,20 +68,12 @@ try {
     );
     let offline = false;
     let activeOverview = overview;
-    let feedbackFails = true;
     await context.route("**/*", (route) => {
       if (route.request().url().includes("/analytics/public-overview")) {
         return route.fulfill({
           status: offline ? 503 : 200,
           contentType: "application/json",
           body: JSON.stringify(offline ? { error: "Offline" } : activeOverview),
-        });
-      }
-      if (route.request().url().includes("/feedback/public-improvement")) {
-        return route.fulfill({
-          status: feedbackFails ? 503 : 200,
-          contentType: "application/json",
-          body: JSON.stringify(feedbackFails ? { error: "Please retry feedback." } : { ok: true }),
         });
       }
       return new URL(route.request().url()).origin === base ? route.continue() : route.abort();
@@ -95,7 +87,7 @@ try {
     assert.match(await page.locator(".usage-scope-card-global").innerText(), /53 people/);
     assert.match(await page.locator(".usage-scope-card-global").innerText(), /18 tools used/);
     assert.equal(await page.locator(".home-container details").count(), 0);
-    assert.equal(await page.locator("textarea[name='message']").isVisible(), true);
+    assert.equal(await page.locator(".home-container textarea[name='message']").count(), 0);
     const recommendedIds = () =>
       page.locator(".home-start [data-home-tool]").evaluateAll((nodes) => nodes.map((node) => node.dataset.homeTool));
     assert.equal((await recommendedIds()).length, 3);
@@ -106,15 +98,14 @@ try {
     assert.equal(await page.locator(".home-start [data-home-tool='master-lockey']").count(), 0, "Desktop tools are excluded on web");
     const recentBounds = await page.locator(".home-recent").boundingBox();
     const tipsBounds = await page.locator(".home-start").boundingBox();
-    const feedbackBounds = await page.locator(".home-feedback").boundingBox();
+    assert.equal(await page.locator(".home-feedback, [data-usage-feedback-form]").count(), 0);
+    assert.equal(await page.getByRole("button", { name: "Feedback", exact: true }).isVisible(), true);
     const detailsBounds = await page.locator(".home-usage-details").boundingBox();
-    assert.ok(recentBounds.y < tipsBounds.y && tipsBounds.y < feedbackBounds.y && feedbackBounds.y < detailsBounds.y);
+    assert.ok(recentBounds.y < tipsBounds.y && tipsBounds.y < detailsBounds.y);
     if (width >= 900) {
       const main = await page.locator(".main-content").boundingBox();
       const home = await page.locator(".home-container").boundingBox();
       assert.ok(home.width >= main.width - 50, "Home uses the available workspace width");
-      assert.ok(feedbackBounds.y - tipsBounds.y - tipsBounds.height >= 28, "Sections have room to breathe");
-      assert.ok(feedbackBounds.height < 125, "Feedback is a compact, visible form");
     }
 
     assert.equal(await page.locator(".home-pinned [data-home-tool='json-tools']").count(), 1);
@@ -126,15 +117,6 @@ try {
     await page.keyboard.press("Escape");
     assert.equal(await page.locator("[data-home-search]").evaluate((node) => node === document.activeElement), true);
     assert.match(await page.locator(".home-usage-details .usage-scope-card-user").innerText(), /3,593/);
-    await page.locator("textarea[name='message']").fill("Keep my feedback while analytics refresh.");
-    await page.evaluate(() => window.app.eventBus.emit("usage:updated"));
-    assert.equal(await page.locator("textarea[name='message']").inputValue(), "Keep my feedback while analytics refresh.");
-    await page.locator(".usage-feedback-form button[type='submit']").click();
-    await page.getByText("Please retry feedback.", { exact: true }).waitFor();
-    assert.equal(await page.locator("textarea[name='message']").inputValue(), "Keep my feedback while analytics refresh.");
-    feedbackFails = false;
-    await page.locator(".usage-feedback-form button[type='submit']").click();
-    await page.getByText("Feedback sent.", { exact: true }).waitFor();
     if (width >= 900) {
       await page.locator(".sidebar-menu-item[data-tool='base64-tools']").hover();
       await page.locator(".sidebar-menu-item[data-tool='base64-tools'] .sidebar-pin-action").click();
@@ -162,7 +144,7 @@ try {
       await page.locator(".home-greeting").scrollIntoViewIfNeeded();
     }
     checks.push(
-      `${width}px: single adoption breakdown, pins, recent navigation and reload, visible usage details, compact feedback persistence, no overflow`,
+      `${width}px: single adoption breakdown, pins, recent navigation and reload, visible usage details, feedback available only in header, no overflow`,
     );
     if (width >= 620) {
       await page.evaluate(() => {
