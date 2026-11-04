@@ -98,7 +98,7 @@ function seed(db) {
       ["c@example.test", "excluded"],
     ]) {
       rows.push(
-        `('${email}-${day}','${email}','${device}','json-tools','prettify','{}','client',datetime('now','+7 hours','start of day','-${day} days','+9 hours'))`,
+        `('${email}-${day}','${email}','${device}','json-tools','prettify','{}','client',MIN(datetime('now','+7 hours','start of day','-${day} days','+9 hours'),datetime('now','+7 hours')))`,
       );
     }
   }
