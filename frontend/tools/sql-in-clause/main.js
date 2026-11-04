@@ -38,10 +38,6 @@ class SQLInClauseTool extends BaseTool {
     await this.initializeMonacoEditor();
     this.bindToolEvents();
     this.updateOutput();
-    // Track page mount as a feature
-    try {
-      UsageTracker.trackFeature("sql-in-clause", "mount", "", 5000);
-    } catch (_) {}
   }
 
   onUnmount() {

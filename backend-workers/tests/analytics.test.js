@@ -641,7 +641,7 @@ describe("Analytics endpoints", () => {
     expect(whoQuery.sql).not.toContain("dev@localhost");
   });
 
-  it("uses lifetime usage for cumulative tools and usage logs for adoption", async () => {
+  it("uses lifetime usage for cumulative tools and the tool use ledger for adoption", async () => {
     mockDashboardTables(env, ["tool_usage", "lifetime_usage_baseline", "usage_log", "device_usage", "error_events"]);
 
     const login = await worker.fetch(
@@ -681,7 +681,7 @@ describe("Analytics endpoints", () => {
       (item) => item.sql.includes("WITH lifetime_usage AS") && item.sql.includes("SELECT tool_id, action, total_count"),
     );
     const toolAdoptionQuery = env.DB.executed.find(
-      (item) => item.sql.includes("WITH normalized_usage AS") && item.sql.includes("top_action_count"),
+      (item) => item.sql.includes("WITH successful_use AS") && item.sql.includes("top_action_count"),
     );
 
     expect(toolsResponse.status).toBe(200);
@@ -692,7 +692,11 @@ describe("Analytics endpoints", () => {
     expect(toolsQuery.sql).toContain("u.source = 'client'");
     expect(toolsQuery.sql).not.toContain("dev@localhost");
     expect(toolsQuery.sql).not.toContain("fashalli.bilhaq@bankmandiri.co.id");
-    expect(toolAdoptionQuery.sql).toContain("NOT EXISTS");
+    // Opens and mount pings in usage_log are not uses; adoption counts the ledger and reports opens separately.
+    expect(toolAdoptionQuery.sql).toContain("FROM tool_usage u");
+    expect(toolAdoptionQuery.sql).toContain("successful_uses");
+    expect(toolAdoptionQuery.sql).toMatch(/FROM usage_log[\s\S]*action = 'open'/);
+    expect(toolAdoptionQuery.sql).not.toContain("NOT EXISTS");
     expect(toolsQuery.sql).not.toContain("FROM device_usage");
   });
 

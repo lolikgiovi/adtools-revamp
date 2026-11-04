@@ -50,7 +50,7 @@ export class CharCounter extends BaseTool {
 
   bindEvents() {
     this.input?.addEventListener("input", () => {
-      this.updateCounts();
+      this.updateCounts({ byUser: true });
       this.schedulePersist();
     });
 
@@ -61,7 +61,8 @@ export class CharCounter extends BaseTool {
     this.container.querySelector("#charCounterRowMode")?.addEventListener("click", () => this.setMode("rows"));
   }
 
-  updateCounts() {
+  // Restored drafts and clears refresh the numbers too; only text the user brings is a Tool Use.
+  updateCounts({ byUser = false } = {}) {
     const text = this.input?.value || "";
     const counts = getTextCounts(text);
     const formatted = Object.fromEntries(Object.entries(counts).map(([key, value]) => [key, value.toLocaleString()]));
@@ -80,7 +81,7 @@ export class CharCounter extends BaseTool {
     if (copyButton) copyButton.disabled = !hasText;
     if (clearButton) clearButton.disabled = !hasText;
 
-    if (hasText && !this.hasTrackedCount) {
+    if (byUser && hasText && !this.hasTrackedCount) {
       this.hasTrackedCount = true;
       const meta = cleanAnalyticsMeta({ characters: counts.characters, words: counts.words });
       try {
@@ -207,7 +208,7 @@ export class CharCounter extends BaseTool {
       }
 
       this.input.value = text;
-      this.updateCounts();
+      this.updateCounts({ byUser: true });
       this.persistDraft();
       this.input.focus();
       this.showSuccess("Pasted from clipboard");

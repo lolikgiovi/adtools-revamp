@@ -34,6 +34,21 @@ export class JenkinsRunner extends BaseTool {
     this._activeRunAnalytics = null;
   }
 
+  // A split Execute All queues one Jenkins build per chunk, but the user started one run: count it once.
+  beginSplitRunUse() {
+    this._splitRunUse = { counted: false };
+  }
+
+  beginSingleRunUse() {
+    this._splitRunUse = null;
+  }
+
+  recordRunUse(meta) {
+    if (this._splitRunUse?.counted) return;
+    if (this._splitRunUse) this._splitRunUse.counted = true;
+    UsageTracker.trackToolUse("run-query", "run", meta);
+  }
+
   /**
    * Centralized cleanup for split execution resources.
    * Called when split execution ends (success, error, cancel, timeout).
@@ -44,6 +59,7 @@ export class JenkinsRunner extends BaseTool {
    *                                          Default false to preserve completed state visibility.
    */
   _cleanupSplitResources({ hideIndicator = false } = {}) {
+    this._splitRunUse = null;
     // Clear log listeners
     try {
       for (const un of this._logUnsubscribes) {
@@ -546,7 +562,7 @@ export class JenkinsRunner extends BaseTool {
           try {
             const successMeta = this.getActiveRunAnalytics({ build_number: this.state.buildNumber || payload.build_number || null });
             UsageTracker.trackEvent("run-query", "run_success", successMeta);
-            UsageTracker.trackToolUse("run-query", "run", successMeta);
+            this.recordRunUse(successMeta);
           } catch (_) {}
         }),
       );
@@ -1700,7 +1716,7 @@ export class JenkinsRunner extends BaseTool {
           saveLastState({ job: jobInput.value.trim(), env: envSelect.value, sql: this.editor ? this.editor.getValue() : "" });
           toggleSubmitEnabled();
           try {
-            UsageTracker.trackFeature("run-query", "template_run_click", {
+            UsageTracker.trackEvent("run-query", "template_run_click", {
               name: tpl.name,
               job: tpl.job,
               env: tpl.env,
@@ -2401,7 +2417,7 @@ export class JenkinsRunner extends BaseTool {
       // Reset source after tracking (next run will be manual unless set again)
       this._querySource = null;
       try {
-        UsageTracker.trackFeature("run-query", "run_click", { job, env, sql_len: sql.length, source });
+        UsageTracker.trackEvent("run-query", "run_click", { job, env, sql_len: sql.length, source });
       } catch (_) {}
 
       // Require statements to end with semicolon; show the line if missing
@@ -2488,6 +2504,7 @@ export class JenkinsRunner extends BaseTool {
                 try {
                   splitExecuteAllBtn.disabled = true;
                   this.state.split.started = true;
+                  this.beginSplitRunUse();
                   // Register beforeunload handler to warn user and cleanup on app close
                   if (!this._beforeUnloadHandler) {
                     this._beforeUnloadHandler = (e) => {
@@ -2661,6 +2678,7 @@ export class JenkinsRunner extends BaseTool {
         this.showError("Select Jenkins URL, enter Job, and choose ENV");
         return;
       }
+      this.beginSingleRunUse();
       if (!allowedJobs.has(job)) {
         this.showError(`Invalid job name. Allowed: ${[...allowedJobs].join(", ")}.`);
         return;
@@ -2776,6 +2794,7 @@ export class JenkinsRunner extends BaseTool {
                   try {
                     splitExecuteAllBtn.disabled = true;
                     this.state.split.started = true;
+                    this.beginSplitRunUse();
                     // Initialize logs for split execution
                     logsEl.textContent = "";
                     const miniL2 = document.getElementById("jr-split-mini-log");

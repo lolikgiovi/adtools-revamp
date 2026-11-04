@@ -281,9 +281,6 @@ class HTMLTemplateTool extends withTemplateSqlImport(BaseTool) {
     this.setupPreviewViewport();
     this.initializeResizer();
     this.renderPreview(this.editor.getValue());
-    try {
-      UsageTracker.trackFeature("html-template", "mount", "", 5000);
-    } catch (_) {}
   }
 
   onUnmount() {

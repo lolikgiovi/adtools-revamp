@@ -85,9 +85,6 @@ class MasterLockey extends BaseTool {
     this.setupEventListeners();
     this.setupTabListeners();
 
-    // Track feature usage
-    UsageTracker.trackFeature("master-lockey", "mount");
-
     // Try to load cached data for the first selected domain
     this.tryLoadCache();
   }

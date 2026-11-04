@@ -1,7 +1,7 @@
 {
   "plantuml": {
-    "actions": ["render", "export_svg", "export_png", "export_workspace", "import"],
-    "boundary": "a current local diagram renders successfully, a valid export is initiated, or workspace import completes"
+    "actions": ["view", "edit", "export_svg", "export_png", "export_workspace", "import"],
+    "boundary": "a diagram first renders that day (view) or first renders after a change that day (edit), a valid export is initiated, or workspace import completes"
   },
   "uuid-generator": { "actions": ["single", "multiple"], "boundary": "clipboard write succeeds" },
   "json-tools": {

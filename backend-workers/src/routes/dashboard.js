@@ -1658,7 +1658,7 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
     }
 
     if (tab.id === "tool-adoption") {
-      return executeToolAdoptionQuery(env, "tab:tool-adoption:v3", tab.query);
+      return executeToolAdoptionQuery(env, "tab:tool-adoption:v4", tab.query);
     }
 
     return executeQuery(env, `tab:${tab.id}:${tab.query}`, tab.query);
@@ -2269,22 +2269,31 @@ async function executeToolAdoptionQuery(env, cacheKey, fallbackQuery) {
 
     await ensureErrorEventsSchema(env);
     const tables = await getDashboardTables(env);
-    if (!tables.has("usage_log")) {
+    if (!tables.has("tool_usage")) {
       return executeQuery(env, `fallback:${cacheKey}:${fallbackQuery}`, fallbackQuery);
     }
 
-    const query = `WITH normalized_usage AS (
-  ${buildNormalizedUsageLogQuery()}
+    // Uses come from the Tool Use ledger; usage_log only holds opens and mount pings, so it reports opens alone.
+    const opensSql = tables.has("usage_log")
+      ? `SELECT tool_id, COUNT(*) AS opens
+  FROM (${buildDeduplicatedUsageLogQuery()})
+  WHERE action = 'open'
+  GROUP BY tool_id`
+      : "SELECT NULL AS tool_id, 0 AS opens WHERE 0";
+    const query = `WITH successful_use AS (
+  ${buildCanonicalToolUsageQuery()}
 ),
 totals AS (
   SELECT tool_id,
-    COUNT(*) AS total_actions,
-    SUM(CASE WHEN action = 'open' THEN 1 ELSE 0 END) AS opens,
+    COUNT(*) AS successful_uses,
     COUNT(DISTINCT user_email) AS users,
     COUNT(DISTINCT device_id) AS devices,
     MAX(created_time) AS last_used
-  FROM normalized_usage
+  FROM successful_use
   GROUP BY tool_id
+),
+opens AS (
+  ${opensSql}
 ),
 ranked_actions AS (
   SELECT tool_id,
@@ -2295,7 +2304,7 @@ ranked_actions AS (
     SELECT tool_id,
       action,
       COUNT(*) AS action_count
-    FROM normalized_usage
+    FROM successful_use
     GROUP BY tool_id, action
   )
 ),
@@ -2309,8 +2318,8 @@ errors AS (
   GROUP BY COALESCE(tool_id, route, 'unknown')
 )
 SELECT totals.tool_id,
-  totals.total_actions,
-  totals.opens,
+  totals.successful_uses,
+  COALESCE(opens.opens, 0) AS opens,
   totals.users,
   totals.devices,
   ranked_actions.action AS top_action,
@@ -2319,9 +2328,10 @@ SELECT totals.tool_id,
   totals.last_used,
   errors.last_error
 FROM totals
+LEFT JOIN opens ON opens.tool_id = totals.tool_id
 LEFT JOIN ranked_actions ON ranked_actions.tool_id = totals.tool_id AND ranked_actions.rank = 1
 LEFT JOIN errors ON errors.tool_id = totals.tool_id
-ORDER BY totals.total_actions DESC, totals.users DESC
+ORDER BY totals.successful_uses DESC, totals.users DESC
 LIMIT 100`;
     const result = await env.DB.prepare(query).all();
     const body = JSON.stringify({ ok: true, data: result.results || [], mode: "computed-tool-adoption" });

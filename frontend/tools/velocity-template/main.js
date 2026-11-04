@@ -115,7 +115,6 @@ class VelocityTemplateTool extends withTemplateSqlImport(BaseTool) {
     this.initializePaneState();
     this.initializePlatformActions();
     this.updatePreview();
-    UsageTracker.trackFeature("velocity-template", "mount", "", 5000);
   }
 
   onUnmount() {

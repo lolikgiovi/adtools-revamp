@@ -30,7 +30,6 @@ class QRGenerator extends BaseTool {
   }
 
   onMount() {
-    UsageTracker.trackFeature("qr-tools", "mount", "", 5000);
     this.bindEvents();
     this.updatePreview();
   }

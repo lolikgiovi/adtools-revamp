@@ -114,6 +114,7 @@ class JSONTools extends BaseTool {
     this.activeProcessAnalytics = null;
   }
 
+  // The process already counted the Tool Use; copying or exporting its output is a supporting event.
   trackOutputUsed(target, meta = {}) {
     const outputMeta = {
       target,
@@ -127,7 +128,6 @@ class JSONTools extends BaseTool {
       ...meta,
     };
     this.trackAnalytics("output_used", outputMeta);
-    UsageTracker.trackToolUse("json-tools", target, outputMeta);
   }
 
   async onMount() {
