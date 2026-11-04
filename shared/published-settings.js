@@ -23,6 +23,13 @@ export const PUBLISHABLE_SETTINGS = [
   ...collect(config.categories),
   { key: "project.name", storageKey: "project.name", label: "Project", type: "string", default: "" },
   {
+    key: "project.replaceDefault",
+    storageKey: "project.replaceDefault",
+    label: "Replace Default project",
+    type: "boolean",
+    default: false,
+  },
+  {
     key: "config.oracle.environment.catalog",
     storageKey: "config.oracle.environment.catalog",
     label: "Environment Oracle Connections",
@@ -54,11 +61,16 @@ function url(value, label) {
     fail(`${label}: use HTTP or HTTPS without embedded credentials.`);
   }
 }
-function rows(value, fields, required, label) {
+function rows(value, fields, required, label, optional = []) {
   if (!Array.isArray(value) || value.length > 200) fail(`${label}: use a list with at most 200 entries.`);
   const names = new Set();
   for (const row of value) {
-    if (!row || typeof row !== "object" || Array.isArray(row) || Object.keys(row).some((key) => !fields.includes(key))) {
+    if (
+      !row ||
+      typeof row !== "object" ||
+      Array.isArray(row) ||
+      Object.keys(row).some((key) => !fields.includes(key) && !optional.includes(key))
+    ) {
       fail(`${label}: unsupported fields. Credentials cannot be published.`);
     }
     for (const [key, val] of Object.entries(row)) text(val, `${label} ${key}`);
@@ -82,6 +94,7 @@ export function validateSettings(settings) {
       if (!value.trim()) fail("Enter a destination project name.");
       continue;
     }
+    if (key === "project.replaceDefault" && !settings["project.name"]?.trim?.()) fail("Enter a destination project name.");
     if (item.type === "boolean") {
       if (typeof value !== "boolean") fail(`${label}: use true or false.`);
     } else if (item.type === "number") {
@@ -101,7 +114,10 @@ export function validateSettings(settings) {
         url(row.cdnDirectUrl || "", label);
       }
     } else if (item.type === "oracle-connections") {
-      rows(value, ["id", "environmentId", "name", "connect_string"], ["name", "connect_string"], label);
+      // Only the environment catalog may carry shared logins; they are moved to the Keychain on arrival.
+      const logins = key === "config.oracle.environment.catalog" ? ["username", "password"] : [];
+      rows(value, ["id", "environmentId", "name", "connect_string"], ["name", "connect_string"], label, logins);
+      if (value.some((row) => !row.username !== !row.password)) fail(`${label}: enter both username and password, or neither.`);
       if (
         key === "config.oracle.environment.catalog" &&
         (value.some((row) => !row.id?.trim()) || new Set(value.map((row) => row.id)).size !== value.length)

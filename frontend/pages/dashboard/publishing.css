@@ -188,9 +188,12 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
-.publish-project-fields > div:last-child {
+.publish-project-fields > div:last-of-type {
   grid-column: 1 / -1;
   max-width: 520px;
+}
+.publish-project-fields > .publish-choice {
+  grid-column: 1 / -1;
 }
 .publish-departments .publish-choice {
   padding: 6px 12px;

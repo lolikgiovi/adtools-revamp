@@ -270,6 +270,74 @@ try {
     await two.waitForFunction(() => localStorage.getItem("config.redis.port") === "6383");
     assert.equal(await one.evaluate(() => localStorage.getItem("config.redis.port")), "6390");
   });
+  await check("Replace Default project with Livin and save published Oracle logins to the Keychain", async () => {
+    // Recipient already received an earlier Livin publication; record Keychain writes through the Tauri bridge.
+    const before = await two.evaluate(async () => {
+      const { createProject, getLegacyProjectId } = await import("/core/Projects.js");
+      const duplicate = createProject("Livin");
+      localStorage.setItem(`project:${duplicate.id}:config.environments`, JSON.stringify([{ id: "dup", name: "Duplicate" }]));
+      window.__keychain = [];
+      window.__TAURI_INTERNALS__ = {
+        invoke: async (command, args) => {
+          window.__keychain.push({ command, ...args });
+          return null;
+        },
+        transformCallback: () => 0,
+      };
+      return { legacyId: getLegacyProjectId(), duplicateId: duplicate.id };
+    });
+    await one.getByRole("button", { name: "Clear selection" }).click();
+    await one.locator("#publish-title").fill("Livin replace");
+    await one.locator("#publish-project").fill("Livin");
+    await one.locator("#publish-replace").check();
+    const json = async (key, value) => {
+      await one.locator(`.publish-setting-list [data-setting="${key}"]`).check();
+      await one.locator(`[data-setting="${key}"]`).locator("xpath=../..").locator("summary").click();
+      await one.locator(`[data-value-key="${key}"]`).fill(JSON.stringify(value));
+    };
+    await json("config.environments", [{ id: "livin-uat", name: "Livin UAT", criticalConnection: "livin-db" }]);
+    await json("config.oracle.environment.catalog", [
+      {
+        id: "livin-db",
+        environmentId: "livin-uat",
+        name: "Livin DB",
+        connect_string: "livin.uat:1521/LIVIN",
+        username: "livin_app",
+        password: "uat-secret",
+      },
+    ]);
+    await one.getByRole("button", { name: "Preview publication" }).click();
+    await one.locator(".publish-preview").filter({ hasText: "Review Livin replace" }).waitFor();
+    const preview = await one.locator(".publish-preview").innerText();
+    assert.match(preview, /livin_app/);
+    assert.match(preview, /••••••••/);
+    assert.doesNotMatch(preview, /uat-secret/);
+    assert.match(preview, /Replace Default project/);
+    await one.getByRole("button", { name: "Publish to 1 user", exact: true }).click();
+    await one.locator(".publish-message").filter({ hasText: "Published to 1 user" }).waitFor();
+    await two.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await two.waitForFunction(() => window.__keychain.some((call) => call.command === "set_oracle_credentials"));
+    const after = await two.evaluate(async () => {
+      const { listProjects, getActiveProject } = await import("/core/Projects.js");
+      const { readEnvironments } = await import("/core/Environments.js");
+      return {
+        projects: listProjects().map(({ id, name }) => ({ id, name })),
+        active: getActiveProject().id,
+        environments: readEnvironments().map((environment) => environment.name),
+        storage: JSON.stringify({ ...localStorage }),
+        keychain: window.__keychain.filter((call) => call.command === "set_oracle_credentials"),
+      };
+    });
+    assert.deepEqual(after.projects, [{ id: before.legacyId, name: "Livin" }]);
+    assert.equal(after.active, before.legacyId);
+    assert.deepEqual(after.environments, ["Livin UAT"]);
+    assert.equal(after.storage.includes(before.duplicateId), false);
+    assert.equal(after.storage.includes("uat-secret"), false);
+    assert.deepEqual(after.keychain, [
+      { command: "set_oracle_credentials", name: `oracle:${before.legacyId}:livin-db`, username: "livin_app", password: "uat-secret" },
+    ]);
+    await two.evaluate(() => delete window.__TAURI_INTERNALS__);
+  });
   await check("Narrow layout and final scroll position", async () => {
     await one.setViewportSize({ width: 390, height: 844 });
     await one.locator('.sidebar[data-mobile="true"][data-state="closed"]').waitFor({ state: "attached" });

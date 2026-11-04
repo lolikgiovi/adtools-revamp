@@ -12,6 +12,23 @@ structured values; malformed and oversized payloads; ordered overlapping publica
 expired credentials; stale responses after identity changes; offline recovery; storage failure and partial application; revocation before
 delivery; and preserving unrelated settings, theme, update preferences, and local edits.
 
+### Replacing the Default project and publishing Oracle logins
+
+**Replace Default project** (`project.replaceDefault`) makes the named project the recipient's only copy of that project: a recipient
+whose original project is still named "Default project" has it renamed in place (keeping its storage keys and Keychain logins), any
+separate project already carrying the published name is removed, and the renamed project becomes active. Recipients who renamed their
+original project keep it; the publication then targets or creates the named project as usual.
+
+Oracle catalog rows may carry `username` and `password`. They are written to the recipient's Keychain for that connection and are never
+stored in local settings. These logins sit in D1 as published and in the admin publication history; publish them only for shared
+non-production accounts.
+
+Failure cases: replacing with no project name; the published name matching the Default project itself (no removal); a removed duplicate
+project's scoped keys and the registry restored on storage failure; the active project restored on rollback; passwords leaking into
+`config.oracle.environment.catalog` in localStorage; a username without a password or a password without a username; unknown row fields
+still rejected; Keychain unavailable (Web) or a Keychain write failing after settings applied — settings stay applied and the user is told
+to enter logins in Settings; republishing the same publication does not rewrite logins.
+
 ## UI direction
 
 Use the Dashboard surface with the existing buttons, fields, spacing, and theme tokens. The Publish Settings section opens
@@ -177,3 +194,13 @@ PUBLISHING_TEST_URL=http://127.0.0.1:1253 \
 ```
 
 The existing browser-to-Worker command above remains the delivery/access-isolation check and manages its own local servers.
+
+## Replace Default project and Oracle logins verification — 2026-11-04
+
+- Focused tests: `frontend/core/tests/published-settings-replace.test.js` (rename in place, renamed original kept, full rollback,
+  login validation, Keychain write once, Keychain failure). Related scope: 50 files, 279 tests passed.
+- Browser-to-Worker verification: all 12 checks passed, including a recipient with a duplicate "Livin" project ending with one active
+  Livin project (the original Default project ID), no password in localStorage, and `set_oracle_credentials` called once for
+  `oracle:<project>:<connection>`. Evidence: `.wrangler/settings-publishing-verification/2026-11-04T03-06-43-394Z/`.
+- The Worker shares the validator, so it must be redeployed before logins or the replace flag can be published. Desktop recipients need a
+  build containing this client code. No deployment was performed.

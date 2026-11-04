@@ -63,6 +63,8 @@ const fieldLabels = {
   name: "Name",
   environmentId: "Environment",
   connect_string: "Connection address",
+  username: "Username",
+  password: "Password",
   brokers: "Brokers",
   criticalConnection: "Critical database",
   complementaryConnection: "Complementary database",
@@ -92,7 +94,8 @@ function renderValue(value, item, settings = {}) {
                 : key.endsWith("Connection")
                   ? connections.find((connection) => connection.id === val)?.name
                   : null;
-            return `<dt>${escape(fieldLabels[key])}</dt><dd>${escape(resolved || val)}</dd>`;
+            const shown = key === "password" ? "••••••••" : resolved || val;
+            return `<dt>${escape(fieldLabels[key])}</dt><dd>${escape(shown)}</dd>`;
           })
           .join("")}</dl></div>`,
     )
@@ -126,6 +129,7 @@ export class SettingsPublisher {
               <input id="publish-project" maxlength="80" value="${escape(this.sourceProject.name)}" required autocomplete="off"></div>
             <div><label for="publish-title">Publication name</label>
               <input id="publish-title" maxlength="120" value="${escape(this.sourceProject.name)} defaults" required autocomplete="off"></div>
+            <label class="publish-choice"><input id="publish-replace" type="checkbox">Replace Default project</label>
           </fieldset>
           <fieldset><legend>Share with</legend>
             <label for="publish-audience">Recipients</label>
@@ -153,7 +157,7 @@ export class SettingsPublisher {
               )
                 .map((item) => this.settingRow(item))
                 .join("")}</section></div>
-            <p class="publish-note">Theme, updates, usernames and credentials stay personal. Quick Query schemas are not included.</p>
+            <p class="publish-note">Theme, updates and app logins stay personal. Quick Query schemas are not included.</p>
           </fieldset>
           <button type="submit" class="btn btn-secondary">Preview publication</button>
         </form>
@@ -389,6 +393,7 @@ export class SettingsPublisher {
       const name = this.root.querySelector("#publish-project").value.trim();
       if (!name) throw new Error("Enter the destination project name.");
       settings["project.name"] = name;
+      if (this.root.querySelector("#publish-replace").checked) settings["project.replaceDefault"] = true;
     }
     const type = this.root.querySelector("#publish-audience").value;
     const values =
@@ -523,6 +528,7 @@ export class SettingsPublisher {
     this.root.querySelector(".publish-legacy").hidden = !Object.keys(publication.settings).some((key) => legacyKeys.has(key));
     this.root.querySelector("#publish-title").value = publication.title;
     this.root.querySelector("#publish-project").value = publication.settings["project.name"] || getActiveProject().name;
+    this.root.querySelector("#publish-replace").checked = publication.settings["project.replaceDefault"] === true;
     this.root.querySelector("#publish-audience").value = publication.target.type;
     this.root.querySelector(".publish-emails").hidden = publication.target.type !== "emails";
     this.root.querySelector(".publish-departments").hidden = publication.target.type !== "departments";
