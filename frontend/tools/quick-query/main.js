@@ -7,6 +7,7 @@ import { initialSchemaTableSpecification, initialDataTableSpecification } from "
 import { AttachmentProcessorService } from "./services/AttachmentProcessorService.js";
 import { ExcelImportWorkerService } from "./services/ExcelImportWorkerService.js";
 import { OracleDataImportService, ORACLE_IMPORT_MAX_ROWS } from "./services/OracleDataImportService.js";
+import { fingerprintQueryInputs, needsRegeneration } from "./services/GenerateAndRunService.js";
 import { describeOracleImportError } from "./services/OracleImportErrorService.js";
 import { hasMalformedQuotedField, recoverMalformedDatabaseClipboard } from "./services/DatabaseClipboardService.js";
 import { MAIN_TEMPLATE, FILE_BUTTON_TEMPLATE } from "./template.js";
@@ -18,7 +19,8 @@ import "handsontable/styles/handsontable.css";
 import "handsontable/styles/ht-theme-main.css";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
-import { getQuickQueryTableInteractionKey } from "../../core/RecentInteractionStore.js";
+import { getQuickQueryTableInteractionKey, RecentInteractionStore } from "../../core/RecentInteractionStore.js";
+import { rankTableResults } from "./services/TableSearchRanking.js";
 import { isTauri } from "../../core/Runtime.js";
 import { confirmAction } from "../../components/ConfirmationDialog.js";
 import { openOtpOverlay } from "../../components/OtpOverlay.js";
@@ -2968,6 +2970,7 @@ export class QuickQueryUI {
       this.isGenerating = false;
 
       this.editor.setValue(result.sql);
+      this._generatedSql = { sql: result.sql, fingerprint: this.currentQueryFingerprint() };
       this.clearError();
 
       // Show duplicate warning if any
@@ -3442,9 +3445,40 @@ export class QuickQueryUI {
     button.setAttribute("aria-disabled", String(!desktop));
   }
 
+  /** Digest of everything that shapes the generated SQL, for Generate & Run freshness checks. */
+  currentQueryFingerprint() {
+    const excel = this.excelImportService?.hasData?.()
+      ? [this.excelImportService.getHeader(), this.excelImportService.getRowCount()]
+      : null;
+    return fingerprintQueryInputs({
+      tableName: this.elements.tableNameInput?.value?.trim(),
+      queryType: this.getQueryTypeValue(),
+      schemaData: this.schemaTable?.getData?.() || [],
+      inputData: excel ? null : this.dataTable?.getData?.() || [],
+      extra: JSON.stringify([
+        excel,
+        this.elements.defaultSysdateToggle?.checked,
+        this.elements.auditUserMode?.value,
+        this.customAuditUserValue,
+        (this.processedFiles || []).map((file) => [file.name, file.size]),
+      ]),
+    });
+  }
+
   async handleExecuteInJenkinsRunner() {
     if (!isToolVisibleToUser("run-query")) return;
     try {
+      await this.flushPendingDataAutosave();
+      const freshness = () => ({
+        sql: this.editor?.getValue(),
+        fingerprint: this.currentQueryFingerprint(),
+        generated: this._generatedSql,
+      });
+      if (needsRegeneration(freshness())) {
+        await this.handleGenerateQuery();
+        // Validation, a cancelled dialog or a failed generation already explained itself.
+        if (needsRegeneration(freshness())) return;
+      }
       const sql = (this.editor?.getValue() || "").trim();
       if (!sql) {
         this.showError("No SQL to execute. Please generate or write a query first.");
@@ -4312,6 +4346,7 @@ export class QuickQueryUI {
       return;
     }
     const importStartedAt = Date.now();
+    let failed = false;
     this._oracleDataBusy = true;
     this.elements.fetchOracleDataButton.disabled = true;
     this.elements.fetchOracleDataButton.textContent = "Fetching…";
@@ -4324,7 +4359,7 @@ export class QuickQueryUI {
           .filter((row) => String(row[1]).trim().toUpperCase() === "BLOB")
           .map((row) => row[0]),
       );
-      const rows = await OracleDataImportService.fetch(connection, query, blobFields);
+      const { rows, missingFields, extraColumns } = await OracleDataImportService.fetch(connection, query, blobFields);
       if (this.elements.tableNameInput.value.trim().toUpperCase() !== selectedTable) {
         throw new Error("The selected table changed during the fetch. Run the query again.");
       }
@@ -4337,11 +4372,20 @@ export class QuickQueryUI {
         outcome: "success",
         ...getOracleImportMeta(query),
         row_count: rows.length,
+        missing_field_count: missingFields.length,
+        extra_column_count: extraColumns.length,
         duration_ms: Date.now() - importStartedAt,
       });
       this.scheduleActiveTabDraftSave();
-      this.eventBus?.emit?.("notification:success", {
-        message: `Loaded ${rows.length.toLocaleString()} Oracle rows into the data sheet${rows.length === ORACLE_IMPORT_MAX_ROWS ? " (1,000 row limit reached)" : ""}.`,
+      const limitNote = rows.length === ORACLE_IMPORT_MAX_ROWS ? " (1,000 row limit reached)" : "";
+      const driftNote = [
+        missingFields.length ? `Not in Oracle, left empty: ${missingFields.join(", ")}.` : "",
+        extraColumns.length ? `Not in schema, skipped: ${extraColumns.join(", ")}.` : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      this.eventBus?.emit?.(driftNote ? "notification:info" : "notification:success", {
+        message: `Loaded ${rows.length.toLocaleString()} Oracle rows into the data sheet${limitNote}.${driftNote ? ` ${driftNote}` : ""}`,
       });
       this._oracleDataBusy = false;
       this.closeOracleDataImport();
@@ -4349,14 +4393,16 @@ export class QuickQueryUI {
       this.trackQuickQueryEvent("oracle_import_result", {
         outcome: "failed",
         reason: "fetch_or_apply",
+        error_code: OracleDataImportService.classifyError(error),
         ...getOracleImportMeta(query),
         duration_ms: Date.now() - importStartedAt,
       });
       this.showOracleDataError(error);
+      failed = true;
     } finally {
       this._oracleDataBusy = false;
       this.elements.fetchOracleDataButton.disabled = false;
-      this.elements.fetchOracleDataButton.textContent = "Fetch rows";
+      this.elements.fetchOracleDataButton.textContent = failed ? "Retry" : "Fetch rows";
     }
   }
 
@@ -5407,8 +5453,7 @@ export class QuickQueryUI {
     this.elements.tableNameInput.style.borderColor = "";
 
     if (!input) {
-      const results = await this.storageService.searchSavedSchemas("");
-      this.showSearchDropdown(results.slice(0, 7));
+      await this.showRecentTables();
       return;
     }
 
@@ -5421,7 +5466,7 @@ export class QuickQueryUI {
         return;
       }
       const results = await this.storageService.searchSavedSchemas(tableTerm);
-      this.showSearchDropdown(results);
+      this.showSearchDropdown(this.rankByRecentUse(results));
       return;
     }
 
@@ -5430,7 +5475,7 @@ export class QuickQueryUI {
         return;
       }
       const results = await this.storageService.searchSavedSchemas(input);
-      this.showSearchDropdown(results);
+      this.showSearchDropdown(this.rankByRecentUse(results));
       return;
     }
 
@@ -5446,13 +5491,22 @@ export class QuickQueryUI {
     }
 
     const results = await this.storageService.searchSavedSchemas(input);
-    this.showSearchDropdown(results);
+    this.showSearchDropdown(this.rankByRecentUse(results));
+  }
+
+  rankByRecentUse(results) {
+    return rankTableResults(results, new RecentInteractionStore().getRecencyMap());
+  }
+
+  /** Empty table field: the tables used most recently, as one flat list. */
+  async showRecentTables() {
+    const results = await this.storageService.searchSavedSchemas("");
+    this.showSearchDropdown(this.rankByRecentUse(results).slice(0, 7), { heading: "Recent" });
   }
 
   async handleSearchKeyDown(event) {
     if (this.elements.dropdownContainer.style.display === "none" && event.key === "ArrowDown") {
-      const results = await this.storageService.searchSavedSchemas("");
-      this.showSearchDropdown(results.slice(0, 7));
+      await this.showRecentTables();
       this.searchState.selectedIndex = -1;
       return;
     }
@@ -5462,7 +5516,7 @@ export class QuickQueryUI {
     }
   }
 
-  showSearchDropdown(results) {
+  showSearchDropdown(results, { heading = null } = {}) {
     const dropdownContainer = this.elements.dropdownContainer;
     dropdownContainer.innerHTML = "";
     this.searchState.visibleItems = [];
@@ -5473,13 +5527,16 @@ export class QuickQueryUI {
       return;
     }
 
-    const groupedResults = results.reduce((groups, table) => {
-      if (!groups[table.schemaName]) {
-        groups[table.schemaName] = [];
-      }
-      groups[table.schemaName].push(table);
-      return groups;
-    }, {});
+    // A heading shows one flat list with full names; otherwise group by schema, in ranked order.
+    const groupedResults = heading
+      ? { [heading]: results }
+      : results.reduce((groups, table) => {
+          if (!groups[table.schemaName]) {
+            groups[table.schemaName] = [];
+          }
+          groups[table.schemaName].push(table);
+          return groups;
+        }, {});
 
     Object.entries(groupedResults).forEach(([schemaName, tables]) => {
       const schemaGroup = document.createElement("div");
@@ -5493,7 +5550,7 @@ export class QuickQueryUI {
       tables.forEach((table) => {
         const item = document.createElement("div");
         item.className = "search-result-item";
-        item.textContent = table.tableName;
+        item.textContent = heading ? table.fullName : table.tableName;
 
         // Store the full table name for easy access
         item.dataset.fullName = table.fullName;
@@ -5515,6 +5572,7 @@ export class QuickQueryUI {
   async selectSearchResult(fullName) {
     this.elements.dropdownContainer.style.display = "none";
     await this.handleLoadSchema(fullName);
+    this.eventBus?.emit?.("search:interaction", { interactionKey: getQuickQueryTableInteractionKey(fullName) });
 
     // Reset selection
     this.searchState.selectedIndex = -1;

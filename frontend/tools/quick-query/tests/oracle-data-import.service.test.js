@@ -41,11 +41,55 @@ describe("Oracle row import", () => {
   it("fetches through the shared Oracle bridge and checks returned column names", async () => {
     const query = OracleDataImportService.parseQuery("SELECT ID, NAME FROM APP.ITEM", schema);
     OracleConnectionService.queryViaSidecar = vi.fn().mockResolvedValue({ columns: ["ID", "NAME"], rows: [[1, "A"]] });
-    await expect(OracleDataImportService.fetch({ name: "SIT", connect_string: "db/service" }, query)).resolves.toEqual([[1, "A"]]);
+    await expect(OracleDataImportService.fetch({ name: "SIT", connect_string: "db/service" }, query)).resolves.toEqual({
+      rows: [[1, "A"]],
+      missingFields: [],
+      extraColumns: [],
+    });
     expect(OracleConnectionService.queryViaSidecar).toHaveBeenCalledWith(
       "SIT", { name: "SIT", connect_string: "db/service" }, "SELECT ID, NAME FROM APP.ITEM", 1000,
     );
     OracleConnectionService.queryViaSidecar.mockResolvedValue({ columns: ["ID", "ALIAS"], rows: [[1, "A"]] });
-    await expect(OracleDataImportService.fetch({ name: "SIT" }, query)).rejects.toThrow("do not match");
+    await expect(OracleDataImportService.fetch({ name: "SIT" }, query)).rejects.toThrow("Missing: NAME. Unexpected: ALIAS.");
+  });
+
+  // Failure modes for SELECT * against a table whose live columns drifted from the saved schema:
+  // 1. Oracle has extra columns  -> import schema columns, report the extras.
+  // 2. Oracle lacks schema columns -> leave those cells empty, report the missing ones.
+  // 3. No overlap at all          -> fail and name both sides.
+  // 4. Duplicate column names     -> fail.
+  // 5. Row width differs from columns -> fail.
+  it("imports schema columns from SELECT * when the live table has drifted", async () => {
+    const query = OracleDataImportService.parseQuery("SELECT * FROM APP.ITEM", schema);
+    OracleConnectionService.queryViaSidecar = vi.fn().mockResolvedValue({
+      columns: ["NAME", "ID", "CREATED_AT"],
+      rows: [["A", 1, "2026-01-01"]],
+    });
+    await expect(OracleDataImportService.fetch({ name: "SIT" }, query)).resolves.toEqual({
+      rows: [[1, "A", null]],
+      missingFields: ["STATUS"],
+      extraColumns: ["CREATED_AT"],
+    });
+
+    OracleConnectionService.queryViaSidecar.mockResolvedValue({ columns: ["OTHER"], rows: [[1]] });
+    await expect(OracleDataImportService.fetch({ name: "SIT" }, query)).rejects.toThrow("None of the returned columns");
+
+    OracleConnectionService.queryViaSidecar.mockResolvedValue({ columns: ["ID", "ID"], rows: [[1, 1]] });
+    await expect(OracleDataImportService.fetch({ name: "SIT" }, query)).rejects.toThrow("duplicate");
+
+    OracleConnectionService.queryViaSidecar.mockResolvedValue({ columns: ["ID", "NAME", "STATUS"], rows: [[1, "A"]] });
+    await expect(OracleDataImportService.fetch({ name: "SIT" }, query)).rejects.toThrow("unexpected row shape");
+  });
+
+  it("classifies failures so analytics can tell causes apart", () => {
+    expect(OracleDataImportService.classifyError(new Error("ORA-00942: table or view does not exist"))).toBe("ORA-00942");
+    expect(OracleDataImportService.classifyError('{"code":1017,"message":"ORA-01017: invalid"}')).toBe("ORA-01017");
+    expect(OracleDataImportService.classifyError(new Error("DPY-6005: cannot connect"))).toBe("DPY-6005");
+    expect(OracleDataImportService.classifyError(new Error("Oracle returned columns that do not match"))).toBe("column_mismatch");
+    expect(OracleDataImportService.classifyError(new Error("None of the returned columns match"))).toBe("column_mismatch");
+    expect(OracleDataImportService.classifyError(new Error("Oracle returned an unexpected row shape."))).toBe("row_shape");
+    expect(OracleDataImportService.classifyError(new Error("Oracle returned an unsupported BLOB value for X."))).toBe("blob");
+    expect(OracleDataImportService.classifyError(new Error("The selected table changed during the fetch."))).toBe("table_changed");
+    expect(OracleDataImportService.classifyError(new Error("sidecar exited"))).toBe("other");
   });
 });

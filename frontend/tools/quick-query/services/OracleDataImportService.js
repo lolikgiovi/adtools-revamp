@@ -119,30 +119,46 @@ export class OracleDataImportService {
       sql: statement,
       tableName: `${table[1]}.${table[2]}`.toUpperCase(),
       hasJoin,
+      star,
       fields,
       sourceTables: [...new Set(sources.map((source) => source.tableName))],
     };
   }
 
+  /**
+   * Fetch rows in query.fields order. SELECT * tolerates schema drift: schema fields the
+   * live table lacks come back empty and extra live columns are ignored, both reported.
+   * @returns {Promise<{ rows: unknown[][], missingFields: string[], extraColumns: string[] }>}
+   */
   static async fetch(connection, query, blobFields = new Set()) {
     const result = await OracleConnectionService.queryViaSidecar(connection.name, connection, query.sql, ORACLE_IMPORT_MAX_ROWS);
-    if (
-      !Array.isArray(result?.columns) ||
-      !Array.isArray(result?.rows) ||
-      result.columns.length !== query.fields.length ||
-      new Set(result.columns).size !== result.columns.length ||
-      result.columns.some((column) => !query.fields.includes(column))
-    ) {
-      throw new Error("Oracle returned columns that do not match the selected schema fields.");
-    }
-    if (result.rows.some((row) => !Array.isArray(row) || row.length !== query.fields.length)) {
+    if (!Array.isArray(result?.columns) || !Array.isArray(result?.rows)) {
       throw new Error("Oracle returned an unexpected row shape.");
     }
-    const columnIndexes = query.fields.map((field) => result.columns.indexOf(field));
-    return result.rows.map((row) =>
+    const columns = result.columns.map((column) => String(column).toUpperCase());
+    if (new Set(columns).size !== columns.length) {
+      throw new Error("Oracle returned duplicate column names. Alias each column once.");
+    }
+    const missingFields = query.fields.filter((field) => !columns.includes(field));
+    const extraColumns = columns.filter((column) => !query.fields.includes(column));
+    if (missingFields.length === query.fields.length) {
+      throw new Error(`None of the returned columns match the schema. Oracle returned: ${columns.join(", ") || "no columns"}.`);
+    }
+    if (!query.star && (missingFields.length || extraColumns.length)) {
+      throw new Error(
+        `Oracle returned columns that do not match the selected fields. Missing: ${missingFields.join(", ") || "none"}. ` +
+          `Unexpected: ${extraColumns.join(", ") || "none"}.`,
+      );
+    }
+    if (result.rows.some((row) => !Array.isArray(row) || row.length !== columns.length)) {
+      throw new Error("Oracle returned an unexpected row shape.");
+    }
+    const columnIndexes = query.fields.map((field) => columns.indexOf(field));
+    const rows = result.rows.map((row) =>
       columnIndexes.map((index) => {
+        if (index < 0) return null;
         const value = row[index];
-        const field = result.columns[index];
+        const field = columns[index];
         if (!blobFields.has(field) || value == null) return value;
         if (value.__adtools_type !== "oracle_blob" || value.encoding !== "base64" || typeof value.data !== "string") {
           throw new Error(`Oracle returned an unsupported BLOB value for ${field}.`);
@@ -151,5 +167,18 @@ export class OracleDataImportService {
         return `data:application/octet-stream;base64,${value.data}`;
       }),
     );
+    return { rows, missingFields, extraColumns };
+  }
+
+  /** Short, stable failure label for analytics: an Oracle code when present, else a cause. */
+  static classifyError(error) {
+    const text = typeof error === "string" ? error : `${error?.rawMessage || ""} ${error?.message || ""}`;
+    const code = /\b(ORA|DPY|NJS|PLS)-(\d{1,5})\b/i.exec(text);
+    if (code) return code[1].toUpperCase() === "ORA" ? `ORA-${code[2].padStart(5, "0")}` : `${code[1].toUpperCase()}-${code[2]}`;
+    if (/do not match|None of the returned columns|duplicate column/i.test(text)) return "column_mismatch";
+    if (/unexpected row shape/i.test(text)) return "row_shape";
+    if (/BLOB/.test(text)) return "blob";
+    if (/selected table changed/i.test(text)) return "table_changed";
+    return "other";
   }
 }

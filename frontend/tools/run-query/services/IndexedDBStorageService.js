@@ -314,11 +314,14 @@ export class IndexedDBStorageService {
     return await this.setSetting("lastState", merged);
   }
 
-  async getEnv() {
-    return await this.getSetting("env") || "";
+  /** Last environment for a project, falling back to the last one used in any project. */
+  async getEnv(projectId = null) {
+    const scoped = projectId ? await this.getSetting(`env:${projectId}`) : null;
+    return scoped || (await this.getSetting("env")) || "";
   }
 
-  async setEnv(env) {
+  async setEnv(env, projectId = null) {
+    if (projectId) await this.setSetting(`env:${projectId}`, env);
     return await this.setSetting("env", env);
   }
 }

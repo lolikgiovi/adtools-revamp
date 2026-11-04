@@ -148,7 +148,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="m8 5 12 7-12 7V5z" />
                         </svg>
-                        <span>Run Query</span>
+                        <span>Generate &amp; Run</span>
                     </button>
                 </div>
                 <div id="warningMessages"></div>

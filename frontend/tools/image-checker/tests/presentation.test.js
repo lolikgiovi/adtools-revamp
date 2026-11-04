@@ -49,7 +49,7 @@ describe("image checker presentation", () => {
     finishOracle();
     await checking;
     expect(tool.root.querySelector("#runSummary")).toBe(header);
-    expect(header.textContent).toContain("1 image with issues");
+    expect(header.textContent).toContain("1 image with warnings");
     expect(header.querySelector('[role="progressbar"]')).toBeNull();
     tool.unmount();
   });

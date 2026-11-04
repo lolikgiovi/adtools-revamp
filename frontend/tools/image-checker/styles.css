@@ -1093,6 +1093,10 @@
   background: hsl(var(--warning) / 0.08);
 }
 
+.status-cell.missing {
+  background: hsl(var(--muted) / 0.35);
+}
+
 .status-cell.canceled {
   background: hsl(var(--muted) / 0.3);
 }
@@ -1193,6 +1197,22 @@
 
 .status-cell.error .status-dot {
   color: hsl(var(--destructive));
+}
+
+.status-cell.missing .status-dot,
+.status-cell.missing .error-text {
+  color: hsl(var(--muted-foreground));
+}
+
+.batch-results-table .env-count {
+  margin-left: 0.5rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+}
+
+.batch-results-table .env-count.is-complete {
+  color: var(--checker-success);
 }
 
 .status-cell.timeout .status-dot {

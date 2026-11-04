@@ -1945,14 +1945,16 @@ class App {
       this.homeWorkspace.render();
       return;
     }
-    const usageData = this.usageOverviewState?.source === "api" ? this.usageOverviewState.data?.user : null;
+    const apiData = this.usageOverviewState?.source === "api" ? this.usageOverviewState.data : null;
     this.homeWorkspace = new HomeWorkspace(container, {
-      usageScope: this.#normalizeUsageScope(usageData || this.#getLocalUsageScope()),
+      usageScope: this.#normalizeUsageScope(apiData?.user || this.#getLocalUsageScope()),
+      peerScope: apiData?.global ? this.#normalizeUsageScope(apiData.global) : null,
       tools: this.getVisibleToolDefinitions(),
       pinnedIds: this.sidebar?.getPinnedToolIds() || new Set(),
       recentStore: this.globalSearch?.recentInteractionStore,
       getIcon: this.getToolIcon.bind(this),
       onOpen: (id) => this.router.navigate(id, {}, { source: "home" }),
+      onOpenTable: (tableName) => this.router.navigate("quick-query", { tableName }, { source: "home" }),
       onSearch: () => this.globalSearch?.open("home"),
     });
   }
@@ -1965,7 +1967,7 @@ class App {
     const userScope = this.#normalizeUsageScope(apiData?.user || this.#getLocalUsageScope());
     const globalScope = apiData?.global ? this.#normalizeUsageScope(apiData.global) : null;
     if (this.homeWorkspace?.container === document.getElementById("home-workspace")) {
-      this.homeWorkspace.updateUsage(userScope);
+      this.homeWorkspace.updateUsage(userScope, globalScope);
     }
     const teamSubtitle = globalScope
       ? `All time · ${globalScope.activeUsers.toLocaleString()} people · ${globalScope.toolsUsed.toLocaleString()} tools used`

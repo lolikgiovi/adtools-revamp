@@ -57,7 +57,7 @@ describe("Quick Query import analytics", () => {
   });
   it("records Oracle row counts and table identifiers after loading the data sheet", async () => {
     const spy = vi.spyOn(UsageTracker, "trackEvent").mockImplementation(() => {});
-    vi.spyOn(OracleDataImportService, "fetch").mockResolvedValue([[1], [2]]);
+    vi.spyOn(OracleDataImportService, "fetch").mockResolvedValue({ rows: [[1], [2]], missingFields: [], extraColumns: [] });
     const ui = Object.assign(Object.create(QuickQueryUI.prototype), {
       scheduleInputValidation: vi.fn(),
       elements: {

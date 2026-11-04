@@ -89,7 +89,7 @@ export const capabilities = [
     start: "#confirmSplit",
     events: { split_complete: "succeeded" },
   }),
-  define("quick-query", "run_query_handoff", "Run generated SQL in Jenkins", {
+  define("quick-query", "run_query_handoff", "Generate and run SQL in Jenkins", {
     start: "#executeInJenkinsRunner",
     desktop: true,
     events: { execute_in_run_query: "succeeded" },

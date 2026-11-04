@@ -11,6 +11,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { ensureMonacoWorkers, setupMonacoOracle, createOracleEditor } from "../../core/MonacoOracle.js";
 import { ensureUnifiedKeychain } from "../../core/KeychainMigration.js";
 import { IndexedDBStorageService } from "./services/IndexedDBStorageService.js";
+import { getActiveProject } from "../../core/Projects.js";
+
+function activeProjectId() {
+  try {
+    return getActiveProject().id;
+  } catch {
+    return null;
+  }
+}
 
 export class JenkinsRunner extends BaseTool {
   constructor(eventBus) {
@@ -597,7 +606,7 @@ export class JenkinsRunner extends BaseTool {
     }
 
     // Load saved env and last UI state from IndexedDB
-    const savedEnv = await this.storageService.getEnv();
+    const savedEnv = await this.storageService.getEnv(activeProjectId());
     let lastState = await this.storageService.getLastState();
     if (lastState.job && allowedJobs.has(lastState.job)) {
       jobInput.value = lastState.job;
@@ -1466,7 +1475,7 @@ export class JenkinsRunner extends BaseTool {
     });
 
     envSelect.addEventListener("change", () => {
-      this.storageService.setEnv(envSelect.value || "");
+      this.storageService.setEnv(envSelect.value || "", activeProjectId());
       saveLastState({ env: envSelect.value });
       toggleSubmitEnabled();
     });

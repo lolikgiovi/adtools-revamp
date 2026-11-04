@@ -18,7 +18,7 @@
   gap: 1rem;
 }
 
-.home-container :is(.home-workspace-heading, .home-start, .home-pinned, .home-usage-details) > h2 {
+.home-container :is(.home-workspace-heading, .home-start, .home-pinned, .home-recent-tables, .home-usage-details) > h2 {
   margin: 0;
   font-size: 0.9375rem;
   font-weight: 600;
@@ -109,6 +109,27 @@
 
 .home-pinned .home-tool-list {
   margin-top: 0;
+}
+
+.home-recent-tables {
+  margin-top: 1.75rem;
+}
+
+.home-recent-tables .home-tool {
+  background: hsl(var(--muted) / 0.4);
+}
+
+.home-table-copy {
+  display: grid;
+  min-width: 0;
+}
+
+.home-table-copy small {
+  overflow: hidden;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .home-start {

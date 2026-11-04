@@ -39,14 +39,20 @@ const TOOL_ACTIONS = {
   "check-image": "Check image IDs across environments",
 };
 
+const TABLE_KEY_PREFIX = "quick-query-table:";
+const RECENT_TABLE_LIMIT = 4;
+
 /** Home destinations share the sidebar's visibility rules and the command palette's recency store. */
 export class HomeWorkspace {
-  constructor(container, { tools, pinnedIds, recentStore, getIcon, onOpen, onSearch, usageScope }) {
+  constructor(container, { tools, pinnedIds, recentStore, getIcon, onOpen, onOpenTable, onSearch, usageScope, peerScope }) {
     this.container = container;
-    this.options = { tools, pinnedIds, recentStore, getIcon, onOpen, onSearch, usageScope };
+    this.options = { tools, pinnedIds, recentStore, getIcon, onOpen, onOpenTable, onSearch, usageScope, peerScope };
     container.addEventListener("click", (event) => {
       const target = event.target.closest("[data-home-tool]");
-      if (target && this.options.tools.some((tool) => tool.id === target.dataset.homeTool)) {
+      const table = event.target.closest("[data-home-table]");
+      if (table) {
+        this.options.onOpenTable?.(table.dataset.homeTable);
+      } else if (target && this.options.tools.some((tool) => tool.id === target.dataset.homeTool)) {
         this.options.onOpen(target.dataset.homeTool);
       } else if (event.target.closest("[data-home-search]")) {
         this.options.onSearch();
@@ -87,6 +93,7 @@ export class HomeWorkspace {
           ${recent.length ? recent.map((tool) => row(tool, true)).join("") : '<p class="home-empty">No recent tools yet.</p>'}
         </div>
       </section>
+      ${this.renderRecentTables(recentStore, byId, getIcon)}
       ${
         pinned.length
           ? `<section class="home-pinned" aria-labelledby="home-pinned-title">
@@ -102,19 +109,54 @@ export class HomeWorkspace {
     this.renderRecommendations();
   }
 
-  updateUsage(usageScope) {
+  /** Quick Query tables the user opened or generated SQL for most recently. */
+  renderRecentTables(recentStore, byId, getIcon) {
+    const quickQuery = byId.get("quick-query");
+    if (!quickQuery || !this.options.onOpenTable) return "";
+    const tables = (recentStore?.getEntries?.() || [])
+      .filter((entry) => entry.key.startsWith(TABLE_KEY_PREFIX))
+      .slice(0, RECENT_TABLE_LIMIT)
+      .map((entry) => entry.key.slice(TABLE_KEY_PREFIX.length));
+    if (!tables.length) return "";
+    const icon = getIcon(quickQuery.icon);
+    return `<section class="home-recent-tables" aria-labelledby="home-recent-tables-title">
+        <h2 id="home-recent-tables-title">Recent tables</h2>
+        <div class="home-tool-list">${tables
+          .map((table) => {
+            const [schema, name = table] = table.split(".");
+            return `<button class="home-tool home-table" type="button" data-home-table="${escapeHtml(table)}" title="${escapeHtml(table)}">
+            <span class="home-tool-icon" aria-hidden="true">${icon}</span>
+            <span class="home-table-copy"><span class="home-tool-name">${escapeHtml(name)}</span><small>${escapeHtml(schema)}</small></span>
+          </button>`;
+          })
+          .join("")}</div>
+      </section>`;
+  }
+
+  updateUsage(usageScope, peerScope = this.options.peerScope) {
     this.options.usageScope = usageScope;
+    this.options.peerScope = peerScope;
     this.renderRecommendations();
   }
 
   renderRecommendations() {
     const list = this.container.querySelector(".home-tip-list");
     if (!list) return;
-    const { tools, usageScope, recentStore, getIcon } = this.options;
+    const { tools, usageScope, peerScope, recentStore, getIcon } = this.options;
     const counts = new Map((usageScope?.tools || []).map((tool) => [tool.id, tool.count]));
+    const peerCounts = new Map((peerScope?.tools || []).map((tool) => [tool.id, tool.count]));
     const recency = recentStore?.getRecencyMap() || new Map();
     const lastUsed = (tool) => recency.get(getSearchInteractionKey({ type: "tool", route: tool.id }))?.lastInteractedAt || 0;
-    const tips = [...tools].sort((a, b) => (counts.get(a.id) || 0) - (counts.get(b.id) || 0) || lastUsed(a) - lastUsed(b)).slice(0, 3);
+    // Suggest what the team relies on that this user has not tried; without team data, the user's least-used tools.
+    const untried = tools.filter((tool) => !counts.get(tool.id));
+    const tips = [...(peerCounts.size && untried.length ? untried : tools)]
+      .sort(
+        (a, b) =>
+          (peerCounts.get(b.id) || 0) - (peerCounts.get(a.id) || 0) ||
+          (counts.get(a.id) || 0) - (counts.get(b.id) || 0) ||
+          lastUsed(a) - lastUsed(b),
+      )
+      .slice(0, 3);
     list.innerHTML = tips
       .map(
         (tool) => `<button class="home-tool home-tip" type="button" data-home-tool="${escapeHtml(tool.id)}">

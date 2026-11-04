@@ -12,6 +12,9 @@ const SETTINGS_FOCUS_STORAGE_KEY = "settings.focus";
 const ORACLE_CONNECTIONS_SETTING_KEY = "config.oracle.connections";
 const WIDE_IMAGE_WARNING_PX = 1440;
 const CDN_SIZE_WARNING_BYTES = 300000;
+const ISSUE_CELL_SELECTOR = ".status-cell.error, .status-cell.timeout, .status-cell.missing, .status-cell.has-warning";
+const escapeHtml = (value) =>
+  String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 
 class CheckImageTool extends BaseTool {
   constructor(eventBus) {
@@ -954,27 +957,18 @@ class CheckImageTool extends BaseTool {
 
       // Track check completion for performance insights
       const durationMs = Date.now() - startTime;
-      const timeoutCount = this.timeoutCells.size;
-      const totalCells = imagePaths.length * baseUrls.length;
-      const successCells = this.root.querySelectorAll(".status-cell.success").length;
-      const failedCells = totalCells - successCells - timeoutCount;
-
-      UsageTracker.trackEvent("check-image", "check_complete", {
+      // "missing" means the image is not deployed to that environment; only errors and timeouts are failed checks.
+      const outcome = {
         image_count: imagePaths.length,
         env_count: baseUrls.length,
-        success_count: successCells,
-        failed_count: failedCells,
-        timeout_count: timeoutCount,
+        success_count: this.root.querySelectorAll(".status-cell.success").length,
+        missing_count: this.root.querySelectorAll(".status-cell.missing").length,
+        failed_count: this.root.querySelectorAll(".status-cell.error").length,
+        timeout_count: this.timeoutCells.size,
         duration_ms: durationMs,
-      });
-      UsageTracker.trackToolUse("check-image", "check", {
-        image_count: imagePaths.length,
-        env_count: baseUrls.length,
-        success_count: successCells,
-        failed_count: failedCells,
-        timeout_count: timeoutCount,
-        duration_ms: durationMs,
-      });
+      };
+      UsageTracker.trackEvent("check-image", "check_complete", outcome);
+      UsageTracker.trackToolUse("check-image", "check", outcome);
     } catch (error) {
       console.error("Error during progressive fetch:", error);
       UsageTracker.trackFailure("check-image", "check", error);
@@ -990,19 +984,29 @@ class CheckImageTool extends BaseTool {
     const found = this.root.querySelectorAll(".status-cell.success").length;
     const timeouts = this.root.querySelectorAll(".status-cell.timeout").length;
     const errors = this.root.querySelectorAll(".status-cell.error").length;
+    const missing = this.root.querySelectorAll(".status-cell.missing").length;
     const warnings = this.root.querySelectorAll(".status-cell.has-warning").length;
-    const issueCount = timeouts + errors + warnings;
+    const failed = timeouts + errors;
     const visibleResultCount = this.root.querySelectorAll(".image-result-row").length;
+    const environments = this.updateEnvironmentHeaders();
+    const missingIn = environments.filter((env) => env.missing > 0).map((env) => env.name);
+    const issueRows = this.countIssueRows();
+    let headline = "All images found";
+    if (canceled) headline = "Check canceled";
+    else if (failed) headline = `${issueRows} image${issueRows === 1 ? "" : "s"} with issues`;
+    else if (missingIn.length) headline = `Missing in ${missingIn.join(", ")}`;
+    else if (warnings) headline = `${issueRows} image${issueRows === 1 ? "" : "s"} with warnings`;
 
     summary.innerHTML = `
       <div class="run-summary-copy">
-        <strong>${canceled ? "Check canceled" : issueCount ? `${this.countIssueRows()} image${this.countIssueRows() === 1 ? "" : "s"} with issues` : "All images found"}</strong>
+        <strong>${escapeHtml(headline)}</strong>
         <span class="run-summary-detail">${imageCount} image${imageCount === 1 ? "" : "s"} checked · Found in ${found} of ${totalCells} CDN checks${duplicateCount ? ` · ${duplicateCount} duplicate${duplicateCount === 1 ? "" : "s"} skipped` : ""}</span>
       </div>
       <div class="run-summary-actions">
         <div class="run-summary-counts">
           <span class="summary-count summary-count-found"><strong>${found}</strong> found</span>
-          <span class="summary-count summary-count-issues"><strong>${timeouts + errors}</strong> failed check${timeouts + errors === 1 ? "" : "s"} · <strong>${warnings}</strong> warning${warnings === 1 ? "" : "s"}</span>
+          <span class="summary-count summary-count-missing"><strong>${missing}</strong> missing</span>
+          <span class="summary-count summary-count-issues"><strong>${failed}</strong> failed · <strong>${warnings}</strong> warning${warnings === 1 ? "" : "s"}</span>
         </div>
         <div class="result-filter-group" role="group" aria-label="Filter image results">
           <button class="result-filter is-active" type="button" data-result-filter="all" aria-pressed="true">All <span>${visibleResultCount}</span></button>
@@ -1015,8 +1019,29 @@ class CheckImageTool extends BaseTool {
 
   countIssueRows() {
     return [...(this.root?.querySelectorAll(".image-result-row") || [])].filter((row) =>
-      row.querySelector(".status-cell.error, .status-cell.timeout, .status-cell.has-warning"),
+      row.querySelector(ISSUE_CELL_SELECTOR),
     ).length;
+  }
+
+  /** Show found/total per environment in each column header and return those counts. */
+  updateEnvironmentHeaders() {
+    const table = this.root?.querySelector("#progressive-results-table");
+    if (!table) return [];
+    const headers = [...table.querySelectorAll(":scope > thead th")].slice(1);
+    const rows = [...table.querySelectorAll(".image-result-row")];
+    return headers.map((th, index) => {
+      const cells = rows.map((row) => row.children[index + 1]).filter(Boolean);
+      const found = cells.filter((cell) => cell.classList.contains("success")).length;
+      const missing = cells.filter((cell) => cell.classList.contains("missing")).length;
+      const name = th.dataset.envName ?? th.textContent;
+      th.dataset.envName = name;
+      th.textContent = name;
+      const count = document.createElement("span");
+      count.className = `env-count${found === cells.length ? " is-complete" : ""}`;
+      count.textContent = `${found}/${cells.length}`;
+      th.append(count);
+      return { name, found, missing, total: cells.length };
+    });
   }
 
   setResultFilter(filter) {
@@ -1030,7 +1055,7 @@ class CheckImageTool extends BaseTool {
     });
 
     this.root.querySelectorAll(".image-result-row").forEach((row) => {
-      const hasIssue = Boolean(row.querySelector(".status-cell.error, .status-cell.timeout, .status-cell.has-warning"));
+      const hasIssue = Boolean(row.querySelector(ISSUE_CELL_SELECTOR));
       row.hidden = filter === "issues" && !hasIssue;
       const metadataRow = this.root.querySelector(`[data-metadata-row="${row.dataset.rowIndex}"]`);
       if (metadataRow) metadataRow.hidden = row.hidden;
@@ -1110,7 +1135,7 @@ class CheckImageTool extends BaseTool {
   updateCellWithResult(cell, result, originalPath, env, rowIndex, colIndex, runId = this.checkRunId) {
     if (!this.isCheckRunCurrent(runId)) return;
     const cellId = `cell-${rowIndex}-${colIndex}`;
-    cell.className = `status-cell ${result.exists ? "success" : result.timeout ? "timeout" : "error"}`;
+    cell.className = `status-cell ${result.exists ? "success" : result.timeout ? "timeout" : "missing"}`;
 
     // Remove from timeout tracking if it was there (in case of retry success)
     this.timeoutCells.delete(cellId);
