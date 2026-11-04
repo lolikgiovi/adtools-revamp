@@ -157,13 +157,14 @@ export class SettingsPublisher {
               )
                 .map((item) => this.settingRow(item))
                 .join("")}</section></div>
-            <p class="publish-note">Theme, updates and app logins stay personal. Quick Query schemas are not included.</p>
           </fieldset>
           <button type="submit" class="btn btn-secondary">Preview publication</button>
         </form>
-        <section class="publish-preview" hidden aria-label="Publication preview"></section>
-        <section class="publish-history"><div class="publish-heading"><h3>Publication history</h3></div>
-          <div class="publish-history-list"></div></section>
+        <aside class="publish-rail">
+          <section class="publish-preview" hidden aria-label="Publication preview"></section>
+          <section class="publish-history"><div class="publish-heading"><h3>Publication history</h3></div>
+            <div class="publish-history-list"></div></section>
+        </aside>
       </div>
       <p class="publish-message" role="status" aria-live="polite"></p>`;
     this.sessionActions = this.root.querySelector("[data-dashboard-session-actions]");
