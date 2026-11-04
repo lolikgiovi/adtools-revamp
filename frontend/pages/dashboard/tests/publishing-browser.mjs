@@ -1,6 +1,7 @@
 // Failure cases: wrong source project; leaked credentials; accidental cross-department audience;
 // stale preview after edits; ambiguous replacement behavior; source switch retaining old values;
-// failed publish losing review; history reuse of another project; overflow on narrow screens.
+// failed publish losing review; history reuse of another project; overflow on narrow screens;
+// people picker missing registered users, search hiding a selection, or sending unselected emails.
 import assert from "node:assert/strict";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -18,6 +19,7 @@ try {
     const context = await browser.newContext({ viewport: { width, height: 1000 } });
     let published;
     let failPublish = true;
+    let expectedTarget = { type: "departments", values: ["RETAIL"] };
     await context.addInitScript(
       ({ release }) => {
         localStorage.setItem("user.email", "fashalli.bilhaq@bankmandiri.co.id");
@@ -66,8 +68,17 @@ try {
             ? [{ ...published, id: 1, createdAt: new Date().toISOString(), recipientCount: 1, appliedDevices: 0 }]
             : [],
         };
-        if (url.pathname.endsWith("/preview")) {
-          assert.deepEqual(payload.target, { type: "departments", values: ["RETAIL"] });
+        if (url.pathname.endsWith("/users")) {
+          data = {
+            ok: true,
+            users: [
+              { email: "ana@bankmandiri.co.id", department: "RETAIL" },
+              { email: "budi@bankmandiri.co.id", department: "SME" },
+              { email: "citra@bankmandiri.co.id", department: null },
+            ],
+          };
+        } else if (url.pathname.endsWith("/preview")) {
+          assert.deepEqual(payload.target, expectedTarget);
           assert.doesNotMatch(JSON.stringify(payload), /NEVER_PUBLISH/);
           data = { ok: true, recipients: [{ email: "retail@example.test" }], audienceHash: "fixture" };
         } else if (payload) {
@@ -121,8 +132,24 @@ try {
     await page.locator(".publish-preview").waitFor();
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.screenshot({ path: resolve(output, `${width}-review.png`), fullPage: true });
+    await page.locator("#publish-audience").selectOption("emails");
+    const people = page.locator(".publish-people-list .publish-choice");
+    assert.equal(await people.count(), 3);
+    await page.locator("#publish-people-search").fill("sme");
+    assert.equal(await people.filter({ visible: true }).count(), 1);
+    await page.getByRole("checkbox", { name: /budi@bankmandiri\.co\.id/ }).check();
+    await page.locator("#publish-people-search").fill("ana");
+    await page.getByRole("checkbox", { name: /ana@bankmandiri\.co\.id/ }).check();
+    await page.locator("#publish-people-search").fill("");
+    assert.equal(await page.locator(".publish-people-list input:checked").count(), 2);
+    assert.equal(await page.locator('[data-summary="recipients"]').innerText(), "2 people");
+    expectedTarget = { type: "emails", values: ["ana@bankmandiri.co.id", "budi@bankmandiri.co.id"] };
+    await page.getByRole("button", { name: "Preview publication" }).click();
+    await page.locator(".publish-preview").waitFor();
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await page.locator(".publish-people").screenshot({ path: resolve(output, `${width}-people.png`) });
     checks.push(
-      `${width}px: department default, source isolation, readable connections, secret exclusion, preview invalidation, publish retry, history reuse, no overflow`,
+      `${width}px: department default, source isolation, readable connections, secret exclusion, preview invalidation, publish retry, history reuse, people picker search and selection, no overflow`,
     );
     await context.close();
   }

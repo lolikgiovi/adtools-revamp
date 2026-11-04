@@ -96,6 +96,19 @@ describe("settings publishing API", () => {
   });
   afterEach(() => sqlite.close());
 
+  // Recipient picker failure cases: unauthenticated or device-session access, leaking user ids,
+  // unstable ordering, and users missing from the list.
+  it("lists registered users for the recipient picker to admins only", async () => {
+    expect((await call("admin/users", undefined, null)).status).toBe(401);
+    expect((await call("admin/users", undefined, "session")).status).toBe(401);
+    const { users } = await (await call("admin/users")).json();
+    expect(users).toEqual([
+      { email: "one@bankmandiri.co.id", department: "RETAIL" },
+      { email: "three@bankmandiri.co.id", department: "RETAIL" },
+      { email: "two@bankmandiri.co.id", department: "SME" },
+    ]);
+  });
+
   // Directory failure cases: unauthenticated access, duplicate publication/races,
   // invalid names or extra data, cross-user visibility, and accidental private-data sharing.
   it("shares only project names across registered users and deduplicates publication", async () => {

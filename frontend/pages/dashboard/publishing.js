@@ -114,6 +114,8 @@ export class SettingsPublisher {
   mount(root) {
     this.root = root;
     this.disposed = false;
+    this.users = [];
+    this.selectedEmails = new Set();
     this.sourceProject = getActiveProject();
     this.storage = projectSettingsStorage(localStorage, this.sourceProject.id);
     this.root.innerHTML = `<div class="publish-session-actions" data-dashboard-session-actions hidden>
@@ -145,8 +147,9 @@ export class SettingsPublisher {
           <section class="publish-section" aria-labelledby="publish-audience-heading">
             <div class="publish-section-head"><h3 id="publish-audience-heading">Recipients</h3>
               <select id="publish-audience" aria-label="Recipients"><option value="departments">Departments</option><option value="emails">Specific people</option></select></div>
-            <div class="publish-emails" hidden><label for="publish-emails">User emails</label>
-              <textarea id="publish-emails" rows="3" placeholder="One email per line" spellcheck="false"></textarea></div>
+            <div class="publish-people" hidden>
+              <input id="publish-people-search" type="search" placeholder="Search people" aria-label="Search people" autocomplete="off" spellcheck="false">
+              <div class="publish-people-list" role="group" aria-label="People"></div></div>
             <div class="publish-departments" role="group" aria-label="Departments">${DEPARTMENTS.map(
               (department) => `<label class="publish-choice">
               <input type="checkbox" value="${department}" ${department === this.sourceProject.department ? "checked" : ""}>${department}</label>`,
@@ -192,16 +195,18 @@ export class SettingsPublisher {
       event.preventDefault();
       void this.preview();
     });
-    this.root.addEventListener("input", () => {
+    this.root.addEventListener("input", (event) => {
+      if (event.target.id === "publish-people-search") return this.filterPeople();
       this.invalidate();
       this.updateSummary();
     });
     this.root.addEventListener("change", (event) => {
       this.invalidate();
       if (event.target.id === "publish-source") this.changeSource(event.target.value);
-      if (event.target.id === "publish-audience") {
-        this.root.querySelector(".publish-emails").hidden = event.target.value !== "emails";
-        this.root.querySelector(".publish-departments").hidden = event.target.value !== "departments";
+      if (event.target.id === "publish-audience") this.showAudience(event.target.value);
+      if (event.target.matches("[data-person]")) {
+        if (event.target.checked) this.selectedEmails.add(event.target.value);
+        else this.selectedEmails.delete(event.target.value);
       }
       if (event.target.matches("[data-setting]")) this.editSetting(event.target);
       this.updateSummary();
@@ -244,9 +249,7 @@ export class SettingsPublisher {
   updateSummary() {
     const value = (selector) => this.root.querySelector(selector).value.trim();
     const replace = this.root.querySelector("#publish-replace").checked;
-    const emails = value("#publish-emails")
-      .split(/[\s,;]+/)
-      .filter(Boolean).length;
+    const emails = this.selectedEmails.size;
     const departments = [...this.root.querySelectorAll(".publish-departments input:checked")].map((input) => input.value);
     this.root.querySelector("#publish-summary-title").textContent = value("#publish-title") || "Untitled publication";
     this.root.querySelector('[data-summary="project"]').textContent =
@@ -344,6 +347,46 @@ export class SettingsPublisher {
     this.root.querySelector(".publish-auth").hidden = true;
     this.root.querySelector(".publish-workspace").hidden = false;
     this.sessionActions.hidden = false;
+    void this.loadUsers();
+  }
+
+  showAudience(type) {
+    this.root.querySelector(".publish-people").hidden = type !== "emails";
+    this.root.querySelector(".publish-departments").hidden = type !== "departments";
+  }
+
+  async loadUsers() {
+    try {
+      this.users = (await this.request("users")).users;
+      this.renderPeople();
+    } catch (error) {
+      this.message(error.message, true);
+    }
+  }
+
+  /** Registered users plus any selected email no longer registered, so a reused draft shows every recipient. */
+  renderPeople() {
+    const known = new Set(this.users.map((user) => user.email.toLowerCase()));
+    const people = [
+      ...this.users.map((user) => ({ email: user.email.toLowerCase(), department: user.department })),
+      ...[...this.selectedEmails].filter((email) => !known.has(email)).map((email) => ({ email, department: null })),
+    ];
+    this.root.querySelector(".publish-people-list").innerHTML = people.length
+      ? people
+          .map(
+            ({ email, department }) => `<label class="publish-choice" data-search="${escape(`${email} ${department || ""}`.toLowerCase())}">
+              <input type="checkbox" data-person value="${escape(email)}" ${this.selectedEmails.has(email) ? "checked" : ""}>
+              <span class="publish-person-email">${escape(email)}</span>${department ? `<span class="publish-person-dept">${escape(department)}</span>` : ""}</label>`,
+          )
+          .join("")
+      : '<p class="publish-note">No registered users.</p>';
+    this.filterPeople();
+  }
+
+  filterPeople() {
+    const query = this.root.querySelector("#publish-people-search").value.trim().toLowerCase();
+    for (const row of this.root.querySelectorAll(".publish-people-list .publish-choice"))
+      row.hidden = Boolean(query) && !row.dataset.search.includes(query);
   }
 
   lock() {
@@ -478,13 +521,9 @@ export class SettingsPublisher {
     const type = this.root.querySelector("#publish-audience").value;
     const values =
       type === "emails"
-        ? this.root
-            .querySelector("#publish-emails")
-            .value.split(/[\s,;]+/)
-            .filter(Boolean)
+        ? [...this.selectedEmails].sort()
         : [...this.root.querySelectorAll(".publish-departments input:checked")].map((input) => input.value);
-    if (!values.length)
-      throw new Error(type === "departments" ? "Choose at least one department." : "Enter at least one registered user email.");
+    if (!values.length) throw new Error(type === "departments" ? "Choose at least one department." : "Choose at least one person.");
     return validatePublication({ title: this.root.querySelector("#publish-title").value, target: { type, values }, settings });
   }
 
@@ -612,9 +651,9 @@ export class SettingsPublisher {
     this.root.querySelector("#publish-project").value = publication.settings["project.name"] || getActiveProject().name;
     this.root.querySelector("#publish-replace").checked = publication.settings["project.replaceDefault"] === true;
     this.root.querySelector("#publish-audience").value = publication.target.type;
-    this.root.querySelector(".publish-emails").hidden = publication.target.type !== "emails";
-    this.root.querySelector(".publish-departments").hidden = publication.target.type !== "departments";
-    this.root.querySelector("#publish-emails").value = publication.target.type === "emails" ? publication.target.values.join("\n") : "";
+    this.selectedEmails = new Set(publication.target.type === "emails" ? publication.target.values : []);
+    this.renderPeople();
+    this.showAudience(publication.target.type);
     for (const input of this.root.querySelectorAll(".publish-departments input"))
       input.checked = publication.target.values.includes(input.value);
     for (const input of this.root.querySelectorAll("[data-setting]")) {

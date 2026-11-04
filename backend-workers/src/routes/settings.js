@@ -110,6 +110,10 @@ export async function handleSettings(request, env) {
           })),
         });
       }
+      if (path === "admin/users" && method === "GET") {
+        const result = await env.DB.prepare("SELECT email, department FROM users ORDER BY LOWER(email) LIMIT 5000").all();
+        return json({ ok: true, users: result.results.map(({ email, department }) => ({ email, department: department ?? null })) });
+      }
       if (path === "admin/revoke" && method === "POST") {
         const data = await readBody(request);
         if (!Number.isSafeInteger(data.id) || data.id < 1) error("Invalid publication.");
