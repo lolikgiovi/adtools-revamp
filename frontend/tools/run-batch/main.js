@@ -224,6 +224,7 @@ export class RunBatch extends BaseTool {
           return;
         }
         e.preventDefault();
+        e.stopPropagation(); // Tauri's shell listener ignores preventDefault and would open the link again.
         openExternalUrl(href);
       });
     }

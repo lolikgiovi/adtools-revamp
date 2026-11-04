@@ -1530,6 +1530,7 @@ class CheckImageTool extends BaseTool {
     openLink.textContent = "Open image";
     openLink.addEventListener("click", (event) => {
       event.preventDefault();
+      event.stopPropagation(); // Tauri's shell listener ignores preventDefault and would open the link again.
       this.openImageUrl(result.url);
     });
     actions.appendChild(openLink);

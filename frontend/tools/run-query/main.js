@@ -481,6 +481,7 @@ export class JenkinsRunner extends BaseTool {
         }
         // Always handle opening explicitly to ensure consistent behavior
         e.preventDefault();
+        e.stopPropagation(); // Tauri's shell listener ignores preventDefault and would open the link again.
         openExternalUrl(href);
       });
     }
@@ -1591,6 +1592,7 @@ export class JenkinsRunner extends BaseTool {
         const link = t && (t.closest ? t.closest("a") : null);
         if (link && link.href) {
           e.preventDefault();
+          e.stopPropagation();
           openExternalUrl(link.href);
           return;
         }
