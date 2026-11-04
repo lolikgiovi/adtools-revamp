@@ -1,0 +1,1320 @@
+{
+  "scenario": "Local Home, 1440x900, collapse then expand; 450ms settling after each",
+  "events": [
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350011977913,
+      "dur": 1195
+    },
+    {
+      "name": "Layout",
+      "ts": 350011979320,
+      "dur": 761
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350011981060,
+      "dur": 136
+    },
+    {
+      "name": "Layout",
+      "ts": 350011981197,
+      "dur": 101
+    },
+    {
+      "name": "Paint",
+      "ts": 350011982272,
+      "dur": 316
+    },
+    {
+      "name": "Paint",
+      "ts": 350011982288,
+      "dur": 300
+    },
+    {
+      "name": "Paint",
+      "ts": 350011982296,
+      "dur": 132
+    },
+    {
+      "name": "Paint",
+      "ts": 350011982429,
+      "dur": 158
+    },
+    {
+      "name": "Paint",
+      "ts": 350011982468,
+      "dur": 11
+    },
+    {
+      "name": "Paint",
+      "ts": 350011982479,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350011982484,
+      "dur": 2
+    },
+    {
+      "name": "Paint",
+      "ts": 350011982487,
+      "dur": 3
+    },
+    {
+      "name": "Paint",
+      "ts": 350011982490,
+      "dur": 2
+    },
+    {
+      "name": "Paint",
+      "ts": 350011982493,
+      "dur": 6
+    },
+    {
+      "name": "Paint",
+      "ts": 350011982500,
+      "dur": 2
+    },
+    {
+      "name": "Paint",
+      "ts": 350011982502,
+      "dur": 3
+    },
+    {
+      "name": "Paint",
+      "ts": 350011982505,
+      "dur": 3
+    },
+    {
+      "name": "Paint",
+      "ts": 350011982508,
+      "dur": 2
+    },
+    {
+      "name": "Paint",
+      "ts": 350011982511,
+      "dur": 2
+    },
+    {
+      "name": "Paint",
+      "ts": 350011982513,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350011982517,
+      "dur": 6
+    },
+    {
+      "name": "Paint",
+      "ts": 350011982523,
+      "dur": 3
+    },
+    {
+      "name": "Paint",
+      "ts": 350011982526,
+      "dur": 36
+    },
+    {
+      "name": "Paint",
+      "ts": 350011982563,
+      "dur": 3
+    },
+    {
+      "name": "Paint",
+      "ts": 350011982567,
+      "dur": 2
+    },
+    {
+      "name": "Paint",
+      "ts": 350011982570,
+      "dur": 3
+    },
+    {
+      "name": "Paint",
+      "ts": 350011982574,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350011982579,
+      "dur": 3
+    },
+    {
+      "name": "Paint",
+      "ts": 350011982583,
+      "dur": 4
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350011998168,
+      "dur": 207
+    },
+    {
+      "name": "Layout",
+      "ts": 350011998379,
+      "dur": 171
+    },
+    {
+      "name": "Paint",
+      "ts": 350011998714,
+      "dur": 73
+    },
+    {
+      "name": "Paint",
+      "ts": 350011998738,
+      "dur": 48
+    },
+    {
+      "name": "Paint",
+      "ts": 350011998757,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350011998764,
+      "dur": 21
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012015626,
+      "dur": 206
+    },
+    {
+      "name": "Layout",
+      "ts": 350012015836,
+      "dur": 116
+    },
+    {
+      "name": "Paint",
+      "ts": 350012016089,
+      "dur": 63
+    },
+    {
+      "name": "Paint",
+      "ts": 350012016109,
+      "dur": 42
+    },
+    {
+      "name": "Paint",
+      "ts": 350012016128,
+      "dur": 7
+    },
+    {
+      "name": "Paint",
+      "ts": 350012016138,
+      "dur": 12
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012032290,
+      "dur": 198
+    },
+    {
+      "name": "Layout",
+      "ts": 350012032494,
+      "dur": 114
+    },
+    {
+      "name": "Paint",
+      "ts": 350012032744,
+      "dur": 63
+    },
+    {
+      "name": "Paint",
+      "ts": 350012032763,
+      "dur": 42
+    },
+    {
+      "name": "Paint",
+      "ts": 350012032783,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012032791,
+      "dur": 14
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012048964,
+      "dur": 224
+    },
+    {
+      "name": "Layout",
+      "ts": 350012049192,
+      "dur": 113
+    },
+    {
+      "name": "Paint",
+      "ts": 350012049445,
+      "dur": 69
+    },
+    {
+      "name": "Paint",
+      "ts": 350012049465,
+      "dur": 48
+    },
+    {
+      "name": "Paint",
+      "ts": 350012049492,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012049499,
+      "dur": 13
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012065554,
+      "dur": 209
+    },
+    {
+      "name": "Layout",
+      "ts": 350012065767,
+      "dur": 111
+    },
+    {
+      "name": "Paint",
+      "ts": 350012066012,
+      "dur": 59
+    },
+    {
+      "name": "Paint",
+      "ts": 350012066029,
+      "dur": 41
+    },
+    {
+      "name": "Paint",
+      "ts": 350012066048,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012066055,
+      "dur": 14
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012082216,
+      "dur": 196
+    },
+    {
+      "name": "Layout",
+      "ts": 350012082415,
+      "dur": 111
+    },
+    {
+      "name": "Paint",
+      "ts": 350012082652,
+      "dur": 59
+    },
+    {
+      "name": "Paint",
+      "ts": 350012082670,
+      "dur": 40
+    },
+    {
+      "name": "Paint",
+      "ts": 350012082691,
+      "dur": 3
+    },
+    {
+      "name": "Paint",
+      "ts": 350012082697,
+      "dur": 12
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012098954,
+      "dur": 210
+    },
+    {
+      "name": "Layout",
+      "ts": 350012099169,
+      "dur": 125
+    },
+    {
+      "name": "Paint",
+      "ts": 350012099441,
+      "dur": 62
+    },
+    {
+      "name": "Paint",
+      "ts": 350012099461,
+      "dur": 41
+    },
+    {
+      "name": "Paint",
+      "ts": 350012099480,
+      "dur": 3
+    },
+    {
+      "name": "Paint",
+      "ts": 350012099487,
+      "dur": 15
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012114740,
+      "dur": 202
+    },
+    {
+      "name": "Layout",
+      "ts": 350012114946,
+      "dur": 139
+    },
+    {
+      "name": "Paint",
+      "ts": 350012115214,
+      "dur": 62
+    },
+    {
+      "name": "Paint",
+      "ts": 350012115232,
+      "dur": 43
+    },
+    {
+      "name": "Paint",
+      "ts": 350012115254,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012115261,
+      "dur": 13
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012132186,
+      "dur": 267
+    },
+    {
+      "name": "Layout",
+      "ts": 350012132458,
+      "dur": 102
+    },
+    {
+      "name": "Paint",
+      "ts": 350012132685,
+      "dur": 63
+    },
+    {
+      "name": "Paint",
+      "ts": 350012132702,
+      "dur": 45
+    },
+    {
+      "name": "Paint",
+      "ts": 350012132725,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012132732,
+      "dur": 14
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012148334,
+      "dur": 178
+    },
+    {
+      "name": "Layout",
+      "ts": 350012148516,
+      "dur": 101
+    },
+    {
+      "name": "Paint",
+      "ts": 350012148849,
+      "dur": 66
+    },
+    {
+      "name": "Paint",
+      "ts": 350012148867,
+      "dur": 47
+    },
+    {
+      "name": "Paint",
+      "ts": 350012148886,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012148900,
+      "dur": 12
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012165436,
+      "dur": 130
+    },
+    {
+      "name": "Layout",
+      "ts": 350012165570,
+      "dur": 106
+    },
+    {
+      "name": "Paint",
+      "ts": 350012165789,
+      "dur": 63
+    },
+    {
+      "name": "Paint",
+      "ts": 350012165804,
+      "dur": 47
+    },
+    {
+      "name": "Paint",
+      "ts": 350012165830,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012165838,
+      "dur": 12
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012181571,
+      "dur": 121
+    },
+    {
+      "name": "Layout",
+      "ts": 350012181695,
+      "dur": 108
+    },
+    {
+      "name": "Paint",
+      "ts": 350012181916,
+      "dur": 58
+    },
+    {
+      "name": "Paint",
+      "ts": 350012181933,
+      "dur": 40
+    },
+    {
+      "name": "Paint",
+      "ts": 350012181953,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012181960,
+      "dur": 12
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012232210,
+      "dur": 123
+    },
+    {
+      "name": "Layout",
+      "ts": 350012232336,
+      "dur": 86
+    },
+    {
+      "name": "Paint",
+      "ts": 350012232532,
+      "dur": 49
+    },
+    {
+      "name": "Paint",
+      "ts": 350012232552,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012232572,
+      "dur": 4
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012248874,
+      "dur": 129
+    },
+    {
+      "name": "Layout",
+      "ts": 350012249007,
+      "dur": 89
+    },
+    {
+      "name": "Paint",
+      "ts": 350012249267,
+      "dur": 58
+    },
+    {
+      "name": "Paint",
+      "ts": 350012249293,
+      "dur": 5
+    },
+    {
+      "name": "Paint",
+      "ts": 350012249317,
+      "dur": 4
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012265107,
+      "dur": 107
+    },
+    {
+      "name": "Layout",
+      "ts": 350012265218,
+      "dur": 190
+    },
+    {
+      "name": "Paint",
+      "ts": 350012265692,
+      "dur": 246
+    },
+    {
+      "name": "Paint",
+      "ts": 350012265704,
+      "dur": 233
+    },
+    {
+      "name": "Paint",
+      "ts": 350012265801,
+      "dur": 125
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012432915,
+      "dur": 888
+    },
+    {
+      "name": "Layout",
+      "ts": 350012433809,
+      "dur": 618
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012435094,
+      "dur": 118
+    },
+    {
+      "name": "Layout",
+      "ts": 350012435214,
+      "dur": 146
+    },
+    {
+      "name": "Paint",
+      "ts": 350012435825,
+      "dur": 381
+    },
+    {
+      "name": "Paint",
+      "ts": 350012435836,
+      "dur": 369
+    },
+    {
+      "name": "Paint",
+      "ts": 350012435842,
+      "dur": 123
+    },
+    {
+      "name": "Paint",
+      "ts": 350012435966,
+      "dur": 239
+    },
+    {
+      "name": "Paint",
+      "ts": 350012436007,
+      "dur": 14
+    },
+    {
+      "name": "Paint",
+      "ts": 350012436021,
+      "dur": 9
+    },
+    {
+      "name": "Paint",
+      "ts": 350012436030,
+      "dur": 6
+    },
+    {
+      "name": "Paint",
+      "ts": 350012436036,
+      "dur": 22
+    },
+    {
+      "name": "Paint",
+      "ts": 350012436058,
+      "dur": 6
+    },
+    {
+      "name": "Paint",
+      "ts": 350012436065,
+      "dur": 5
+    },
+    {
+      "name": "Paint",
+      "ts": 350012436071,
+      "dur": 9
+    },
+    {
+      "name": "Paint",
+      "ts": 350012436080,
+      "dur": 6
+    },
+    {
+      "name": "Paint",
+      "ts": 350012436087,
+      "dur": 5
+    },
+    {
+      "name": "Paint",
+      "ts": 350012436093,
+      "dur": 8
+    },
+    {
+      "name": "Paint",
+      "ts": 350012436101,
+      "dur": 8
+    },
+    {
+      "name": "Paint",
+      "ts": 350012436109,
+      "dur": 6
+    },
+    {
+      "name": "Paint",
+      "ts": 350012436115,
+      "dur": 13
+    },
+    {
+      "name": "Paint",
+      "ts": 350012436129,
+      "dur": 5
+    },
+    {
+      "name": "Paint",
+      "ts": 350012436135,
+      "dur": 24
+    },
+    {
+      "name": "Paint",
+      "ts": 350012436162,
+      "dur": 5
+    },
+    {
+      "name": "Paint",
+      "ts": 350012436168,
+      "dur": 10
+    },
+    {
+      "name": "Paint",
+      "ts": 350012436179,
+      "dur": 7
+    },
+    {
+      "name": "Paint",
+      "ts": 350012436187,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012436192,
+      "dur": 5
+    },
+    {
+      "name": "Paint",
+      "ts": 350012436198,
+      "dur": 6
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012448278,
+      "dur": 161
+    },
+    {
+      "name": "Layout",
+      "ts": 350012448443,
+      "dur": 112
+    },
+    {
+      "name": "Paint",
+      "ts": 350012448712,
+      "dur": 69
+    },
+    {
+      "name": "Paint",
+      "ts": 350012448733,
+      "dur": 47
+    },
+    {
+      "name": "Paint",
+      "ts": 350012448758,
+      "dur": 3
+    },
+    {
+      "name": "Paint",
+      "ts": 350012448769,
+      "dur": 11
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012465656,
+      "dur": 155
+    },
+    {
+      "name": "Layout",
+      "ts": 350012465815,
+      "dur": 113
+    },
+    {
+      "name": "Paint",
+      "ts": 350012466070,
+      "dur": 65
+    },
+    {
+      "name": "Paint",
+      "ts": 350012466089,
+      "dur": 44
+    },
+    {
+      "name": "Paint",
+      "ts": 350012466112,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012466122,
+      "dur": 11
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012481890,
+      "dur": 141
+    },
+    {
+      "name": "Layout",
+      "ts": 350012482036,
+      "dur": 99
+    },
+    {
+      "name": "Paint",
+      "ts": 350012482255,
+      "dur": 79
+    },
+    {
+      "name": "Paint",
+      "ts": 350012482272,
+      "dur": 61
+    },
+    {
+      "name": "Paint",
+      "ts": 350012482310,
+      "dur": 6
+    },
+    {
+      "name": "Paint",
+      "ts": 350012482321,
+      "dur": 11
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012498930,
+      "dur": 190
+    },
+    {
+      "name": "Layout",
+      "ts": 350012499126,
+      "dur": 135
+    },
+    {
+      "name": "Paint",
+      "ts": 350012499395,
+      "dur": 64
+    },
+    {
+      "name": "Paint",
+      "ts": 350012499414,
+      "dur": 44
+    },
+    {
+      "name": "Paint",
+      "ts": 350012499438,
+      "dur": 3
+    },
+    {
+      "name": "Paint",
+      "ts": 350012499447,
+      "dur": 11
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012515684,
+      "dur": 240
+    },
+    {
+      "name": "Layout",
+      "ts": 350012515929,
+      "dur": 113
+    },
+    {
+      "name": "Paint",
+      "ts": 350012516214,
+      "dur": 66
+    },
+    {
+      "name": "Paint",
+      "ts": 350012516233,
+      "dur": 46
+    },
+    {
+      "name": "Paint",
+      "ts": 350012516258,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012516267,
+      "dur": 11
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012532310,
+      "dur": 226
+    },
+    {
+      "name": "Layout",
+      "ts": 350012532540,
+      "dur": 108
+    },
+    {
+      "name": "Paint",
+      "ts": 350012532778,
+      "dur": 62
+    },
+    {
+      "name": "Paint",
+      "ts": 350012532796,
+      "dur": 43
+    },
+    {
+      "name": "Paint",
+      "ts": 350012532819,
+      "dur": 3
+    },
+    {
+      "name": "Paint",
+      "ts": 350012532828,
+      "dur": 10
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012549028,
+      "dur": 215
+    },
+    {
+      "name": "Layout",
+      "ts": 350012549247,
+      "dur": 97
+    },
+    {
+      "name": "Paint",
+      "ts": 350012549469,
+      "dur": 58
+    },
+    {
+      "name": "Paint",
+      "ts": 350012549486,
+      "dur": 40
+    },
+    {
+      "name": "Paint",
+      "ts": 350012549507,
+      "dur": 3
+    },
+    {
+      "name": "Paint",
+      "ts": 350012549516,
+      "dur": 9
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012565584,
+      "dur": 181
+    },
+    {
+      "name": "Layout",
+      "ts": 350012565767,
+      "dur": 89
+    },
+    {
+      "name": "Paint",
+      "ts": 350012565986,
+      "dur": 63
+    },
+    {
+      "name": "Paint",
+      "ts": 350012566005,
+      "dur": 43
+    },
+    {
+      "name": "Paint",
+      "ts": 350012566029,
+      "dur": 3
+    },
+    {
+      "name": "Paint",
+      "ts": 350012566037,
+      "dur": 10
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012581849,
+      "dur": 214
+    },
+    {
+      "name": "Layout",
+      "ts": 350012582067,
+      "dur": 155
+    },
+    {
+      "name": "Paint",
+      "ts": 350012582358,
+      "dur": 60
+    },
+    {
+      "name": "Paint",
+      "ts": 350012582376,
+      "dur": 41
+    },
+    {
+      "name": "Paint",
+      "ts": 350012582399,
+      "dur": 3
+    },
+    {
+      "name": "Paint",
+      "ts": 350012582408,
+      "dur": 9
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012598937,
+      "dur": 191
+    },
+    {
+      "name": "Layout",
+      "ts": 350012599131,
+      "dur": 72
+    },
+    {
+      "name": "Paint",
+      "ts": 350012599333,
+      "dur": 68
+    },
+    {
+      "name": "Paint",
+      "ts": 350012599352,
+      "dur": 48
+    },
+    {
+      "name": "Paint",
+      "ts": 350012599378,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012599388,
+      "dur": 11
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012615601,
+      "dur": 206
+    },
+    {
+      "name": "Layout",
+      "ts": 350012615811,
+      "dur": 100
+    },
+    {
+      "name": "Paint",
+      "ts": 350012616034,
+      "dur": 60
+    },
+    {
+      "name": "Paint",
+      "ts": 350012616053,
+      "dur": 40
+    },
+    {
+      "name": "Paint",
+      "ts": 350012616075,
+      "dur": 3
+    },
+    {
+      "name": "Paint",
+      "ts": 350012616083,
+      "dur": 10
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012632193,
+      "dur": 260
+    },
+    {
+      "name": "Layout",
+      "ts": 350012632460,
+      "dur": 109
+    },
+    {
+      "name": "Paint",
+      "ts": 350012632699,
+      "dur": 62
+    },
+    {
+      "name": "Paint",
+      "ts": 350012632718,
+      "dur": 42
+    },
+    {
+      "name": "Paint",
+      "ts": 350012632740,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012632749,
+      "dur": 10
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012648973,
+      "dur": 166
+    },
+    {
+      "name": "Layout",
+      "ts": 350012649142,
+      "dur": 100
+    },
+    {
+      "name": "Paint",
+      "ts": 350012649354,
+      "dur": 68
+    },
+    {
+      "name": "Paint",
+      "ts": 350012649371,
+      "dur": 50
+    },
+    {
+      "name": "Paint",
+      "ts": 350012649392,
+      "dur": 11
+    },
+    {
+      "name": "Paint",
+      "ts": 350012649408,
+      "dur": 13
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012665567,
+      "dur": 178
+    },
+    {
+      "name": "Layout",
+      "ts": 350012665748,
+      "dur": 88
+    },
+    {
+      "name": "Paint",
+      "ts": 350012666058,
+      "dur": 56
+    },
+    {
+      "name": "Paint",
+      "ts": 350012666079,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012666103,
+      "dur": 3
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012682298,
+      "dur": 171
+    },
+    {
+      "name": "Layout",
+      "ts": 350012682472,
+      "dur": 303
+    },
+    {
+      "name": "Paint",
+      "ts": 350012682959,
+      "dur": 158
+    },
+    {
+      "name": "Paint",
+      "ts": 350012682977,
+      "dur": 139
+    },
+    {
+      "name": "Paint",
+      "ts": 350012682998,
+      "dur": 20
+    },
+    {
+      "name": "Paint",
+      "ts": 350012683019,
+      "dur": 7
+    },
+    {
+      "name": "Paint",
+      "ts": 350012683027,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012683031,
+      "dur": 6
+    },
+    {
+      "name": "Paint",
+      "ts": 350012683038,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012683042,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012683046,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012683050,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012683055,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012683059,
+      "dur": 3
+    },
+    {
+      "name": "Paint",
+      "ts": 350012683063,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012683068,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012683072,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012683076,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012683080,
+      "dur": 6
+    },
+    {
+      "name": "Paint",
+      "ts": 350012683086,
+      "dur": 4
+    },
+    {
+      "name": "Paint",
+      "ts": 350012683090,
+      "dur": 3
+    },
+    {
+      "name": "Paint",
+      "ts": 350012683094,
+      "dur": 6
+    },
+    {
+      "name": "Paint",
+      "ts": 350012683100,
+      "dur": 3
+    },
+    {
+      "name": "Paint",
+      "ts": 350012683104,
+      "dur": 6
+    },
+    {
+      "name": "Paint",
+      "ts": 350012683110,
+      "dur": 6
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012698890,
+      "dur": 118
+    },
+    {
+      "name": "Layout",
+      "ts": 350012699011,
+      "dur": 94
+    },
+    {
+      "name": "Paint",
+      "ts": 350012699216,
+      "dur": 54
+    },
+    {
+      "name": "Paint",
+      "ts": 350012699236,
+      "dur": 7
+    },
+    {
+      "name": "Paint",
+      "ts": 350012699261,
+      "dur": 3
+    },
+    {
+      "name": "UpdateLayoutTree",
+      "ts": 350012715591,
+      "dur": 105
+    },
+    {
+      "name": "Layout",
+      "ts": 350012715699,
+      "dur": 233
+    },
+    {
+      "name": "Paint",
+      "ts": 350012716184,
+      "dur": 225
+    },
+    {
+      "name": "Paint",
+      "ts": 350012716196,
+      "dur": 212
+    },
+    {
+      "name": "Paint",
+      "ts": 350012716284,
+      "dur": 115
+    }
+  ]
+}

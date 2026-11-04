@@ -86,6 +86,10 @@ class Sidebar {
    * Bind event listeners
    */
   bindEvents() {
+    this.reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    this.reducedMotion.addEventListener("change", ({ matches }) => {
+      if (matches) this.sidebarAnimations?.forEach((animation) => animation.cancel());
+    });
     if (this.eventBus) {
       this.eventBus.on("route:changed", (data) => {
         this.updateActiveItem(data.path);
@@ -205,6 +209,21 @@ class Sidebar {
 
     if (!sidebar) return;
 
+    const desktopState = this.state.isCollapsed ? "collapsed" : "expanded";
+    const animate =
+      !this.state.isMobile &&
+      sidebar.dataset.mobile !== "true" &&
+      ["collapsed", "expanded"].includes(sidebar.dataset.state) &&
+      sidebar.dataset.state !== desktopState &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const moving = animate
+      ? [main, ...sidebar.querySelectorAll(".sidebar-project, .sidebar-menu-item, .release-tour-dev-preview")]
+          .filter(Boolean)
+          .map((element) => ({ element, before: element.getBoundingClientRect() }))
+      : [];
+    // Read the current visual positions before cancelling an interrupted transition.
+    this.sidebarAnimations?.forEach((animation) => animation.cancel());
+
     if ((this.state.isMobile && !this.state.isOpen) || (!this.state.isMobile && this.state.isCollapsed)) {
       this.closeContextMenu();
       this.hidePinEducation();
@@ -227,7 +246,8 @@ class Sidebar {
         main.style.marginLeft = "0";
       } else {
         const sidebarWidth = getComputedStyle(document.documentElement).getPropertyValue("--sidebar-width").trim() || "12rem";
-        main.style.marginLeft = this.state.isCollapsed ? "0" : sidebarWidth;
+        const railWidth = getComputedStyle(document.documentElement).getPropertyValue("--sidebar-rail-width").trim() || "52px";
+        main.style.marginLeft = this.state.isCollapsed ? railWidth : sidebarWidth;
       }
     }
 
@@ -241,6 +261,29 @@ class Sidebar {
 
     // Update ARIA attributes
     this.updateAriaStates();
+
+    if (moving.length) this.animateSidebarLayout(moving);
+  }
+
+  animateSidebarLayout(moving) {
+    const styles = getComputedStyle(document.documentElement);
+    const edgeMotion = document
+      .querySelector(".sidebar")
+      .getAnimations()
+      .find((animation) => animation.transitionProperty === "transform");
+    const duration =
+      edgeMotion?.effect.getComputedTiming().duration || parseFloat(styles.getPropertyValue("--sidebar-motion-duration")) || 280;
+    const easing = styles.getPropertyValue("--sidebar-motion-ease").trim() || "cubic-bezier(0.32, 0.72, 0, 1)";
+    // Commit layout once, then move the rendered elements without resizing editors every frame.
+    const changes = moving.map(({ element, before }) => {
+      const after = element.getBoundingClientRect();
+      return { element, x: before.left - after.left, y: before.top - after.top };
+    });
+    this.sidebarAnimations = changes
+      .filter(({ x, y }) => Math.abs(x) > 0.1 || Math.abs(y) > 0.1)
+      .map(({ element, x, y }) =>
+        element.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: "translate(0px, 0px)" }], { duration, easing }),
+      );
   }
 
   /**
@@ -438,11 +481,11 @@ class Sidebar {
           const svg = ensureSvgClass(rawSvg);
           const toolId = this.escapeHtml(tool.id);
           const toolName = this.escapeHtml(tool.name);
-          const toolTitle = this.escapeHtml(tool.description || tool.name);
+          const toolTitle = this.escapeHtml(tool.description ? `${tool.name}: ${tool.description}` : tool.name);
           const isPinned = pinnedToolIds.has(tool.id);
           return `
             <div class="sidebar-menu-item" data-tool="${toolId}" data-pinned="${isPinned ? "true" : "false"}">
-              <button class="sidebar-menu-button" type="button" title="${toolTitle}">
+              <button class="sidebar-menu-button" type="button" aria-label="${toolName}" title="${toolTitle}">
                 ${svg}
                 <span class="sidebar-menu-label">${toolName}</span>
               </button>
@@ -464,8 +507,7 @@ class Sidebar {
           const toolId = button.closest("[data-tool]").dataset.tool;
           this.togglePin(toolId, "button");
           await this._pinRenderPromise;
-          const item = Array.from(sidebarContent.querySelectorAll("[data-tool]"))
-            .find((node) => node.dataset.tool === toolId);
+          const item = Array.from(sidebarContent.querySelectorAll("[data-tool]")).find((node) => node.dataset.tool === toolId);
           item?.querySelector(".sidebar-pin-action")?.focus({ preventScroll: true });
         });
       });
@@ -573,11 +615,11 @@ class Sidebar {
           const dataAttr =
             item.type === "tool" ? `data-tool="${itemId}"` : item.type === "action" ? `data-action="${itemId}"` : `data-page="${itemId}"`;
           const itemName = this.escapeHtml(item.name);
-          const itemTitle = this.escapeHtml(item.description || item.name);
+          const itemTitle = this.escapeHtml(item.description ? `${item.name}: ${item.description}` : item.name);
           const isPinned = item.type === "tool" && this.getPinnedToolIds().has(item.id);
           return `
             <div class=\"sidebar-menu-item\" ${dataAttr} data-pinned=\"${isPinned ? "true" : "false"}\">
-              <button class=\"sidebar-menu-button\" type=\"button\" title=\"${itemTitle}\">
+              <button class=\"sidebar-menu-button\" type=\"button\" aria-label=\"${itemName}\" title=\"${itemTitle}\">
                 ${svg}
                 <span class=\"sidebar-menu-label\">${itemName}</span>
               </button>
@@ -735,7 +777,7 @@ class Sidebar {
   }
 
   maybeShowPinEducation() {
-    if (this.state?.isMobile || this.pinEducationSuppressed) return;
+    if (this.state?.isMobile || this.state?.isCollapsed || this.pinEducationSuppressed) return;
 
     const anchor = document.querySelector(".sidebar-content .sidebar-menu-item[data-tool]");
     if (!anchor) return;
@@ -882,7 +924,12 @@ class Sidebar {
     menu.style.top = `${top}px`;
 
     const actionButton = menu.querySelector("[role='menuitem']");
-    actionButton?.addEventListener("click", () => this.togglePin(toolId));
+    actionButton?.addEventListener("click", async () => {
+      this.togglePin(toolId);
+      await this._pinRenderPromise;
+      const item = Array.from(document.querySelectorAll(".sidebar-menu-item[data-tool]")).find((node) => node.dataset.tool === toolId);
+      item?.querySelector(".sidebar-menu-button")?.focus();
+    });
     actionButton?.focus({ preventScroll: true });
   }
 

@@ -869,7 +869,14 @@ class App {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "btn btn-sm btn-outline release-tour-dev-preview";
-    button.textContent = "Preview What's New";
+    button.setAttribute("aria-label", "Preview What's New");
+    button.innerHTML = `
+      <svg class="release-tour-preview-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="3" width="18" height="18" rx="3" /><path d="m10 8 6 4-6 4Z" />
+      </svg>
+      <span class="release-tour-preview-label">Preview What's New</span>
+    `;
     button.title = "Preview the current release tour without simulating an update";
     button.addEventListener("click", () => this.openReleaseTourPreview());
     container.prepend(button);

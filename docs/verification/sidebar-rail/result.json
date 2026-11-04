@@ -1,0 +1,6 @@
+{
+  "passed": false,
+  "checks": [],
+  "errors": [],
+  "error": "AssertionError [ERR_ASSERTION]: Sidebar and workspace separated by 28.04643577148437px during reversal\n    at file:///Users/ddl/projects/ad-tools-revamp/frontend/components/tests/sidebar-rail-browser.mjs:168:14"
+}
