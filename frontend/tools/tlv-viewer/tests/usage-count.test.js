@@ -50,3 +50,12 @@ describe("TLV Viewer usage counting", () => {
     expect(uses).toEqual(["tlv-viewer:parse", "tlv-viewer:parse"]);
   });
 });
+
+describe("TLV Viewer sample data", () => {
+  it("does not count loading a sample", () => {
+    const { container } = mount();
+    container.querySelector("#tlv-sample-btn").click();
+    container.querySelector("#tlv-sample-ber-btn").click();
+    expect(uses).toEqual([]);
+  });
+});

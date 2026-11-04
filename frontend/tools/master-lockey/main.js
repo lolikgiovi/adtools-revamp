@@ -333,12 +333,14 @@ class MasterLockey extends BaseTool {
       this.els.showMissingKeys.disabled = this.els.searchMode.value !== "key";
       this.els.searchResultFilter.value = "all";
       this.applyFilterDebounced();
+      this.scheduleSearchUse();
     });
 
     // Search input with debouncing (300ms delay)
     this.els.searchInput.addEventListener("input", () => {
       this.resizeSearchInput();
       this.applyFilterDebounced();
+      this.scheduleSearchUse();
     });
 
     // Clear search
@@ -710,6 +712,25 @@ class MasterLockey extends BaseTool {
     const input = this.els.searchInput;
     input.style.height = "0px";
     input.style.height = `${Math.min(160, Math.max(34, input.scrollHeight))}px`;
+  }
+
+  // The live filter re-runs on every typing pause. A search counts once the user lands on it:
+  // its results stay on screen for 1.5s, or the user copies them. Restored filters never count.
+  scheduleSearchUse() {
+    clearTimeout(this.searchUseTimer);
+    this.searchUseTimer = setTimeout(() => this.trackSearchUse(), 1500);
+  }
+
+  trackSearchUse() {
+    const query = this.els.searchInput.value.trim();
+    if (!query) {
+      this.countedSearch = null;
+      return;
+    }
+    const key = `${this.els.searchMode.value}:${query}`;
+    if (!this.filteredRows?.length || this.countedSearch === key) return;
+    this.countedSearch = key;
+    UsageTracker.trackToolUse("master-lockey", "search", { mode: this.els.searchMode.value, result_count: this.filteredRows.length });
   }
 
   applyFilterDebounced() {
@@ -1175,7 +1196,8 @@ class MasterLockey extends BaseTool {
   }
 
   onUnmount() {
-    // Cleanup if needed
+    // Leaving the tool before a search settles is not landing on it.
+    clearTimeout(this.searchUseTimer);
   }
 
   // =====================
@@ -1322,6 +1344,7 @@ class MasterLockey extends BaseTool {
 
       // Display results
       this.displayConfluenceResults();
+      UsageTracker.trackToolUse("master-lockey", "confluence_search", { row_count: comparedLockeys.length, refresh: isRefresh });
 
       // Refresh cached pages list and update input to show page title
       await this.loadCachedPagesDropdown();
@@ -1620,7 +1643,6 @@ class MasterLockey extends BaseTool {
         UsageTracker.trackEvent("master-lockey", "confluence_copy_lockey", {
           rowCount: visibleResults.length,
         });
-        UsageTracker.trackToolUse("master-lockey", "confluence_copy_lockey", { row_count: visibleResults.length });
       })
       .catch((err) => {
         console.error("Copy failed:", err);
@@ -1672,7 +1694,6 @@ class MasterLockey extends BaseTool {
         UsageTracker.trackEvent("master-lockey", "confluence_copy_table", {
           rowCount: visibleResults.length,
         });
-        UsageTracker.trackToolUse("master-lockey", "confluence_copy_table", { row_count: visibleResults.length });
       })
       .catch((err) => {
         console.error("Copy failed:", err);
@@ -1692,7 +1713,9 @@ class MasterLockey extends BaseTool {
     try {
       await navigator.clipboard.writeText(content);
       this.showSuccess(`Copied ${this.filteredRows.length} ${keysOnly ? "lockeys" : "results"} to clipboard`);
-      UsageTracker.trackToolUse("master-lockey", keysOnly ? "search_copy_lockey" : "search_copy_results", {
+      clearTimeout(this.searchUseTimer);
+      this.trackSearchUse();
+      UsageTracker.trackEvent("master-lockey", keysOnly ? "search_copy_lockey" : "search_copy_results", {
         row_count: this.filteredRows.length,
       });
     } catch (error) {
@@ -1916,7 +1939,6 @@ class MasterLockey extends BaseTool {
         UsageTracker.trackEvent("master-lockey", "bulk_confluence_copy_lockey", {
           rowCount: lockeys.length,
         });
-        UsageTracker.trackToolUse("master-lockey", "bulk_confluence_copy_lockey", { row_count: lockeys.length });
       })
       .catch((err) => {
         console.error("Copy failed:", err);
@@ -2002,7 +2024,6 @@ class MasterLockey extends BaseTool {
             rowCount: dataRowCount,
             format: "html",
           });
-          UsageTracker.trackToolUse("master-lockey", "bulk_confluence_copy_table", { row_count: dataRowCount, format: "html" });
         })
         .catch((err) => {
           console.error("HTML clipboard failed, falling back to plain text:", err);
@@ -2012,7 +2033,6 @@ class MasterLockey extends BaseTool {
             .then(() => {
               this.showSuccess(`Copied ${dataRowCount} results to clipboard`);
               UsageTracker.trackEvent("master-lockey", "bulk_confluence_copy_table", { rowCount: dataRowCount, format: "plain" });
-              UsageTracker.trackToolUse("master-lockey", "bulk_confluence_copy_table", { row_count: dataRowCount, format: "plain" });
             })
             .catch((err2) => {
               console.error("Copy failed:", err2);
@@ -2030,7 +2050,6 @@ class MasterLockey extends BaseTool {
             rowCount: dataRowCount,
             format: "plain",
           });
-          UsageTracker.trackToolUse("master-lockey", "bulk_confluence_copy_table", { row_count: dataRowCount, format: "plain" });
         })
         .catch((err2) => {
           console.error("Copy failed:", err2);

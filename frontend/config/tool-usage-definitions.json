@@ -9,9 +9,12 @@
     "boundary": "valid output is produced"
   },
   "base64-tools": { "actions": ["encode", "decode"], "boundary": "at least one output is produced" },
-  "compress-image": { "actions": ["compress"], "boundary": "a validated lossless, lossy or resized image is ready for download" },
+  "compress-image": {
+    "actions": ["compress"],
+    "boundary": "a Compress click readies at least one validated lossless, lossy or resized image"
+  },
   "char-counter": { "actions": ["count"], "boundary": "non-empty text is counted" },
-  "tlv-viewer": { "actions": ["parse"], "boundary": "input parses and results render", "embedded_in": "qr-tools" },
+  "tlv-viewer": { "actions": ["parse"], "boundary": "the user's own input parses and results render", "embedded_in": "qr-tools" },
   "qr-tools": { "actions": ["download_png", "download_svg"], "boundary": "download is initiated from valid rendered content" },
   "quick-query": { "actions": ["merge", "insert", "update"], "boundary": "query generation succeeds" },
   "querify": { "actions": ["generate"], "boundary": "at least one file generates successfully" },
@@ -37,18 +40,7 @@
     "boundary": "validated INSERT SQL is copied or downloaded"
   },
   "master-lockey": {
-    "actions": [
-      "search_copy_lockey",
-      "search_copy_results",
-      "bulk_search",
-      "bulk_search_copy",
-      "bulk_search_copy_lockey",
-      "bulk_confluence_search",
-      "bulk_confluence_copy_lockey",
-      "bulk_confluence_copy_table",
-      "confluence_copy_lockey",
-      "confluence_copy_table"
-    ],
-    "boundary": "search returns results or clipboard write succeeds"
+    "actions": ["search", "confluence_search", "bulk_confluence_search"],
+    "boundary": "a typed search with results stays on screen for 1.5s or is copied, or a Confluence page or bulk search returns lockeys"
   }
 }

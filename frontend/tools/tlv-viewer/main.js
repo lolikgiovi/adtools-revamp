@@ -108,7 +108,7 @@ class TLVViewer extends BaseTool {
     } catch (_) {}
 
     if ((c.querySelector("#tlv-input")?.value || "").trim()) {
-      this.parseCurrentInput({ restored: true });
+      this.parseCurrentInput({ countUse: false });
     } else {
       this.renderEmpty();
     }
@@ -128,8 +128,8 @@ class TLVViewer extends BaseTool {
 
   // ── Parsing ───────────────────────────────────────────────────────────
 
-  // A restored input re-parses on every open; only a parse the user asks for is a Tool Use.
-  parseCurrentInput({ restored = false } = {}) {
+  // Restored input re-parses on every open and samples are demo data; only the user's own parse is a Tool Use.
+  parseCurrentInput({ countUse = true } = {}) {
     const c = this.container;
     if (!c) return;
 
@@ -150,7 +150,7 @@ class TLVViewer extends BaseTool {
       this.clearError();
       this.renderResult(result);
       this.updateCopyButton();
-      if (!restored) UsageTracker.trackToolUse("tlv-viewer", "parse");
+      if (countUse) UsageTracker.trackToolUse("tlv-viewer", "parse");
       this.trackAnalytics("parse", {
         format: result.format,
         node_count: result.summary.nodeCount,
@@ -470,7 +470,7 @@ class TLVViewer extends BaseTool {
     this.persistValue(this.storageKeys.format, formatEl.value);
     this.persistInputDebounced();
     this.trackAnalytics("sample_loaded", { sample_type: type, format: formatEl.value });
-    this.parseCurrentInput();
+    this.parseCurrentInput({ countUse: false });
   }
 
   clearAll() {

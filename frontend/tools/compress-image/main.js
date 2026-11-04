@@ -553,6 +553,7 @@ export class CompressImage extends BaseTool {
     const generation = this.generation;
     const batch = (this.batch = new AbortController());
     const pending = [...this.items];
+    let readied = 0;
     pending.forEach((item) => {
       item.status = "Queued";
       item.primaryPending = (item.type || item.file.type) === "image/jpeg" ? "lossy" : settings.lossyPng ? "lossy" : "lossless";
@@ -568,11 +569,7 @@ export class CompressImage extends BaseTool {
         item.status = "Ready";
         this.log(item, "Completed", { outcome: item.result.outcome });
         item.error = null;
-        try {
-          UsageTracker.trackToolUse("compress-image", "compress");
-        } catch (_) {
-          /* Analytics cannot interrupt local processing. */
-        }
+        readied++;
       } catch (error) {
         if (generation !== this.generation) return;
         item.status = "Error";
@@ -587,6 +584,14 @@ export class CompressImage extends BaseTool {
     };
     try {
       await Promise.allSettled(pending.map(process));
+      // One Compress click is one Tool Use, however many images it readies.
+      if (readied) {
+        try {
+          UsageTracker.trackToolUse("compress-image", "compress", { image_count: readied });
+        } catch (_) {
+          /* Analytics cannot interrupt local processing. */
+        }
+      }
     } finally {
       if (generation === this.generation) {
         this.running = false;

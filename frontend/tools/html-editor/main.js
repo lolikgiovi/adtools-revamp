@@ -171,7 +171,7 @@ class HTMLTemplateTool extends withTemplateSqlImport(BaseTool) {
     try {
       const cleanMeta = cleanAnalyticsMeta(meta);
       UsageTracker.trackEvent("html-template", event, cleanMeta);
-      const usageActions = { format_action: "format", minify_action: "minify", copy_html: "copy", vtl_extract: "vtl_extract" };
+      const usageActions = { format_action: "format", minify_action: "minify", copy_html: "copy" };
       if (usageActions[event]) UsageTracker.trackToolUse("html-template", usageActions[event], cleanMeta);
     } catch (_) {}
   }
