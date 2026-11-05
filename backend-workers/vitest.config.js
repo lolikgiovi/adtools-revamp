@@ -1,6 +1,12 @@
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { cloudflareTest } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
+
+const TESTS = new URL("./tests/", import.meta.url);
+const NODE_SQLITE_TESTS = readdirSync(TESTS)
+  .filter((name) => name.endsWith(".test.js") && readFileSync(new URL(name, TESTS), "utf8").includes('"node:sqlite"'))
+  .map((name) => `backend-workers/tests/${name}`);
 
 export default defineConfig({
   root: fileURLToPath(new URL("..", import.meta.url)),
@@ -22,24 +28,6 @@ export default defineConfig({
   test: {
     include: ["backend-workers/tests/**/*.test.js"],
     // node:sqlite tests run in the root Node suite; workerd cannot load that module.
-    exclude: [
-      "backend-workers/tests/settings-publishing.test.js",
-      "backend-workers/tests/analytics-count-integrity.test.js",
-      "backend-workers/tests/analytics-ingestion-integrity.test.js",
-      "backend-workers/tests/analytics-timestamps.test.js",
-      "backend-workers/tests/analytics-timestamp-repair.test.js",
-      "backend-workers/tests/analytics-timestamp-regression-repair.test.js",
-      "backend-workers/tests/capability-adoption.test.js",
-      "backend-workers/tests/canonical-tool-usage-migration.test.js",
-      "backend-workers/tests/dashboard-load.test.js",
-      "backend-workers/tests/dashboard-performance.test.js",
-      "backend-workers/tests/dashboard-device-exclusions.test.js",
-      "backend-workers/tests/dashboard-ordering.test.js",
-      "backend-workers/tests/dashboard-person.test.js",
-      "backend-workers/tests/dashboard-tabs-smoke.test.js",
-      "backend-workers/tests/dashboard-trends.test.js",
-      "backend-workers/tests/dashboard-patterns.test.js",
-      "backend-workers/tests/lifetime-usage-baseline.test.js",
-    ],
+    exclude: NODE_SQLITE_TESTS,
   },
 });
