@@ -256,6 +256,14 @@ export class ValueProcessorService {
     const integerDigits = decimalPosition - first;
     const decimalDigits = end - decimalPosition;
     const storedDigits = end - first + Math.max(0, decimalPosition + Math.min(scale ?? 0, 0) - end);
+    if (scale < 0 && decimalDigits > scale) {
+      return {
+        type: "scale_exceeded",
+        scale,
+        precision,
+        message: `Value ${num} would be rounded to the nearest ${10 ** -scale} for field "${fieldName}"`,
+      };
+    }
     if (storedDigits > precision) {
       return {
         type: "precision_exceeded",

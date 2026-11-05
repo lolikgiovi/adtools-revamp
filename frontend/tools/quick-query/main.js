@@ -2478,11 +2478,14 @@ export class QuickQueryUI {
   appendErrorCellLinks(container, message) {
     const text = String(message).replace(/<br\s*\/?>/gi, "\n");
     const references = /\bCell ([A-Z]+)([1-9]\d*)\b/g;
+    const excel = this.excelImportService?.hasData();
     let end = 0;
     for (const match of text.matchAll(references)) {
       container.appendChild(document.createTextNode(text.slice(end, match.index)));
+      const row = Number(match[2]);
       const col = [...match[1]].reduce((value, letter) => value * 26 + letter.charCodeAt(0) - 64, 0) - 1;
-      container.appendChild(this.createCellLink(Number(match[2]), col, match[0]));
+      // Imported rows keep the sheet's header row, so data row N is Excel row N + 1, as in the issue panel.
+      container.appendChild(excel ? document.createTextNode(`Excel row ${row + 1}`) : this.createCellLink(row, col, match[0]));
       end = match.index + match[0].length;
     }
     container.appendChild(document.createTextNode(text.slice(end)));
@@ -2496,13 +2499,16 @@ export class QuickQueryUI {
     warning.appendChild(summary);
     const content = document.createElement("div");
     content.className = "qq-duplicate-warning-content";
+    const excel = this.excelImportService?.hasData();
     for (const duplicate of message.duplicates) {
       const line = document.createElement("p");
-      line.appendChild(
-        document.createTextNode(
-          `Primary key ${duplicate.pkFields.join(", ")} with value ${duplicate.pkValues.join(", ")} appears in cells: `,
-        ),
-      );
+      const key = `Primary key ${duplicate.pkFields.join(", ")} with value ${duplicate.pkValues.join(", ")} appears in`;
+      if (excel) {
+        line.textContent = `${key} Excel rows ${duplicate.rows.map((row) => row + 1).join(", ")}`;
+        content.appendChild(line);
+        continue;
+      }
+      line.appendChild(document.createTextNode(`${key} cells: `));
       for (const [index, row] of duplicate.rows.slice(0, 5).entries()) {
         if (index) line.appendChild(document.createTextNode(", "));
         for (const [keyIndex, col] of duplicate.columns.entries()) {

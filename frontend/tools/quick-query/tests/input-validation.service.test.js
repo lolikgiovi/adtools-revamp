@@ -2,6 +2,8 @@
 // UPDATE blanks rejected, explicit NULL accepted in required fields, audit defaults ignored,
 // UTF-8 bytes confused with characters, header mismatches missed, source data mutated,
 // attachment filenames treated as content, repeated live checks emitting analytics, or unbounded issue lists.
+// Negative scale: values Oracle would round reported as a precision overflow, real overflows hidden behind
+// a rounding message, or positive-scale messages changed.
 import { describe, expect, it, vi } from "vitest";
 import { collectInputIssues } from "../services/InputValidationService.js";
 import { ValueProcessorService } from "../services/ValueProcessorService.js";
@@ -229,4 +231,20 @@ describe("input validation", () => {
     expect(() => processor.processValue("", "VARCHAR2(3 BYTE)", "No", "NAME", "APP.TEST", "insert")).toThrow(/NULL value/);
     expect(processor.processValue("", "VARCHAR2(3 BYTE)", "No", "NAME", "APP.TEST", "update")).toBe(null);
   });
+
+  it("explains negative-scale rounding separately from precision overflow", () => {
+    const processor = new ValueProcessorService();
+    const issue = (value, type) => processor.getConstraintIssue(value, type, "Yes", "AMOUNT");
+    expect(issue("9900", "NUMBER(2,-2)")).toBe(null);
+    for (const value of ["9949", "-9949", "9900.5", "12301"]) {
+      const rounded = issue(value, value === "12301" ? "NUMBER(3,-2)" : "NUMBER(2,-2)");
+      expect(rounded, value).toMatchObject({ type: "scale_exceeded", scale: -2 });
+      expect(rounded.message).toBe(`Value ${value} would be rounded to the nearest 100 for field "AMOUNT"`);
+    }
+    expect(issue("1.2e3", "NUMBER(2,-3)").message).toMatch(/nearest 1000/);
+    expect(issue("12300", "NUMBER(2,-2)")).toMatchObject({ type: "precision_exceeded" });
+    expect(issue("123.456", "NUMBER(5,2)").type).toBe("precision_exceeded");
+    expect(issue("12.345", "NUMBER(6,2)").message).toMatch(/exceeds maximum scale of 2 \(6,2\)/);
+  });
 });
+
