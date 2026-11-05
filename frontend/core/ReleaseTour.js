@@ -692,14 +692,17 @@ export class ReleaseTour {
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const pad = 6;
-    this.spotlightEl.style.left = `${Math.max(4, rect.left - pad)}px`;
-    this.spotlightEl.style.top = `${Math.max(4, rect.top - pad)}px`;
-    this.spotlightEl.style.width = `${Math.min(viewportWidth - 8, rect.width + pad * 2)}px`;
-    this.spotlightEl.style.height = `${Math.min(viewportHeight - 8, rect.height + pad * 2)}px`;
+    const spotLeft = Math.max(4, rect.left - pad);
+    const spotTop = Math.max(4, rect.top - pad);
+    this.spotlightEl.style.left = `${spotLeft}px`;
+    this.spotlightEl.style.top = `${spotTop}px`;
+    this.spotlightEl.style.width = `${Math.max(0, Math.min(viewportWidth - 4, rect.right + pad) - spotLeft)}px`;
+    this.spotlightEl.style.height = `${Math.max(0, Math.min(viewportHeight - 4, rect.bottom + pad) - spotTop)}px`;
 
     const step = this.model.tour[this.tourIndex];
-    const tooltipWidth = Math.min(340, viewportWidth - 24);
-    const gap = 14;
+    const wide = ["top", "bottom"].includes(step?.placement || "bottom");
+    const tooltipWidth = Math.min(wide ? Math.max(300, Math.min(rect.width + pad * 2, 380)) : 340, viewportWidth - 24);
+    const gap = 20;
     this.tooltipEl.style.width = `${tooltipWidth}px`;
     const tooltipHeight = this.tooltipEl.offsetHeight || 150;
     let placement = step?.placement || "bottom";
@@ -708,7 +711,7 @@ export class ReleaseTour {
     if (placement === "right" && rect.right + gap + tooltipWidth > viewportWidth - 8) placement = "left";
     if (placement === "left" && rect.left - gap - tooltipWidth < 8) placement = "right";
 
-    let left = rect.left + rect.width / 2 - tooltipWidth / 2;
+    let left = wide && rect.width + pad * 2 >= 300 ? rect.left - pad : rect.left + rect.width / 2 - tooltipWidth / 2;
     let top = rect.bottom + gap;
     if (placement === "top") {
       top = rect.top - gap - tooltipHeight;
@@ -1129,21 +1132,24 @@ export class ReleaseTips {
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const pad = 6;
-    this.spotlightEl.style.left = `${Math.max(4, rect.left - pad)}px`;
-    this.spotlightEl.style.top = `${Math.max(4, rect.top - pad)}px`;
-    this.spotlightEl.style.width = `${Math.min(viewportWidth - 8, rect.width + pad * 2)}px`;
-    this.spotlightEl.style.height = `${Math.min(viewportHeight - 8, rect.height + pad * 2)}px`;
+    const spotLeft = Math.max(4, rect.left - pad);
+    const spotTop = Math.max(4, rect.top - pad);
+    this.spotlightEl.style.left = `${spotLeft}px`;
+    this.spotlightEl.style.top = `${spotTop}px`;
+    this.spotlightEl.style.width = `${Math.max(0, Math.min(viewportWidth - 4, rect.right + pad) - spotLeft)}px`;
+    this.spotlightEl.style.height = `${Math.max(0, Math.min(viewportHeight - 4, rect.bottom + pad) - spotTop)}px`;
 
-    const tooltipWidth = Math.min(340, viewportWidth - 24);
+    const wide = ["top", "bottom"].includes(stage.placement || this.activeTip.placement || "bottom");
+    const tooltipWidth = Math.min(wide ? Math.max(300, Math.min(rect.width + pad * 2, 380)) : 340, viewportWidth - 24);
     const tooltipHeight = this.tooltipEl.offsetHeight || 150;
-    const gap = 14;
+    const gap = 20;
     let placement = stage.placement || this.activeTip.placement;
     if (placement === "bottom" && rect.bottom + gap + tooltipHeight > viewportHeight - 8) placement = "top";
     if (placement === "top" && rect.top - gap - tooltipHeight < 8) placement = "bottom";
     if (placement === "right" && rect.right + gap + tooltipWidth > viewportWidth - 8) placement = "left";
     if (placement === "left" && rect.left - gap - tooltipWidth < 8) placement = "right";
 
-    let left = rect.left + rect.width / 2 - tooltipWidth / 2;
+    let left = wide && rect.width + pad * 2 >= 300 ? rect.left - pad : rect.left + rect.width / 2 - tooltipWidth / 2;
     let top = rect.bottom + gap;
     if (placement === "top") top = rect.top - gap - tooltipHeight;
     else if (placement === "right") {

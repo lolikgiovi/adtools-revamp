@@ -1,8 +1,19 @@
-# AD Tools 1.3.15
+# AD Tools 1.4.0
 
-- **PlantUML** — Render large diagrams at full size. Long sequence diagrams that previously failed with "The renderer could not finish" now preview; PNG export still scales very large diagrams to fit.
+- **Quick Query** — Validate input and enforce field constraints, navigate cells more smoothly, read clearer rounding and Excel row messages, and convert DBeaver schemas from a new dialog. Fixes SQL, import and tab-isolation defects.
+- **Home** — Recent PlantUML diagrams appear on Home.
+- **PlantUML** — Create files and folders inline and search tables and PlantUML files from the catalog.
+- **Merge SQL and Compare Config** — Improved workflows and narrow-screen layouts.
+- **Navigation** — The desktop sidebar stays visible as a compact rail with tooltips, and the web header is more compact.
+- **Feedback** — Report a bug or send feedback from the header; saved submissions are emailed.
+- **Forms** — Required-field errors wait until you interact with the field.
+- **Desktop** — External links no longer open twice.
 
 ## Earlier release notes
+
+### AD Tools 1.3.15
+
+- **PlantUML** — Render large diagrams at full size. Long sequence diagrams that previously failed with "The renderer could not finish" now preview; PNG export still scales very large diagrams to fit.
 
 ### AD Tools 1.3.14
 
