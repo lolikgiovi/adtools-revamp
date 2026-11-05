@@ -107,7 +107,7 @@ export function renderDepartmentUsage(page, container, { departments = [], tools
       const department = button.dataset.departmentFilter;
       page.departmentFilter = page.departmentFilter === department ? null : department;
       rerender();
-      container.querySelector(`[data-department-filter="${CSS.escape(department)}"]`)?.focus();
+      [...container.querySelectorAll("[data-department-filter]")].find((el) => el.dataset.departmentFilter === department)?.focus();
     }),
   );
   container
