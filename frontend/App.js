@@ -1955,6 +1955,7 @@ class App {
       getIcon: this.getToolIcon.bind(this),
       onOpen: (id) => this.router.navigate(id, {}, { source: "home" }),
       onOpenTable: (tableName) => this.router.navigate("quick-query", { tableName }, { source: "home" }),
+      onOpenDiagram: (fileId) => this.router.navigate("plantuml", { fileId }, { source: "home" }),
       onSearch: () => this.globalSearch?.open("home"),
     });
   }

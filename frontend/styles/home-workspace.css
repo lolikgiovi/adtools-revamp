@@ -18,7 +18,7 @@
   gap: 1rem;
 }
 
-.home-container :is(.home-workspace-heading, .home-start, .home-pinned, .home-recent-tables, .home-usage-details) > h2 {
+.home-container :is(.home-workspace-heading, .home-start, .home-pinned, .home-recent-tables, .home-recent-diagrams, .home-usage-details) > h2 {
   margin: 0;
   font-size: 0.9375rem;
   font-weight: 600;
@@ -111,11 +111,13 @@
   margin-top: 0;
 }
 
-.home-recent-tables {
+.home-recent-tables,
+.home-recent-diagrams {
   margin-top: 1.75rem;
 }
 
-.home-recent-tables .home-tool {
+.home-recent-tables .home-tool,
+.home-recent-diagrams .home-tool {
   background: hsl(var(--muted) / 0.4);
 }
 
@@ -183,7 +185,6 @@
 
 .home-container .home-usage-details {
   padding-top: 1.5rem;
-  border-top: 1px solid hsl(var(--border));
 }
 
 .home-usage-details .usage-overview-grid {

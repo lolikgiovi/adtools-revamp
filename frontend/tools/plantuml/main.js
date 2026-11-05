@@ -15,6 +15,7 @@ import { getIconSvg, workbenchIcon } from "./icon.js";
 import { editorThemeOptions } from "./themes.js";
 import { template } from "./template.js";
 import { diagramType } from "./diagram-type.js";
+import { recordRecentDiagram } from "./recent.js";
 import "./styles.css";
 
 const USAGE_COUNTED_KEY = "plantuml.usage.counted";
@@ -234,6 +235,7 @@ export class PlantUmlTool extends BaseTool {
         nodes: this.workspace.nodes.map((node) => (node.id === file.id ? { ...node, content: model.getValue() } : node)),
       };
       setCompletionWorkspace(this.workspace.nodes);
+      recordRecentDiagram(file.id);
       this.editedFiles.add(file.id);
       this.scheduleSave();
       if (this.isActive) this.renderer?.render(this.activeFile, this.workspace.nodes, { delay: 1000 });
@@ -248,6 +250,7 @@ export class PlantUmlTool extends BaseTool {
     if (this.currentFileId !== file?.id) {
       if (this.currentFileId) this.views.set(this.currentFileId, this.editor.saveViewState());
       this.currentFileId = file?.id;
+      recordRecentDiagram(file?.id);
       this.editor.setModel(file ? this.model(file) : null);
       if (file && this.views.has(file.id)) this.editor.restoreViewState(this.views.get(file.id));
       this.diagram = null;

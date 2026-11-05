@@ -1,4 +1,5 @@
 import { getSearchInteractionKey } from "../core/RecentInteractionStore.js";
+import { recentDiagrams } from "../tools/plantuml/recent.js";
 import "../styles/home-workspace.css";
 
 const escapeHtml = (value) =>
@@ -44,13 +45,16 @@ const RECENT_TABLE_LIMIT = 4;
 
 /** Home destinations share the sidebar's visibility rules and the command palette's recency store. */
 export class HomeWorkspace {
-  constructor(container, { tools, pinnedIds, recentStore, getIcon, onOpen, onOpenTable, onSearch, usageScope, peerScope }) {
+  constructor(container, { tools, pinnedIds, recentStore, getIcon, onOpen, onOpenTable, onOpenDiagram, onSearch, usageScope, peerScope }) {
     this.container = container;
-    this.options = { tools, pinnedIds, recentStore, getIcon, onOpen, onOpenTable, onSearch, usageScope, peerScope };
+    this.options = { tools, pinnedIds, recentStore, getIcon, onOpen, onOpenTable, onOpenDiagram, onSearch, usageScope, peerScope };
     container.addEventListener("click", (event) => {
       const target = event.target.closest("[data-home-tool]");
       const table = event.target.closest("[data-home-table]");
-      if (table) {
+      const diagram = event.target.closest("[data-home-diagram]");
+      if (diagram) {
+        this.options.onOpenDiagram?.(diagram.dataset.homeDiagram);
+      } else if (table) {
         this.options.onOpenTable?.(table.dataset.homeTable);
       } else if (target && this.options.tools.some((tool) => tool.id === target.dataset.homeTool)) {
         this.options.onOpen(target.dataset.homeTool);
@@ -94,6 +98,10 @@ export class HomeWorkspace {
         </div>
       </section>
       ${this.renderRecentTables(recentStore, byId, getIcon)}
+      <section class="home-recent-diagrams" aria-labelledby="home-recent-diagrams-title" hidden>
+        <h2 id="home-recent-diagrams-title">Recent sequence diagrams</h2>
+        <div class="home-tool-list"></div>
+      </section>
       ${
         pinned.length
           ? `<section class="home-pinned" aria-labelledby="home-pinned-title">
@@ -107,6 +115,31 @@ export class HomeWorkspace {
         <div class="home-tip-list"></div>
       </section>`;
     this.renderRecommendations();
+    void this.renderRecentDiagrams();
+  }
+
+  async renderRecentDiagrams() {
+    const { tools, recentStore, getIcon, onOpenDiagram } = this.options;
+    const tool = tools.find((tool) => tool.id === "plantuml");
+    const section = this.container.querySelector(".home-recent-diagrams");
+    if (!tool || !onOpenDiagram || !section) return;
+    try {
+      const files = await recentDiagrams(recentStore);
+      if (!this.container.contains(section)) return;
+      section.querySelector(".home-tool-list").innerHTML = files
+        .map(
+          (file) => `
+        <button class="home-tool" type="button" data-home-diagram="${escapeHtml(file.id)}" title="${escapeHtml(file.path)}">
+          <span class="home-tool-icon" aria-hidden="true">${getIcon(tool.icon)}</span>
+          <span class="home-tool-name">${escapeHtml(file.name)}</span>
+        </button>`,
+        )
+        .join("");
+      section.hidden = !files.length;
+    } catch {
+      // Home remains usable when the local diagram database is unavailable.
+      section.hidden = true;
+    }
   }
 
   /** Quick Query tables the user opened or generated SQL for most recently. */

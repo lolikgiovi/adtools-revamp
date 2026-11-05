@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "checks": [
+    "No diagram history: section hidden",
+    "Four most recent opened files in order, below Recent tables; names escaped",
+    "Home item opens exact file; editing updates recency",
+    "History persists across reload",
+    "Mobile section has no horizontal overflow",
+    "Deleted file excluded; next recent file fills the limit",
+    "Hidden PlantUML tool hides its recent files"
+  ]
+}
