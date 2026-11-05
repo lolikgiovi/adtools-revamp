@@ -63,12 +63,12 @@ try {
       ]);
     });
     const panel = page.locator("#quickQueryInputValidation");
-    await panel.getByText("3 cells need attention", { exact: true }).waitFor();
+    await panel.getByText("2 cells need attention", { exact: true }).waitFor();
     await panel.locator("summary").click();
-    assert.equal(await panel.locator("button").count(), 3);
+    assert.equal(await panel.locator("button").count(), 2);
     await panel.getByRole("button", { name: /B2:.*4 \/ 3 BYTE/ }).click();
     assert.deepEqual(await withUI(page, (ui) => ui.dataTable.getSelectedLast().slice(0, 2)), [2, 1]);
-    assert.equal(await page.locator('#spreadsheet-data .ht_master td[aria-invalid="true"]').count(), 3);
+    assert.equal(await page.locator('#spreadsheet-data .ht_master td[aria-invalid="true"]').count(), 2);
     await withUI(page, (ui) => {
       window.beforeValidation = JSON.stringify(ui.dataTable.getData());
     });
@@ -78,8 +78,11 @@ try {
         window.app.tools.get("quick-query").ui.editor.getValue() === "" && !window.app.tools.get("quick-query").ui._queryPreparationPending,
     );
     assert.equal(await withUI(page, (ui) => JSON.stringify(ui.dataTable.getData()) === window.beforeValidation), true);
+    await panel.getByText("3 cells need attention", { exact: true }).waitFor();
     await page.screenshot({ path: resolve(output, `${width}-${theme}-issues.png`), animations: "disabled" });
-    checks.push(`${width}: live required/BYTE/CHAR issues, exact coordinates, navigation, generation blocked, input preserved`);
+    checks.push(
+      `${width}: live BYTE/CHAR issues, untouched required cells deferred until Generate, exact navigation, generation blocked, input preserved`,
+    );
 
     await withUI(page, (ui) => {
       ui.dataTable.setDataAtCell([
@@ -140,7 +143,7 @@ try {
         ["12abc", "SYSDATE", "ok"],
       ]);
     });
-    await panel.getByText("5 cells need attention", { exact: true }).waitFor();
+    await panel.getByText("4 cells need attention", { exact: true }).waitFor();
     await panel.getByRole("button", { name: /A1:.*maximum scale/ }).waitFor();
     await panel.getByRole("button", { name: /B1:.*Invalid date/ }).waitFor();
     await panel.getByRole("button", { name: /A2:.*maximum precision/ }).waitFor();
@@ -150,6 +153,7 @@ try {
       () =>
         window.app.tools.get("quick-query").ui.editor.getValue() === "" && !window.app.tools.get("quick-query").ui._queryPreparationPending,
     );
+    await panel.getByText("5 cells need attention", { exact: true }).waitFor();
     await page.screenshot({ path: resolve(output, `${width}-${theme}-numeric-date.png`), animations: "disabled" });
     await withUI(page, (ui) =>
       ui.dataTable.setDataAtCell([
@@ -201,6 +205,8 @@ try {
         ["", "changed", "installment.education.banner.image.en"],
       ]);
     });
+    await page.waitForFunction(() => document.querySelector("#quickQueryInputValidation").hidden);
+    await page.locator("#generateQuery").click();
     await panel.getByText("1 cell needs attention", { exact: true }).waitFor();
     await panel.getByRole("button", { name: /C1:.*PARAMETER_KEY.*required to match/ }).click();
     assert.deepEqual(await withUI(page, (ui) => ui.dataTable.getSelectedLast().slice(0, 2)), [1, 2]);

@@ -33,6 +33,7 @@ import {
 } from "./services/SchemaImportService.js";
 import { splitSqlStatementsSafely, calcUtf8Bytes, groupBySize, groupByQueryCount, deriveBaseName } from "./services/SplitService.js";
 import { collectInputIssues } from "./services/InputValidationService.js";
+import { InputValidationInteraction } from "./services/InputValidationInteraction.js";
 import { QueryExecutionService } from "./services/QueryExecutionService.js";
 import { SplitWorkerService } from "./services/SplitWorkerService.js";
 import { analyzeJenkinsSql, convertJenkinsUnsafeLiterals } from "./services/JenkinsSqlSafetyService.js";
@@ -938,6 +939,9 @@ export class QuickQueryUI {
       beforeChange: (changes, source) => this.normalizeDataTablePasteChanges(changes, source),
       beforePaste: (data) => this.restoreDatabaseClipboardJson(data),
       afterChange: (changes, source) => {
+        if (changes && source !== "loadData" && !this._isHydratingTab) {
+          this.getInputValidationInteraction().commit(changes, source);
+        }
         this.scheduleInputValidation();
         // Persist data only for user edits (skip loadData)
         if (!changes || source === "loadData") return;
@@ -951,11 +955,35 @@ export class QuickQueryUI {
           this.scheduleActiveTabDraftSave();
         }
       },
-      afterLoadData: () => this.scheduleInputValidation(),
-      afterRemoveRow: () => this.scheduleInputValidation(),
-      afterCreateRow: () => this.scheduleInputValidation(),
-      afterRemoveCol: () => this.scheduleInputValidation(),
-      afterCreateCol: () => this.scheduleInputValidation(),
+      afterLoadData: (initialLoad, source) => {
+        if (!this._isHydratingTab && source !== "qq-preserve-validation") {
+          this._inputValidationInteractions?.delete(this.activeTabId);
+        }
+        this.scheduleInputValidation();
+      },
+      beforeKeyDown: (event) => {
+        this._inputValidationUserSelection = ["Tab", "Enter", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End"].includes(
+          event.key,
+        );
+      },
+      afterDocumentKeyDown: () => {
+        this._inputValidationUserSelection = false;
+      },
+      beforeOnCellMouseDown: () => {
+        this._inputValidationUserSelection = true;
+      },
+      afterOnCellMouseDown: () => {
+        this._inputValidationUserSelection = false;
+      },
+      afterSelection: (row, col, endRow, endCol) => {
+        if (!this._inputValidationUserSelection || this._isHydratingTab) return;
+        this.getInputValidationInteraction().select(row, col, endRow, endCol);
+        this.scheduleInputValidation();
+      },
+      afterRemoveRow: (index, amount) => this.moveInputValidationHistory("row", index, amount, 0),
+      afterCreateRow: (index, amount) => this.moveInputValidationHistory("row", index, 0, amount),
+      afterRemoveCol: (index, amount) => this.moveInputValidationHistory("col", index, amount, 0),
+      afterCreateCol: (index, amount) => this.moveInputValidationHistory("col", index, 0, amount),
       afterRenderer: (td, row, col) => {
         const issue = this._inputIssueCells?.get(`${row}:${col}`);
         td.classList.toggle("qq-invalid-cell", Boolean(issue));
@@ -970,11 +998,34 @@ export class QuickQueryUI {
       // No height recalculation hooks
     };
 
+    this._handleValidationDeparture = (event) => {
+      const target = event.type === "focusout" ? event.relatedTarget : event.target;
+      if (!target || dataContainer.contains(target)) return;
+      // Error navigation and tab restoration must not count as visiting a cell.
+      if (target.closest?.("#quickQueryInputValidation, #quickQueryTabStrip")) return;
+      this.getInputValidationInteraction().leave();
+      this.scheduleInputValidation();
+    };
+    document.addEventListener("mousedown", this._handleValidationDeparture, true);
+    dataContainer.addEventListener("focusout", this._handleValidationDeparture);
     this.dataTable = new Handsontable(this.elements.dataContainer, dataTableConfig);
     this.elements.dataContainer.addEventListener("wheel", this._handleDataWorkspaceWheel, { passive: false });
     this._handleDataTablePasteCapture ||= (event) => this.captureDataTablePaste(event);
     this.elements.dataContainer.removeEventListener("paste", this._handleDataTablePasteCapture, true);
     this.elements.dataContainer.addEventListener("paste", this._handleDataTablePasteCapture, true);
+  }
+
+  getInputValidationInteraction() {
+    this._inputValidationInteractions ||= new Map();
+    if (!this._inputValidationInteractions.has(this.activeTabId)) {
+      this._inputValidationInteractions.set(this.activeTabId, new InputValidationInteraction());
+    }
+    return this._inputValidationInteractions.get(this.activeTabId);
+  }
+
+  moveInputValidationHistory(axis, index, removed, added) {
+    if (!this._isHydratingTab) this.getInputValidationInteraction().splice(axis, index, removed, added);
+    this.scheduleInputValidation();
   }
 
   scheduleInputValidation() {
@@ -987,6 +1038,8 @@ export class QuickQueryUI {
     clearTimeout(this._inputValidationTimer);
     const panel = this.elements.inputValidation;
     if (!panel) return { issues: [], truncated: false };
+    const interaction = this.getInputValidationInteraction();
+    if (reveal) interaction.revealAll = true;
     // Imported Excel rows are kept outside the grid; validate them on Generate.
     const skipGrid = !inputData && this.excelImportService?.hasData();
     const result = skipGrid
@@ -1002,6 +1055,7 @@ export class QuickQueryUI {
             customAuditUser: this.customAuditUserValue,
           },
           attachments: this.processedFiles || [],
+          reportMissing: reveal || excel ? undefined : (row, col) => interaction.shouldReportMissing(row, col),
         });
     const auditIssues = result.issues.filter((issue) => issue.target === "audit_user");
     this.markAuditUserIssues(auditIssues);
@@ -1861,6 +1915,7 @@ export class QuickQueryUI {
 
   async applyTabDraft(tab) {
     if (!tab) return;
+    this.getInputValidationInteraction().active = null;
     this._isHydratingTab = true;
     try {
       this.elements.tableNameInput.value = tab.tableName || "";
@@ -2334,6 +2389,9 @@ export class QuickQueryUI {
     this.elements.dataContainer?.removeEventListener("wheel", this._handleDataWorkspaceWheel);
     this.elements.dataContainer?.removeEventListener("paste", this._handleDataTablePasteCapture, true);
     this._pendingDataTableClipboard = null;
+    document.removeEventListener("mousedown", this._handleValidationDeparture, true);
+    this.elements.dataContainer?.removeEventListener("focusout", this._handleValidationDeparture);
+    this._inputValidationInteractions?.clear();
     clearTimeout(this._inputValidationTimer);
     this.imageWorkflow?.abort();
     this._closeBlobAttachmentChoice?.();
@@ -4163,14 +4221,15 @@ export class QuickQueryUI {
     const columnCount = schemaData.length;
     const newRow = Array(columnCount).fill(null);
     const newData = [...currentData, newRow];
-    this.dataTable.loadData(newData);
+    this.dataTable.loadData(newData, "qq-preserve-validation");
     this.scheduleActiveTabDraftSave();
   }
 
   handleRemoveDataRow() {
     const currentData = this.dataTable.getData();
     const newData = currentData.slice(0, -1);
-    this.dataTable.loadData(newData);
+    this.moveInputValidationHistory("row", newData.length, 1, 0);
+    this.dataTable.loadData(newData, "qq-preserve-validation");
     this.scheduleActiveTabDraftSave();
   }
 

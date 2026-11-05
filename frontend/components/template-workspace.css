@@ -24,7 +24,7 @@
 
 :where(.splunk-vtl-editor) .vtl-layout {
   display: grid;
-  gap: 0.75rem;
+  gap: 4px;
   min-height: 0;
   flex: 1 1 0;
   grid-template-columns: minmax(0, 3fr) 6px minmax(0, 2fr);
@@ -583,7 +583,7 @@
   grid-area: 1 / 2 / span 2;
   width: 6px;
   border-radius: 4px;
-  background: hsl(var(--border));
+  background: transparent;
   cursor: col-resize;
   opacity: 0.7;
 }
@@ -598,9 +598,17 @@
   transform: translateX(-50%);
 }
 
-:where(.splunk-vtl-editor) .vtl-resizer:hover,
-:where(.splunk-vtl-editor) .vtl-resizer:focus-visible,
-:where(.splunk-vtl-editor) .vtl-resizer:active {
+:where(.splunk-vtl-editor) .vtl-resizer::after {
+  position: absolute;
+  inset: 0 2px;
+  border-radius: inherit;
+  background: hsl(var(--border));
+  content: "";
+}
+
+:where(.splunk-vtl-editor) .vtl-resizer:hover::after,
+:where(.splunk-vtl-editor) .vtl-resizer:focus-visible::after,
+:where(.splunk-vtl-editor) .vtl-resizer:active::after {
   background: hsl(var(--foreground));
 }
 

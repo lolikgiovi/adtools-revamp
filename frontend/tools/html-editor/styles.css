@@ -267,7 +267,7 @@ body:has(.html-template.is-focus-mode) .main-content {
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(240px, 3fr) 6px minmax(240px, 2fr);
-  gap: 0.75rem;
+  gap: 4px;
 }
 
 .html-template-resizer {
@@ -284,7 +284,7 @@ body:has(.html-template.is-focus-mode) .main-content {
 
 .html-template-resizer::before {
   position: absolute;
-  inset: 0 1px;
+  inset: 0 2px;
   content: "";
   border-radius: inherit;
   background: hsl(var(--border));
@@ -671,7 +671,7 @@ body.is-resizing * {
 .html-template .html-input-panels {
   display: grid;
   grid-template-rows: minmax(0, 5fr) minmax(0, 3fr);
-  gap: 0.75rem;
+  gap: 4px;
   min-height: 0;
   min-width: 0;
 }

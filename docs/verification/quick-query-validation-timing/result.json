@@ -1,0 +1,22 @@
+{
+  "date": "2026-11-05",
+  "method": "Interactive in-app browser walkthrough of production QuickQuery mounted in the accompanying local harness",
+  "passed": true,
+  "checks": [
+    "Entering ID and tabbing into untouched NAME leaves the validation panel hidden.",
+    "Tabbing away from empty NAME shows B1: NAME is required.",
+    "Clicking a validation issue selects the indicated cell.",
+    "Correcting NAME clears its error; committing AGE=abc reports invalid numeric input.",
+    "Correcting AGE to 42 clears its error; adding a blank row adds no error.",
+    "Entering row 2 ID=2 leaves untouched NAME quiet; clicking another row reports B2: NAME is required.",
+    "Switching to another valid tab shows no inherited errors; switching back restores the row 2 error.",
+    "Pasting only ID=3 into row 3 reports the missing NAME immediately.",
+    "Generate with a missing NAME produces no SQL; correcting the name allows generation with all three rows."
+  ],
+  "automated": {
+    "command": "./node_modules/.bin/vitest run frontend/tools/quick-query/tests",
+    "filesPassed": 38,
+    "testsPassed": 442
+  },
+  "limitations": "Isolated component, not signed-in application shell. Legacy input-validation-browser.mjs expectations updated but that standalone script was not executed in this run."
+}

@@ -5,7 +5,16 @@ const processor = new ValueProcessorService();
 
 // Read-only preflight shares cell constraints with generation; attachment content
 // is validated after expansion by the generator.
-export function collectInputIssues({ schemaData, inputData, queryType, tableName = "", options = {}, attachments = [], limit = 100 }) {
+export function collectInputIssues({
+  schemaData,
+  inputData,
+  queryType,
+  tableName = "",
+  options = {},
+  attachments = [],
+  limit = 100,
+  reportMissing = () => true,
+}) {
   const issues = [];
   const result = () => ({ issues, truncated: issues.length >= limit });
   const headers = (inputData?.[0] || []).map((value) => String(value ?? "").trim());
@@ -59,6 +68,8 @@ export function collectInputIssues({ schemaData, inputData, queryType, tableName
     if (!values.some((value) => value != null && value !== "")) continue;
     for (const [col, { field, dataType, nullable, parsed }] of columns.entries()) {
       const value = values[col];
+      const empty = value == null || value === "";
+      if (empty && !reportMissing(row, col)) continue;
       if (matchKeys.has(field) && (value == null || value === "" || String(value).toLowerCase() === "null")) {
         issues.push({ row, col, type: "missing_primary_key", message: `Field "${field}" is required to match this row` });
         if (issues.length >= limit) return result();
@@ -68,6 +79,7 @@ export function collectInputIssues({ schemaData, inputData, queryType, tableName
       try {
         const effectiveValue = resolveAttachmentValue(value, dataType, attachments);
         const issue = processor.getConstraintIssue(effectiveValue, dataType, nullable, field, queryType, options, parsed);
+        if (issue?.type === "null_not_allowed" && empty) issue.message = `${field} is required`;
         if (issue) issues.push({ row, col, ...issue });
       } catch (error) {
         issues.push({ row, col, type: "attachment", message: error.message });

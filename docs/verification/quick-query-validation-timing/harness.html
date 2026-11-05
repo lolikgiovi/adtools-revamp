@@ -1,0 +1,9 @@
+<!doctype html>
+<html><head><meta charset="UTF-8"><title>Quick Query UX Review</title><link rel="stylesheet" href="/styles.css"></head>
+<body><main id="tool" style="min-height:100vh;padding:80px 16px 16px"></main><script type="module">
+import { QuickQuery } from '/tools/quick-query/main.js';
+import { EventBus } from '/core/EventBus.js';
+const tool = new QuickQuery(new EventBus());
+tool.mount(document.querySelector('#tool'));
+tool.activate();
+</script></body></html>

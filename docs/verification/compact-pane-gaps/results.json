@@ -1,0 +1,117 @@
+{
+  "status": "PASS",
+  "results": [
+    {
+      "tool": "html-template",
+      "desktop": {
+        "gap": "4px",
+        "rowGap": "4px",
+        "line": "2px",
+        "columns": "721.188px 6px 480.797px",
+        "value": "721",
+        "overflow": false
+      },
+      "keyboard": {
+        "gap": "4px",
+        "rowGap": "4px",
+        "line": "2px",
+        "columns": "737px 6px 465px",
+        "value": "737",
+        "overflow": false
+      },
+      "dragged": {
+        "gap": "4px",
+        "rowGap": "4px",
+        "line": "2px",
+        "columns": "684px 6px 518px",
+        "value": "684",
+        "overflow": false
+      },
+      "mobileDividerHidden": true
+    },
+    {
+      "tool": "velocity-template",
+      "desktop": {
+        "gap": "4px",
+        "rowGap": "4px",
+        "line": "2px",
+        "columns": "721.188px 6px 480.797px",
+        "value": "60",
+        "overflow": false
+      },
+      "keyboard": {
+        "gap": "4px",
+        "rowGap": "4px",
+        "line": "2px",
+        "columns": "745.031px 6px 456.969px",
+        "value": "62",
+        "overflow": false
+      },
+      "dragged": {
+        "gap": "4px",
+        "rowGap": "4px",
+        "line": "2px",
+        "columns": "694.375px 6px 507.609px",
+        "value": "58",
+        "overflow": false
+      },
+      "mobileDividerHidden": true
+    },
+    {
+      "tool": "splunk-template",
+      "desktop": {
+        "gap": "4px",
+        "rowGap": "4px",
+        "line": "2px",
+        "columns": "721.188px 6px 480.797px",
+        "value": "60",
+        "overflow": false
+      },
+      "keyboard": {
+        "gap": "4px",
+        "rowGap": "4px",
+        "line": "2px",
+        "columns": "745.188px 6px 456.797px",
+        "value": "62",
+        "overflow": false
+      },
+      "dragged": {
+        "gap": "4px",
+        "rowGap": "4px",
+        "line": "2px",
+        "columns": "699px 6px 503px",
+        "value": "58",
+        "overflow": false
+      },
+      "mobileDividerHidden": true
+    },
+    {
+      "tool": "kafka",
+      "desktop": {
+        "gap": "4px",
+        "rowGap": "4px",
+        "line": "2px",
+        "columns": "674.234px 4px 529.766px",
+        "value": "674",
+        "overflow": false
+      },
+      "keyboard": {
+        "gap": "4px",
+        "rowGap": "4px",
+        "line": "2px",
+        "columns": "690px 4px 514px",
+        "value": "690",
+        "overflow": false
+      },
+      "dragged": {
+        "gap": "4px",
+        "rowGap": "4px",
+        "line": "2px",
+        "columns": "638px 4px 566px",
+        "value": "638",
+        "overflow": false
+      },
+      "mobileDividerHidden": true
+    }
+  ]
+}
