@@ -111,7 +111,9 @@ pub fn run() {
       kafka::kafka_search_history,
       kafka::kafka_publish,
       kafka::kafka_start_listener,
-      kafka::kafka_stop_listener
+      kafka::kafka_stop_listener,
+      install_location::install_location_check,
+      install_location::move_install_to_user_apps
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
@@ -350,6 +352,7 @@ pub mod oracle;
 pub mod oracle_sidecar;
 pub mod redis_cache;
 pub mod kafka;
+pub mod install_location;
 use keyring::Entry;
 use reqwest::Client;
 use std::time::Duration;

@@ -16,6 +16,7 @@ dependencies = [
  "chrono",
  "httpmock",
  "keyring",
+ "libc",
  "log",
  "objc2 0.6.3",
  "objc2-app-kit",

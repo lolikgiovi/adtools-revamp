@@ -262,12 +262,18 @@ class SettingsPage {
             this.eventBus?.emit?.("notification:error", { message: "A forced update is required, but desktop runtime is not available." });
           } else {
             this.eventBus?.emit?.("update:forced", { policy, unsupported: false, manifest });
-            const ok = await performUpdate(
-              (loaded, total) => this.eventBus?.emit?.("update:progress", { loaded, total }),
-              (stage) => this.eventBus?.emit?.("update:stage", { stage }),
-              policy.channel,
-              { manifest, version: manifest?.version || policy.forceMinVersion, channel: policy.channel },
-            );
+            let ok = false;
+            try {
+              ok = await performUpdate(
+                (loaded, total) => this.eventBus?.emit?.("update:progress", { loaded, total }),
+                (stage) => this.eventBus?.emit?.("update:stage", { stage }),
+                policy.channel,
+                { manifest, version: manifest?.version || policy.forceMinVersion, channel: policy.channel },
+              );
+            } catch (err) {
+              this.eventBus?.emit?.("update:error", { message: String(err?.message || err) });
+              return;
+            }
             if (!ok) {
               this.eventBus?.emit?.("update:error", { message: "Update not available or install failed" });
             }

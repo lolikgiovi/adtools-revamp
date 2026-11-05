@@ -1097,7 +1097,7 @@ class App {
             this.eventBus.emit("update:error", { message: "Update not available or install failed" });
           }
         } catch (err) {
-          this.eventBus.emit("update:error", { message: String(err) || "Update failed" });
+          this.eventBus.emit("update:error", { message: String(err?.message || err) || "Update failed" });
         } finally {
           updateBtn.disabled = false;
           laterBtn && (laterBtn.disabled = false);

@@ -153,6 +153,36 @@ export async function checkUpdate(opts = {}) {
   }
 }
 
+export class InstallLocationError extends Error {}
+
+// Returns true when the app moved itself to ~/apps (and is about to quit); false when it can update in place.
+async function relocateIfInstallLocked(setStage) {
+  let location = null;
+  try {
+    location = await invoke("install_location_check");
+  } catch (_) {
+    return false;
+  }
+  if (!location?.needsMove) return false;
+
+  const { ask } = await import("@tauri-apps/plugin-dialog");
+  const move = await ask(`Updating AD Tools here needs admin rights. Move it to ${location.targetPath} and reopen?`, {
+    title: "Move AD Tools",
+    kind: "info",
+    okLabel: "Move and reopen",
+    cancelLabel: "Not now",
+  });
+  if (!move) throw new InstallLocationError(`Update skipped. Move AD Tools to ${location.targetPath} to update.`);
+
+  setStage("restarting");
+  try {
+    await invoke("move_install_to_user_apps");
+  } catch (err) {
+    throw new InstallLocationError(String(err));
+  }
+  return true;
+}
+
 export async function performUpdate(progressCb, stageCb, channel, releaseMeta = {}) {
   const setStage = (s) => {
     try {
@@ -182,6 +212,8 @@ export async function performUpdate(progressCb, stageCb, channel, releaseMeta = 
         setStage("uptodate");
         return false;
       }
+      // Stop before the plugin can fall back to an admin prompt: move to ~/apps instead, with the user's OK.
+      if (await relocateIfInstallLocked(setStage)) return true;
       const manifest = releaseMeta?.manifest || releaseMeta?.release || {};
       const pendingRelease = {
         surface: "desktop",
@@ -236,7 +268,8 @@ export async function performUpdate(progressCb, stageCb, channel, releaseMeta = 
         throw err;
       }
     }
-  } catch (_) {
+  } catch (err) {
+    if (err instanceof InstallLocationError) throw err;
     // fallthrough
   }
 
