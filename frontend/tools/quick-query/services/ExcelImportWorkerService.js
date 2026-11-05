@@ -1,6 +1,8 @@
 import ExcelImportWorker from "./excel.worker.js?worker";
 import { ExcelImportService } from "./ExcelImportService.js";
 
+let importCounter = 0;
+
 export class ExcelImportWorkerService {
   constructor(options = {}) {
     this.fallbackService = options.fallbackService || new ExcelImportService();
@@ -113,6 +115,28 @@ export class ExcelImportWorkerService {
     this.header = result?.header || null;
     this.importedData = result?.data || null;
     this.rowCount = result?.rowCount || 0;
+    // Each import gets its own id so re-importing an identically shaped file still counts as a change.
+    if (result) this.importId = ++importCounter;
+  }
+
+  getImportId() {
+    return this.hasData() ? this.importId : null;
+  }
+
+  // Imports belong to a query tab: snapshot on import, restore on tab switch.
+  snapshot() {
+    return this.hasData() ? { header: this.header, data: this.importedData, rowCount: this.rowCount, importId: this.importId } : null;
+  }
+
+  restore(snapshot) {
+    if (!snapshot) {
+      this.clear();
+      return;
+    }
+    this.header = snapshot.header;
+    this.importedData = snapshot.data;
+    this.rowCount = snapshot.rowCount;
+    this.importId = snapshot.importId;
   }
 
   getDataForQuery() {

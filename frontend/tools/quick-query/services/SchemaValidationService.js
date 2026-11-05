@@ -108,7 +108,22 @@ export class SchemaValidationService {
   }
 
   isValidOracleDataType(dataType) {
-    const validTypes = ["NUMBER", "VARCHAR", "VARCHAR2", "DATE", "TIMESTAMP", "CHAR", "CLOB", "BLOB"];
+    const validTypes = [
+      "NUMBER",
+      "VARCHAR",
+      "VARCHAR2",
+      "DATE",
+      "TIMESTAMP",
+      "CHAR",
+      "CLOB",
+      "BLOB",
+      "FLOAT",
+      "INTEGER",
+      "NVARCHAR2",
+      "NCHAR",
+      "RAW",
+      "LONG",
+    ];
     return validTypes.some((type) => dataType.toUpperCase().startsWith(type));
   }
 

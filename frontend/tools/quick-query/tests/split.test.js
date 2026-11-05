@@ -428,3 +428,49 @@ describe('deriveBaseName - Edge cases', () => {
     expect(baseName).toBe('CHUNK_6')
   })
 })
+
+// Failure modes for statements that are not plain semicolon-terminated SQL:
+// 1. A PL/SQL block (the BLOB attachment script) is cut at its inner semicolons into unusable fragments.
+// 2. A block's "/" terminator gets a stray ";" appended or is separated from its block.
+// 3. A string ending in a backslash is treated as escaped, so splitting happens inside the string.
+// 4. Grouping by query count no longer counts a block as a query, merging every following statement into it.
+describe('splitSqlStatementsSafely - PL/SQL blocks and backslashes', () => {
+  const block = [
+    'DECLARE',
+    '  quick_query_chunk RAW(32767);',
+    '  quick_query_blob_1 BLOB;',
+    'BEGIN',
+    "  quick_query_chunk := UTL_ENCODE.BASE64_DECODE(UTL_RAW.CAST_TO_RAW('QUJD'));",
+    'INSERT INTO s.t (id, doc) \nVALUES (1, quick_query_blob_1);',
+    '',
+    'INSERT INTO s.t (id, doc) \nVALUES (2, quick_query_blob_1);',
+    '  DBMS_LOB.FREETEMPORARY(quick_query_blob_1);',
+    'EXCEPTION',
+    '  WHEN OTHERS THEN',
+    '    IF DBMS_LOB.ISTEMPORARY(quick_query_blob_1) = 1 THEN DBMS_LOB.FREETEMPORARY(quick_query_blob_1); END IF;',
+    '    RAISE;',
+    'END;',
+    '/',
+  ].join('\n')
+
+  it('keeps a PL/SQL block whole, terminated by its slash', () => {
+    const result = splitSqlStatementsSafely(`SET DEFINE OFF;\n\n${block}\n\nSELECT * FROM s.t WHERE id IN (1, 2);`)
+    expect(result).toEqual(['SET DEFINE OFF;', block, 'SELECT * FROM s.t WHERE id IN (1, 2);'])
+  })
+
+  it('counts a block as one query when grouping', () => {
+    const { chunks } = groupByQueryCount(splitSqlStatementsSafely(`${block}\n\nINSERT INTO s.t (id) VALUES (3);`), 1, 'SET DEFINE OFF;\n')
+    expect(chunks).toHaveLength(2)
+    expect(chunks[0]).toContain(block)
+    expect(chunks[1]).toContain('VALUES (3);')
+  })
+
+  it('does not treat a backslash as an escape inside strings', () => {
+    const sql = "INSERT INTO t VALUES (1, 'C:\\temp\\');\nINSERT INTO t VALUES (2, 'a;b');\nINSERT INTO t VALUES (3, 'c');"
+    expect(splitSqlStatementsSafely(sql)).toEqual([
+      "INSERT INTO t VALUES (1, 'C:\\temp\\');",
+      "INSERT INTO t VALUES (2, 'a;b');",
+      "INSERT INTO t VALUES (3, 'c');",
+    ])
+  })
+})

@@ -92,4 +92,25 @@ describe("Oracle row import", () => {
     expect(OracleDataImportService.classifyError(new Error("The selected table changed during the fetch."))).toBe("table_changed");
     expect(OracleDataImportService.classifyError(new Error("sidecar exited"))).toBe("other");
   });
+  // Failure modes for schemas typed in lowercase (generation treats them case-insensitively):
+  // 1. Selecting the same fields in any case is rejected as "must exactly match".
+  // 2. SELECT * finds no matching columns because Oracle reports names in uppercase.
+  // 3. The grid header loses the schema's spelling, so generation no longer matches the schema.
+  // 4. A lowercase BLOB field is not recognized, so its bytes are not marked as BLOB data.
+  it("matches lowercase schema fields to Oracle's uppercase columns", async () => {
+    const lower = ["id", "name", "doc"];
+    expect(OracleDataImportService.parseQuery("SELECT id, NAME FROM APP.ITEM", lower).fields).toEqual(["id", "name"]);
+    expect(() => OracleDataImportService.parseQuery("SELECT ID, ID FROM APP.ITEM", lower)).toThrow("only once");
+    const query = OracleDataImportService.parseQuery("SELECT * FROM APP.ITEM", lower);
+    expect(query.fields).toEqual(["id", "name", "doc"]);
+    OracleConnectionService.queryViaSidecar = vi.fn().mockResolvedValue({
+      columns: ["ID", "NAME", "DOC"],
+      rows: [[1, "A", { __adtools_type: "oracle_blob", encoding: "base64", data: "QUJD" }]],
+    });
+    await expect(OracleDataImportService.fetch({ name: "SIT" }, query, new Set(["doc"]))).resolves.toEqual({
+      rows: [[1, "A", "data:application/octet-stream;base64,QUJD"]],
+      missingFields: [],
+      extraColumns: [],
+    });
+  });
 });

@@ -1,6 +1,9 @@
-import { commonDateFormats } from "../constants.js";
+import { commonDateFormats, oracleReservedWords } from "../constants.js";
 import moment from "moment";
 import { UsageTracker } from "../../../core/UsageTracker.js";
+import { formatOracleFieldName } from "./OracleIdentifier.js";
+
+const STRING_TYPES = ["VARCHAR", "VARCHAR2", "CHAR", "NVARCHAR2", "NCHAR"];
 
 export class ValueProcessorService {
   constructor() {}
@@ -77,7 +80,7 @@ export class ValueProcessorService {
 
     const type = parsedType || this.parseDataType(dataType);
     if (type.type === "NUMBER") {
-      if (field === "config_id" && dataType.toUpperCase() === "NUMBER") return null;
+      if (this.isGeneratedConfigId(fieldName, dataType, options)) return null;
       if (text.toLowerCase().includes("max")) return null;
       const normalized = this.normalizeNumber(text);
       const num = Number(normalized);
@@ -94,8 +97,22 @@ export class ValueProcessorService {
         return { type: "invalid_timestamp", message: `Invalid date/time for field "${fieldName}"` };
       }
     }
+    if (type.type === "RAW") {
+      if (!/^[0-9A-F]*$/i.test(text)) {
+        return { type: "invalid_raw", message: `Invalid hexadecimal value for RAW field "${fieldName}"` };
+      }
+      const bytes = Math.ceil(text.length / 2);
+      if (!type.maxLength || bytes <= type.maxLength) return null;
+      return {
+        type: "max_length_exceeded",
+        maxLength: type.maxLength,
+        length: bytes,
+        unit: "BYTE",
+        message: `Value exceeds maximum length for field "${fieldName}": ${bytes} / ${type.maxLength} BYTE`,
+      };
+    }
     // These tokens are expanded by the generator rather than stored literally.
-    if (!auditUserField && ["VARCHAR", "VARCHAR2", "CHAR"].includes(type.type) && text.toLowerCase() === "uuid") {
+    if (!auditUserField && STRING_TYPES.includes(type.type) && text.toLowerCase() === "uuid") {
       if (!type.maxLength || type.maxLength >= 36) return null;
       return {
         type: "uuid_length_too_small",
@@ -104,7 +121,7 @@ export class ValueProcessorService {
       };
     }
     if (field === "system_config_id" && text.toLowerCase() === "max") return null;
-    if (!["VARCHAR", "VARCHAR2", "CHAR"].includes(type.type) || !type.maxLength) return null;
+    if (!STRING_TYPES.includes(type.type) || !type.maxLength) return null;
     const length = type.unit === "BYTE" ? new TextEncoder().encode(text).length : Array.from(text).length;
     if (length <= type.maxLength) return null;
     return {
@@ -167,25 +184,22 @@ export class ValueProcessorService {
     }
 
     // Handle special ID fields
-    const upperDataType = dataType.toUpperCase();
     const lowerStrValue = strValue.toLowerCase();
+    const fieldDataType = this.parseDataType(dataType);
+    // Reserved columns need the generator's quoting; other names stay as entered.
+    const column = oracleReservedWords.has(fieldName.toLowerCase()) ? formatOracleFieldName(fieldName) : fieldName;
 
-    // Increment value (max + 1)
-    if (
-      (fieldName.toLowerCase() === "config_id" && upperDataType === "NUMBER") || // specific for config_id
-      (upperDataType.startsWith("NUMBER") && lowerStrValue.includes("max")) // any number fields containing "max" phrase
-    ) {
-      return `(SELECT NVL(MAX(${fieldName})+1, 1) FROM ${tableName})`;
+    // Increment value (max + 1): CONFIG_ID outside match keys, or any number containing "max"
+    if (this.isGeneratedConfigId(fieldName, dataType, options) || (fieldDataType.type === "NUMBER" && lowerStrValue.includes("max"))) {
+      return `(SELECT NVL(MAX(${column})+1, 1) FROM ${tableName})`;
     }
 
     // System config ID
     if (fieldName.toLowerCase() === "system_config_id" && lowerStrValue === "max") {
-      return `(SELECT MAX(CAST(${fieldName} AS INT))+1 FROM ${tableName})`;
+      return `(SELECT MAX(CAST(${column} AS INT))+1 FROM ${tableName})`;
     }
 
     // Process regular values based on data type
-    const fieldDataType = this.parseDataType(dataType);
-
     switch (fieldDataType.type) {
       case "NUMBER":
         return this.normalizeNumber(strValue);
@@ -193,8 +207,13 @@ export class ValueProcessorService {
       case "VARCHAR":
       case "VARCHAR2":
       case "CHAR":
+      case "NVARCHAR2":
+      case "NCHAR":
         if (lowerStrValue === "uuid") return `'${crypto.randomUUID()}'`;
         return `'${strValue.replace(/'/g, "''")}'`;
+
+      case "RAW":
+        return `HEXTORAW('${strValue.toUpperCase()}')`;
 
       case "DATE":
       case "TIMESTAMP":
@@ -211,8 +230,28 @@ export class ValueProcessorService {
     }
   }
 
+  // CONFIG_ID is generated as MAX+1, except when it is the key that matches existing rows.
+  isGeneratedConfigId(fieldName, dataType, options = {}) {
+    return (
+      fieldName.toLowerCase() === "config_id" &&
+      String(dataType).toUpperCase() === "NUMBER" &&
+      !(options.matchKeys || []).includes(fieldName)
+    );
+  }
+
   parseDataType(dataType) {
     const upperType = dataType.trim().toUpperCase();
+
+    // INTEGER is NUMBER(38) without decimals; FLOAT accepts any decimal number.
+    if (upperType === "INTEGER") return { type: "NUMBER", precision: 38, scale: 0 };
+    if (/^FLOAT\s*(?:\(\s*\d+\s*\))?$/.test(upperType)) return { type: "NUMBER" };
+
+    // National character types always count characters.
+    const nationalMatch = upperType.match(/^(NVARCHAR2|NCHAR)\s*\(\s*(\d+)\s*\)$/);
+    if (nationalMatch) return { type: nationalMatch[1], maxLength: parseInt(nationalMatch[2]), unit: "CHAR" };
+
+    const rawMatch = upperType.match(/^RAW\s*\(\s*(\d+)\s*\)$/);
+    if (rawMatch) return { type: "RAW", maxLength: parseInt(rawMatch[1]) };
 
     // Parse NUMBER type
     const numberMatch = upperType.match(/^NUMBER\s*\(\s*(\d+)\s*(?:,\s*(-?\d+)\s*)?\)$/);
@@ -509,7 +548,7 @@ export class ValueProcessorService {
   formatBLOB(value) {
     // Ensure base64 string and wrap in utl_raw.cast_to_raw
     const base64 = value.replace(/^data:.*;base64,/, "");
-    return `utl_raw.cast_to_raw('${base64}')`;
+    return `utl_raw.cast_to_raw('${base64.replace(/'/g, "''")}')`;
   }
 
   isValidDate(value) {

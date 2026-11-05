@@ -109,12 +109,16 @@ export class OracleDataImportService {
     if (selections.some((selection) => selection[1] && !sources.some((source) => source.qualifier === selection[1].toUpperCase()))) {
       throw new Error("Selected field qualifiers must match a queried table or its alias.");
     }
-    const fields = star ? [...schemaFields] : selections.map((selection) => (selection[3] || selection[2]).toUpperCase());
-    const schemaSet = new Set(schemaFields);
-    if (validateFields && fields.some((field) => !schemaSet.has(field))) {
-      throw new Error(`Selected fields must exactly match the schema: ${fields.filter((field) => !schemaSet.has(field)).join(", ")}.`);
+    // Oracle reports unquoted names in uppercase; keep the schema's spelling so the grid header matches it.
+    const schemaByKey = new Map(schemaFields.map((field) => [String(field).toUpperCase(), field]));
+    const selected = star ? [...schemaFields] : selections.map((selection) => (selection[3] || selection[2]).toUpperCase());
+    if (validateFields && !star && selected.some((field) => !schemaByKey.has(field))) {
+      throw new Error(`Selected fields must exactly match the schema: ${selected.filter((field) => !schemaByKey.has(field)).join(", ")}.`);
     }
-    if (new Set(fields).size !== fields.length) throw new Error("Each selected field may appear only once.");
+    if (new Set(selected.map((field) => String(field).toUpperCase())).size !== selected.length) {
+      throw new Error("Each selected field may appear only once.");
+    }
+    const fields = star ? selected : selected.map((field) => schemaByKey.get(field) ?? field);
     return {
       sql: statement,
       tableName: `${table[1]}.${table[2]}`.toUpperCase(),
@@ -139,8 +143,10 @@ export class OracleDataImportService {
     if (new Set(columns).size !== columns.length) {
       throw new Error("Oracle returned duplicate column names. Alias each column once.");
     }
-    const missingFields = query.fields.filter((field) => !columns.includes(field));
-    const extraColumns = columns.filter((column) => !query.fields.includes(column));
+    const fieldKeys = query.fields.map((field) => String(field).toUpperCase());
+    const blobKeys = new Set([...blobFields].map((field) => String(field).toUpperCase()));
+    const missingFields = query.fields.filter((field, index) => !columns.includes(fieldKeys[index]));
+    const extraColumns = columns.filter((column) => !fieldKeys.includes(column));
     if (missingFields.length === query.fields.length) {
       throw new Error(`None of the returned columns match the schema. Oracle returned: ${columns.join(", ") || "no columns"}.`);
     }
@@ -153,13 +159,13 @@ export class OracleDataImportService {
     if (result.rows.some((row) => !Array.isArray(row) || row.length !== columns.length)) {
       throw new Error("Oracle returned an unexpected row shape.");
     }
-    const columnIndexes = query.fields.map((field) => columns.indexOf(field));
+    const columnIndexes = fieldKeys.map((field) => columns.indexOf(field));
     const rows = result.rows.map((row) =>
       columnIndexes.map((index) => {
         if (index < 0) return null;
         const value = row[index];
         const field = columns[index];
-        if (!blobFields.has(field) || value == null) return value;
+        if (!blobKeys.has(field) || value == null) return value;
         if (value.__adtools_type !== "oracle_blob" || value.encoding !== "base64" || typeof value.data !== "string") {
           throw new Error(`Oracle returned an unsupported BLOB value for ${field}.`);
         }

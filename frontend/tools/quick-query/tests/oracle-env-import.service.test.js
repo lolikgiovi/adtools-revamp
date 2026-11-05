@@ -79,4 +79,17 @@ describe("OracleEnvImportService shared Oracle connection usage", () => {
     expect(payload.CONTENT.tables.MESSAGE_TEMPLATE.columns.ID.type).toBe("VARCHAR2(36)");
     expect(payload.CONTENT.tables.MESSAGE_TEMPLATE.pk).toEqual(["ID"]);
   });
+  it("keeps selected table names intact in the primary key query", async () => {
+    OracleConnectionService.queryViaSidecar
+      .mockResolvedValueOnce({ rows: [["APP_OWNER", "ACCOUNT_OWNER", "ID", "NUMBER", 22, null, null, "N", null, 1]] })
+      .mockResolvedValueOnce({ rows: [["APP_OWNER", "ACCOUNT_OWNER", "ID", 1]] });
+
+    const payload = await OracleEnvImportService.fetchAllMetadata("SIT", config, ["APP_OWNER"], null, [
+      { schema: "APP_OWNER", table: "ACCOUNT_OWNER" },
+    ]);
+
+    const pkSql = OracleConnectionService.queryViaSidecar.mock.calls[1][2];
+    expect(pkSql).toContain("cons.OWNER = 'APP_OWNER' AND cons.TABLE_NAME IN ('ACCOUNT_OWNER')");
+    expect(payload.APP_OWNER.tables.ACCOUNT_OWNER.pk).toEqual(["ID"]);
+  });
 });

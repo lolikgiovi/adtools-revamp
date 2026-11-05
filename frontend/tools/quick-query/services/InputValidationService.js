@@ -21,6 +21,8 @@ export function collectInputIssues({
   if (!schemaData.length || !inputData?.slice(1).some((row) => row.some((cell) => cell != null && cell !== ""))) return result();
   const schema = new Map(schemaData.map((row) => [row[0], row]));
   const matchKeys = new Set(queryType === "update" ? processor.findPrimaryKeys(schemaData, tableName) : []);
+  // Generation keeps entered values for UPDATE/MERGE keys, so they are validated like any other value.
+  if (["update", "merge"].includes(queryType)) options = { ...options, matchKeys: processor.findPrimaryKeys(schemaData, tableName) };
   const seen = new Set();
   for (const [col, field] of headers.entries()) {
     let message;

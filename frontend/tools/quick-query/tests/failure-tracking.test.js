@@ -21,6 +21,7 @@ function ui(generate) {
   vi.spyOn(UsageTracker, "trackFailure").mockImplementation((id, action, error) => failures.push([id, action, failureName(error)]));
   const instance = Object.assign(Object.create(QuickQueryUI.prototype), {
     queryExecutionService: { generateQuery: generate },
+    elements: {},
     processedFiles: [],
     editor: { setValue: vi.fn() },
     _showProgress: vi.fn(),

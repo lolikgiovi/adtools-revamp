@@ -7,7 +7,7 @@ import { initialSchemaTableSpecification, initialDataTableSpecification } from "
 import { AttachmentProcessorService } from "./services/AttachmentProcessorService.js";
 import { ExcelImportWorkerService } from "./services/ExcelImportWorkerService.js";
 import { OracleDataImportService, ORACLE_IMPORT_MAX_ROWS } from "./services/OracleDataImportService.js";
-import { fingerprintQueryInputs, needsRegeneration } from "./services/GenerateAndRunService.js";
+import { fingerprintQueryInputs, generationRecord, needsRegeneration } from "./services/GenerateAndRunService.js";
 import { describeOracleImportError } from "./services/OracleImportErrorService.js";
 import { hasMalformedQuotedField, recoverMalformedDatabaseClipboard } from "./services/DatabaseClipboardService.js";
 import { MAIN_TEMPLATE, FILE_BUTTON_TEMPLATE } from "./template.js";
@@ -166,6 +166,7 @@ export class QuickQueryUI {
     this._storageReady = false;
     this.attachmentProcessorService = new AttachmentProcessorService();
     this.excelImportService = new ExcelImportWorkerService();
+    this._excelImportsByTab = new Map(); // tab id -> Excel import snapshot
     this.queryExecutionService = new QueryExecutionService();
     this.splitWorkerService = new SplitWorkerService();
     this.dataAutosave = new TableAutosaveService({
@@ -1579,6 +1580,8 @@ export class QuickQueryUI {
       inputData: Array.isArray(overrides.inputData) ? overrides.inputData : [[], []],
       attachments: Array.isArray(overrides.attachments) ? overrides.attachments : [],
       generatedSql: overrides.generatedSql || "",
+      // Digest + input fingerprint of the SQL Quick Query generated, so Run Query can spot stale SQL per tab.
+      generatedFrom: overrides.generatedFrom?.sqlHash ? { ...overrides.generatedFrom } : null,
       dirty: Boolean(overrides.dirty),
       createdAt: overrides.createdAt || now,
       lastUpdated: overrides.lastUpdated || now,
@@ -1898,6 +1901,7 @@ export class QuickQueryUI {
       inputData: this.dataTable?.getData?.() || [[], []],
       attachments: this.cloneAttachments(this.processedFiles),
       generatedSql: this.editor?.getValue?.() || "",
+      generatedFrom: this._generatedSql || null,
       dirty: true,
       createdAt: active?.createdAt,
       lastUpdated: now,
@@ -1915,6 +1919,8 @@ export class QuickQueryUI {
 
   async applyTabDraft(tab) {
     if (!tab) return;
+    // A running generation belongs to the tab being left; its result must not land in this one.
+    this.handleCancelGeneration();
     this.getInputValidationInteraction().active = null;
     this._isHydratingTab = true;
     try {
@@ -1936,6 +1942,9 @@ export class QuickQueryUI {
       }
       this.updateAttachmentControlsState();
       this.editor?.setValue?.(tab.generatedSql || "");
+      this._generatedSql = tab.generatedFrom || null;
+      this.excelImportService?.restore?.(this._excelImportsByTab?.get(tab.id));
+      this._refreshExcelImportUI();
       this.clearError();
       this.renderTabs();
       this.refreshLayouts();
@@ -2184,6 +2193,7 @@ export class QuickQueryUI {
       }
       this.tabs = remaining;
       this.activeTabId = next.id;
+      for (const tabId of idsToClose) this._excelImportsByTab?.delete(tabId);
       if (next.id !== previousActiveId) await this.applyTabDraft(await this.loadTabDraft(next));
       await this.saveTabSession();
       this.renderTabs();
@@ -2814,6 +2824,9 @@ export class QuickQueryUI {
 
       const tableName = this.elements.tableNameInput.value.trim();
       const queryType = this.getQueryTypeValue();
+      const tabId = this.activeTabId;
+      // Dialogs and saves below are awaited; stop if the user switched tabs meanwhile.
+      const tabChanged = () => tabId !== this.activeTabId;
 
       const schemaData = this.schemaTable.getData().filter((row) => row[0]);
 
@@ -2871,6 +2884,7 @@ export class QuickQueryUI {
         }
       }
 
+      if (tabChanged()) return;
       const options = { defaultSysdate: this.elements.defaultSysdateToggle.checked, auditUserMode };
       if (auditUserMode === "custom") options.customAuditUser = customAuditUser;
       const validation = this.validateInputSheet({
@@ -2903,6 +2917,7 @@ export class QuickQueryUI {
         if (!choice) return;
         options.blobAttachmentMode = choice;
       }
+      if (tabChanged()) return;
 
       await this._generateQuery(tableName, queryType, schemaData, inputData, dataSource, options);
     } catch (error) {
@@ -3004,6 +3019,9 @@ export class QuickQueryUI {
     // Increment request ID to track this specific generation request
     this._genReqId = (this._genReqId || 0) + 1;
     const currentReqId = this._genReqId;
+    const tabId = this.activeTabId;
+    const fingerprint = this.currentQueryFingerprint();
+    const isCurrent = () => currentReqId === this._genReqId && tabId === this.activeTabId;
 
     try {
       this.isGenerating = true;
@@ -3024,9 +3042,12 @@ export class QuickQueryUI {
         },
       });
 
-      // Guard against stale results - discard if a newer request was initiated
-      if (currentReqId !== this._genReqId) {
-        console.log("[QuickQuery] Discarding stale generation result");
+      // Discard results from an older request or for a tab that is no longer shown.
+      if (!isCurrent()) {
+        if (currentReqId === this._genReqId) {
+          this._hideProgress();
+          this.isGenerating = false;
+        }
         return;
       }
 
@@ -3034,7 +3055,7 @@ export class QuickQueryUI {
       this.isGenerating = false;
 
       this.editor.setValue(result.sql);
-      this._generatedSql = { sql: result.sql, fingerprint: this.currentQueryFingerprint() };
+      this._generatedSql = generationRecord(result.sql, fingerprint);
       this.clearError();
 
       // Show duplicate warning if any
@@ -3046,8 +3067,12 @@ export class QuickQueryUI {
       this._trackQueryGenerated(queryType, tableName, schemaData, inputData, dataSource, result.usedWorker);
       this.scheduleActiveTabDraftSave();
     } catch (error) {
-      // Only handle error if this is still the current request
-      if (currentReqId !== this._genReqId) {
+      // Only handle errors for the current request in the tab that started it
+      if (!isCurrent()) {
+        if (currentReqId === this._genReqId) {
+          this._hideProgress();
+          this.isGenerating = false;
+        }
         return;
       }
 
@@ -3512,7 +3537,7 @@ export class QuickQueryUI {
   /** Digest of everything that shapes the generated SQL, for Generate & Run freshness checks. */
   currentQueryFingerprint() {
     const excel = this.excelImportService?.hasData?.()
-      ? [this.excelImportService.getHeader(), this.excelImportService.getRowCount()]
+      ? [this.excelImportService.getHeader(), this.excelImportService.getRowCount(), this.excelImportService.getImportId?.()]
       : null;
     return fingerprintQueryInputs({
       tableName: this.elements.tableNameInput?.value?.trim(),
@@ -4549,11 +4574,12 @@ export class QuickQueryUI {
       fileName = getImportFileName(selected);
 
       // Read file contents
+      const tabId = this.activeTabId;
       const fileData = await readFile(selected);
 
       // Process Excel file
       const result = await this.excelImportService.processFromUint8Array(fileData);
-      this._onExcelImportSuccess(result, fileName);
+      this._onExcelImportSuccess(result, fileName, tabId);
     } catch (error) {
       this.trackQuickQueryEvent("excel_import_result", { outcome: "failed", reason: "file_processing", file_name: fileName });
       console.error("Failed to import Excel (Tauri):", error);
@@ -4579,8 +4605,9 @@ export class QuickQueryUI {
     if (!file) return;
 
     try {
+      const tabId = this.activeTabId;
       const result = await this.excelImportService.processFromFile(file);
-      this._onExcelImportSuccess(result, file.name);
+      this._onExcelImportSuccess(result, file.name, tabId);
     } catch (error) {
       this.trackQuickQueryEvent("excel_import_result", {
         outcome: "failed",
@@ -4599,8 +4626,15 @@ export class QuickQueryUI {
    * Called when Excel import is successful
    * Updates UI to show row count without rendering to Handsontable
    */
-  _onExcelImportSuccess(result, fileName) {
+  _onExcelImportSuccess(result, fileName, tabId = this.activeTabId) {
     const { header, rowCount } = result;
+    this._excelImportsByTab ||= new Map();
+    this._excelImportsByTab.set(tabId, this.excelImportService?.snapshot?.() ?? null);
+    // The user switched tabs while the file was read: keep the rows with the tab that imported them.
+    if (tabId !== this.activeTabId) {
+      this.excelImportService?.restore?.(this._excelImportsByTab.get(this.activeTabId));
+      return;
+    }
 
     const schemaData = this.schemaTable.getData().filter((row) => row[0]);
     if (schemaData.length > 0) {
@@ -4647,10 +4681,17 @@ export class QuickQueryUI {
    */
   handleClearExcelImport() {
     this.excelImportService.clear();
+    this._excelImportsByTab?.delete(this.activeTabId);
     this.scheduleInputValidation();
-    if (this.elements.excelImportInfo) {
-      this.elements.excelImportInfo.classList.add("hidden");
+    this._refreshExcelImportUI();
+  }
+
+  _refreshExcelImportUI() {
+    if (this.excelImportService?.hasData?.()) {
+      this._updateExcelImportUI(this.excelImportService.getRowCount());
+      return;
     }
+    this.elements.excelImportInfo?.classList.add("hidden");
     if (this.elements.excelImportRowCount) {
       this.elements.excelImportRowCount.textContent = "0 rows imported from Excel";
     }

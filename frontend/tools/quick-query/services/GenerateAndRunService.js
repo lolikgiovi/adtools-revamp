@@ -18,9 +18,16 @@ export function fingerprintQueryInputs({ tableName, queryType, schemaData, input
   return hash(JSON.stringify([String(tableName || "").toUpperCase(), queryType, schemaData, inputData, extra]));
 }
 
+// What was generated, kept per tab and saved with its draft: a digest instead of the SQL itself.
+export function generationRecord(sql, fingerprint) {
+  return { sqlHash: hash(String(sql || "").trim()), fingerprint };
+}
+
 export function needsRegeneration({ sql, fingerprint, generated }) {
   const current = String(sql || "").trim();
   if (!current) return true;
-  if (!generated || current !== String(generated.sql || "").trim()) return false;
+  if (!generated) return false;
+  const untouched = generated.sqlHash ? hash(current) === generated.sqlHash : current === String(generated.sql || "").trim();
+  if (!untouched) return false;
   return generated.fingerprint !== fingerprint;
 }

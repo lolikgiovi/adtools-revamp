@@ -1,5 +1,37 @@
 import * as XLSX from "xlsx";
 
+// cellNF keeps each cell's number format so dates and zero-padded codes can be read as displayed.
+const READ_OPTIONS = { type: "array", cellNF: true };
+
+const pad = (value, length = 2) => String(value).padStart(length, "0");
+
+// Excel stores dates as day serials; convert from the serial itself so the machine time zone cannot shift the day.
+function excelDateText(serial, date1904) {
+  const parts = XLSX.SSF.parse_date_code(serial, { date1904 });
+  if (!parts) return null;
+  const date = `${pad(parts.y, 4)}-${pad(parts.m)}-${pad(parts.d)}`;
+  return parts.H || parts.M || parts.S ? `${date} ${pad(parts.H)}:${pad(parts.M)}:${pad(parts.S)}` : date;
+}
+
+// Read numeric cells the way Excel shows them: dates as text, zero-padded codes with their zeros,
+// and decimals at Excel's 15 significant digits instead of binary float noise.
+function normalizeNumericCells(sheet, date1904) {
+  for (const [address, cell] of Object.entries(sheet)) {
+    if (address.startsWith("!") || cell?.t !== "n" || typeof cell.v !== "number") continue;
+    const format = typeof cell.z === "string" ? cell.z : "";
+    if (format && XLSX.SSF.is_date(format)) {
+      const text = excelDateText(cell.v, date1904);
+      // Drop the format too: sheet_to_json re-parses any cell that still has a date format.
+      if (text) Object.assign(cell, { t: "s", v: text, z: undefined, w: text });
+    } else if (/^0+$/.test(format)) {
+      const padded = XLSX.SSF.format(format, cell.v);
+      Object.assign(cell, { t: "s", v: padded, z: undefined, w: padded });
+    } else if (Number.isFinite(cell.v)) {
+      cell.v = Number(cell.v.toPrecision(15));
+    }
+  }
+}
+
 /**
  * Service for importing Excel files for quick-query data processing.
  * Reads Sheet1, extracts header from first row and data from subsequent rows.
@@ -28,7 +60,7 @@ export class ExcelImportService {
    * @returns {{header: string[], data: any[][], rowCount: number}}
    */
   processFromUint8Array(uint8Array) {
-    const workbook = XLSX.read(uint8Array, { type: "array" });
+    const workbook = XLSX.read(uint8Array, READ_OPTIONS);
     return this._processWorkbook(workbook);
   }
 
@@ -38,7 +70,7 @@ export class ExcelImportService {
    * @returns {{header: string[], data: any[][], rowCount: number}}
    */
   processFromArrayBuffer(arrayBuffer) {
-    const workbook = XLSX.read(arrayBuffer, { type: "array" });
+    const workbook = XLSX.read(arrayBuffer, READ_OPTIONS);
     return this._processWorkbook(workbook);
   }
 
@@ -59,6 +91,8 @@ export class ExcelImportService {
       throw new Error("Could not read sheet data");
     }
 
+    normalizeNumericCells(sheet, Boolean(workbook.Workbook?.WBProps?.date1904));
+
     // Convert sheet to 2D array
     const rawData = XLSX.utils.sheet_to_json(sheet, {
       header: 1, // Use array of arrays format
@@ -70,14 +104,17 @@ export class ExcelImportService {
       throw new Error("Excel file is empty");
     }
 
-    // First row is header
-    const header = rawData[0].map((cell) => (cell != null ? String(cell).trim() : ""));
+    // First row is header. Formatted but empty columns inside the used range are not part of the data.
+    const fullHeader = rawData[0].map((cell) => (cell != null ? String(cell).trim() : ""));
+    const hasValue = (cell) => cell != null && cell !== "";
+    const columns = fullHeader.flatMap((name, index) => (name || rawData.some((row) => hasValue(row[index])) ? [index] : []));
+    const header = columns.map((index) => fullHeader[index]);
 
     // Remaining rows are data
     const data = rawData.slice(1).map((row) => {
       // Ensure each row has same length as header
       const normalizedRow = [];
-      for (let i = 0; i < header.length; i++) {
+      for (const i of columns) {
         const cell = row[i];
         // Convert cell value to string or null
         if (cell == null || cell === "") {

@@ -127,23 +127,24 @@ export class OracleEnvImportService {
     const skipList = SKIPPED_TABLES.map((t) => `'${t}'`).join(",");
 
     // Build optional table filter when specific tables are selected
-    let tableFilter = "";
-    if (selectedTables && selectedTables.length > 0) {
+    // Built per alias: rewriting column names in finished SQL would also rewrite quoted table names.
+    const tableFilter = (prefix = "") => {
+      if (!selectedTables?.length) return "";
       const grouped = {};
       for (const { schema, table } of selectedTables) {
         if (!grouped[schema]) grouped[schema] = [];
         grouped[schema].push(`'${table.replace(/'/g, "''")}'`);
       }
       const clauses = Object.entries(grouped).map(
-        ([schema, tables]) => `(OWNER = '${schema.replace(/'/g, "''")}' AND TABLE_NAME IN (${tables.join(",")}))`,
+        ([schema, tables]) => `(${prefix}OWNER = '${schema.replace(/'/g, "''")}' AND ${prefix}TABLE_NAME IN (${tables.join(",")}))`,
       );
-      tableFilter = ` AND (${clauses.join(" OR ")})`;
-    }
+      return ` AND (${clauses.join(" OR ")})`;
+    };
 
     const columnsSql = `SELECT OWNER, TABLE_NAME, COLUMN_NAME, DATA_TYPE, DATA_LENGTH,
        DATA_PRECISION, DATA_SCALE, NULLABLE, DATA_DEFAULT, COLUMN_ID
 FROM ALL_TAB_COLUMNS
-WHERE OWNER IN (${inList}) AND UPPER(TABLE_NAME) NOT IN (${skipList})${tableFilter}
+WHERE OWNER IN (${inList}) AND UPPER(TABLE_NAME) NOT IN (${skipList})${tableFilter()}
 ORDER BY OWNER, TABLE_NAME, COLUMN_ID`;
 
     const columnsResult = await OracleConnectionService.queryViaSidecar(name, config, columnsSql, 100000);
@@ -153,7 +154,7 @@ ORDER BY OWNER, TABLE_NAME, COLUMN_ID`;
     const pkSql = `SELECT cons.OWNER, cons.TABLE_NAME, cc.COLUMN_NAME, cc.POSITION
 FROM ALL_CONSTRAINTS cons
 JOIN ALL_CONS_COLUMNS cc ON cons.OWNER = cc.OWNER AND cons.CONSTRAINT_NAME = cc.CONSTRAINT_NAME
-WHERE cons.OWNER IN (${inList}) AND cons.CONSTRAINT_TYPE = 'P' AND UPPER(cons.TABLE_NAME) NOT IN (${skipList})${tableFilter.replace(/OWNER/g, "cons.OWNER").replace(/TABLE_NAME/g, "cons.TABLE_NAME")}
+WHERE cons.OWNER IN (${inList}) AND cons.CONSTRAINT_TYPE = 'P' AND UPPER(cons.TABLE_NAME) NOT IN (${skipList})${tableFilter("cons.")}
 ORDER BY cons.OWNER, cons.TABLE_NAME, cc.POSITION`;
 
     const pkResult = await OracleConnectionService.queryViaSidecar(name, config, pkSql, 100000);

@@ -185,11 +185,11 @@ describe('QueryGenerationService - BLOB attachments', () => {
 describe('QueryGenerationService - reserved words formatting', () => {
   const svc = new QueryGenerationService()
 
-  it('quotes lowercase reserved words and lowers uppercase without quotes', () => {
+  it('quotes reserved words in the case Oracle stores them', () => {
     expect(svc.formatFieldName('type')).toBe('"type"')
     expect(svc.formatFieldName('sequence')).toBe('"sequence"')
-    expect(svc.formatFieldName('TYPE')).toBe('type')
-    expect(svc.formatFieldName('SEQUENCE')).toBe('sequence')
+    expect(svc.formatFieldName('TYPE')).toBe('"TYPE"')
+    expect(svc.formatFieldName('SEQUENCE')).toBe('"SEQUENCE"')
   })
 })
 
@@ -248,13 +248,13 @@ describe('QueryGenerationService - MERGE generation (uppercase headers)', () => 
   const row = ['1','menu','10','','', '', 'user1']
   const inputData = [headers, row]
 
-  it('uses unquoted lowercased names for uppercase reserved words', () => {
+  it('quotes uppercase reserved words as uppercase identifiers', () => {
     const sql = svc.generateQuery('my_table', 'merge', schema, inputData, [])
-    expect(sql).toContain('AS type')
-    expect(sql).toContain('AS sequence')
-    expect(sql).toContain('tgt.type = src.type')
-    expect(sql).toContain('tgt.sequence = src.sequence')
-    expect(sql).toContain('INSERT (id, type, sequence, created_time, created_by, updated_time, updated_by)')
+    expect(sql).toContain('AS "TYPE"')
+    expect(sql).toContain('AS "SEQUENCE"')
+    expect(sql).toContain('tgt."TYPE" = src."TYPE"')
+    expect(sql).toContain('tgt."SEQUENCE" = src."SEQUENCE"')
+    expect(sql).toContain('INSERT (id, "TYPE", "SEQUENCE", created_time, created_by, updated_time, updated_by)')
   })
 })
 

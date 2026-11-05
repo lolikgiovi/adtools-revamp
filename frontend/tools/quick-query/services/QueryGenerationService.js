@@ -1,6 +1,6 @@
 import { ValueProcessorService } from "./ValueProcessorService.js";
-import { oracleReservedWords } from "../constants.js";
 import { resolveAttachmentValue } from "./AttachmentValidationService.js";
+import { formatOracleFieldName } from "./OracleIdentifier.js";
 
 const populatedDataRows = (inputData) =>
   inputData
@@ -150,8 +150,8 @@ export class QueryGenerationService {
       return { hasDuplicates: false, duplicates: [], warningMessage: null };
     }
 
-    // 2. Get field names from first row of input data
-    const fieldNames = inputData[0].map((name) => name);
+    // 2. Get field names from first row of input data, trimmed as generation does
+    const fieldNames = inputData[0].map((name) => String(name ?? "").trim());
 
     // 3. Get data rows (excluding header row)
     const dataRows = populatedDataRows(inputData);
@@ -289,6 +289,8 @@ export class QueryGenerationService {
     const blobAttachments = new Map();
     const importedBlobs = new Map();
     const primaryKeys = this.ValueProcessorService.findPrimaryKeys(schemaData, tableName);
+    // Match keys must keep their entered values (e.g. CONFIG_ID is not replaced by MAX+1).
+    const valueOptions = ["update", "merge"].includes(queryType) ? { ...options, matchKeys: primaryKeys } : options;
 
     // Partial UPDATEs still use the existing audit-value rules. Only append
     // audit columns present in the schema, without changing the source grid.
@@ -366,7 +368,15 @@ export class QueryGenerationService {
             // Return formatted object
             return {
               fieldName,
-              formattedValue: this.ValueProcessorService.processValue(value, dataType, nullable, fieldName, tableName, queryType, options),
+              formattedValue: this.ValueProcessorService.processValue(
+                value,
+                dataType,
+                nullable,
+                fieldName,
+                tableName,
+                queryType,
+                valueOptions,
+              ),
             };
           } catch (fieldError) {
             // Convert column index to Excel-style letter (A, B, ..., Z, AA, AB, ...)
@@ -685,7 +695,7 @@ export class QueryGenerationService {
     // If any PK is a running number, use FETCH FIRST approach instead of WHERE IN
     if (hasRunningNumberPK) {
       // Use updated_time for ordering only if it exists in schema
-      const orderByField = hasUpdatedTime ? "updated_time" : primaryKeys[0].toLowerCase();
+      const orderByField = hasUpdatedTime ? "updated_time" : this.formatFieldName(primaryKeys[0]);
       let selectStatement = `\nSELECT * FROM ${tableName} ORDER BY ${orderByField} DESC FETCH FIRST ${rowCount} ROWS ONLY;`;
       if (hasUpdatedTime) {
         selectStatement += `\nSELECT ${primaryKeys
@@ -713,9 +723,6 @@ export class QueryGenerationService {
   }
 
   formatFieldName(fieldName) {
-    if (fieldName === fieldName.toLowerCase()) {
-      return oracleReservedWords.has(fieldName.toLowerCase()) ? `"${fieldName.toLowerCase()}"` : fieldName;
-    }
-    return fieldName.toLowerCase();
+    return formatOracleFieldName(fieldName);
   }
 }

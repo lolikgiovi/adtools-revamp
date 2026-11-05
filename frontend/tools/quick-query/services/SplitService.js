@@ -16,6 +16,22 @@ export function splitSqlStatementsSafely(sql) {
   let inDouble = false;
   let inLineComment = false;
   let inBlockComment = false;
+  // PL/SQL blocks contain inner semicolons and end with "/" alone on its line.
+  let hasCode = false;
+  let inPlsqlBlock = false;
+
+  const push = (block) => {
+    const text = cur.trim();
+    if (text) out.push({ text, block });
+    cur = "";
+    hasCode = false;
+    inPlsqlBlock = false;
+  };
+  const lineIsOnly = (index) => {
+    const lineStart = src.lastIndexOf("\n", index - 1) + 1;
+    const lineEnd = src.indexOf("\n", index);
+    return !src.slice(lineStart, index).trim() && !src.slice(index + 1, lineEnd === -1 ? src.length : lineEnd).trim();
+  };
 
   while (i < src.length) {
     const ch = src[i];
@@ -51,24 +67,39 @@ export function splitSqlStatementsSafely(sql) {
         inBlockComment = true;
         continue;
       }
+      if (inPlsqlBlock && ch === "/" && lineIsOnly(i)) {
+        cur += ch;
+        i++;
+        push(true);
+        continue;
+      }
+      if (!hasCode && /\S/.test(ch)) {
+        hasCode = true;
+        inPlsqlBlock = /^(DECLARE|BEGIN)\b/i.test(src.slice(i, i + 8));
+      }
     }
-    if (!inDouble && ch === "'" && src[i - 1] !== "\\") {
+    // Oracle escapes quotes by doubling them; a backslash is an ordinary character.
+    if (!inDouble && ch === "'") {
       inSingle = !inSingle;
-    } else if (!inSingle && ch === '"' && src[i - 1] !== "\\") {
+    } else if (!inSingle && ch === '"') {
       inDouble = !inDouble;
     }
-    if (!inSingle && !inDouble && ch === ";") {
+    if (!inSingle && !inDouble && !inPlsqlBlock && ch === ";") {
       cur += ch;
-      out.push(cur.trim());
-      cur = "";
       i++;
+      push(false);
       continue;
     }
     cur += ch;
     i++;
   }
-  if (cur.trim()) out.push(cur.trim());
-  return out.map((s) => (s.endsWith(";") ? s : s + ";"));
+  if (inPlsqlBlock) {
+    cur += "\n/";
+    push(true);
+  } else {
+    push(false);
+  }
+  return out.map(({ text, block }) => (block || text.endsWith(";") ? text : text + ";"));
 }
 
 /**
@@ -175,8 +206,8 @@ export function groupByQueryCount(statements, count, header, maxBytes = Infinity
 
   for (const st of statements) {
     const trimmed = st.trim().toUpperCase();
-    // Count MERGE, INSERT, UPDATE only
-    const isMutating = /^(MERGE|INSERT|UPDATE)\b/.test(trimmed);
+    // Count MERGE, INSERT, UPDATE and PL/SQL blocks (the BLOB script) as queries
+    const isMutating = /^(MERGE|INSERT|UPDATE|DECLARE|BEGIN)\b/.test(trimmed);
 
     current.push(st);
     if (isMutating) queryCount++;
